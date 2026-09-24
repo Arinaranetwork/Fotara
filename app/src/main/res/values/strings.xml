@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Fotara</string>
+    <string name="widget_due_tomorrow_name">Due Tomorrow</string>
+    <string name="widget_due_tomorrow_description">Displays notes and coursework due tomorrow.</string>
+    <string name="widget_no_deadlines">No deadlines due tomorrow</string>
+    <string name="widget_all_caught_up">All caught up with coursework</string>
+</resources>

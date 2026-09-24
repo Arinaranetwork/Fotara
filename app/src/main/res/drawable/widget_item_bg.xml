@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arinara Network (c) 2026
+  Exclusive property of Arinara Network.
+  Unauthorized use, reproduction, distribution, or modification of this code,
+  in whole or in part, for any purpose, is strictly prohibited without prior
+  written consent from Arinara Network as sole legal owner of this codebase.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#172338" />
+    <corners android:radius="10dp" />
+    <stroke
+        android:width="0.8dp"
+        android:color="#24334B" />
+</shape>

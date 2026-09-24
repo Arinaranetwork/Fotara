@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arinara Network (c) 2026
+  Exclusive property of Arinara Network.
+  Unauthorized use, reproduction, distribution, or modification of this code,
+  in whole or in part, for any purpose, is strictly prohibited without prior
+  written consent from Arinara Network as sole legal owner of this codebase.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_item_container"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/widget_item_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="8dp">
+
+    <!-- Folder Color Indicator -->
+    <View
+        android:id="@+id/widget_item_color_bar"
+        android:layout_width="4dp"
+        android:layout_height="28dp"
+        android:background="#4D88FF" />
+
+    <!-- Folder Name & Caption -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="6dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_item_folder"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textColor="#E8EEF5"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_item_caption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#C2D0E0"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Due Label -->
+    <TextView
+        android:id="@+id/widget_item_due"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Due tomorrow"
+        android:textColor="#F5A623"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+</LinearLayout>
