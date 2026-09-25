@@ -15,25 +15,6 @@ Phase 6 - DocumentNotesAndConnectedFeatures [Completed]
 | 6     | DocumentNotesAndConnectedFeatures   | Completed   |
 
 ## Completed
-- [x] Part 1: DocumentNote data models, SQLite tables, PDF native renderer + OCR, DOCX text extractor, vertical viewer, Split to Images - Phase 6
-- [x] Part 2: Jetpack Glance widget rebuild with resizability, deep linking, direct interactive callback, and 30-min sync - Phase 6
-- [x] Part 3: Batch rename for 1+ items across Photo/Group/DocumentNote, Home folder rename parity, and Group screen parity - Phase 6
-- [x] Part 4: Unified Share As picker (Original, PDF, Word) and multi-select Share Notes - Phase 6
-- [x] Part 5: Combine operation UX with determinate progress, cancellation, and partial file cleanup - Phase 6
-- [x] Part 6: Online services: GitHub update checker, Supabase suggestion form with UUID rate limiting, QRIS support, What's New - Phase 6
-- [x] Part 7: Pre-flight 100-page cap check on combine and export operations - Phase 6
-- [x] QRIS 1:1 dimension crop with pure quiet zone, added to assets & resources, integrated into SupportScreen - Phase 6
-- [x] Proprietary & Educational Software License added to GitHub repository - Phase 6
-- [x] Release packaging: Fotara 1.2.0 Beta APK and Fotara 1.3.0 Beta APK uploaded to GitHub Releases - Phase 6
-
-## In Progress
-None.
-
-## Pending
-None.
-
-## Blocked
-None.
 - [x] Analyze product brief and UI reference image - Phase 1
 - [x] Install and verify Android CLI and SDK environment (API 36, Temurin JDK 17) - Phase 1
 - [x] Initialize Arinara governance docs (Rules.md, Codex.md, Phase1 spec, Changelog) - Phase 1
@@ -53,10 +34,6 @@ None.
 - [x] Implement photo card long-press quick action sheet (move, tag color, deadline, delete) - Phase 2
 - [x] Implement deadline manager for "Due Tomorrow" banner and scheduling reminders - Phase 2
 - [x] Execute automated tests and package updated Fotara 1.0 Beta APK - Phase 2
-- [x] Author UX & Performance Specification Revision 4 document (`Docs/UXPerformanceSpecification_Rev4.md`) consolidating Revisions 1-3, FTS index architecture, and latency benchmarks - Phase 2
-- [x] Eliminate mock data and stub placeholders project-wide - v1.0.1
-- [x] Implement real CameraX consecutive multi-capture session with runtime permission handling - v1.0.1
-- [x] Implement real Android photo picker (`PickMultipleVisualMedia`) and thumbnail downscaling - v1.0.1
 - [x] Implement real Google ML Kit on-device text recognition pipeline - v1.0.1
 - [x] Implement offline SQLite database with SQLite FTS5 search index (`FotaraDbHelper`) - v1.0.1
 - [x] Implement home screen Folder Multi-Select and Bulk Delete with exact byte calculation - v1.0.1
@@ -110,5 +87,24 @@ None.
 - [x] Group Management Expansion: Inline caption renaming in popup triage review slider - Phase 5
 - [x] Automated Test Suite: 100 unit tests passing covering all v1.2 features and edge cases - Phase 5
 - [x] Release packaging: Fotara 1.2.0 Beta APK compiled and verified - Phase 5
+- [x] Part 1: DocumentNote data models, SQLite tables, PDF native renderer + OCR, DOCX text extractor, vertical viewer, Split to Images - Phase 6
+- [x] Part 2: Jetpack Glance widget rebuild with resizability, deep linking, direct interactive callback, and 30-min sync - Phase 6
+- [x] Part 3: Batch rename for 1+ items across Photo/Group/DocumentNote, Home folder rename parity, and Group screen parity - Phase 6
+- [x] Part 4: Unified Share As picker (Original, PDF, Word) and multi-select Share Notes - Phase 6
+- [x] Part 5: Combine operation UX with determinate progress, cancellation, and partial file cleanup - Phase 6
+- [x] Part 6: Online services: GitHub update checker, Supabase suggestion form with UUID rate limiting, QRIS support, What's New - Phase 6
+- [x] Part 7: Pre-flight 100-page cap check on combine and export operations - Phase 6
+- [x] QRIS 1:1 dimension crop with pure quiet zone, added to assets & resources, integrated into SupportScreen - Phase 6
+- [x] Proprietary & Educational Software License added to GitHub repository - Phase 6
+- [x] Release packaging: Fotara 1.2.0 Beta APK and Fotara 1.3.0 Beta APK uploaded to GitHub Releases - Phase 6
+- [x] Fix Settings and UpdateManager versioning: dynamically read PackageManager versionName, strip prefix in version comparisons, and upload re-signed v1.3.0 Beta APK - Phase 6
+- [x] Fix release banner assets: attach release banners to GitHub release assets and embed direct HTTPS URLs in release notes - Phase 6
 
+## In Progress
+None.
 
+## Pending
+None.
+
+## Blocked
+None.
