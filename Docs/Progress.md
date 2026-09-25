@@ -1,18 +1,39 @@
 # Progress - Fotara
-Last Updated: 2026-09-24
+Last Updated: 2026-09-25
 
 ## Current Phase
-Phase 4 - AdvancedFeatures [Completed]
+Phase 6 - DocumentNotesAndConnectedFeatures [Completed]
 
 ## Phases
-| Phase | Name                  | Status      |
-|-------|-----------------------|-------------|
-| 1     | CoreFolderEngine      | Completed   |
-| 2     | PhotoOcrEngine        | Completed   |
-| 3     | CustomNotesAndSearch  | Completed   |
-| 4     | AdvancedFeatures      | Completed   |
+| Phase | Name                                | Status      |
+|-------|-------------------------------------|-------------|
+| 1     | CoreFolderEngine                    | Completed   |
+| 2     | PhotoOcrEngine                      | Completed   |
+| 3     | CustomNotesAndSearch                | Completed   |
+| 4     | AdvancedFeatures                    | Completed   |
+| 5     | GroupExpansionAndLinkIt             | Completed   |
+| 6     | DocumentNotesAndConnectedFeatures   | Completed   |
 
 ## Completed
+- [x] Part 1: DocumentNote data models, SQLite tables, PDF native renderer + OCR, DOCX text extractor, vertical viewer, Split to Images - Phase 6
+- [x] Part 2: Jetpack Glance widget rebuild with resizability, deep linking, direct interactive callback, and 30-min sync - Phase 6
+- [x] Part 3: Batch rename for 1+ items across Photo/Group/DocumentNote, Home folder rename parity, and Group screen parity - Phase 6
+- [x] Part 4: Unified Share As picker (Original, PDF, Word) and multi-select Share Notes - Phase 6
+- [x] Part 5: Combine operation UX with determinate progress, cancellation, and partial file cleanup - Phase 6
+- [x] Part 6: Online services: GitHub update checker, Supabase suggestion form with UUID rate limiting, QRIS support, What's New - Phase 6
+- [x] Part 7: Pre-flight 100-page cap check on combine and export operations - Phase 6
+- [x] QRIS 1:1 dimension crop with pure quiet zone, added to assets & resources, integrated into SupportScreen - Phase 6
+- [x] Proprietary & Educational Software License added to GitHub repository - Phase 6
+- [x] Release packaging: Fotara 1.2.0 Beta APK and Fotara 1.3.0 Beta APK uploaded to GitHub Releases - Phase 6
+
+## In Progress
+None.
+
+## Pending
+None.
+
+## Blocked
+None.
 - [x] Analyze product brief and UI reference image - Phase 1
 - [x] Install and verify Android CLI and SDK environment (API 36, Temurin JDK 17) - Phase 1
 - [x] Initialize Arinara governance docs (Rules.md, Codex.md, Phase1 spec, Changelog) - Phase 1
@@ -74,12 +95,20 @@ Phase 4 - AdvancedFeatures [Completed]
 - [x] Implement Addendum 7: Dedicated fullscreen Group Screen with responsive grid, order-added sorting, [+] Add photos, overflow menu (Rename, Ungroup, Delete to Trash, Color label), and scoped popup viewer with auto-dissolve - v1.1.1
 - [x] Implement Addendum 7 Search Edge Case: Chained search highlight for grouped photo matches (1s waypoint on group cell -> auto-navigate -> 3s member photo highlight) - v1.1.1
 - [x] Release packaging: Fotara v1.1.1 Beta APK compiled and verified - v1.1.1
+- [x] Bug Fix: Remove placeholder Light theme, offer System / Dark options, silently migrate legacy LIGHT preference to SYSTEM - Phase 5
+- [x] LinkIt: Spatial consecutive grouping for 2-4 linked items across Home folders and Folder grid notes/groups with LinkGroup SQLite table, pinned elevation, and auto-dissolve - Phase 5
+- [x] Group Management Expansion: Multi-select group merge with earliest photo cover and automatic old group dissolution - Phase 5
+- [x] Group Management Expansion: Move groups to folders/subfolders with recent destinations picker and folder counter sync - Phase 5
+- [x] Group Management Expansion: Add to Group multi-select & quick action with recents picker and order-added preservation - Phase 5
+- [x] Group Management Expansion: Direct capture and gallery import into group with folder-locked triage review - Phase 5
+- [x] Group Management Expansion: Manual cover photo assignment via inspector star button and context menu - Phase 5
+- [x] Group Management Expansion: Independent photo copy duplicating image files and thumbnail records - Phase 5
+- [x] Group Management Expansion: 4-second undo snackbar on delete and move actions - Phase 5
+- [x] Group Management Expansion: Group deadline with notification scheduling, due tomorrow banner inheritance, and inspector countdown - Phase 5
+- [x] Group Management Expansion: PDF and ZIP archive export for groups and mixed multi-selections via FileProvider - Phase 5
+- [x] Group Management Expansion: Trash severance auto-dissolve rule dissolving group when trashing leaves <= 1 member - Phase 5
+- [x] Group Management Expansion: Inline caption renaming in popup triage review slider - Phase 5
+- [x] Automated Test Suite: 100 unit tests passing covering all v1.2 features and edge cases - Phase 5
+- [x] Release packaging: Fotara 1.2.0 Beta APK compiled and verified - Phase 5
 
-## In Progress
-None.
 
-## Pending
-None.
-
-## Blocked
-None.
