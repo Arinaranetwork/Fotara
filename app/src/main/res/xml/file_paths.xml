@@ -2,4 +2,6 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <files-path name="fotara_files" path="." />
     <cache-path name="fotara_cache" path="." />
+    <external-files-path name="fotara_external_files" path="." />
+    <external-cache-path name="fotara_external_cache" path="." />
 </paths>

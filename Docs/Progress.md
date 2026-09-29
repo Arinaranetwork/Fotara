@@ -1,8 +1,8 @@
 # Progress - Fotara
-Last Updated: 2026-09-25
+Last Updated: 2026-09-29
 
 ## Current Phase
-Phase 6 - DocumentNotesAndConnectedFeatures [Completed]
+Phase 7 - NativeTextNotesAndAdvancedDocuments [Completed]
 
 ## Phases
 | Phase | Name                                | Status      |
@@ -13,6 +13,7 @@ Phase 6 - DocumentNotesAndConnectedFeatures [Completed]
 | 4     | AdvancedFeatures                    | Completed   |
 | 5     | GroupExpansionAndLinkIt             | Completed   |
 | 6     | DocumentNotesAndConnectedFeatures   | Completed   |
+| 7     | NativeTextNotesAndAdvancedDocuments | Completed   |
 
 ## Completed
 - [x] Analyze product brief and UI reference image - Phase 1
@@ -99,6 +100,45 @@ Phase 6 - DocumentNotesAndConnectedFeatures [Completed]
 - [x] Release packaging: Fotara 1.2.0 Beta APK and Fotara 1.3.0 Beta APK uploaded to GitHub Releases - Phase 6
 - [x] Fix Settings and UpdateManager versioning: dynamically read PackageManager versionName, strip prefix in version comparisons, and upload re-signed v1.3.0 Beta APK - Phase 6
 - [x] Fix release banner assets: attach release banners to GitHub release assets and embed direct HTTPS URLs in release notes - Phase 6
+- [x] Patch 1.3.1: Stabilized feedback and bug report submissions with an offline-first persistent queue.
+- [x] Patch 1.3.1: Restructured Folder multi-select with a dedicated contextual action dock preventing action clipping.
+- [x] Patch 1.3.1: Enhanced LinkIt badge visibility and spatial layout across Home folders and Folder note cards.
+- [x] Patch 1.3.1: Integrated smart folder and subfolder suggestions directly into the camera review workflow.
+- [x] Patch 1.3.1: Implemented real 90-degree image rotation in the capture review perspective tool.
+- [x] Patch 1.3.1: Wired camera button on the Home screen floating dock.
+- [x] Patch 1.3.1: Modernized in-app update engine with automatic launch check and resilient GitHub release asset redirect handling.
+- [x] Patch 1.3.1: Dynamically bound Settings screen version display to active application package metadata.
+
+- [x] Patch 1.3.2: Elevated contextual multi-select bottom dock safely above system 3-button navigation bar with navigationBarsPadding.
+- [x] Patch 1.3.2: Extended App Update screen viewport with navigationBarsPadding and a 56.dp scroll spacer to eliminate bottom button truncation.
+- [x] Patch 1.3.2: Fixed in-app APK installer freeze by adding REQUEST_INSTALL_PACKAGES permission, switching APK storage to getExternalFilesDir, and providing an unknown-apps settings prompt.
+- [x] Patch 1.3.2: Safe Navigation Pop Guard preventing backstack exhaustion and app closure upon double-clicking close/back.
+- [x] Patch 1.3.2: What's New rich markdown renderer with categorized cards (What's New, Patches, Breaking Changes) and custom chips.
+- [x] Patch 1.3.2: App Update screen polish renaming Software Update to App Update with status bar padding.
+- [x] Patch 1.3.2: Supabase database schema documentation (Docs/Supabase_Schema.sql) with RLS and 10/hr trigger rate limit.
+- [x] Patch 1.3.2: Bumped versionCode to 8, versionName to 1.3.2, compiled and signed Fotara_1.3.2_Beta.apk for GitHub Releases.
+
+- [x] Patch 1.3.3: Bump versionCode to 9, versionName to 1.3.3, build, sign, and publish Fotara_1.3.3_Beta.apk to GitHub Releases for in-app OTA update verification.
+- [x] Patch 1.3.3: Implemented universal Rich Markdown component (`RichMarkdownText` & `RichMarkdownColumn`) supporting bold, italic, code, strikethrough, blockquotes, and lists across What's New, App Update, and Study Notes.
+- [x] Patch 1.3.3: Added interactive update re-check action to scan all releases and immediately fast-forward/skip to newest available build.
+
+- [x] Patch 1.3.4: Persistent background APK download decoupled from Compose screen lifecycle with application-scoped `updateScope` and `.part` streaming.
+- [x] Patch 1.3.4: Interactive background download notifications with progress bar and completion intent routing directly to `UpdateScreen` via `MainActivity` and `MainNavigation`.
+- [x] Patch 1.3.4: Added explicit download cancellation (`cancelDownload()`) with partial file cleanup.
+- [x] Patch 1.3.4: Automated Supabase feedback email forwarding bridge (`Docs/SupabaseEmailBridge.gs`) delivering styled HTML notifications to `arinaranetwork@gmail.com`.
+- [x] Patch 1.3.4: Supabase schema and documentation expansion (`Docs/Supabase_Email_Notification_Guide.md` and `Docs/Supabase_Schema.sql`).
+
+- [x] Patch 1.3.5: Bump versionCode to 11, versionName to 1.3.5 in `app/build.gradle.kts` and update What's New fallback metadata.
+- [x] Patch 1.3.5: Upgraded `FeedbackManager` with strict standard HTTP headers (`User-Agent`, `Accept`, `Content-Length`, `setFixedLengthStreamingMode`), 30/day submission quota, 3s throttle, and opportunistic auto-flush.
+- [x] Patch 1.3.5: Upgraded `FeedbackDialog` with dynamic 4-category selector chip row (`BUG_REPORT`, `SUGGESTION`, `FEATURE_IDEA`, `GENERAL`).
+- [x] Patch 1.3.5: Verified direct automated email bridge to `arinaranetwork@gmail.com` via Supabase database webhooks.
+- [x] Patch 1.3.5: Compile, sign, and publish `Fotara_1.3.5_Beta.apk` to GitHub Releases.
+- [x] Workstream 1: Full Audit & Quality Improvement - Present audit report and apply fixes - Phase 7
+- [x] Workstream 2: PDF Defect Repair (White background fill, viewport scale, bounded cache, pipelined import) - Phase 7
+- [x] Workstream 3: In-App Reflowed DOCX Viewer with XML structure parser - Phase 7
+- [x] Workstream 4: Native Text Notes (TextNote entity, markdown editor, autosave, grid integration, MD/TXT share) - Phase 7
+- [x] Package and sign Fotara_1.4.0_Beta.apk artifact - Phase 7
+- [x] Publish Fotara 1.4.0 Beta release notes and signed APK to GitHub Releases - Phase 7
 
 ## In Progress
 None.

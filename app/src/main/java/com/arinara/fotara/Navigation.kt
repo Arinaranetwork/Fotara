@@ -9,8 +9,13 @@ package com.arinara.fotara
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -33,12 +38,23 @@ import com.arinara.fotara.ui.trash.TrashViewModel
 fun MainNavigation(
     appContainer: AppContainer,
     deepLinkPhotoId: Long? = null,
-    deepLinkDirectView: Boolean = false
+    deepLinkDirectView: Boolean = false,
+    openUpdateScreen: Boolean = false,
+    onUpdateScreenOpened: (() -> Unit)? = null
 ) {
     val initialKey = remember {
         if (appContainer.settingsRepository.isOnboardingCompleted()) HomeNavKey else OnboardingNavKey
     }
     val backStack = rememberNavBackStack(initialKey)
+
+    LaunchedEffect(openUpdateScreen) {
+        if (openUpdateScreen) {
+            if (backStack.none { it is UpdateNavKey }) {
+                backStack.add(UpdateNavKey)
+            }
+            onUpdateScreenOpened?.invoke()
+        }
+    }
 
     LaunchedEffect(deepLinkPhotoId) {
         val photoId = deepLinkPhotoId ?: return@LaunchedEffect
@@ -56,9 +72,15 @@ fun MainNavigation(
         }
     }
 
+    val safePopBack = {
+        if (backStack.size > 1) {
+            backStack.removeLastOrNull()
+        }
+    }
+
     NavDisplay(
         backStack = backStack,
-        onBack = { backStack.removeLastOrNull() },
+        onBack = { safePopBack() },
         entryProvider = entryProvider {
             entry<OnboardingNavKey> {
                 val onboardingViewModel: OnboardingViewModel = viewModel(
@@ -82,7 +104,8 @@ fun MainNavigation(
                         folderRepository = appContainer.folderRepository,
                         photoRepository = appContainer.photoRepository,
                         deadlineNotificationManager = appContainer.deadlineNotificationManager,
-                        settingsRepository = appContainer.settingsRepository
+                        settingsRepository = appContainer.settingsRepository,
+                        textNoteRepository = appContainer.textNoteRepository
                     )
                 )
                 HomeScreen(
@@ -96,12 +119,25 @@ fun MainNavigation(
                     onNavigateToGroup = { folderId, subfolderId, groupId ->
                         backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetGroupId = groupId))
                     },
+                    onNavigateToTextNote = { folderId, noteId ->
+                        backStack.add(TextNoteEditorNavKey(folderId = folderId, noteId = noteId))
+                    },
                     onOpenTrash = {
                         backStack.add(TrashNavKey)
                     },
                     onOpenSettings = {
                         backStack.add(SettingsNavKey)
                     },
+                    onOpenUpdates = {
+                        backStack.add(UpdateNavKey)
+                    },
+                    onOpenSupport = {
+                        backStack.add(SupportNavKey)
+                    },
+                    onOpenWhatsNew = {
+                        backStack.add(WhatsNewNavKey)
+                    },
+                    feedbackManager = appContainer.feedbackManager,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -120,7 +156,9 @@ fun MainNavigation(
                         initialSubfolderId = key.initialSubfolderId,
                         targetPhotoId = key.targetPhotoId,
                         targetGroupId = key.targetGroupId,
-                        settingsRepository = appContainer.settingsRepository
+                        settingsRepository = appContainer.settingsRepository,
+                        documentRepository = appContainer.documentRepository,
+                        textNoteRepository = appContainer.textNoteRepository
                     )
                 )
                 FolderDetailScreen(
@@ -128,10 +166,16 @@ fun MainNavigation(
                     photoStorageManager = appContainer.photoStorageManager,
                     ocrEngine = appContainer.ocrEngine,
                     folderSuggestEngine = appContainer.folderSuggestEngine,
-                    onBackClick = { backStack.removeLastOrNull() },
+                    onBackClick = { safePopBack() },
                     openViewerDirectly = key.openViewerDirectly,
                     onOpenGroup = { fId, gId, targetPhotoId ->
                         backStack.add(GroupDetailNavKey(folderId = fId, groupId = gId, targetPhotoId = targetPhotoId))
+                    },
+                    onOpenTextNote = { nId, fId, sId ->
+                        backStack.add(TextNoteEditorNavKey(noteId = nId, folderId = fId, subfolderId = sId))
+                    },
+                    onOpenDocx = { dId ->
+                        backStack.add(DocxViewerNavKey(documentId = dId))
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -147,12 +191,17 @@ fun MainNavigation(
                         photoRepository = appContainer.photoRepository,
                         folderRepository = appContainer.folderRepository,
                         settingsRepository = appContainer.settingsRepository,
-                        ocrEngine = appContainer.ocrEngine
+                        ocrEngine = appContainer.ocrEngine,
+                        photoStorageManager = appContainer.photoStorageManager,
+                        deadlineNotificationManager = appContainer.deadlineNotificationManager
                     )
                 )
                 GroupDetailScreen(
                     viewModel = groupDetailViewModel,
-                    onBackClick = { backStack.removeLastOrNull() },
+                    photoStorageManager = appContainer.photoStorageManager,
+                    ocrEngine = appContainer.ocrEngine,
+                    folderSuggestEngine = appContainer.folderSuggestEngine,
+                    onBackClick = { safePopBack() },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -166,7 +215,7 @@ fun MainNavigation(
                 )
                 TrashScreen(
                     viewModel = trashViewModel,
-                    onBackClick = { backStack.removeLastOrNull() },
+                    onBackClick = { safePopBack() },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -179,9 +228,77 @@ fun MainNavigation(
                 )
                 SettingsScreen(
                     viewModel = settingsViewModel,
-                    onBackClick = { backStack.removeLastOrNull() },
+                    onBackClick = { safePopBack() },
                     onNavigateToTrash = { backStack.add(TrashNavKey) },
                     modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            entry<DocxViewerNavKey> { key ->
+                var docNote by remember { mutableStateOf<com.arinara.fotara.data.model.DocumentNote?>(null) }
+                val coroutineScope = rememberCoroutineScope()
+                LaunchedEffect(key.documentId) {
+                    docNote = appContainer.documentRepository.getDocumentNoteById(key.documentId)
+                }
+                docNote?.let { doc ->
+                    com.arinara.fotara.ui.document.DocxViewerScreen(
+                        documentNote = doc,
+                        onBack = { safePopBack() },
+                        onDelete = {
+                            coroutineScope.launch {
+                                appContainer.documentRepository.deleteDocumentNote(doc.id)
+                                safePopBack()
+                            }
+                        }
+                    )
+                }
+            }
+
+            entry<TextNoteEditorNavKey> { key ->
+                var textNoteToShare by remember { mutableStateOf<com.arinara.fotara.data.model.TextNote?>(null) }
+                com.arinara.fotara.ui.note.TextNoteEditorScreen(
+                    noteId = key.noteId,
+                    folderId = key.folderId,
+                    subfolderId = key.subfolderId,
+                    textNoteRepository = appContainer.textNoteRepository,
+                    onBack = { safePopBack() },
+                    onShare = { note -> textNoteToShare = note }
+                )
+                textNoteToShare?.let { note ->
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    com.arinara.fotara.ui.components.TextNoteShareDialog(
+                        note = note,
+                        onDismiss = { textNoteToShare = null },
+                        onShareMarkdown = {
+                            textNoteToShare = null
+                            com.arinara.fotara.util.TextNoteExporter.shareNoteAsMarkdown(context, note)
+                        },
+                        onSharePlainText = {
+                            textNoteToShare = null
+                            com.arinara.fotara.util.TextNoteExporter.shareNoteAsPlainText(context, note)
+                        }
+                    )
+                }
+            }
+
+            entry<UpdateNavKey> {
+                com.arinara.fotara.online.UpdateScreen(
+                    updateManager = appContainer.updateManager,
+                    onClose = { safePopBack() },
+                    onSkipVersion = { safePopBack() }
+                )
+            }
+
+            entry<SupportNavKey> {
+                com.arinara.fotara.ui.support.SupportScreen(
+                    onBack = { safePopBack() }
+                )
+            }
+
+            entry<WhatsNewNavKey> {
+                com.arinara.fotara.online.WhatsNewScreen(
+                    updateManager = appContainer.updateManager,
+                    onBack = { safePopBack() }
                 )
             }
         }

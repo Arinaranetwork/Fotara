@@ -18,7 +18,8 @@ data class Folder(
     val isTrashed: Boolean = false,
     val deletedAt: Long? = null,
     val isLocked: Boolean = false,
-    val lockPin: String? = null
+    val lockPin: String? = null,
+    val linkGroupId: Long? = null
 ) {
     val tagColor: TagColor get() = TagColor.fromHex(colorLabel)
 }

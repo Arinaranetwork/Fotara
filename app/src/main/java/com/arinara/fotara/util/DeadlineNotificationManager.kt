@@ -123,6 +123,45 @@ class DeadlineNotificationManager(private val context: Context) {
         notificationManager.notify(photoId.toInt(), notification)
     }
 
+    fun scheduleGroupReminder(groupId: Long, folderName: String, groupName: String, deadlineMs: Long) {
+        val triggerTime = deadlineMs - 24 * 60 * 60 * 1000L
+        if (triggerTime <= System.currentTimeMillis()) return
+
+        val intent = Intent(context, DeadlineAlarmReceiver::class.java).apply {
+            putExtra("photo_id", -(groupId + 1000000L))
+            putExtra("folder_name", folderName)
+            putExtra("caption", "Group \"$groupName\" is due tomorrow")
+        }
+        val reqCode = (-(groupId + 1000000L)).toInt()
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            reqCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        try {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+        } catch (_: SecurityException) {
+            alarmManager.set(AlarmManager.RTC, triggerTime, pendingIntent)
+        }
+    }
+
+    fun cancelGroupReminder(groupId: Long) {
+        val intent = Intent(context, DeadlineAlarmReceiver::class.java)
+        val reqCode = (-(groupId + 1000000L)).toInt()
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            reqCode,
+            intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (pendingIntent != null) {
+            alarmManager.cancel(pendingIntent)
+            pendingIntent.cancel()
+        }
+    }
+
     companion object {
         const val CHANNEL_ID = "fotara_deadlines"
     }

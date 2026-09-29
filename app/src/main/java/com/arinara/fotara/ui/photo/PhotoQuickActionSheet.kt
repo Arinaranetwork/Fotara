@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.FileCopy
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -74,6 +76,9 @@ fun PhotoQuickActionSheet(
     onSetDeadline: (Long?) -> Unit,
     onRenamePhoto: () -> Unit = {},
     onSelectPhoto: () -> Unit = {},
+    onCopyTo: () -> Unit = {},
+    isLinked: Boolean = false,
+    onUnlink: () -> Unit = {},
     onDeletePhoto: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -295,6 +300,27 @@ fun PhotoQuickActionSheet(
                 title = "Move to Subfolder...",
                 onClick = { showSubfolderPicker = true }
             )
+
+            ActionItem(
+                icon = Icons.Default.FileCopy,
+                title = "Copy Note to...",
+                onClick = {
+                    onCopyTo()
+                    onDismiss()
+                }
+            )
+
+            if (isLinked) {
+                ActionItem(
+                    icon = Icons.Default.LinkOff,
+                    title = "Unlink Note",
+                    tint = TagCrimson,
+                    onClick = {
+                        onUnlink()
+                        onDismiss()
+                    }
+                )
+            }
 
             ActionItem(
                 icon = Icons.Default.ColorLens,

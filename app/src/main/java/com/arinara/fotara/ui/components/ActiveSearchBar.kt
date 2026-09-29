@@ -89,6 +89,7 @@ import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.SearchDateFilter
 import com.arinara.fotara.data.model.TagColor
+import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.theme.DockSlatePill
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
@@ -109,6 +110,7 @@ fun ActiveSearchBar(
     folderResults: List<Folder>,
     groupResults: List<PhotoGroup> = emptyList(),
     photoResults: List<Photo>,
+    textNoteResults: List<TextNote> = emptyList(),
     recentSearches: List<String>,
     selectedDateFilter: SearchDateFilter,
     onSelectDateFilter: (SearchDateFilter) -> Unit,
@@ -124,6 +126,7 @@ fun ActiveSearchBar(
     onFolderClick: (Long) -> Unit,
     onGroupClick: (PhotoGroup) -> Unit = {},
     onPhotoClick: (Photo) -> Unit,
+    onTextNoteClick: (TextNote) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -277,7 +280,7 @@ fun ActiveSearchBar(
                             )
                         )
                     }
-                } else if (folderResults.isEmpty() && groupResults.isEmpty() && photoResults.isEmpty() && !isLoading) {
+                } else if (folderResults.isEmpty() && groupResults.isEmpty() && photoResults.isEmpty() && textNoteResults.isEmpty() && !isLoading) {
                     // Zero Results Empty State
                     Column(
                         modifier = Modifier
@@ -382,6 +385,29 @@ fun ActiveSearchBar(
                                     photo = photo,
                                     query = query,
                                     onClick = { onPhotoClick(photo) }
+                                )
+                            }
+                        }
+
+                        if (textNoteResults.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "TEXT NOTES (${textNoteResults.size})",
+                                    style = TextStyle(
+                                        color = TextSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    ),
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            }
+                            items(textNoteResults, key = { "text_note_${it.id}" }) { note ->
+                                SearchTextNoteResultCard(
+                                    note = note,
+                                    query = query,
+                                    onClick = { onTextNoteClick(note) }
                                 )
                             }
                         }
@@ -928,6 +954,87 @@ fun SearchGroupResultCard(
                             .clip(CircleShape)
                             .background(tagColor)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SearchTextNoteResultCard(
+    note: TextNote,
+    query: String,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MidnightCardOutline),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(DockSlatePill.copy(alpha = 0.5f))
+                    .border(0.8.dp, MidnightCardOutline, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = null,
+                    tint = FolderTabCream,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = note.title.ifBlank { "Untitled Note" },
+                    style = TextStyle(
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (note.bodyMarkdown.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "“${note.getPlainTextSnippet(90)}”",
+                        style = TextStyle(
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                note.tagColor?.let { colorHex ->
+                    val tag = TagColor.fromHex(colorHex)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(tag.composeColor.copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = tag.displayName,
+                            color = tag.composeColor,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

@@ -6,17 +6,26 @@
 
 package com.arinara.fotara.ui.group
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.arinara.fotara.data.model.DestinationType
 import com.arinara.fotara.data.model.Photo
+import com.arinara.fotara.data.model.PhotoSource
+import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
+import com.arinara.fotara.data.storage.PhotoStorageManager
 import com.arinara.fotara.ocr.OcrEngine
+import com.arinara.fotara.util.DeadlineNotificationManager
+import com.arinara.fotara.util.PdfExporter
+import com.arinara.fotara.util.ZipExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +44,9 @@ class GroupDetailViewModel(
     private val photoRepository: PhotoRepository,
     private val folderRepository: FolderRepository,
     private val settingsRepository: SettingsRepository? = null,
-    private val ocrEngine: OcrEngine? = null
+    private val ocrEngine: OcrEngine? = null,
+    private val photoStorageManager: PhotoStorageManager? = null,
+    private val deadlineNotificationManager: DeadlineNotificationManager? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -53,6 +64,18 @@ class GroupDetailViewModel(
         viewModelScope.launch {
             folderRepository.getFolderById(folderId).collect { folder ->
                 _uiState.update { it.copy(folder = folder) }
+            }
+        }
+
+        viewModelScope.launch {
+            folderRepository.getSubfolders(folderId).collect { subfolders ->
+                _uiState.update { it.copy(subfolders = subfolders) }
+            }
+        }
+
+        viewModelScope.launch {
+            folderRepository.getFolders().collect { folders ->
+                _uiState.update { it.copy(availableFolders = folders) }
             }
         }
 
@@ -85,6 +108,16 @@ class GroupDetailViewModel(
                 repo.settingsFlow.collect { settings ->
                     _uiState.update { it.copy(gridDensity = settings.gridDensity) }
                 }
+            }
+            refreshRecentDestinations()
+        }
+    }
+
+    fun refreshRecentDestinations() {
+        settingsRepository?.let { repo ->
+            viewModelScope.launch {
+                val recents = repo.getRecentDestinations()
+                _uiState.update { it.copy(recentDestinations = recents) }
             }
         }
     }
@@ -200,6 +233,111 @@ class GroupDetailViewModel(
         }
     }
 
+    fun setCoverPhoto(photoId: Long) {
+        viewModelScope.launch {
+            photoRepository.setGroupCoverPhoto(groupId, photoId)
+            _uiState.update { it.copy(userMessage = "Cover photo updated") }
+        }
+    }
+
+    fun setGroupDeadline(deadlineMs: Long?) {
+        viewModelScope.launch {
+            photoRepository.updateGroupDeadline(groupId, deadlineMs)
+            val folderName = _uiState.value.folder?.name ?: "Folder"
+            val groupName = _uiState.value.group?.name ?: "Group"
+            if (deadlineMs != null) {
+                deadlineNotificationManager?.scheduleGroupReminder(groupId, folderName, groupName, deadlineMs)
+                _uiState.update { it.copy(userMessage = "Group deadline set") }
+            } else {
+                deadlineNotificationManager?.cancelGroupReminder(groupId)
+                _uiState.update { it.copy(userMessage = "Group deadline removed") }
+            }
+        }
+    }
+
+    fun moveGroup(targetFolderId: Long, targetSubfolderId: Long?, onMoved: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            photoRepository.moveGroup(groupId, targetFolderId, targetSubfolderId)
+            settingsRepository?.let { repo ->
+                val folderName = _uiState.value.availableFolders.firstOrNull { it.id == targetFolderId }?.name ?: "Folder"
+                repo.addRecentDestination(
+                    RecentDestination(
+                        type = if (targetSubfolderId != null) DestinationType.SUBFOLDER else DestinationType.FOLDER,
+                        folderId = targetFolderId,
+                        subfolderId = targetSubfolderId,
+                        title = folderName
+                    )
+                )
+            }
+            onMoved?.invoke()
+        }
+    }
+
+    fun saveCapturedBatch(photos: List<Photo>, targetSubfolderId: Long? = null) {
+        viewModelScope.launch {
+            val groupSubfolderId = targetSubfolderId ?: _uiState.value.group?.subfolderId
+            photos.forEach { photo ->
+                val toSave = photo.copy(
+                    folderId = folderId,
+                    subfolderId = groupSubfolderId,
+                    groupId = groupId,
+                    addedAt = System.currentTimeMillis()
+                )
+                photoRepository.addPhoto(toSave)
+            }
+            _uiState.update {
+                it.copy(userMessage = "Added ${photos.size} note${if (photos.size > 1) "s" else ""} to group")
+            }
+        }
+    }
+
+    suspend fun importGalleryUris(uris: List<Uri>): List<Photo> {
+        val results = mutableListOf<Photo>()
+        val currentSubfolder = _uiState.value.group?.subfolderId
+        for (uri in uris) {
+            try {
+                val saved = photoStorageManager?.saveUriAsPhoto(uri) ?: continue
+                val ocr = ocrEngine?.extractText(saved.filePath)
+                val nextIndex = _uiState.value.photos.size + results.size + 1
+                val newPhoto = Photo(
+                    fileUri = saved.filePath,
+                    thumbnailUri = saved.thumbnailPath,
+                    folderId = folderId,
+                    subfolderId = currentSubfolder,
+                    groupId = groupId,
+                    caption = "Imported Note #$nextIndex",
+                    ocrText = ocr?.fullText,
+                    source = PhotoSource.IMPORT,
+                    fileSizeBytes = saved.fileSizeBytes,
+                    addedAt = System.currentTimeMillis()
+                )
+                results.add(newPhoto)
+            } catch (_: Exception) {}
+        }
+        return results
+    }
+
+    fun exportGroup(context: Context, isZip: Boolean, onReady: (File) -> Unit) {
+        val currentGroup = _uiState.value.group ?: return
+        val memberPhotos = _uiState.value.photos
+        if (memberPhotos.isEmpty()) {
+            _uiState.update { it.copy(userMessage = "No photos to export") }
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val exportedFile = if (isZip) {
+                    ZipExporter.exportPhotosToZip(context, currentGroup.name, memberPhotos)
+                } else {
+                    PdfExporter.exportPhotosToPdf(context, currentGroup.name, memberPhotos)
+                }
+                onReady(exportedFile)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(userMessage = "Failed to export group: ${e.message}") }
+            }
+        }
+    }
+
     fun clearHighlightedPhoto() {
         _uiState.update { it.copy(highlightedPhotoId = null) }
     }
@@ -216,7 +354,9 @@ class GroupDetailViewModel(
             photoRepository: PhotoRepository,
             folderRepository: FolderRepository,
             settingsRepository: SettingsRepository? = null,
-            ocrEngine: OcrEngine? = null
+            ocrEngine: OcrEngine? = null,
+            photoStorageManager: PhotoStorageManager? = null,
+            deadlineNotificationManager: DeadlineNotificationManager? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -227,7 +367,9 @@ class GroupDetailViewModel(
                     photoRepository = photoRepository,
                     folderRepository = folderRepository,
                     settingsRepository = settingsRepository,
-                    ocrEngine = ocrEngine
+                    ocrEngine = ocrEngine,
+                    photoStorageManager = photoStorageManager,
+                    deadlineNotificationManager = deadlineNotificationManager
                 ) as T
             }
         }

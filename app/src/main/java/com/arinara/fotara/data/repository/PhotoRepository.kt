@@ -8,7 +8,10 @@ package com.arinara.fotara.data.repository
 
 import android.content.ContentValues
 import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
 import com.arinara.fotara.data.db.FotaraDbHelper
+import com.arinara.fotara.data.model.LinkGroup
+import com.arinara.fotara.data.model.LinkItemType
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.PhotoSource
@@ -36,12 +39,17 @@ interface PhotoRepository {
     suspend fun createGroup(folderId: Long, subfolderId: Long?, name: String, photoIds: List<Long>, tagColor: String? = null): Long
     suspend fun renameGroup(groupId: Long, newName: String)
     suspend fun updateGroupTagColor(groupId: Long, colorHex: String?)
+    suspend fun updateGroupDeadline(groupId: Long, deadlineMs: Long?)
+    suspend fun setGroupCoverPhoto(groupId: Long, photoId: Long)
     suspend fun ungroup(groupId: Long)
     suspend fun deleteGroup(groupId: Long)
     suspend fun deleteGroups(groupIds: List<Long>)
     suspend fun removePhotoFromGroup(photoId: Long)
     suspend fun addPhotosToGroup(groupId: Long, photoIds: List<Long>)
+    suspend fun addPhotosToExistingGroup(groupId: Long, photoIds: List<Long>)
+    suspend fun moveGroup(groupId: Long, targetFolderId: Long, targetSubfolderId: Long? = null)
     suspend fun moveGroups(groupIds: List<Long>, targetFolderId: Long, targetSubfolderId: Long? = null)
+    suspend fun mergeGroups(sourceGroupIds: List<Long>, newName: String, targetFolderId: Long, targetSubfolderId: Long? = null): Long
     suspend fun addPhoto(photo: Photo): Long
     suspend fun updatePhoto(photo: Photo)
     suspend fun renamePhoto(id: Long, newCaption: String)
@@ -49,10 +57,12 @@ interface PhotoRepository {
     suspend fun deletePhoto(id: Long)
     suspend fun deletePhotos(ids: List<Long>)
     suspend fun movePhotos(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long? = null)
+    suspend fun copyPhoto(photoId: Long, targetFolderId: Long, targetSubfolderId: Long? = null, targetGroupId: Long? = null): Long
     suspend fun updatePhotosTagColor(ids: List<Long>, colorHex: String?)
     suspend fun getPhotoById(id: Long): Photo?
     fun getTrashedPhotos(): Flow<List<Photo>>
     suspend fun restorePhoto(id: Long, targetFolderId: Long? = null, targetSubfolderId: Long? = null)
+    suspend fun restoreGroup(id: Long)
     suspend fun purgePhotoPermanently(id: Long)
     suspend fun emptyTrash()
     suspend fun purgeOldTrashedItems(retentionDays: Int = 30)
@@ -64,6 +74,9 @@ interface PhotoRepository {
     fun getPhotosByTag(tag: String): Flow<List<Photo>>
     suspend fun addTagToPhoto(id: Long, tag: String)
     suspend fun removeTagFromPhoto(id: Long, tag: String)
+    fun getGridLinkGroups(): Flow<List<LinkGroup>>
+    suspend fun createGridLinkGroup(memberIds: List<Long>): Long
+    suspend fun unlinkGridItem(itemId: Long)
     suspend fun refresh()
 }
 
@@ -78,6 +91,7 @@ class SqlitePhotoRepository(
     private val photosFlow = MutableStateFlow<List<Photo>>(emptyList())
     private val trashedPhotosFlow = MutableStateFlow<List<Photo>>(emptyList())
     private val groupsFlow = MutableStateFlow<List<PhotoGroup>>(emptyList())
+    private val gridLinkGroupsFlow = MutableStateFlow<List<LinkGroup>>(emptyList())
 
     init {
         scope.launch {
@@ -177,7 +191,8 @@ class SqlitePhotoRepository(
             val groupCursor = db.rawQuery(
                 """
                 SELECT id, folder_id, subfolder_id, name, tag_color,
-                       created_at, cover_photo_id, is_trashed, deleted_at
+                       created_at, cover_photo_id, is_trashed, deleted_at,
+                       linked_deadline
                 FROM photo_groups
                 WHERE is_trashed = 0
                 ORDER BY created_at DESC
@@ -196,12 +211,32 @@ class SqlitePhotoRepository(
                             createdAt = gc.getLong(5),
                             coverPhotoId = if (gc.isNull(6)) null else gc.getLong(6),
                             isTrashed = gc.getInt(7) == 1,
-                            deletedAt = if (gc.isNull(8)) null else gc.getLong(8)
+                            deletedAt = if (gc.isNull(8)) null else gc.getLong(8),
+                            linkedDeadline = if (gc.isNull(9)) null else gc.getLong(9)
                         )
                     )
                 }
             }
             groupsFlow.value = groupList
+
+            // Load grid link groups
+            val linkList = mutableListOf<LinkGroup>()
+            try {
+                val linkCursor = db.rawQuery(
+                    "SELECT id, item_type, member_ids, created_at FROM link_groups WHERE item_type = 'GRID_ITEM' ORDER BY created_at ASC",
+                    null
+                )
+                linkCursor.use { lc ->
+                    while (lc.moveToNext()) {
+                        val lgId = lc.getLong(0)
+                        val type = LinkItemType.valueOf(lc.getString(1))
+                        val rawIds = lc.getString(2)
+                        val memberIds = rawIds.split(",").mapNotNull { it.trim().toLongOrNull() }
+                        linkList.add(LinkGroup(id = lgId, itemType = type, memberIds = memberIds, createdAt = lc.getLong(3)))
+                    }
+                }
+            } catch (_: Exception) {}
+            gridLinkGroupsFlow.value = linkList
         } catch (e: Exception) {
             android.util.Log.e("SqlitePhotoRepo", "Failed to refresh photos cleanly: ${e.message}", e)
         }
@@ -300,12 +335,31 @@ class SqlitePhotoRepository(
         refreshSync()
     }
 
+    override suspend fun updateGroupDeadline(groupId: Long, deadlineMs: Long?) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        val values = ContentValues().apply {
+            if (deadlineMs != null) put("linked_deadline", deadlineMs) else putNull("linked_deadline")
+        }
+        db.update("photo_groups", values, "id = ?", arrayOf(groupId.toString()))
+        refreshSync()
+    }
+
+    override suspend fun setGroupCoverPhoto(groupId: Long, photoId: Long) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        val values = ContentValues().apply {
+            put("cover_photo_id", photoId)
+        }
+        db.update("photo_groups", values, "id = ?", arrayOf(groupId.toString()))
+        refreshSync()
+    }
+
     override suspend fun ungroup(groupId: Long) = withContext(Dispatchers.IO) {
         val db = dbHelper.getSafeWritableDatabase()
         db.beginTransaction()
         try {
             db.execSQL("UPDATE photos SET group_id = NULL WHERE group_id = ?", arrayOf(groupId.toString()))
             db.delete("photo_groups", "id = ?", arrayOf(groupId.toString()))
+            removeGridItemFromLinkGroupsInternal(db, groupId)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -322,7 +376,10 @@ class SqlitePhotoRepository(
         db.beginTransaction()
         try {
             db.execSQL("UPDATE photo_groups SET is_trashed = 1, deleted_at = $now WHERE id IN ($inClause)")
-            db.execSQL("UPDATE photos SET is_trashed = 1, deleted_at = $now WHERE group_id IN ($inClause)")
+            db.execSQL("UPDATE photos SET is_trashed = 1, deleted_at = $now, group_id = NULL WHERE group_id IN ($inClause)")
+            for (gId in groupIds) {
+                removeGridItemFromLinkGroupsInternal(db, gId)
+            }
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -354,6 +411,7 @@ class SqlitePhotoRepository(
                     db.execSQL("UPDATE photos SET group_id = NULL WHERE id = ?", arrayOf(remId.toString()))
                 }
                 db.delete("photo_groups", "id = ?", arrayOf(gId.toString()))
+                removeGridItemFromLinkGroupsInternal(db, gId)
             } else {
                 // Update cover_photo_id if needed
                 val earliestRemaining = remainingMembers.minByOrNull { it.addedAt }?.id
@@ -379,6 +437,36 @@ class SqlitePhotoRepository(
         folderRepository.refresh()
     }
 
+    override suspend fun addPhotosToExistingGroup(groupId: Long, photoIds: List<Long>) = withContext(Dispatchers.IO) {
+        if (photoIds.isEmpty()) return@withContext
+        val targetGroup = getGroupById(groupId) ?: return@withContext
+        val db = dbHelper.getSafeWritableDatabase()
+        val inClause = photoIds.joinToString(",") { it.toString() }
+
+        db.beginTransaction()
+        try {
+            val values = ContentValues().apply {
+                put("group_id", groupId)
+                put("folder_id", targetGroup.folderId)
+                if (targetGroup.subfolderId != null) {
+                    put("subfolder_id", targetGroup.subfolderId)
+                } else {
+                    putNull("subfolder_id")
+                }
+            }
+            db.update("photos", values, "id IN ($inClause)", null)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        refreshSync()
+        folderRepository.refresh()
+    }
+
+    override suspend fun moveGroup(groupId: Long, targetFolderId: Long, targetSubfolderId: Long?) = withContext(Dispatchers.IO) {
+        moveGroups(listOf(groupId), targetFolderId, targetSubfolderId)
+    }
+
     override suspend fun moveGroups(
         groupIds: List<Long>,
         targetFolderId: Long,
@@ -391,12 +479,12 @@ class SqlitePhotoRepository(
         try {
             val gValues = ContentValues().apply {
                 put("folder_id", targetFolderId)
-                put("subfolder_id", targetSubfolderId)
+                if (targetSubfolderId != null) put("subfolder_id", targetSubfolderId) else putNull("subfolder_id")
             }
             db.update("photo_groups", gValues, "id IN ($inClause)", null)
             val pValues = ContentValues().apply {
                 put("folder_id", targetFolderId)
-                put("subfolder_id", targetSubfolderId)
+                if (targetSubfolderId != null) put("subfolder_id", targetSubfolderId) else putNull("subfolder_id")
             }
             db.update("photos", pValues, "group_id IN ($inClause)", null)
             db.setTransactionSuccessful()
@@ -405,6 +493,59 @@ class SqlitePhotoRepository(
         }
         refreshSync()
         folderRepository.refresh()
+    }
+
+    override suspend fun mergeGroups(
+        sourceGroupIds: List<Long>,
+        newName: String,
+        targetFolderId: Long,
+        targetSubfolderId: Long?
+    ): Long = withContext(Dispatchers.IO) {
+        if (sourceGroupIds.size < 2 || newName.isBlank()) return@withContext -1L
+        val db = dbHelper.getSafeWritableDatabase()
+        val inClause = sourceGroupIds.joinToString(",") { it.toString() }
+
+        db.beginTransaction()
+        val newGroupId: Long
+        try {
+            var coverPhotoId: Long? = null
+            val coverCursor = db.rawQuery(
+                "SELECT id FROM photos WHERE group_id IN ($inClause) AND is_trashed = 0 ORDER BY added_at ASC LIMIT 1",
+                null
+            )
+            coverCursor.use {
+                if (it.moveToFirst()) coverPhotoId = it.getLong(0)
+            }
+
+            val gValues = ContentValues().apply {
+                put("folder_id", targetFolderId)
+                if (targetSubfolderId != null) put("subfolder_id", targetSubfolderId) else putNull("subfolder_id")
+                put("name", newName.trim())
+                put("created_at", System.currentTimeMillis())
+                if (coverPhotoId != null) put("cover_photo_id", coverPhotoId) else putNull("cover_photo_id")
+                put("is_trashed", 0)
+            }
+            newGroupId = db.insert("photo_groups", null, gValues)
+
+            val pValues = ContentValues().apply {
+                put("group_id", newGroupId)
+                put("folder_id", targetFolderId)
+                if (targetSubfolderId != null) put("subfolder_id", targetSubfolderId) else putNull("subfolder_id")
+            }
+            db.update("photos", pValues, "group_id IN ($inClause)", null)
+            db.delete("photo_groups", "id IN ($inClause)", null)
+
+            for (sgId in sourceGroupIds) {
+                removeGridItemFromLinkGroupsInternal(db, sgId)
+            }
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        refreshSync()
+        folderRepository.refresh()
+        newGroupId
     }
 
     override fun getPhotosAddedToday(): Flow<List<Photo>> =
@@ -565,7 +706,57 @@ class SqlitePhotoRepository(
 
         db.beginTransaction()
         try {
-            db.execSQL("UPDATE photos SET is_trashed = 1, deleted_at = $now WHERE id IN ($inClause)")
+            // Check which groups are affected before severing membership
+            val affectedGroupIds = mutableSetOf<Long>()
+            val groupCheckCursor = db.rawQuery(
+                "SELECT DISTINCT group_id FROM photos WHERE id IN ($inClause) AND group_id IS NOT NULL",
+                null
+            )
+            groupCheckCursor.use { gc ->
+                while (gc.moveToNext()) {
+                    affectedGroupIds.add(gc.getLong(0))
+                }
+            }
+
+            // Universal rule 2.11: Move to trash immediately removes group membership
+            db.execSQL("UPDATE photos SET is_trashed = 1, deleted_at = $now, group_id = NULL WHERE id IN ($inClause)")
+
+            // Check affected groups for auto-dissolve if <= 1 member remains
+            for (gId in affectedGroupIds) {
+                val memberCursor = db.rawQuery(
+                    "SELECT id FROM photos WHERE group_id = ? AND is_trashed = 0",
+                    arrayOf(gId.toString())
+                )
+                val remainingIds = mutableListOf<Long>()
+                memberCursor.use { mc ->
+                    while (mc.moveToNext()) {
+                        remainingIds.add(mc.getLong(0))
+                    }
+                }
+                if (remainingIds.size <= 1) {
+                    if (remainingIds.isNotEmpty()) {
+                        db.execSQL("UPDATE photos SET group_id = NULL WHERE id = ?", arrayOf(remainingIds.first().toString()))
+                    }
+                    db.delete("photo_groups", "id = ?", arrayOf(gId.toString()))
+                    removeGridItemFromLinkGroupsInternal(db, gId)
+                } else {
+                    val earliestCursor = db.rawQuery(
+                        "SELECT id FROM photos WHERE group_id = ? AND is_trashed = 0 ORDER BY added_at ASC LIMIT 1",
+                        arrayOf(gId.toString())
+                    )
+                    var earliestId: Long? = null
+                    earliestCursor.use { ec ->
+                        if (ec.moveToFirst()) earliestId = ec.getLong(0)
+                    }
+                    val values = ContentValues().apply { put("cover_photo_id", earliestId) }
+                    db.update("photo_groups", values, "id = ?", arrayOf(gId.toString()))
+                }
+            }
+
+            for (pId in ids) {
+                removeGridItemFromLinkGroupsInternal(db, pId)
+            }
+
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -585,11 +776,36 @@ class SqlitePhotoRepository(
         val inClause = ids.joinToString(",") { it.toString() }
         val values = ContentValues().apply {
             put("folder_id", targetFolderId)
-            put("subfolder_id", targetSubfolderId)
+            if (targetSubfolderId != null) put("subfolder_id", targetSubfolderId) else putNull("subfolder_id")
         }
         db.update("photos", values, "id IN ($inClause)", null)
         refreshSync()
         folderRepository.refresh()
+    }
+
+    override suspend fun copyPhoto(
+        photoId: Long,
+        targetFolderId: Long,
+        targetSubfolderId: Long?,
+        targetGroupId: Long?
+    ): Long = withContext(Dispatchers.IO) {
+        val source = getPhotoById(photoId) ?: return@withContext -1L
+        val manager = photoStorageManager ?: return@withContext -1L
+
+        val copiedFiles = manager.duplicatePhotoFiles(source.fileUri, source.thumbnailUri)
+        val now = System.currentTimeMillis()
+        val newPhoto = source.copy(
+            id = 0,
+            fileUri = copiedFiles.filePath,
+            thumbnailUri = copiedFiles.thumbnailPath,
+            folderId = targetFolderId,
+            subfolderId = targetSubfolderId,
+            groupId = targetGroupId,
+            createdAt = now,
+            addedAt = now,
+            fileSizeBytes = copiedFiles.fileSizeBytes
+        )
+        addPhoto(newPhoto)
     }
 
     override suspend fun updatePhotosTagColor(ids: List<Long>, colorHex: String?) = withContext(Dispatchers.IO) {
@@ -620,6 +836,19 @@ class SqlitePhotoRepository(
             }
         }
         db.update("photos", values, "id = ?", arrayOf(id.toString()))
+        refreshSync()
+        folderRepository.refresh()
+    }
+
+    override suspend fun restoreGroup(id: Long) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        db.beginTransaction()
+        try {
+            db.execSQL("UPDATE photo_groups SET is_trashed = 0, deleted_at = NULL WHERE id = ?", arrayOf(id.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
         refreshSync()
         folderRepository.refresh()
     }
@@ -834,5 +1063,72 @@ class SqlitePhotoRepository(
         val remaining = existing.filter { it != cleanTag }
         val updated = if (remaining.isEmpty()) null else remaining.joinToString(",")
         updatePhoto(target.copy(tags = updated))
+    }
+
+    override fun getGridLinkGroups(): Flow<List<LinkGroup>> = gridLinkGroupsFlow.asStateFlow()
+
+    override suspend fun createGridLinkGroup(memberIds: List<Long>): Long = withContext(Dispatchers.IO) {
+        if (memberIds.size < 2) return@withContext -1L
+        val cappedIds = memberIds.distinct().take(4)
+        val db = dbHelper.getSafeWritableDatabase()
+        db.beginTransaction()
+        val insertedId: Long
+        try {
+            for (mId in cappedIds) {
+                removeGridItemFromLinkGroupsInternal(db, mId)
+            }
+            val values = ContentValues().apply {
+                put("item_type", LinkItemType.GRID_ITEM.name)
+                put("member_ids", cappedIds.joinToString(","))
+                put("created_at", System.currentTimeMillis())
+            }
+            insertedId = db.insert("link_groups", null, values)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        refreshSync()
+        insertedId
+    }
+
+    override suspend fun unlinkGridItem(itemId: Long) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        db.beginTransaction()
+        try {
+            removeGridItemFromLinkGroupsInternal(db, itemId)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        refreshSync()
+    }
+
+    private fun removeGridItemFromLinkGroupsInternal(db: SQLiteDatabase, itemId: Long) {
+        try {
+            val cursor = db.rawQuery("SELECT id, member_ids FROM link_groups WHERE item_type = 'GRID_ITEM'", null)
+            val toUpdate = mutableListOf<Pair<Long, List<Long>>>()
+            val toDelete = mutableListOf<Long>()
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    val lgId = c.getLong(0)
+                    val members = c.getString(1).split(",").mapNotNull { it.trim().toLongOrNull() }
+                    if (members.contains(itemId) || members.contains(-itemId)) {
+                        val rem = members.filter { it != itemId && it != -itemId }
+                        if (rem.size <= 1) {
+                            toDelete.add(lgId)
+                        } else {
+                            toUpdate.add(lgId to rem)
+                        }
+                    }
+                }
+            }
+            for (id in toDelete) {
+                db.delete("link_groups", "id = ?", arrayOf(id.toString()))
+            }
+            for ((id, rem) in toUpdate) {
+                val vals = ContentValues().apply { put("member_ids", rem.joinToString(",")) }
+                db.update("link_groups", vals, "id = ?", arrayOf(id.toString()))
+            }
+        } catch (_: Exception) {}
     }
 }

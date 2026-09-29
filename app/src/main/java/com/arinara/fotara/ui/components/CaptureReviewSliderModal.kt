@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,6 +45,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import com.arinara.fotara.ocr.FolderSuggestEngine
+import com.arinara.fotara.ocr.FolderSuggestion
+import com.arinara.fotara.ocr.OcrResult
+import com.arinara.fotara.data.model.Folder
+import com.arinara.fotara.theme.TagAmber
+import java.io.File
+import java.io.FileOutputStream
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,6 +104,9 @@ fun CaptureReviewSliderModal(
     subfolders: List<Subfolder>,
     onSaveBatch: (List<Photo>, Long?) -> Unit,
     onDismiss: () -> Unit,
+    folderSuggestEngine: FolderSuggestEngine? = null,
+    availableFolders: List<Folder> = emptyList(),
+    subfoldersByFolder: Map<Long, List<Subfolder>> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     val reviewPhotos = remember(initialPhotos) {
@@ -103,6 +119,21 @@ fun CaptureReviewSliderModal(
     val pagerState = rememberPagerState(pageCount = { reviewPhotos.size })
     val coroutineScope = rememberCoroutineScope()
     var isCurrentPhotoZoomed by remember { mutableStateOf(false) }
+
+    val currentPhoto = reviewPhotos.getOrNull(pagerState.currentPage)
+    val folderSuggestion: FolderSuggestion? = remember(currentPhoto?.id, currentPhoto?.ocrText) {
+        if (currentPhoto != null && folderSuggestEngine != null && availableFolders.isNotEmpty()) {
+            val text = currentPhoto.ocrText ?: ""
+            val words = text.split(Regex("\\s+")).filter { it.length > 2 }
+            val fakeResult = OcrResult(
+                fullText = text,
+                detectedSubjectHint = null,
+                keywords = words.take(8),
+                processingTimeMs = 0L
+            )
+            folderSuggestEngine.suggestFolder(fakeResult, availableFolders, subfoldersByFolder)
+        } else null
+    }
 
     LaunchedEffect(pagerState.currentPage) {
         isCurrentPhotoZoomed = false
@@ -214,10 +245,35 @@ fun CaptureReviewSliderModal(
 
                         Spacer(modifier = Modifier.weight(1f))
 
-                        // Perspective Crop Adjustment Button
+                        // Perspective Crop / 90° Rotate Adjustment Button
                         IconButton(
                             onClick = {
-                                cropFeedbackMessage = "Perspective straightened automatically"
+                                if (reviewPhotos.isNotEmpty()) {
+                                    val currentIndex = pagerState.currentPage.coerceIn(0, reviewPhotos.size - 1)
+                                    val photoToRotate = reviewPhotos[currentIndex]
+                                    val photoFile = File(photoToRotate.fileUri)
+                                    if (photoFile.exists()) {
+                                        try {
+                                            val bmp = BitmapFactory.decodeFile(photoFile.absolutePath)
+                                            if (bmp != null) {
+                                                val matrix = Matrix().apply { postRotate(90f) }
+                                                val rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+                                                FileOutputStream(photoFile).use { out ->
+                                                    rotated.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                                                }
+                                                if (rotated != bmp) bmp.recycle()
+                                                rotated.recycle()
+
+                                                reviewPhotos[currentIndex] = photoToRotate.copy(
+                                                    addedAt = System.currentTimeMillis()
+                                                )
+                                                cropFeedbackMessage = "Adjusted & rotated 90°"
+                                            }
+                                        } catch (e: Exception) {
+                                            cropFeedbackMessage = "Adjustment failed: ${e.message}"
+                                        }
+                                    }
+                                }
                             },
                             modifier = Modifier.size(36.dp)
                         ) {
@@ -306,6 +362,9 @@ fun CaptureReviewSliderModal(
                                     photo = photo,
                                     pageNumber = page + 1,
                                     totalPages = reviewPhotos.size,
+                                    onCaptionChange = { newCaption ->
+                                        reviewPhotos[page] = photo.copy(caption = newCaption.ifBlank { null })
+                                    },
                                     onZoomChanged = { isZoomed ->
                                         if (pagerState.currentPage == page) {
                                             isCurrentPhotoZoomed = isZoomed
@@ -331,33 +390,74 @@ fun CaptureReviewSliderModal(
                                 fontWeight = FontWeight.Medium
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                color = if (selectedSubfolderId == null) FolderBodyBlue else DockSlatePill.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.clickable { selectedSubfolderId = null }
+
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(
-                                    text = "All Notes",
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                            subfolders.take(2).forEach { sub ->
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    color = if (selectedSubfolderId == sub.id) FolderBodyBlue else DockSlatePill.copy(alpha = 0.4f),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.clickable { selectedSubfolderId = sub.id }
-                                ) {
-                                    Text(
-                                        text = sub.name,
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
+                                if (folderSuggestion?.suggestedSubfolderName != null) {
+                                    item {
+                                        Surface(
+                                            color = Color(0xFF2A2050),
+                                            shape = RoundedCornerShape(8.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, TagAmber),
+                                            modifier = Modifier.clickable {
+                                                selectedSubfolderId = folderSuggestion.suggestedSubfolderId
+                                            }
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.AutoAwesome,
+                                                    contentDescription = null,
+                                                    tint = TagAmber,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = "✨ ${folderSuggestion.suggestedSubfolderName}",
+                                                    color = TagAmber,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                item {
+                                    Surface(
+                                        color = if (selectedSubfolderId == null) FolderBodyBlue else DockSlatePill.copy(alpha = 0.4f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.clickable { selectedSubfolderId = null }
+                                    ) {
+                                        Text(
+                                            text = "All Notes",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+
+                                items(subfolders, key = { it.id }) { sub ->
+                                    Surface(
+                                        color = if (selectedSubfolderId == sub.id) FolderBodyBlue else DockSlatePill.copy(alpha = 0.4f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.clickable { selectedSubfolderId = sub.id }
+                                    ) {
+                                        Text(
+                                            text = sub.name,
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -403,6 +503,7 @@ private fun CaptureReviewPage(
     photo: Photo,
     pageNumber: Int,
     totalPages: Int,
+    onCaptionChange: (String) -> Unit = {},
     onZoomChanged: (Boolean) -> Unit = {}
 ) {
     Box(
@@ -453,34 +554,85 @@ private fun CaptureReviewPage(
             }
         }
 
-        // Overlay status pill at bottom
+        // Overlay status & editable caption at bottom
         Surface(
-            color = Color.Black.copy(alpha = 0.70f),
-            shape = RoundedCornerShape(10.dp),
+            color = Color.Black.copy(alpha = 0.78f),
+            shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(12.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "Page $pageNumber of $totalPages",
-                    color = FolderTabCream,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                if (!photo.ocrText.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        text = "“${photo.ocrText.take(80)}...”",
-                        color = TextSecondary,
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = "Page $pageNumber of $totalPages",
+                        color = FolderTabCream,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
                     )
+                    if (!photo.ocrText.isNullOrBlank()) {
+                        Text(
+                            text = "“${photo.ocrText.take(40)}...”",
+                            color = TextSecondary,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                // Editable caption field (inline rename)
+                var currentText by remember(photo.id, photo.caption) {
+                    mutableStateOf(photo.caption ?: "")
+                }
+                androidx.compose.foundation.text.BasicTextField(
+                    value = currentText,
+                    onValueChange = {
+                        currentText = it
+                        onCaptionChange(it)
+                    },
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF1E293B).copy(alpha = 0.8f))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    decorationBox = { innerTextField ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit caption",
+                                tint = FolderTabCream,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (currentText.isEmpty()) {
+                                    Text(
+                                        text = "Add caption / rename note...",
+                                        color = TextSecondary.copy(alpha = 0.7f),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    }
+                )
             }
         }
     }

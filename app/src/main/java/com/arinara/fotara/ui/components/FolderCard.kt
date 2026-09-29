@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Icon
@@ -220,6 +221,34 @@ fun FolderCard(
                         tint = Color(0xFF6B6559),
                         modifier = Modifier.size(14.dp)
                     )
+                }
+                if (folder.linkGroupId != null) {
+                    if (folder.isPinned) Spacer(modifier = Modifier.width(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF1A2238),
+                        border = androidx.compose.foundation.BorderStroke(0.9.dp, Color(0xFFF77F00)),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Link,
+                                contentDescription = "Linked folder",
+                                tint = Color(0xFFF77F00),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "LINK",
+                                color = Color(0xFFF77F00),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 if (folder.isLocked) {

@@ -53,6 +53,11 @@ interface SettingsRepository {
     suspend fun addRecentSearch(query: String)
     suspend fun removeRecentSearch(query: String)
     suspend fun clearRecentSearches()
+    fun getRecentDestinations(): List<com.arinara.fotara.data.model.RecentDestination>
+    suspend fun addRecentDestination(destination: com.arinara.fotara.data.model.RecentDestination)
+    suspend fun clearRecentDestinations()
+    suspend fun updateAutoCheckUpdates(enabled: Boolean)
+    suspend fun updateOptInCrashReporting(enabled: Boolean)
 }
 
 class DefaultSettingsRepository(
@@ -71,16 +76,23 @@ class DefaultSettingsRepository(
     override val settingsFlow: StateFlow<UserSettings> = _settingsFlow.asStateFlow()
 
     private fun loadSettings(): UserSettings {
+        val rawTheme = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)
+        val resolvedTheme = ThemeMode.fromName(rawTheme)
+        if (rawTheme.equals("LIGHT", ignoreCase = true)) {
+            prefs.edit().putString(KEY_THEME_MODE, ThemeMode.SYSTEM.name).apply()
+        }
         return UserSettings(
             defaultSortOrder = SortOrder.fromName(prefs.getString(KEY_SORT_ORDER, SortOrder.UPLOAD_DATE.name)),
             gridDensity = prefs.getInt(KEY_GRID_DENSITY, 3),
-            themeMode = ThemeMode.fromName(prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)),
+            themeMode = resolvedTheme,
             autoOcrEnabled = prefs.getBoolean(KEY_AUTO_OCR, true),
             ocrLanguage = prefs.getString(KEY_OCR_LANGUAGE, "Latin") ?: "Latin",
             downsampleQuality = DownsampleQuality.fromName(prefs.getString(KEY_DOWNSAMPLE_QUALITY, DownsampleQuality.HIGH_QUALITY.name)),
             reminderLeadTimeHours = prefs.getInt(KEY_REMINDER_LEAD_TIME, 1),
             dueTomorrowRibbonEnabled = prefs.getBoolean(KEY_DUE_TOMORROW_RIBBON, true),
-            storageLocation = StorageLocation.fromName(prefs.getString(KEY_STORAGE_LOCATION, StorageLocation.INTERNAL.name))
+            storageLocation = StorageLocation.fromName(prefs.getString(KEY_STORAGE_LOCATION, StorageLocation.INTERNAL.name)),
+            autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK_UPDATES, true),
+            optInCrashReporting = prefs.getBoolean(KEY_OPT_IN_CRASH_REPORTING, false)
         )
     }
 
@@ -366,6 +378,71 @@ class DefaultSettingsRepository(
         prefs.edit().remove(KEY_RECENT_SEARCHES).apply()
     }
 
+    override fun getRecentDestinations(): List<com.arinara.fotara.data.model.RecentDestination> {
+        val raw = prefs.getString(KEY_RECENT_DESTINATIONS, null) ?: return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            val list = mutableListOf<com.arinara.fotara.data.model.RecentDestination>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(
+                    com.arinara.fotara.data.model.RecentDestination(
+                        type = com.arinara.fotara.data.model.DestinationType.valueOf(obj.getString("type")),
+                        folderId = obj.getLong("folderId"),
+                        subfolderId = if (obj.isNull("subfolderId")) null else obj.getLong("subfolderId"),
+                        groupId = if (obj.isNull("groupId")) null else obj.getLong("groupId"),
+                        title = obj.getString("title"),
+                        subtitle = if (obj.isNull("subtitle")) null else obj.getString("subtitle"),
+                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                    )
+                )
+            }
+            list
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    override suspend fun addRecentDestination(destination: com.arinara.fotara.data.model.RecentDestination) = withContext(Dispatchers.IO) {
+        val current = getRecentDestinations().toMutableList()
+        current.removeAll {
+            it.type == destination.type &&
+            it.folderId == destination.folderId &&
+            it.subfolderId == destination.subfolderId &&
+            it.groupId == destination.groupId
+        }
+        current.add(0, destination)
+        val max5 = current.take(5)
+        val array = JSONArray()
+        for (item in max5) {
+            val obj = JSONObject().apply {
+                put("type", item.type.name)
+                put("folderId", item.folderId)
+                if (item.subfolderId != null) put("subfolderId", item.subfolderId) else put("subfolderId", JSONObject.NULL)
+                if (item.groupId != null) put("groupId", item.groupId) else put("groupId", JSONObject.NULL)
+                put("title", item.title)
+                if (item.subtitle != null) put("subtitle", item.subtitle) else put("subtitle", JSONObject.NULL)
+                put("timestamp", item.timestamp)
+            }
+            array.put(obj)
+        }
+        prefs.edit().putString(KEY_RECENT_DESTINATIONS, array.toString()).apply()
+    }
+
+    override suspend fun clearRecentDestinations() = withContext(Dispatchers.IO) {
+        prefs.edit().remove(KEY_RECENT_DESTINATIONS).apply()
+    }
+
+    override suspend fun updateAutoCheckUpdates(enabled: Boolean) = withContext(Dispatchers.IO) {
+        prefs.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, enabled).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(autoCheckUpdates = enabled)
+    }
+
+    override suspend fun updateOptInCrashReporting(enabled: Boolean) = withContext(Dispatchers.IO) {
+        prefs.edit().putBoolean(KEY_OPT_IN_CRASH_REPORTING, enabled).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(optInCrashReporting = enabled)
+    }
+
     companion object {
         private const val PREFS_NAME = "fotara_settings"
         private const val KEY_SORT_ORDER = "key_sort_order"
@@ -379,5 +456,8 @@ class DefaultSettingsRepository(
         private const val KEY_STORAGE_LOCATION = "key_storage_location"
         private const val KEY_ONBOARDING_COMPLETED = "key_onboarding_completed"
         private const val KEY_RECENT_SEARCHES = "key_recent_searches"
+        private const val KEY_RECENT_DESTINATIONS = "key_recent_destinations"
+        private const val KEY_AUTO_CHECK_UPDATES = "key_auto_check_updates"
+        private const val KEY_OPT_IN_CRASH_REPORTING = "key_opt_in_crash_reporting"
     }
 }

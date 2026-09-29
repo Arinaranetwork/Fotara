@@ -9,7 +9,10 @@ package com.arinara.fotara.data.repository
 import android.content.ContentValues
 import android.database.Cursor
 import com.arinara.fotara.data.db.FotaraDbHelper
+import android.database.sqlite.SQLiteDatabase
 import com.arinara.fotara.data.model.Folder
+import com.arinara.fotara.data.model.LinkGroup
+import com.arinara.fotara.data.model.LinkItemType
 import com.arinara.fotara.data.model.Subfolder
 import com.arinara.fotara.data.model.TagColor
 import com.arinara.fotara.data.storage.PhotoStorageManager
@@ -22,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 data class FolderBulkDeleteResult(
     val folderCount: Int,
@@ -59,6 +63,9 @@ interface FolderRepository {
     suspend fun lockFolder(id: Long, pin: String)
     suspend fun unlockFolder(id: Long)
     suspend fun updateFolderPin(id: Long, newPin: String)
+    fun getFolderLinkGroups(): Flow<List<LinkGroup>>
+    suspend fun createFolderLinkGroup(folderIds: List<Long>): Long
+    suspend fun unlinkFolder(folderId: Long)
     suspend fun refresh()
 }
 
@@ -72,6 +79,7 @@ class SqliteFolderRepository(
     private val foldersFlow = MutableStateFlow<List<Folder>>(emptyList())
     private val subfoldersFlow = MutableStateFlow<Map<Long, List<Subfolder>>>(emptyMap())
     private val trashedFoldersFlow = MutableStateFlow<List<Folder>>(emptyList())
+    private val folderLinkGroupsFlow = MutableStateFlow<List<LinkGroup>>(emptyList())
 
     init {
         scope.launch {
@@ -82,6 +90,28 @@ class SqliteFolderRepository(
     private fun refreshSync() {
         try {
             val db = dbHelper.getSafeReadableDatabase()
+
+            // Load folder link groups
+            val linkList = mutableListOf<LinkGroup>()
+            val folderToLinkGroupMap = mutableMapOf<Long, Long>()
+            try {
+                val linkCursor = db.rawQuery(
+                    "SELECT id, item_type, member_ids, created_at FROM link_groups WHERE item_type = 'FOLDER' ORDER BY created_at ASC",
+                    null
+                )
+                linkCursor.use { lc ->
+                    while (lc.moveToNext()) {
+                        val lgId = lc.getLong(0)
+                        val type = LinkItemType.valueOf(lc.getString(1))
+                        val rawIds = lc.getString(2)
+                        val memberIds = rawIds.split(",").mapNotNull { it.trim().toLongOrNull() }
+                        linkList.add(LinkGroup(id = lgId, itemType = type, memberIds = memberIds, createdAt = lc.getLong(3)))
+                        memberIds.forEach { fId -> folderToLinkGroupMap[fId] = lgId }
+                    }
+                }
+            } catch (_: Exception) {}
+            folderLinkGroupsFlow.value = linkList
+
             val folderList = mutableListOf<Folder>()
 
             val cursor = db.rawQuery(
@@ -101,9 +131,10 @@ class SqliteFolderRepository(
 
             cursor.use { c ->
                 while (c.moveToNext()) {
+                    val fId = c.getLong(0)
                     folderList.add(
                         Folder(
-                            id = c.getLong(0),
+                            id = fId,
                             name = c.getString(1),
                             colorLabel = c.getString(2),
                             isPinned = c.getInt(3) == 1,
@@ -111,7 +142,8 @@ class SqliteFolderRepository(
                             photoCount = c.getInt(5),
                             totalSizeBytes = c.getLong(6),
                             isLocked = c.getInt(7) == 1,
-                            lockPin = if (c.isNull(8)) null else c.getString(8)
+                            lockPin = if (c.isNull(8)) null else c.getString(8),
+                            linkGroupId = folderToLinkGroupMap[fId]
                         )
                     )
                 }
@@ -281,6 +313,9 @@ class SqliteFolderRepository(
             db.execSQL("UPDATE photos SET is_trashed = 1, deleted_at = $now WHERE folder_id IN ($inClause)")
             db.execSQL("UPDATE subfolders SET is_trashed = 1, deleted_at = $now WHERE folder_id IN ($inClause)")
             db.execSQL("UPDATE folders SET is_trashed = 1, deleted_at = $now WHERE id IN ($inClause)")
+            for (fId in folderIds) {
+                removeFolderFromLinkGroupsInternal(db, fId)
+            }
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -397,16 +432,111 @@ class SqliteFolderRepository(
                 } catch (_: Exception) {}
             }
         }
+
+        // Clean up document note original files and page image files to prevent disk leaks
+        try {
+            val docCursor = db.rawQuery("SELECT origin_file_uri, id FROM document_notes WHERE folder_id = ?", arrayOf(id.toString()))
+            val docIds = mutableListOf<Long>()
+            docCursor.use { c ->
+                while (c.moveToNext()) {
+                    val originUri = c.getString(0)
+                    docIds.add(c.getLong(1))
+                    try { File(originUri).delete() } catch (_: Exception) {}
+                }
+            }
+            if (docIds.isNotEmpty()) {
+                val placeholders = docIds.joinToString(",") { "?" }
+                val pagesCursor = db.rawQuery("SELECT image_uri FROM document_pages WHERE document_note_id IN ($placeholders)", docIds.map { it.toString() }.toTypedArray())
+                pagesCursor.use { pc ->
+                    while (pc.moveToNext()) {
+                        try { File(pc.getString(0)).delete() } catch (_: Exception) {}
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FolderRepository", "Error cleaning up document files for folder $id: ${e.message}")
+        }
+
         db.beginTransaction()
         try {
             db.execSQL("DELETE FROM photos WHERE folder_id = ?", arrayOf(id.toString()))
+            db.execSQL("DELETE FROM document_notes WHERE folder_id = ?", arrayOf(id.toString()))
+            db.execSQL("DELETE FROM text_notes WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM subfolders WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM folders WHERE id = ?", arrayOf(id.toString()))
+            removeFolderFromLinkGroupsInternal(db, id)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
         }
         refreshSync()
+    }
+
+    override fun getFolderLinkGroups(): Flow<List<LinkGroup>> = folderLinkGroupsFlow.asStateFlow()
+
+    override suspend fun createFolderLinkGroup(folderIds: List<Long>): Long = withContext(Dispatchers.IO) {
+        if (folderIds.size < 2) return@withContext -1L
+        val cappedIds = folderIds.distinct().take(4)
+        val db = dbHelper.getSafeWritableDatabase()
+        db.beginTransaction()
+        val insertedId: Long
+        try {
+            for (fId in cappedIds) {
+                removeFolderFromLinkGroupsInternal(db, fId)
+            }
+            val values = ContentValues().apply {
+                put("item_type", LinkItemType.FOLDER.name)
+                put("member_ids", cappedIds.joinToString(","))
+                put("created_at", System.currentTimeMillis())
+            }
+            insertedId = db.insert("link_groups", null, values)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        refreshSync()
+        insertedId
+    }
+
+    override suspend fun unlinkFolder(folderId: Long) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        db.beginTransaction()
+        try {
+            removeFolderFromLinkGroupsInternal(db, folderId)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        refreshSync()
+    }
+
+    private fun removeFolderFromLinkGroupsInternal(db: SQLiteDatabase, folderId: Long) {
+        try {
+            val cursor = db.rawQuery("SELECT id, member_ids FROM link_groups WHERE item_type = 'FOLDER'", null)
+            val toUpdate = mutableListOf<Pair<Long, List<Long>>>()
+            val toDelete = mutableListOf<Long>()
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    val lgId = c.getLong(0)
+                    val members = c.getString(1).split(",").mapNotNull { it.trim().toLongOrNull() }
+                    if (members.contains(folderId)) {
+                        val rem = members.filter { it != folderId }
+                        if (rem.size <= 1) {
+                            toDelete.add(lgId)
+                        } else {
+                            toUpdate.add(lgId to rem)
+                        }
+                    }
+                }
+            }
+            for (id in toDelete) {
+                db.delete("link_groups", "id = ?", arrayOf(id.toString()))
+            }
+            for ((id, rem) in toUpdate) {
+                val vals = ContentValues().apply { put("member_ids", rem.joinToString(",")) }
+                db.update("link_groups", vals, "id = ?", arrayOf(id.toString()))
+            }
+        } catch (_: Exception) {}
     }
 
     override suspend fun lockFolder(id: Long, pin: String) = withContext(Dispatchers.IO) {

@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
 
     private var appContainer: AppContainer? by mutableStateOf(null)
     private var startupError: String? by mutableStateOf(null)
+    private var openUpdateScreenRequested: Boolean by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +76,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val deepLinkPhotoId = intent?.getLongExtra("photo_id", -1L)?.takeIf { it > 0 }
         val deepLinkDirectView = intent?.getBooleanExtra("direct_view_note", false) ?: false
+        if (intent?.getBooleanExtra("OPEN_UPDATE_SCREEN", false) == true) {
+            openUpdateScreenRequested = true
+        }
 
         setContent {
             FotaraTheme {
@@ -89,7 +93,9 @@ class MainActivity : ComponentActivity() {
                             MainNavigation(
                                 appContainer = container,
                                 deepLinkPhotoId = deepLinkPhotoId,
-                                deepLinkDirectView = deepLinkDirectView
+                                deepLinkDirectView = deepLinkDirectView,
+                                openUpdateScreen = openUpdateScreenRequested,
+                                onUpdateScreenOpened = { openUpdateScreenRequested = false }
                             )
                         }
                         error != null -> {
@@ -117,6 +123,14 @@ class MainActivity : ComponentActivity() {
         } catch (e: Throwable) {
             Log.e("MainActivity", "Failed to initialize AppContainer: ${e.message}", e)
             startupError = e.message ?: e.toString()
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("OPEN_UPDATE_SCREEN", false)) {
+            openUpdateScreenRequested = true
         }
     }
 }

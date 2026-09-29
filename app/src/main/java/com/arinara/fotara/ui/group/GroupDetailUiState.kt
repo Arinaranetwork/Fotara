@@ -9,12 +9,17 @@ package com.arinara.fotara.ui.group
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
+import com.arinara.fotara.data.model.RecentDestination
+import com.arinara.fotara.data.model.Subfolder
 
 data class GroupDetailUiState(
     val group: PhotoGroup? = null,
     val folder: Folder? = null,
     val photos: List<Photo> = emptyList(),
     val availableFolderPhotos: List<Photo> = emptyList(),
+    val subfolders: List<Subfolder> = emptyList(),
+    val availableFolders: List<Folder> = emptyList(),
+    val recentDestinations: List<RecentDestination> = emptyList(),
     val gridDensity: Int = 3,
     val highlightedPhotoId: Long? = null,
     val userMessage: String? = null

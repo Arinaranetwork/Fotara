@@ -36,14 +36,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Feedback
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -81,6 +88,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
+import com.arinara.fotara.data.model.TextNote
+import com.arinara.fotara.online.FeedbackManager
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.MidnightCardOutline
@@ -91,6 +100,8 @@ import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.ui.components.BatchRenameDialog
+import com.arinara.fotara.ui.components.FeedbackDialog
 import com.arinara.fotara.ui.components.FloatingDock
 import com.arinara.fotara.ui.components.FolderCard
 import com.arinara.fotara.ui.components.FolderUnlockDialog
@@ -107,8 +118,13 @@ fun HomeScreen(
     onFolderClick: (Folder) -> Unit,
     onNavigateToPhoto: (folderId: Long, subfolderId: Long?, photoId: Long) -> Unit = { _, _, _ -> },
     onNavigateToGroup: (folderId: Long, subfolderId: Long?, groupId: Long) -> Unit = { _, _, _ -> },
+    onNavigateToTextNote: (folderId: Long, noteId: Long) -> Unit = { _, _ -> },
     onOpenTrash: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenUpdates: () -> Unit = {},
+    onOpenSupport: () -> Unit = {},
+    onOpenWhatsNew: () -> Unit = {},
+    feedbackManager: FeedbackManager? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -118,6 +134,8 @@ fun HomeScreen(
 
     var activeContextFolder by remember { mutableStateOf<Folder?>(null) }
     var showHomeOverflowMenu by remember { mutableStateOf(false) }
+    var showBatchRenameDialog by remember { mutableStateOf(false) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
 
     var folderToUnlock by remember { mutableStateOf<Folder?>(null) }
     var folderToLock by remember { mutableStateOf<Folder?>(null) }
@@ -126,6 +144,7 @@ fun HomeScreen(
     var isResettingPin by remember { mutableStateOf(false) }
     var pendingPhotoSearchResult by remember { mutableStateOf<Photo?>(null) }
     var pendingGroupSearchResult by remember { mutableStateOf<PhotoGroup?>(null) }
+    var pendingTextNoteSearchResult by remember { mutableStateOf<TextNote?>(null) }
 
     val deviceLockLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -146,6 +165,18 @@ fun HomeScreen(
                     pendingPhotoSearchResult = null
                     viewModel.onPhotoSearchResultClicked(photo) { folderId, subfolderId, photoId ->
                         onNavigateToPhoto(folderId, subfolderId, photoId)
+                    }
+                } else if (pendingGroupSearchResult != null) {
+                    val group = pendingGroupSearchResult!!
+                    pendingGroupSearchResult = null
+                    viewModel.onGroupSearchResultClicked(group) { folderId, subfolderId, groupId ->
+                        onNavigateToGroup(folderId, subfolderId, groupId)
+                    }
+                } else if (pendingTextNoteSearchResult != null) {
+                    val note = pendingTextNoteSearchResult!!
+                    pendingTextNoteSearchResult = null
+                    viewModel.onTextNoteSearchResultClicked(note) { folderId, noteId ->
+                        onNavigateToTextNote(folderId, noteId)
                     }
                 } else {
                     onFolderClick(target)
@@ -189,6 +220,24 @@ fun HomeScreen(
                         }
                     },
                     actions = {
+                        if (uiState.selectedFolderIds.size in 2..4) {
+                            IconButton(onClick = { viewModel.linkSelectedFolders() }) {
+                                Icon(
+                                    imageVector = Icons.Default.Link,
+                                    contentDescription = "Link Folders",
+                                    tint = FolderTabCream
+                                )
+                            }
+                        }
+                        if (uiState.selectedFolderIds.isNotEmpty()) {
+                            IconButton(onClick = { showBatchRenameDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Rename Selected Folders",
+                                    tint = FolderTabCream
+                                )
+                            }
+                        }
                         IconButton(onClick = { viewModel.selectAllFolders() }) {
                             Icon(
                                 imageVector = Icons.Default.SelectAll,
@@ -220,6 +269,13 @@ fun HomeScreen(
                         )
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.enterMultiSelectMode(null) }) {
+                            Icon(
+                                imageVector = Icons.Default.SelectAll,
+                                contentDescription = "Select Folders",
+                                tint = FolderTabCream
+                            )
+                        }
                         Box {
                             IconButton(onClick = { showHomeOverflowMenu = true }) {
                                 Icon(
@@ -235,6 +291,63 @@ fun HomeScreen(
                                     .background(MidnightSurface)
                                     .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text("What's New", color = TextPrimary) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.NewReleases,
+                                            contentDescription = null,
+                                            tint = TagAmber
+                                        )
+                                    },
+                                    onClick = {
+                                        showHomeOverflowMenu = false
+                                        onOpenWhatsNew()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Check for Updates", color = TextPrimary) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.SystemUpdate,
+                                            contentDescription = null,
+                                            tint = FolderTabCream
+                                        )
+                                    },
+                                    onClick = {
+                                        showHomeOverflowMenu = false
+                                        onOpenUpdates()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Send Feedback", color = TextPrimary) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Feedback,
+                                            contentDescription = null,
+                                            tint = FolderTabCream
+                                        )
+                                    },
+                                    onClick = {
+                                        showHomeOverflowMenu = false
+                                        showFeedbackDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Support Fotara", color = TextPrimary) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.VolunteerActivism,
+                                            contentDescription = null,
+                                            tint = TagCrimson
+                                        )
+                                    },
+                                    onClick = {
+                                        showHomeOverflowMenu = false
+                                        onOpenSupport()
+                                    }
+                                )
+                                HorizontalDivider(color = MidnightCardOutline.copy(alpha = 0.6f))
                                 DropdownMenuItem(
                                     text = { Text("Settings", color = TextPrimary) },
                                     leadingIcon = {
@@ -276,7 +389,12 @@ fun HomeScreen(
                 FloatingDock(
                     onSearchClick = { viewModel.activateSearch() },
                     onCameraClick = {
-                        // If folders exist, open first folder or search
+                        val target = uiState.folders.firstOrNull { !it.isLocked } ?: uiState.folders.firstOrNull()
+                        if (target != null) {
+                            onFolderClick(target)
+                        } else {
+                            viewModel.openNewFolderDialog()
+                        }
                     }
                 )
             }
@@ -492,6 +610,34 @@ fun HomeScreen(
                                     }
                                 }
                             }
+
+                            if (folder.linkGroupId != null) {
+                                Surface(
+                                    color = Color.Transparent,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.unlinkFolder(folder.id)
+                                            activeContextFolder = null
+                                        }
+                                        .padding(vertical = 12.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.LinkOff,
+                                            contentDescription = null,
+                                            tint = TagCrimson,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(14.dp))
+                                        Text(
+                                            text = "Unlink Folder",
+                                            color = TagCrimson,
+                                            fontSize = 15.sp
+                                        )
+                                    }
+                                }
+                            }
                         }
                     },
                     confirmButton = {},
@@ -539,6 +685,13 @@ fun HomeScreen(
                                 pendingPhotoSearchResult = null
                                 viewModel.onPhotoSearchResultClicked(photo) { folderId, subfolderId, photoId ->
                                     onNavigateToPhoto(folderId, subfolderId, photoId)
+                                }
+                            }
+                            pendingTextNoteSearchResult != null -> {
+                                val note = pendingTextNoteSearchResult!!
+                                pendingTextNoteSearchResult = null
+                                viewModel.onTextNoteSearchResultClicked(note) { folderId, noteId ->
+                                    onNavigateToTextNote(folderId, noteId)
                                 }
                             }
                             else -> {
@@ -665,6 +818,7 @@ fun HomeScreen(
                     folderResults = uiState.folderSearchResults,
                     groupResults = uiState.groupSearchResults,
                     photoResults = uiState.searchResults,
+                    textNoteResults = uiState.textNoteSearchResults,
                     recentSearches = uiState.recentSearches,
                     selectedDateFilter = uiState.searchDateFilter,
                     onSelectDateFilter = { viewModel.setDateFilter(it) },
@@ -710,10 +864,40 @@ fun HomeScreen(
                                 onNavigateToPhoto(folderId, subfolderId, photoId)
                             }
                         }
+                    },
+                    onTextNoteClick = { note ->
+                        val targetFolder = uiState.folders.firstOrNull { it.id == note.folderId }
+                        if (targetFolder != null && targetFolder.isLocked) {
+                            pendingTextNoteSearchResult = note
+                            folderToUnlock = targetFolder
+                        } else {
+                            viewModel.onTextNoteSearchResultClicked(note) { folderId, noteId ->
+                                onNavigateToTextNote(folderId, noteId)
+                            }
+                        }
                     }
                 )
             }
         }
+    }
+
+    if (showBatchRenameDialog) {
+        BatchRenameDialog(
+            itemCount = uiState.selectedFolderIds.size,
+            initialBaseName = uiState.folders.firstOrNull { it.id in uiState.selectedFolderIds }?.name ?: "",
+            onConfirm = { baseName ->
+                viewModel.batchRenameFolders(baseName)
+                showBatchRenameDialog = false
+            },
+            onDismiss = { showBatchRenameDialog = false }
+        )
+    }
+
+    if (showFeedbackDialog && feedbackManager != null) {
+        FeedbackDialog(
+            feedbackManager = feedbackManager,
+            onDismiss = { showFeedbackDialog = false }
+        )
     }
 }
 

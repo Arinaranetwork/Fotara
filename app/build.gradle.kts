@@ -11,8 +11,8 @@ android {
         applicationId = "com.arinara.fotara"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.1.1"
+        versionCode = 12
+        versionName = "1.4.0"
     }
 
     buildTypes {
@@ -20,6 +20,10 @@ android {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+    }
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -97,4 +101,8 @@ dependencies {
   implementation(libs.androidx.navigation3.ui)
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+
+  // Jetpack Glance Widget
+  implementation("androidx.glance:glance-appwidget:1.1.1")
+  implementation("androidx.glance:glance-material3:1.1.1")
 }

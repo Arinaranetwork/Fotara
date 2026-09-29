@@ -15,7 +15,8 @@ data class PhotoGroup(
     val createdAt: Long = System.currentTimeMillis(),
     val coverPhotoId: Long? = null,
     val isTrashed: Boolean = false,
-    val deletedAt: Long? = null
+    val deletedAt: Long? = null,
+    val linkedDeadline: Long? = null
 ) {
     val tag: TagColor? get() = tagColor?.let { TagColor.fromHex(it) }
 }

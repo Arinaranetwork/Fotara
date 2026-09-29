@@ -6,6 +6,12 @@
 
 package com.arinara.fotara.ui.group
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -25,22 +31,32 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LayersClear
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,6 +65,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -59,46 +76,66 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.arinara.fotara.data.model.DestinationType
+import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
+import com.arinara.fotara.data.model.RecentDestination
+import com.arinara.fotara.data.model.Subfolder
 import com.arinara.fotara.data.model.TagColor
+import com.arinara.fotara.data.storage.PhotoStorageManager
+import com.arinara.fotara.ocr.FolderSuggestEngine
+import com.arinara.fotara.ocr.OcrEngine
 import com.arinara.fotara.theme.DockSlatePill
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.MidnightCardOutline
 import com.arinara.fotara.theme.MidnightNavy
 import com.arinara.fotara.theme.MidnightSurface
+import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.ui.capture.MultiCaptureScreen
+import com.arinara.fotara.ui.components.CaptureReviewSliderModal
 import com.arinara.fotara.ui.folder.DetailPhotoCard
 import com.arinara.fotara.ui.photo.PhotoViewerDialog
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupDetailScreen(
     viewModel: GroupDetailViewModel,
+    photoStorageManager: PhotoStorageManager? = null,
+    ocrEngine: OcrEngine? = null,
+    folderSuggestEngine: FolderSuggestEngine? = null,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -107,11 +144,32 @@ fun GroupDetailScreen(
     var showColorDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showAddPhotosDialog by remember { mutableStateOf(false) }
+    var showAddOptionsSheet by remember { mutableStateOf(false) }
+    var showMultiCapture by remember { mutableStateOf(false) }
+    var showDeadlineDialog by remember { mutableStateOf(false) }
+    var showMoveGroupDialog by remember { mutableStateOf(false) }
+    var showExportGroupDialog by remember { mutableStateOf(false) }
 
+    var capturedBatchPhotos by remember { mutableStateOf<List<Photo>?>(null) }
     var inspectingPhoto by remember { mutableStateOf<Photo?>(null) }
+    var contextMenuPhoto by remember { mutableStateOf<Photo?>(null) }
 
+    val bottomSheetState = rememberModalBottomSheetState()
     val gridState = rememberLazyGridState()
     val highlightAlpha = remember { Animatable(0f) }
+
+    val galleryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            coroutineScope.launch {
+                val imported = viewModel.importGalleryUris(uris)
+                if (imported.isNotEmpty()) {
+                    capturedBatchPhotos = imported
+                }
+            }
+        }
+    }
 
     LaunchedEffect(uiState.userMessage) {
         uiState.userMessage?.let { msg ->
@@ -186,9 +244,9 @@ fun GroupDetailScreen(
                     }
                 },
                 actions = {
-                    // Right Action 1: Add Photos Button [+]
+                    // Right Action 1: Add Photos Dropdown Button [+]
                     IconButton(
-                        onClick = { showAddPhotosDialog = true },
+                        onClick = { showAddOptionsSheet = true },
                         modifier = Modifier
                             .padding(end = 4.dp)
                             .size(36.dp)
@@ -197,7 +255,7 @@ fun GroupDetailScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Add Photos to Group",
+                            contentDescription = "Add Notes to Group",
                             tint = FolderTabCream,
                             modifier = Modifier.size(20.dp)
                         )
@@ -233,6 +291,35 @@ fun GroupDetailScreen(
                                 onClick = {
                                     showOverflowMenu = false
                                     showRenameDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        if (uiState.group?.linkedDeadline != null) "Edit Deadline" else "Set Deadline",
+                                        color = TextPrimary
+                                    )
+                                },
+                                leadingIcon = { Icon(Icons.Default.Event, null, tint = TagAmber) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showDeadlineDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Move to Subfolder...", color = TextPrimary) },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, null, tint = FolderTabCream) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showMoveGroupDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Export Group...", color = TextPrimary) },
+                                leadingIcon = { Icon(Icons.Default.Share, null, tint = FolderTabCream) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showExportGroupDialog = true
                                 }
                             )
                             DropdownMenuItem(
@@ -312,10 +399,249 @@ fun GroupDetailScreen(
                             isHighlighted = isTarget && highlightAlpha.value > 0f,
                             highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
                             onCardClick = { inspectingPhoto = photo },
-                            onCardLongClick = { inspectingPhoto = photo }
+                            onCardLongClick = { contextMenuPhoto = photo }
                         )
                     }
                 }
+            }
+        }
+    }
+
+    // Modal Sheet for Add Button [+] Options (2.4)
+    if (showAddOptionsSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAddOptionsSheet = false },
+            sheetState = bottomSheetState,
+            containerColor = MidnightSurface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+            ) {
+                Text(
+                    text = "Add to \"${uiState.group?.name ?: "Group"}\"",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Option 1: Multi-Capture Camera
+                Surface(
+                    color = FolderBodyBlue.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, FolderBodyBlue),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showAddOptionsSheet = false
+                            showMultiCapture = true
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(FolderBodyBlue),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.CameraAlt, null, tint = FolderTabCream, modifier = Modifier.size(24.dp))
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text("Multi-Capture Camera", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("Straighten & capture directly into this group", color = TextSecondary, fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Option 2: Import from Gallery
+                Surface(
+                    color = DockSlatePill.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showAddOptionsSheet = false
+                            galleryPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(DockSlatePill),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Collections, null, tint = FolderTabCream, modifier = Modifier.size(24.dp))
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text("Import from Gallery", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("Select images from library to add directly", color = TextSecondary, fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Option 3: Add Existing Notes from Folder
+                Surface(
+                    color = DockSlatePill.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showAddOptionsSheet = false
+                            showAddPhotosDialog = true
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(DockSlatePill),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Layers, null, tint = FolderTabCream, modifier = Modifier.size(24.dp))
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text("Add Existing Notes", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("Pick standalone notes in this folder", color = TextSecondary, fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+
+    // Full-Screen Multi-Capture Camera Viewfinder
+    if (showMultiCapture && photoStorageManager != null && ocrEngine != null && folderSuggestEngine != null) {
+        MultiCaptureScreen(
+            folderId = uiState.folder?.id ?: 1L,
+            ocrEngine = ocrEngine,
+            folderSuggestEngine = folderSuggestEngine,
+            photoStorageManager = photoStorageManager,
+            onFinishBatch = { batch ->
+                showMultiCapture = false
+                capturedBatchPhotos = batch
+            },
+            onDismiss = { showMultiCapture = false }
+        )
+    }
+
+    // Capture Triage Modal (Review before committing into group)
+    if (capturedBatchPhotos != null) {
+        CaptureReviewSliderModal(
+            folderName = uiState.group?.name ?: "Group",
+            initialPhotos = capturedBatchPhotos ?: emptyList(),
+            subfolders = uiState.subfolders,
+            folderSuggestEngine = folderSuggestEngine,
+            onSaveBatch = { savedList, subfolderId ->
+                viewModel.saveCapturedBatch(savedList, subfolderId)
+                capturedBatchPhotos = null
+            },
+            onDismiss = { capturedBatchPhotos = null }
+        )
+    }
+
+    // Contextual Action Sheet on Member Photo (Long-Press) (2.5)
+    contextMenuPhoto?.let { photo ->
+        ModalBottomSheet(
+            onDismissRequest = { contextMenuPhoto = null },
+            containerColor = MidnightSurface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+            ) {
+                Text(
+                    text = photo.caption ?: "Note Actions",
+                    color = TextPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Action 1: Set as Cover Photo (2.5)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            viewModel.setCoverPhoto(photo.id)
+                            contextMenuPhoto = null
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = FolderTabCream)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(text = "Set as cover photo", color = TextPrimary, fontSize = 15.sp)
+                }
+
+                // Action 2: Inspect Note
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            val target = photo
+                            contextMenuPhoto = null
+                            inspectingPhoto = target
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Collections, contentDescription = null, tint = FolderTabCream)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(text = "Inspect note", color = TextPrimary, fontSize = 15.sp)
+                }
+
+                // Action 3: Remove from Group
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            viewModel.removePhotoFromGroup(photo.id, onAutoDissolved = {
+                                contextMenuPhoto = null
+                                onBackClick()
+                            })
+                            contextMenuPhoto = null
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.LayersClear, contentDescription = null, tint = TagCrimson)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(text = "Remove from group", color = TagCrimson, fontSize = 15.sp)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -337,6 +663,9 @@ fun GroupDetailScreen(
                 viewModel.cropPhoto(p.id, left, top, right, bottom) { updated ->
                     inspectingPhoto = updated
                 }
+            },
+            onSetAsCover = { p ->
+                viewModel.setCoverPhoto(p.id)
             },
             onRemoveFromGroup = { p ->
                 viewModel.removePhotoFromGroup(p.id, onAutoDissolved = {
@@ -389,6 +718,184 @@ fun GroupDetailScreen(
             dismissButton = {
                 TextButton(onClick = { showRenameDialog = false }) {
                     Text("Cancel", color = FolderTabCream)
+                }
+            }
+        )
+    }
+
+    // Dialog: Group-Level Deadline (2.9)
+    if (showDeadlineDialog) {
+        val now = System.currentTimeMillis()
+        val oneDayMs = 24 * 60 * 60 * 1000L
+        AlertDialog(
+            onDismissRequest = { showDeadlineDialog = false },
+            containerColor = MidnightSurface,
+            shape = RoundedCornerShape(18.dp),
+            title = { Text("Set Group Deadline", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Reminders trigger 24 hours prior:", color = TextSecondary, fontSize = 13.sp)
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = DockSlatePill.copy(alpha = 0.35f),
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.setGroupDeadline(now + oneDayMs)
+                                showDeadlineDialog = false
+                            }
+                    ) {
+                        Text("Due Tomorrow (Urgent)", color = TextPrimary, fontSize = 14.sp, modifier = Modifier.padding(14.dp))
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = DockSlatePill.copy(alpha = 0.35f),
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.setGroupDeadline(now + 3 * oneDayMs)
+                                showDeadlineDialog = false
+                            }
+                    ) {
+                        Text("Due in 3 Days", color = TextPrimary, fontSize = 14.sp, modifier = Modifier.padding(14.dp))
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = DockSlatePill.copy(alpha = 0.35f),
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.setGroupDeadline(now + 7 * oneDayMs)
+                                showDeadlineDialog = false
+                            }
+                    ) {
+                        Text("Due Next Week", color = TextPrimary, fontSize = 14.sp, modifier = Modifier.padding(14.dp))
+                    }
+
+                    if (uiState.group?.linkedDeadline != null) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = TagCrimson.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(0.8.dp, TagCrimson.copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setGroupDeadline(null)
+                                    showDeadlineDialog = false
+                                }
+                        ) {
+                            Text("Remove Deadline", color = TagCrimson, fontSize = 14.sp, modifier = Modifier.padding(14.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showDeadlineDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    // Dialog: Move Group to Subfolder (2.2)
+    if (showMoveGroupDialog) {
+        DestinationPickerDialog(
+            title = "Move Group \"${uiState.group?.name}\" to...",
+            recentDestinations = uiState.recentDestinations.filter { it.type != DestinationType.GROUP },
+            availableFolders = uiState.availableFolders,
+            currentFolderId = uiState.folder?.id,
+            currentSubfolders = uiState.subfolders,
+            onSelectDestination = { targetFolderId, targetSubId ->
+                viewModel.moveGroup(targetFolderId, targetSubId, onMoved = onBackClick)
+                showMoveGroupDialog = false
+            },
+            onDismiss = { showMoveGroupDialog = false }
+        )
+    }
+
+    // Dialog: Export Group (2.10)
+    if (showExportGroupDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportGroupDialog = false },
+            containerColor = MidnightSurface,
+            shape = RoundedCornerShape(18.dp),
+            title = { Text("Export \"${uiState.group?.name ?: "Group"}\"", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Choose an export format:", color = TextSecondary, fontSize = 13.sp)
+
+                    // PDF Option
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = DockSlatePill.copy(alpha = 0.35f),
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.exportGroup(context, isZip = false) { file ->
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/pdf"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share Group PDF"))
+                                }
+                                showExportGroupDialog = false
+                            }
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.PictureAsPdf, null, tint = FolderTabCream, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("PDF Document (.pdf)", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("Multi-page coursework notes with group header", color = TextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    // ZIP Option
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = DockSlatePill.copy(alpha = 0.35f),
+                        border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.exportGroup(context, isZip = true) { file ->
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/zip"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share Group ZIP"))
+                                }
+                                showExportGroupDialog = false
+                            }
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Folder, null, tint = FolderTabCream, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("ZIP Archive (.zip)", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("Original high-resolution photos", color = TextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showExportGroupDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
                 }
             }
         )
@@ -573,4 +1080,159 @@ fun GroupDetailScreen(
             }
         )
     }
+}
+
+@Composable
+private fun DestinationPickerDialog(
+    title: String,
+    recentDestinations: List<RecentDestination>,
+    availableFolders: List<Folder>,
+    currentFolderId: Long?,
+    currentSubfolders: List<Subfolder>,
+    onSelectDestination: (folderId: Long, subfolderId: Long?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MidnightSurface,
+        shape = RoundedCornerShape(18.dp),
+        title = { Text(title, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(320.dp)
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (recentDestinations.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "Recently Used",
+                                color = FolderTabCream,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(recentDestinations, key = { "recent_${it.type}_${it.folderId}_${it.subfolderId}_${it.groupId}" }) { recent ->
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = DockSlatePill.copy(alpha = 0.5f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, FolderTabCream.copy(alpha = 0.4f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val subId = if (recent.type == DestinationType.SUBFOLDER) recent.subfolderId else null
+                                        onSelectDestination(recent.folderId, subId)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (recent.type == DestinationType.SUBFOLDER) Icons.AutoMirrored.Filled.DriveFileMove else Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = FolderTabCream,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(recent.title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                        item {
+                            Text(
+                                text = "All Folders",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                            )
+                        }
+                    }
+
+                    items(availableFolders, key = { it.id }) { targetF ->
+                        val isCurrent = targetF.id == currentFolderId
+                        Column {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isCurrent) FolderBodyBlue.copy(alpha = 0.2f) else DockSlatePill.copy(alpha = 0.35f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isCurrent) FolderBodyBlue else MidnightCardOutline
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onSelectDestination(targetF.id, null)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = targetF.tagColor.composeColor,
+                                        modifier = Modifier.size(10.dp)
+                                    ) {}
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = targetF.name + if (isCurrent) " (Current Folder)" else "",
+                                        color = TextPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+
+                            if (isCurrent && currentSubfolders.isNotEmpty()) {
+                                currentSubfolders.forEach { sub ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = DockSlatePill.copy(alpha = 0.2f),
+                                        border = androidx.compose.foundation.BorderStroke(0.6.dp, MidnightCardOutline),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 24.dp, top = 4.dp)
+                                            .clickable {
+                                                onSelectDestination(targetF.id, sub.id)
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                                                contentDescription = null,
+                                                tint = FolderTabCream,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = sub.name,
+                                                color = TextPrimary,
+                                                fontSize = 13.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        }
+    )
 }

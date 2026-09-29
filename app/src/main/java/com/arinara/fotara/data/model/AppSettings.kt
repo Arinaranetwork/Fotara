@@ -20,11 +20,11 @@ enum class SortOrder(val displayName: String) {
 
 enum class ThemeMode(val displayName: String) {
     SYSTEM("System Default"),
-    DARK("Dark Mode"),
-    LIGHT("Light Mode");
+    DARK("Dark Mode");
 
     companion object {
         fun fromName(name: String?): ThemeMode {
+            if (name.equals("LIGHT", ignoreCase = true)) return SYSTEM
             return entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: SYSTEM
         }
     }
@@ -87,7 +87,9 @@ data class UserSettings(
     val downsampleQuality: DownsampleQuality = DownsampleQuality.HIGH_QUALITY,
     val reminderLeadTimeHours: Int = 1,
     val dueTomorrowRibbonEnabled: Boolean = true,
-    val storageLocation: StorageLocation = StorageLocation.INTERNAL
+    val storageLocation: StorageLocation = StorageLocation.INTERNAL,
+    val autoCheckUpdates: Boolean = true,
+    val optInCrashReporting: Boolean = false
 )
 
 data class ImportResult(

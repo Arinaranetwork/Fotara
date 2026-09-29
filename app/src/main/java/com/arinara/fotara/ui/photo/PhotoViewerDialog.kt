@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.LayersClear
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +63,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import com.arinara.fotara.ui.components.RichMarkdownText
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -122,6 +124,7 @@ fun PhotoViewerDialog(
     onRotatePhoto: ((Photo) -> Unit)? = null,
     onCropPhoto: ((photo: Photo, left: Float, top: Float, right: Float, bottom: Float) -> Unit)? = null,
     onRemoveFromGroup: ((Photo) -> Unit)? = null,
+    onSetAsCover: ((Photo) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -296,6 +299,20 @@ fun PhotoViewerDialog(
                                 contentDescription = "Adjust Crop",
                                 tint = FolderTabCream
                             )
+                        }
+
+                        // Set as group cover photo Button
+                        if (onSetAsCover != null) {
+                            IconButton(
+                                onClick = { onSetAsCover.invoke(currentPhoto) },
+                                enabled = !isOperating
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = "Set as cover photo",
+                                    tint = FolderTabCream
+                                )
+                            }
                         }
 
                         // Remove from group Button (strictly when viewed within a group)
@@ -558,7 +575,7 @@ fun PhotoViewerDialog(
                                 }
                             }
                         } else if (!currentPhoto.note.isNullOrBlank()) {
-                            Text(
+                            RichMarkdownText(
                                 text = currentPhoto.note,
                                 color = TextSecondary,
                                 fontSize = 13.sp,

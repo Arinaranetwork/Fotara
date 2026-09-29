@@ -9,8 +9,11 @@ package com.arinara.fotara.test
 import com.arinara.fotara.data.model.DownsampleQuality
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.ImportResult
+import com.arinara.fotara.data.model.LinkGroup
+import com.arinara.fotara.data.model.LinkItemType
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
+import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.model.SortOrder
 import com.arinara.fotara.data.model.StorageBreakdown
 import com.arinara.fotara.data.model.StorageLocation
@@ -23,6 +26,11 @@ import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.data.repository.SubfolderDeleteResult
+import com.arinara.fotara.data.model.DocumentNote
+import com.arinara.fotara.data.model.DocumentPage
+import com.arinara.fotara.data.model.DocumentType
+import com.arinara.fotara.data.repository.DocumentRepository
+import android.net.Uri
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -228,6 +236,29 @@ class FakeFolderRepository(
             current[index] = current[index].copy(lockPin = newPin)
             foldersFlow.value = current
         }
+    }
+
+    private val folderLinkGroupsFlow = MutableStateFlow<List<LinkGroup>>(emptyList())
+    private var nextFolderLinkId = 100L
+
+    override fun getFolderLinkGroups(): Flow<List<LinkGroup>> = folderLinkGroupsFlow.asStateFlow()
+
+    override suspend fun createFolderLinkGroup(folderIds: List<Long>): Long {
+        val id = nextFolderLinkId++
+        val group = LinkGroup(id = id, itemType = LinkItemType.FOLDER, memberIds = folderIds)
+        folderLinkGroupsFlow.value = folderLinkGroupsFlow.value + group
+        return id
+    }
+
+    override suspend fun unlinkFolder(folderId: Long) {
+        val updated = mutableListOf<LinkGroup>()
+        for (lg in folderLinkGroupsFlow.value) {
+            val remaining = lg.memberIds.filter { it != folderId }
+            if (remaining.size >= 2) {
+                updated.add(lg.copy(memberIds = remaining))
+            }
+        }
+        folderLinkGroupsFlow.value = updated
     }
 
     override suspend fun refresh() {}
@@ -476,6 +507,18 @@ class FakePhotoRepository(
         }
     }
 
+    override suspend fun updateGroupDeadline(groupId: Long, deadlineMs: Long?) {
+        groupsFlow.value = groupsFlow.value.map {
+            if (it.id == groupId) it.copy(linkedDeadline = deadlineMs) else it
+        }
+    }
+
+    override suspend fun setGroupCoverPhoto(groupId: Long, photoId: Long) {
+        groupsFlow.value = groupsFlow.value.map {
+            if (it.id == groupId) it.copy(coverPhotoId = photoId) else it
+        }
+    }
+
     override suspend fun ungroup(groupId: Long) {
         photosFlow.value = photosFlow.value.map {
             if (it.groupId == groupId) it.copy(groupId = null) else it
@@ -537,6 +580,94 @@ class FakePhotoRepository(
         if (memberPhotoIds.isNotEmpty()) {
             movePhotos(memberPhotoIds, targetFolderId, targetSubfolderId)
         }
+    }
+
+    override suspend fun addPhotosToExistingGroup(groupId: Long, photoIds: List<Long>) {
+        addPhotosToGroup(groupId, photoIds)
+    }
+
+    override suspend fun moveGroup(groupId: Long, targetFolderId: Long, targetSubfolderId: Long?) {
+        moveGroups(listOf(groupId), targetFolderId, targetSubfolderId)
+    }
+
+    override suspend fun mergeGroups(
+        sourceGroupIds: List<Long>,
+        newName: String,
+        targetFolderId: Long,
+        targetSubfolderId: Long?
+    ): Long {
+        val memberPhotoIds = photosFlow.value.filter { it.groupId in sourceGroupIds }.map { it.id }
+        val earliestPhoto = photosFlow.value.filter { it.id in memberPhotoIds }.minByOrNull { it.addedAt }
+        val newGroupId = nextGroupId++
+        val newGroup = PhotoGroup(
+            id = newGroupId,
+            folderId = targetFolderId,
+            subfolderId = targetSubfolderId,
+            name = newName.trim(),
+            createdAt = System.currentTimeMillis(),
+            coverPhotoId = earliestPhoto?.id
+        )
+        groupsFlow.value = groupsFlow.value.filterNot { it.id in sourceGroupIds } + newGroup
+        photosFlow.value = photosFlow.value.map { photo ->
+            if (photo.id in memberPhotoIds) {
+                photo.copy(groupId = newGroupId, folderId = targetFolderId, subfolderId = targetSubfolderId)
+            } else {
+                photo
+            }
+        }
+        return newGroupId
+    }
+
+    override suspend fun copyPhoto(
+        photoId: Long,
+        targetFolderId: Long,
+        targetSubfolderId: Long?,
+        targetGroupId: Long?
+    ): Long {
+        val original = getPhotoById(photoId) ?: return -1L
+        val newId = nextPhotoId.incrementAndGet()
+        val copy = original.copy(
+            id = newId,
+            folderId = targetFolderId,
+            subfolderId = targetSubfolderId,
+            groupId = targetGroupId,
+            addedAt = System.currentTimeMillis()
+        )
+        photosFlow.value = photosFlow.value + copy
+        return newId
+    }
+
+    override suspend fun restoreGroup(id: Long) {
+        groupsFlow.value = groupsFlow.value.map {
+            if (it.id == id) it.copy(isTrashed = false, deletedAt = null) else it
+        }
+        val memberPhotoIds = trashedPhotosFlow.value.filter { it.groupId == id }.map { it.id }
+        for (mId in memberPhotoIds) {
+            restorePhoto(mId)
+        }
+    }
+
+    private val gridLinkGroupsFlow = MutableStateFlow<List<LinkGroup>>(emptyList())
+    private var nextGridLinkId = 100L
+
+    override fun getGridLinkGroups(): Flow<List<LinkGroup>> = gridLinkGroupsFlow.asStateFlow()
+
+    override suspend fun createGridLinkGroup(memberIds: List<Long>): Long {
+        val id = nextGridLinkId++
+        val group = LinkGroup(id = id, itemType = LinkItemType.GRID_ITEM, memberIds = memberIds)
+        gridLinkGroupsFlow.value = gridLinkGroupsFlow.value + group
+        return id
+    }
+
+    override suspend fun unlinkGridItem(itemId: Long) {
+        val updated = mutableListOf<LinkGroup>()
+        for (lg in gridLinkGroupsFlow.value) {
+            val remaining = lg.memberIds.filter { it != itemId }
+            if (remaining.size >= 2) {
+                updated.add(lg.copy(memberIds = remaining))
+            }
+        }
+        gridLinkGroupsFlow.value = updated
     }
 
     override fun getAllSmartTags(): Flow<List<String>> =
@@ -666,7 +797,7 @@ class FakeSettingsRepository : SettingsRepository {
         recentSearches.removeAll { it.equals(trimmed, ignoreCase = true) }
         recentSearches.add(0, trimmed)
         while (recentSearches.size > 10) {
-            recentSearches.removeLast()
+            recentSearches.removeAt(recentSearches.lastIndex)
         }
     }
 
@@ -678,5 +809,172 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun clearRecentSearches() {
         recentSearches.clear()
     }
+
+    private val recentDestinations = mutableListOf<RecentDestination>()
+
+    override fun getRecentDestinations(): List<RecentDestination> = recentDestinations.toList()
+
+    override suspend fun addRecentDestination(destination: RecentDestination) {
+        recentDestinations.removeAll {
+            it.type == destination.type &&
+            it.folderId == destination.folderId &&
+            it.subfolderId == destination.subfolderId &&
+            it.groupId == destination.groupId
+        }
+        recentDestinations.add(0, destination)
+        while (recentDestinations.size > 5) {
+            recentDestinations.removeAt(recentDestinations.lastIndex)
+        }
+    }
+
+    override suspend fun clearRecentDestinations() {
+        recentDestinations.clear()
+    }
+
+    override suspend fun updateAutoCheckUpdates(enabled: Boolean) {
+        _settingsFlow.value = _settingsFlow.value.copy(autoCheckUpdates = enabled)
+    }
+
+    override suspend fun updateOptInCrashReporting(enabled: Boolean) {
+        _settingsFlow.value = _settingsFlow.value.copy(optInCrashReporting = enabled)
+    }
 }
+
+class FakeDocumentRepository(
+    initialNotes: List<DocumentNote> = emptyList(),
+    initialPages: Map<Long, List<DocumentPage>> = emptyMap()
+) : DocumentRepository {
+    private val notesFlow = MutableStateFlow(initialNotes)
+    private val pagesFlow = MutableStateFlow(initialPages)
+    private val nextId = AtomicLong(100L)
+
+    override fun getDocumentNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<DocumentNote>> =
+        notesFlow.map { list ->
+            list.filter { !it.isTrashed && it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) }
+        }
+
+    override fun getDocumentPages(documentNoteId: Long): Flow<List<DocumentPage>> =
+        pagesFlow.map { it[documentNoteId] ?: emptyList() }
+
+    override suspend fun getDocumentNoteById(id: Long): DocumentNote? =
+        notesFlow.value.firstOrNull { it.id == id }
+
+    override suspend fun importPdf(
+        uri: Uri,
+        folderId: Long,
+        subfolderId: Long?,
+        name: String,
+        onProgress: ((current: Int, total: Int) -> Unit)?
+    ): Long {
+        val id = nextId.incrementAndGet()
+        val now = System.currentTimeMillis()
+        val note = DocumentNote(
+            id = id,
+            folderId = folderId,
+            subfolderId = subfolderId,
+            name = name,
+            docType = DocumentType.PDF,
+            originFileUri = uri.toString(),
+            pageCount = 1,
+            createdAt = now,
+            addedAt = now
+        )
+        notesFlow.value = notesFlow.value + note
+        pagesFlow.value = pagesFlow.value + (id to listOf(
+            DocumentPage(id = id * 10, documentNoteId = id, pageIndex = 0, imageUri = "fake://page/0", ocrText = null)
+        ))
+        onProgress?.invoke(1, 1)
+        return id
+    }
+
+    override suspend fun importDocx(
+        uri: Uri,
+        folderId: Long,
+        subfolderId: Long?,
+        name: String
+    ): Long {
+        val id = nextId.incrementAndGet()
+        val now = System.currentTimeMillis()
+        val note = DocumentNote(
+            id = id,
+            folderId = folderId,
+            subfolderId = subfolderId,
+            name = name,
+            docType = DocumentType.DOCX,
+            originFileUri = uri.toString(),
+            pageCount = 1,
+            extractedText = "Sample docx text",
+            createdAt = now,
+            addedAt = now
+        )
+        notesFlow.value = notesFlow.value + note
+        return id
+    }
+
+    override suspend fun splitPdfToImages(documentNoteId: Long): List<Long> {
+        val note = getDocumentNoteById(documentNoteId) ?: return emptyList()
+        notesFlow.value = notesFlow.value.filter { it.id != documentNoteId }
+        val pages = pagesFlow.value[documentNoteId] ?: emptyList()
+        pagesFlow.value = pagesFlow.value - documentNoteId
+        return pages.map { it.id }
+    }
+
+    override suspend fun renameDocumentNote(id: Long, newName: String) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(name = newName) else it
+        }
+    }
+
+    override suspend fun deleteDocumentNote(id: Long) {
+        deleteDocumentNotes(listOf(id))
+    }
+
+    override suspend fun deleteDocumentNotes(ids: List<Long>) {
+        val now = System.currentTimeMillis()
+        notesFlow.value = notesFlow.value.map {
+            if (ids.contains(it.id)) it.copy(isTrashed = true, deletedAt = now) else it
+        }
+    }
+
+    override suspend fun restoreDocumentNote(id: Long) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(isTrashed = false, deletedAt = null) else it
+        }
+    }
+
+    override suspend fun purgeDocumentNotePermanently(id: Long) {
+        notesFlow.value = notesFlow.value.filter { it.id != id }
+        pagesFlow.value = pagesFlow.value - id
+    }
+
+    override suspend fun moveDocumentNote(id: Long, targetFolderId: Long, targetSubfolderId: Long?) {
+        moveDocumentNotes(listOf(id), targetFolderId, targetSubfolderId)
+    }
+
+    override suspend fun moveDocumentNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?) {
+        notesFlow.value = notesFlow.value.map {
+            if (ids.contains(it.id)) it.copy(folderId = targetFolderId, subfolderId = targetSubfolderId) else it
+        }
+    }
+
+    override suspend fun updateDocumentTagColor(id: Long, colorHex: String?) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(tagColor = colorHex) else it
+        }
+    }
+
+    override suspend fun updateDocumentDeadline(id: Long, deadlineMs: Long?) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(linkedDeadline = deadlineMs) else it
+        }
+    }
+
+    override fun getTrashedDocumentNotes(): Flow<List<DocumentNote>> =
+        notesFlow.map { list -> list.filter { it.isTrashed } }
+
+    override suspend fun refresh() {
+        // no-op for in-memory fake
+    }
+}
+
 

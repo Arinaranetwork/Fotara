@@ -37,3 +37,25 @@ data object SettingsNavKey : NavKey
 @Serializable
 data object OnboardingNavKey : NavKey
 
+@Serializable
+data class PdfViewerNavKey(val documentId: Long) : NavKey
+
+@Serializable
+data class DocxViewerNavKey(val documentId: Long) : NavKey
+
+@Serializable
+data class TextNoteEditorNavKey(
+    val noteId: Long? = null,
+    val folderId: Long,
+    val subfolderId: Long? = null
+) : NavKey
+
+@Serializable
+data object UpdateNavKey : NavKey
+
+@Serializable
+data object SupportNavKey : NavKey
+
+@Serializable
+data object WhatsNewNavKey : NavKey
+

@@ -10,12 +10,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.arinara.fotara.data.model.Folder
+import com.arinara.fotara.data.model.LinkGroup
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.SearchDateFilter
+import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
+import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.util.DeadlineNotificationManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +33,8 @@ class HomeViewModel(
     private val folderRepository: FolderRepository,
     private val photoRepository: PhotoRepository,
     private val deadlineNotificationManager: DeadlineNotificationManager? = null,
-    private val settingsRepository: SettingsRepository? = null
+    private val settingsRepository: SettingsRepository? = null,
+    private val textNoteRepository: TextNoteRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -44,10 +48,12 @@ class HomeViewModel(
         viewModelScope.launch {
             combine(
                 folderRepository.getFolders(),
+                folderRepository.getFolderLinkGroups(),
                 photoRepository.getPhotosAddedToday(),
                 photoRepository.getPhotosDueTomorrow()
-            ) { folders, addedToday, dueTomorrow ->
-                Triple(folders, addedToday, dueTomorrow)
+            ) { folders, linkGroups, addedToday, dueTomorrow ->
+                val arranged = arrangeFoldersWithLinks(folders, linkGroups)
+                Triple(arranged, addedToday, dueTomorrow)
             }.collect { (folders, addedToday, dueTomorrow) ->
                 _uiState.update { current ->
                     current.copy(
@@ -79,6 +85,7 @@ class HomeViewModel(
                 folderSearchResults = emptyList(),
                 groupSearchResults = emptyList(),
                 searchResults = emptyList(),
+                textNoteSearchResults = emptyList(),
                 isSearchLoading = false,
                 searchDateFilter = SearchDateFilter.ALL,
                 searchColorFilter = null,
@@ -223,6 +230,20 @@ class HomeViewModel(
                     }
                 }
             }
+            textNoteRepository?.let { repo ->
+                viewModelScope.launch {
+                    repo.searchNotes(trimmed).collect { notes ->
+                        val filtered = if (smartTag != null) emptyList() else notes.filter { note ->
+                            val matchesDate = note.createdAt >= dateThreshold
+                            val matchesColor = if (colorFilter == null) true else note.tagColor.equals(colorFilter, ignoreCase = true)
+                            matchesDate && matchesColor
+                        }
+                        _uiState.update {
+                            it.copy(textNoteSearchResults = filtered)
+                        }
+                    }
+                }
+            }
         } else if (hasFilters) {
             viewModelScope.launch {
                 val basePhotos = if (smartTag != null) {
@@ -238,6 +259,7 @@ class HomeViewModel(
                 _uiState.update {
                     it.copy(
                         searchResults = filtered,
+                        textNoteSearchResults = emptyList(),
                         isSearchLoading = false
                     )
                 }
@@ -263,6 +285,7 @@ class HomeViewModel(
                 it.copy(
                     searchResults = emptyList(),
                     groupSearchResults = emptyList(),
+                    textNoteSearchResults = emptyList(),
                     isSearchLoading = false
                 )
             }
@@ -294,6 +317,26 @@ class HomeViewModel(
                 onNavigate(photo.folderId, freshPhoto.subfolderId, photo.id)
             } else {
                 _uiState.update { it.copy(userMessage = "Photo is no longer in this folder") }
+                executeSearch(_uiState.value.searchQuery, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter)
+            }
+        }
+    }
+
+    fun onTextNoteSearchResultClicked(
+        note: TextNote,
+        onNavigate: (folderId: Long, noteId: Long) -> Unit
+    ) {
+        if (_uiState.value.searchQuery.isNotBlank()) {
+            submitSearch(_uiState.value.searchQuery)
+        }
+        viewModelScope.launch {
+            val freshNote = textNoteRepository?.getTextNoteByIdOnce(note.id)
+            val parentFolder = folderRepository.getFolderById(note.folderId).firstOrNull()
+            if (freshNote != null && !freshNote.isTrashed && parentFolder != null && !parentFolder.isTrashed) {
+                deactivateSearch()
+                onNavigate(note.folderId, note.id)
+            } else {
+                _uiState.update { it.copy(userMessage = "Note is no longer in this folder") }
                 executeSearch(_uiState.value.searchQuery, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter)
             }
         }
@@ -370,11 +413,11 @@ class HomeViewModel(
 
     // --- Multi-Select & Bulk Delete ---
 
-    fun enterMultiSelectMode(initialFolderId: Long) {
+    fun enterMultiSelectMode(initialFolderId: Long? = null) {
         _uiState.update {
             it.copy(
                 isMultiSelectMode = true,
-                selectedFolderIds = setOf(initialFolderId)
+                selectedFolderIds = if (initialFolderId != null) setOf(initialFolderId) else emptySet()
             )
         }
     }
@@ -492,6 +535,94 @@ class HomeViewModel(
         }
     }
 
+    fun linkSelectedFolders() {
+        val selectedIds = _uiState.value.selectedFolderIds.toList()
+        if (selectedIds.size !in 2..4) {
+            _uiState.update { it.copy(userMessage = "Select between 2 and 4 folders to link") }
+            return
+        }
+        viewModelScope.launch {
+            folderRepository.createFolderLinkGroup(selectedIds)
+            exitMultiSelectMode()
+            _uiState.update { it.copy(userMessage = "Folders linked") }
+        }
+    }
+
+    fun unlinkFolder(folderId: Long) {
+        viewModelScope.launch {
+            folderRepository.unlinkFolder(folderId)
+            _uiState.update { it.copy(userMessage = "Folder unlinked") }
+        }
+    }
+
+    fun batchRenameFolders(baseName: String) {
+        if (baseName.isBlank()) return
+        val selectedIds = _uiState.value.selectedFolderIds
+        if (selectedIds.isEmpty()) return
+        viewModelScope.launch {
+            val selectedFolders = _uiState.value.folders.filter { it.id in selectedIds }
+            if (selectedFolders.size == 1) {
+                folderRepository.renameFolder(selectedFolders.first().id, baseName.trim())
+            } else {
+                var index = 1
+                for (folder in selectedFolders) {
+                    folderRepository.renameFolder(folder.id, "${baseName.trim()} $index")
+                    index++
+                }
+            }
+            exitMultiSelectMode()
+            _uiState.update { it.copy(userMessage = "Renamed ${selectedFolders.size} folder${if (selectedFolders.size > 1) "s" else ""}") }
+        }
+    }
+
+    private fun arrangeFoldersWithLinks(rawFolders: List<Folder>, linkGroups: List<LinkGroup>): List<Folder> {
+        if (rawFolders.isEmpty()) return emptyList()
+        val linkGroupMap = linkGroups.associateBy { it.id }
+        val folderMap = rawFolders.associateBy { it.id }
+
+        // Pinned folder rule: If any folder in a link is pinned, the entire link block moves to the pinned section
+        val isEffectivelyPinned = { folder: Folder ->
+            if (folder.isPinned) true
+            else {
+                val lg = folder.linkGroupId?.let { linkGroupMap[it] }
+                lg?.memberIds?.any { mId -> folderMap[mId]?.isPinned == true } ?: false
+            }
+        }
+
+        val pinnedFolders = rawFolders.filter { isEffectivelyPinned(it) }
+        val unpinnedFolders = rawFolders.filter { !isEffectivelyPinned(it) }
+
+        fun arrangeSection(sectionFolders: List<Folder>): List<Folder> {
+            val result = mutableListOf<Folder>()
+            val visitedFolderIds = mutableSetOf<Long>()
+            val visitedLinkGroupIds = mutableSetOf<Long>()
+
+            for (folder in sectionFolders) {
+                if (visitedFolderIds.contains(folder.id)) continue
+                val lgId = folder.linkGroupId
+                val lg = lgId?.let { linkGroupMap[it] }
+
+                if (lg != null && !visitedLinkGroupIds.contains(lg.id)) {
+                    visitedLinkGroupIds.add(lg.id)
+                    // Add all members of this link group in order of lg.memberIds
+                    for (mId in lg.memberIds) {
+                        val memberFolder = folderMap[mId]
+                        if (memberFolder != null && !visitedFolderIds.contains(mId)) {
+                            result.add(memberFolder)
+                            visitedFolderIds.add(mId)
+                        }
+                    }
+                } else if (lg == null) {
+                    result.add(folder)
+                    visitedFolderIds.add(folder.id)
+                }
+            }
+            return result
+        }
+
+        return arrangeSection(pinnedFolders) + arrangeSection(unpinnedFolders)
+    }
+
     fun clearUserMessage() {
         _uiState.update { it.copy(userMessage = null) }
     }
@@ -501,11 +632,12 @@ class HomeViewModel(
             folderRepository: FolderRepository,
             photoRepository: PhotoRepository,
             deadlineNotificationManager: DeadlineNotificationManager? = null,
-            settingsRepository: SettingsRepository? = null
+            settingsRepository: SettingsRepository? = null,
+            textNoteRepository: TextNoteRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return HomeViewModel(folderRepository, photoRepository, deadlineNotificationManager, settingsRepository) as T
+                return HomeViewModel(folderRepository, photoRepository, deadlineNotificationManager, settingsRepository, textNoteRepository) as T
             }
         }
     }

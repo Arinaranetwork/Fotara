@@ -13,6 +13,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.ui.folder.FolderGridItem
@@ -92,6 +93,12 @@ object PdfExporter {
                     if (item.memberPhotos.isNotEmpty()) {
                         totalPages += 1 + item.memberPhotos.size
                     }
+                }
+                is FolderGridItem.Document -> {
+                    totalPages += item.pages.size.coerceAtLeast(1)
+                }
+                is FolderGridItem.TextNoteItem -> {
+                    // Under MD/TXT only sharing rules, text notes are skipped in PDF export
                 }
             }
         }
@@ -185,6 +192,44 @@ object PdfExporter {
                             pdfDoc.finishPage(page)
                         }
                     }
+                }
+                is FolderGridItem.Document -> {
+                    for (docPage in item.pages) {
+                        currentPageNumber++
+                        val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, currentPageNumber).create()
+                        val page = pdfDoc.startPage(pageInfo)
+                        val canvas: Canvas = page.canvas
+                        canvas.drawColor(Color.WHITE)
+
+                        paint.color = Color.DKGRAY
+                        paint.textSize = 14f
+                        canvas.drawText("${item.documentNote.name} — Page ${docPage.pageIndex + 1}", 36f, 40f, paint)
+
+                        paint.textSize = 10f
+                        paint.color = Color.GRAY
+                        canvas.drawText("Page $currentPageNumber of $totalPages • Fotara Document Notes", 36f, 56f, paint)
+
+                        try {
+                            val bmp = BitmapFactory.decodeFile(docPage.imageUri)
+                            if (bmp != null) {
+                                val availableWidth = (pageWidth - 72).toFloat()
+                                val availableHeight = (pageHeight - 120).toFloat()
+                                val scale = (availableWidth / bmp.width).coerceAtMost(availableHeight / bmp.height)
+                                val destWidth = bmp.width * scale
+                                val destHeight = bmp.height * scale
+                                val left = (pageWidth - destWidth) / 2f
+                                val top = 80f + (availableHeight - destHeight) / 2f
+                                val destRect = RectF(left, top, left + destWidth, top + destHeight)
+                                canvas.drawBitmap(bmp, null, destRect, paint)
+                                bmp.recycle()
+                            }
+                        } catch (_: Exception) {}
+
+                        pdfDoc.finishPage(page)
+                    }
+                }
+                is FolderGridItem.TextNoteItem -> {
+                    // Under MD/TXT only sharing rules, text notes are skipped in PDF export
                 }
             }
         }

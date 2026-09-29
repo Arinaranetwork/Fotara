@@ -68,8 +68,20 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 cover_photo_id INTEGER,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
+                linked_deadline INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
                 FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE link_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type TEXT NOT NULL,
+                member_ids TEXT NOT NULL,
+                created_at INTEGER NOT NULL
             )
             """.trimIndent()
         )
@@ -98,6 +110,62 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
                 FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL,
                 FOREIGN KEY(group_id) REFERENCES photo_groups(id) ON DELETE SET NULL
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE document_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                folder_id INTEGER NOT NULL,
+                subfolder_id INTEGER,
+                name TEXT NOT NULL,
+                doc_type TEXT NOT NULL,
+                origin_file_uri TEXT NOT NULL,
+                extracted_text TEXT,
+                created_at INTEGER NOT NULL,
+                added_at INTEGER NOT NULL,
+                tag_color TEXT,
+                linked_deadline INTEGER,
+                is_trashed INTEGER NOT NULL DEFAULT 0,
+                deleted_at INTEGER,
+                FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+                FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE document_pages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_note_id INTEGER NOT NULL,
+                page_index INTEGER NOT NULL,
+                image_uri TEXT NOT NULL,
+                ocr_text TEXT,
+                FOREIGN KEY(document_note_id) REFERENCES document_notes(id) ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE text_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                folder_id INTEGER NOT NULL,
+                subfolder_id INTEGER,
+                title TEXT NOT NULL,
+                body_markdown TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                added_at INTEGER NOT NULL,
+                tag_color TEXT,
+                linked_deadline INTEGER,
+                is_trashed INTEGER NOT NULL DEFAULT 0,
+                deleted_at INTEGER,
+                FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+                FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
             )
             """.trimIndent()
         )
@@ -188,6 +256,84 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 db.execSQL("ALTER TABLE photos ADD COLUMN tags TEXT")
             } catch (_: Exception) {}
         }
+        if (oldVersion < 8) {
+            try {
+                db.execSQL("ALTER TABLE photo_groups ADD COLUMN linked_deadline INTEGER")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS link_groups (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        item_type TEXT NOT NULL,
+                        member_ids TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            } catch (_: Exception) {}
+        }
+        if (oldVersion < 9) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS document_notes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        folder_id INTEGER NOT NULL,
+                        subfolder_id INTEGER,
+                        name TEXT NOT NULL,
+                        doc_type TEXT NOT NULL,
+                        origin_file_uri TEXT NOT NULL,
+                        extracted_text TEXT,
+                        created_at INTEGER NOT NULL,
+                        added_at INTEGER NOT NULL,
+                        tag_color TEXT,
+                        linked_deadline INTEGER,
+                        is_trashed INTEGER NOT NULL DEFAULT 0,
+                        deleted_at INTEGER,
+                        FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+                        FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS document_pages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        document_note_id INTEGER NOT NULL,
+                        page_index INTEGER NOT NULL,
+                        image_uri TEXT NOT NULL,
+                        ocr_text TEXT,
+                        FOREIGN KEY(document_note_id) REFERENCES document_notes(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+            } catch (_: Exception) {}
+        }
+        if (oldVersion < 10) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS text_notes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        folder_id INTEGER NOT NULL,
+                        subfolder_id INTEGER,
+                        title TEXT NOT NULL,
+                        body_markdown TEXT NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        added_at INTEGER NOT NULL,
+                        tag_color TEXT,
+                        linked_deadline INTEGER,
+                        is_trashed INTEGER NOT NULL DEFAULT 0,
+                        deleted_at INTEGER,
+                        FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+                        FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+            } catch (_: Exception) {}
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -223,6 +369,6 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 7
+        const val DATABASE_VERSION = 10
     }
 }

@@ -108,6 +108,26 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val (appVersionName, appVersionCode) = remember(context) {
+        try {
+            val pInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            val vName = pInfo?.versionName ?: "1.4.0"
+            val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                pInfo?.longVersionCode ?: 12L
+            } else {
+                @Suppress("DEPRECATION")
+                (pInfo?.versionCode ?: 12).toLong()
+            }
+            Pair(vName, vCode)
+        } catch (_: Exception) {
+            Pair("1.4.0", 12L)
+        }
+    }
 
     var showSortOrderDialog by remember { mutableStateOf(false) }
     var showGridDensityDialog by remember { mutableStateOf(false) }
@@ -365,7 +385,7 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Version 1.1.0 Beta",
+                            text = "Version $appVersionName Beta (Build $appVersionCode)",
                             color = FolderTabCream,
                             fontSize = 14.sp
                         )

@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -37,8 +39,10 @@
             android:name=".util.DeadlineAlarmReceiver"
             android:exported="false" />
 
+        <!-- Re-enabled Jetpack Glance Due Tomorrow widget for v1.3 -->
         <receiver
-            android:name=".widget.DueTomorrowWidgetProvider"
+            android:name=".widget.DueTomorrowGlanceWidgetReceiver"
+            android:enabled="true"
             android:exported="true"
             android:label="@string/widget_due_tomorrow_name">
             <intent-filter>
@@ -48,10 +52,6 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/due_tomorrow_widget_info" />
         </receiver>
-
-        <service
-            android:name=".widget.DueTomorrowWidgetService"
-            android:permission="android.permission.BIND_REMOTEVIEWS" />
     </application>
 
 </manifest>

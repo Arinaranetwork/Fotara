@@ -22,3 +22,9 @@ local.properties
 /Output/Logs
 /Output/Reports
 /Output/Exports
+
+# Security & Node
+.env
+node_modules/
+scratch/
+*.idsig

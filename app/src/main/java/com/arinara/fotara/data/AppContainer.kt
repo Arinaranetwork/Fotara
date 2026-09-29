@@ -19,6 +19,12 @@ import com.arinara.fotara.ocr.DefaultFolderSuggestEngine
 import com.arinara.fotara.ocr.FolderSuggestEngine
 import com.arinara.fotara.ocr.MlKitOcrEngine
 import com.arinara.fotara.ocr.OcrEngine
+import com.arinara.fotara.data.repository.DocumentRepository
+import com.arinara.fotara.data.repository.SqliteDocumentRepository
+import com.arinara.fotara.data.repository.TextNoteRepository
+import com.arinara.fotara.data.repository.SqliteTextNoteRepository
+import com.arinara.fotara.online.UpdateManager
+import com.arinara.fotara.online.FeedbackManager
 import com.arinara.fotara.util.DeadlineNotificationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +39,10 @@ interface AppContainer {
     val photoStorageManager: PhotoStorageManager
     val deadlineNotificationManager: DeadlineNotificationManager
     val settingsRepository: SettingsRepository
+    val documentRepository: DocumentRepository
+    val textNoteRepository: TextNoteRepository
+    val updateManager: UpdateManager
+    val feedbackManager: FeedbackManager
 }
 
 class DefaultAppContainer(private val context: Context) : AppContainer {
@@ -72,6 +82,28 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
             photoRepository = photoRepository,
             photoStorageManager = photoStorageManager
         )
+    }
+
+    override val documentRepository: DocumentRepository by lazy {
+        SqliteDocumentRepository(
+            context = context,
+            dbHelper = dbHelper,
+            photoRepository = photoRepository,
+            photoStorageManager = photoStorageManager,
+            ocrEngine = ocrEngine
+        )
+    }
+
+    override val textNoteRepository: TextNoteRepository by lazy {
+        SqliteTextNoteRepository(dbHelper)
+    }
+
+    override val updateManager: UpdateManager by lazy {
+        UpdateManager(context)
+    }
+
+    override val feedbackManager: FeedbackManager by lazy {
+        FeedbackManager(context)
     }
 
     init {

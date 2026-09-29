@@ -35,6 +35,53 @@ class PhotoStorageManager(private val context: Context) {
         File(context.filesDir, "thumbnails").apply { if (!exists()) mkdirs() }
     }
 
+    val documentsDir: File by lazy {
+        File(context.filesDir, "documents").apply { if (!exists()) mkdirs() }
+    }
+
+    val documentPagesDir: File by lazy {
+        File(context.filesDir, "document_pages").apply { if (!exists()) mkdirs() }
+    }
+
+    suspend fun copyUriToDocuments(uri: Uri, baseName: String, extension: String): File = withContext(Dispatchers.IO) {
+        val safeName = baseName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val id = "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(4)}"
+        val ext = if (extension.startsWith(".")) extension else ".$extension"
+        val targetFile = File(documentsDir, "${safeName}_$id$ext")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(targetFile).use { output ->
+                input.copyTo(output)
+            }
+        } ?: throw IllegalStateException("Could not open stream for uri: $uri")
+        targetFile
+    }
+
+    suspend fun saveDocumentPageBitmap(bitmap: Bitmap, docId: Long, pageIndex: Int): File = withContext(Dispatchers.IO) {
+        val pageFile = File(documentPagesDir, "doc_${docId}_page_${pageIndex}.jpg")
+        FileOutputStream(pageFile).use { out ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out)
+        }
+        pageFile
+    }
+
+    suspend fun renameDocumentFile(filePath: String, newName: String): String = withContext(Dispatchers.IO) {
+        val file = File(filePath)
+        if (!file.exists()) return@withContext filePath
+        val ext = file.extension
+        val cleanName = newName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val targetName = if (ext.isNotBlank()) "$cleanName.$ext" else cleanName
+        var targetFile = File(file.parentFile, targetName)
+        if (targetFile.exists() && targetFile.absolutePath != file.absolutePath) {
+            val id = "${System.currentTimeMillis().toString().takeLast(4)}"
+            targetFile = File(file.parentFile, "${cleanName}_$id.$ext")
+        }
+        if (file.renameTo(targetFile)) {
+            targetFile.absolutePath
+        } else {
+            filePath
+        }
+    }
+
     suspend fun saveBitmapAsPhoto(bitmap: Bitmap): SavedPhotoFile = withContext(Dispatchers.IO) {
         val id = "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
         val photoFile = File(photosDir, "photo_$id.jpg")
@@ -100,6 +147,34 @@ class PhotoStorageManager(private val context: Context) {
             filePath = photoFile.absolutePath,
             thumbnailPath = thumbFile.absolutePath,
             fileSizeBytes = photoFile.length()
+        )
+    }
+
+    suspend fun duplicatePhotoFiles(sourceFilePath: String, sourceThumbPath: String?): SavedPhotoFile = withContext(Dispatchers.IO) {
+        val id = "${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
+        val newPhotoFile = File(photosDir, "photo_$id.jpg")
+        val newThumbFile = File(thumbsDir, "thumb_$id.jpg")
+
+        val srcFile = File(sourceFilePath)
+        if (srcFile.exists()) {
+            srcFile.copyTo(newPhotoFile, overwrite = true)
+        }
+
+        if (!sourceThumbPath.isNullOrBlank()) {
+            val srcThumb = File(sourceThumbPath)
+            if (srcThumb.exists()) {
+                srcThumb.copyTo(newThumbFile, overwrite = true)
+            } else if (newPhotoFile.exists()) {
+                newPhotoFile.copyTo(newThumbFile, overwrite = true)
+            }
+        } else if (newPhotoFile.exists()) {
+            newPhotoFile.copyTo(newThumbFile, overwrite = true)
+        }
+
+        SavedPhotoFile(
+            filePath = newPhotoFile.absolutePath,
+            thumbnailPath = newThumbFile.absolutePath,
+            fileSizeBytes = newPhotoFile.length()
         )
     }
 
