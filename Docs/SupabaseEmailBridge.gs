@@ -5,59 +5,56 @@
 // written consent from Arinara Network as sole legal owner of this codebase.
 
 /**
- * Fotara Supabase to Gmail Webhook Bridge
- * 
- * Target recipient: arinaranetwork@gmail.com
- * Deployment: Google Apps Script Web App
+ * Fotara - Supabase Webhook to Gmail Bridge
+ *
+ * This Google Apps Script receives HTTP POST webhooks from the Supabase database
+ * (triggered whenever a new row is inserted into the `public.suggestions` table)
+ * and formats a rich HTML email sent directly to `arinaranetwork@gmail.com`.
  */
 
 function doPost(e) {
   try {
     if (!e || !e.postData || !e.postData.contents) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No post data received" }))
-        .setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "error", 
+        message: "No payload received" 
+      })).setMimeType(ContentService.MimeType.JSON);
     }
 
     var payload = JSON.parse(e.postData.contents);
-    
-    // Supabase Webhook payload format: { type: "INSERT", table: "suggestions", record: { ... } }
     var record = payload.record || payload;
-    
+
     var category = record.category || "GENERAL";
-    var content = record.content || "Tidak ada pesan.";
+    var content = record.content || "(No message content)";
     var senderEmail = record.email || "";
     var diagnosticInfo = record.diagnostic_info || "";
     var uuid = record.uuid || "Unknown UUID";
     var createdAt = record.created_at || new Date().toISOString();
 
-    // Map Category to Visual Badges & Indonesian Titles
+    // Map Category to Visual Badges & Titles
     var categoryConfig = {
       "BUG_REPORT": {
-        label: "LAPORAN BUG",
+        label: "BUG REPORT",
         color: "#E63946",
         bgColor: "#FFE3E5",
-        icon: "🐞",
         subjectPrefix: "[BUG REPORT]"
       },
       "FEATURE_IDEA": {
-        label: "IDE FITUR BARU",
+        label: "FEATURE IDEA",
         color: "#D97706",
         bgColor: "#FEF3C7",
-        icon: "💡",
         subjectPrefix: "[FEATURE IDEA]"
       },
       "SUGGESTION": {
-        label: "SARAN & MASUKAN",
+        label: "SUGGESTION",
         color: "#059669",
         bgColor: "#D1FAE5",
-        icon: "💬",
         subjectPrefix: "[SUGGESTION]"
       },
       "GENERAL": {
-        label: "MASUKAN UMUM",
+        label: "GENERAL FEEDBACK",
         color: "#2563EB",
         bgColor: "#DBEAFE",
-        icon: "📝",
         subjectPrefix: "[FEEDBACK]"
       }
     };
@@ -66,7 +63,6 @@ function doPost(e) {
 
     // Format timestamps
     var dateObj = new Date(createdAt);
-    var formattedDateWIB = Utilities.formatDate(dateObj, "Asia/Jakarta", "dd MMMM yyyy, HH:mm:ss 'WIB'");
     var formattedDateUTC = Utilities.formatDate(dateObj, "UTC", "yyyy-MM-dd HH:mm:ss 'UTC'");
 
     // Build Email Subject
@@ -79,7 +75,7 @@ function doPost(e) {
     // Render HTML Email Template
     var htmlBody = `
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -102,12 +98,12 @@ function doPost(e) {
                       Fotara System Engine
                     </span>
                     <h1 style="margin: 8px 0 0 0; color: #FFFFFF; font-size: 20px; font-weight: 700; letter-spacing: -0.3px;">
-                      Masukan Pengguna Masuk
+                      Incoming User Feedback
                     </h1>
                   </td>
                   <td align="right" valign="middle">
                     <span style="display: inline-block; background-color: ${cat.bgColor}; color: ${cat.color}; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid ${cat.color}; white-space: nowrap;">
-                      ${cat.icon} ${cat.label}
+                      ${cat.label}
                     </span>
                   </td>
                 </tr>
@@ -122,7 +118,7 @@ function doPost(e) {
               <!-- Message Box -->
               <div style="margin-bottom: 24px;">
                 <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">
-                  ISI PESAN DARI PENGGUNA
+                  USER MESSAGE
                 </div>
                 <div style="background-color: #F8FAFC; border-left: 4px solid ${cat.color}; border-radius: 0 10px 10px 0; padding: 18px 20px; color: #0F172A; font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; font-family: inherit; border-top: 1px solid #EDF2F7; border-right: 1px solid #EDF2F7; border-bottom: 1px solid #EDF2F7;">
 ${escapeHtml(content)}
@@ -133,24 +129,23 @@ ${escapeHtml(content)}
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #F8FAFC; border-radius: 10px; border: 1px solid #E2E8F0; margin-bottom: 24px;">
                 <tr>
                   <td style="padding: 14px 18px; border-bottom: 1px solid #E2E8F0; width: 35%; font-size: 13px; color: #64748B; font-weight: 600;">
-                    Email Kontak
+                    Contact Email
                   </td>
                   <td style="padding: 14px 18px; border-bottom: 1px solid #E2E8F0; font-size: 13.5px; color: #0F172A; font-weight: 600;">
-                    ${senderEmail ? `<a href="mailto:${senderEmail}?subject=Tanggapan Fotara: ${encodeURIComponent(cat.label)}" style="color: #2563EB; text-decoration: none;">${escapeHtml(senderEmail)} &rarr; (Balas)</a>` : '<span style="color: #94A3B8; font-style: italic;">Anonim (Tidak Disertakan)</span>'}
+                    ${senderEmail ? `<a href="mailto:${senderEmail}?subject=Fotara Support Response: ${encodeURIComponent(cat.label)}" style="color: #2563EB; text-decoration: none;">${escapeHtml(senderEmail)} &rarr; (Reply)</a>` : '<span style="color: #94A3B8; font-style: italic;">Anonymous (Not Provided)</span>'}
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 14px 18px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #64748B; font-weight: 600;">
-                    Waktu Pengiriman
+                    Submission Time
                   </td>
                   <td style="padding: 14px 18px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155;">
-                    <strong>${formattedDateWIB}</strong><br>
-                    <span style="font-size: 11.5px; color: #64748B;">(${formattedDateUTC})</span>
+                    <strong>${formattedDateUTC}</strong>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 14px 18px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #64748B; font-weight: 600;">
-                    Kategori & Status
+                    Category & Status
                   </td>
                   <td style="padding: 14px 18px; border-bottom: 1px solid #E2E8F0; font-size: 13px; color: #334155;">
                     <span style="display: inline-block; font-weight: 700; color: ${cat.color};">${category}</span>
@@ -158,10 +153,10 @@ ${escapeHtml(content)}
                 </tr>
                 <tr>
                   <td style="padding: 14px 18px; font-size: 13px; color: #64748B; font-weight: 600; vertical-align: top;">
-                    Informasi Diagnostik
+                    Diagnostic Info
                   </td>
                   <td style="padding: 14px 18px; font-size: 12px; color: #475569; font-family: monospace;">
-                    ${diagnosticInfo ? escapeHtml(diagnosticInfo) : '<span style="color: #94A3B8; font-style: italic;">Tidak ada info diagnostik</span>'}
+                    ${diagnosticInfo ? escapeHtml(diagnosticInfo) : '<span style="color: #94A3B8; font-style: italic;">No diagnostic information</span>'}
                   </td>
                 </tr>
               </table>
@@ -172,13 +167,13 @@ ${escapeHtml(content)}
                   ${senderEmail ? `
                   <td style="padding-right: 8px;">
                     <a href="mailto:${senderEmail}?subject=Re: Fotara ${encodeURIComponent(cat.label)}" style="display: block; text-align: center; background-color: #F77F00; color: #000000; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 700;">
-                      Balas Pengguna
+                      Reply to User
                     </a>
                   </td>
                   ` : ''}
                   <td>
                     <a href="https://supabase.com/dashboard/project/nrvnhbizyvubcdqvzabv/editor" target="_blank" style="display: block; text-align: center; background-color: #03071E; color: #FFFFFF; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 600;">
-                      Buka Supabase Database
+                      Open Supabase Database
                     </a>
                   </td>
                 </tr>
@@ -190,8 +185,8 @@ ${escapeHtml(content)}
           <!-- Footer -->
           <tr>
             <td style="background-color: #F8FAFC; padding: 18px 28px; border-top: 1px solid #E2E8F0; font-size: 11.5px; color: #94A3B8; text-align: center; line-height: 1.5;">
-              Email otomatis dari database Supabase Fotara (<code style="background: #E2E8F0; padding: 2px 4px; border-radius: 4px; font-size: 11px;">public.suggestions</code>).<br>
-              Hak Cipta &copy; 2026 Arinara Network. Seluruh hak cipta dilindungi.
+              Automated email from Fotara Supabase database (<code style="background: #E2E8F0; padding: 2px 4px; border-radius: 4px; font-size: 11px;">public.suggestions</code>).<br>
+              Copyright &copy; 2026 Arinara Network. All rights reserved.
             </td>
           </tr>
 

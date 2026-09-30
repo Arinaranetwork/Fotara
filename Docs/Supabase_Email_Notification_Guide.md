@@ -1,112 +1,112 @@
-<!-- --- Arinara Network (c) 2026 ---
-Exclusive property of Arinara Network.
-Unauthorized use, reproduction, distribution, or modification of this code,
-in whole or in part, for any purpose, is strictly prohibited without prior
-written consent from Arinara Network as sole legal owner of this codebase. -->
+<!-- --- Arinara Network (c) 2026 --- -->
+<!-- Exclusive property of Arinara Network. -->
+<!-- Unauthorized use, reproduction, distribution, or modification of this code, -->
+<!-- in whole or in part, for any purpose, is strictly prohibited without prior -->
+<!-- written consent from Arinara Network as sole legal owner of this codebase. -->
 
-# Panduan Integrasi Email Otomatis Supabase ke arinaranetwork@gmail.com
+# Supabase Automated Email Notification Guide to arinaranetwork@gmail.com
 
-Dokumen ini menjelaskan arsitektur dan langkah konfigurasi agar setiap masukan (*suggestion*, ide fitur, laporan bug) yang masuk ke tabel `public.suggestions` di Supabase langsung diteruskan ke email **`arinaranetwork@gmail.com`** dengan format HTML yang rapi, modern, dan profesional.
+This document describes the architecture and configuration procedures to ensure every user submission (suggestions, feature ideas, bug reports) inserted into the `public.suggestions` table in Supabase is immediately dispatched to **`arinaranetwork@gmail.com`** in a clean, modern, and professional HTML format.
 
 ---
 
-## 1. Arsitektur Solusi
+## 1. Solution Architecture
 
-Supabase tidak menyediakan server pengiriman SMTP kustom untuk email publik (layanan bawaan Supabase hanya untuk Auth seperti konfirmasi akun/reset kata sandi). Oleh karena itu, notifikasi ke inbox pengembang menggunakan mekanisme **Supabase Database Webhook**.
+Supabase does not supply a custom SMTP dispatch server for arbitrary outbound emails (its native email service is restricted to Auth flows such as confirmation and password resets). Therefore, notifications to the developer inbox utilize the **Supabase Database Webhooks** mechanism.
 
-Terdapat dua metode yang didukung penuh:
+Two fully supported deployment methods are available:
 
-| Fitur | Metode 1: Google Apps Script Webhook (Rekomendasi Utama) | Metode 2: Supabase Edge Function / Resend API |
+| Feature | Method 1: Google Apps Script Webhook (Recommended) | Method 2: Supabase Edge Function / Resend API |
 | :--- | :--- | :--- |
-| **Biaya** | **100% Gratis Selamanya** | Gratis hingga kuota tertentu (e.g. 100 email/hari) |
-| **Setup** | **2 Menit (Tanpa kartu kredit/API key)** | Perlu registrasi akun pihak ke-3 (Resend/Sendgrid) |
-| **Deliverability** | **100% Masuk Inbox Gmail** (Dikirim via akun Google) | Tergantung reputasi domain pengirim |
-| **File Sumber** | [`Docs/SupabaseEmailBridge.gs`](file:///c:/Users/sepli/OneDrive/Documents/File%20DD/Coding/Fotara/Docs/SupabaseEmailBridge.gs) | [`Docs/Supabase_Schema.sql`](file:///c:/Users/sepli/OneDrive/Documents/File%20DD/Coding/Fotara/Docs/Supabase_Schema.sql) |
+| **Cost** | **100% Free Indefinitely** | Free tier up to volume limits (e.g. 100 emails/day) |
+| **Setup Time** | **2 Minutes (No credit card or API key needed)** | Requires 3rd-party registration (Resend/Sendgrid) |
+| **Deliverability** | **100% Gmail Inbox Delivery** (Dispatched via Google) | Dependent on domain reputation and DKIM/SPF setup |
+| **Source File** | [`Docs/SupabaseEmailBridge.gs`](file:///c:/Users/sepli/OneDrive/Documents/File%20DD/Coding/Fotara/Docs/SupabaseEmailBridge.gs) | [`Docs/Supabase_Schema.sql`](file:///c:/Users/sepli/OneDrive/Documents/File%20DD/Coding/Fotara/Docs/Supabase_Schema.sql) |
 
 ---
 
-## 2. Metode 1: Setup Google Apps Script (2 Menit, 100% Gratis)
+## 2. Method 1: Google Apps Script Setup (2 Minutes, Free)
 
-Metode ini menggunakan Google Apps Script yang terpasang langsung pada akun Google Anda (`arinaranetwork@gmail.com`). Setiap kali ada baris baru di Supabase, Supabase memanggil webhook URL Google Apps Script, dan script langsung mengirimkan email format HTML cantik ke inbox Anda.
+This method employs Google Apps Script associated directly with your Google account (`arinaranetwork@gmail.com`). Each time a new row is inserted in Supabase, Supabase calls the Google Apps Script Webhook URL, which immediately formats and delivers a rich HTML email to your inbox.
 
-### Langkah 0: Buat Tabel `public.suggestions` di Supabase (Prasyarat Wajib)
-Jika tabel `public.suggestions` belum muncul di dashboard atau dropdown Webhooks Anda, buat tabel terlebih dahulu dalam 30 detik:
-1. Buka Supabase SQL Editor:
+### Step 0: Create `public.suggestions` Table in Supabase (Prerequisite)
+If the `public.suggestions` table has not yet been created:
+1. Open the Supabase SQL Editor:
    `https://supabase.com/dashboard/project/nrvnhbizyvubcdqvzabv/sql/new`
-2. Buka file [`Docs/Supabase_Schema.sql`](file:///c:/Users/sepli/OneDrive/Documents/File%20DD/Coding/Fotara/Docs/Supabase_Schema.sql) di project ini, lalu salin seluruh kodenya.
-3. Tempelkan (*paste*) ke SQL Editor di Supabase.
-4. Klik tombol **Run** (atau tekan `Ctrl+Enter`).
-5. Selesai! Pesan `Success. No rows returned` akan muncul. Sekarang tabel `public.suggestions` sudah resmi aktif dan siap menerima data maupun webhook.
+2. Open [`Docs/Supabase_Schema.sql`](file:///c:/Users/sepli/OneDrive/Documents/File%20DD/Coding/Fotara/Docs/Supabase_Schema.sql) in this repository and copy the script.
+3. Paste it into the Supabase SQL Editor.
+4. Click **Run** (or press `Ctrl+Enter`).
+5. The `public.suggestions` table is now ready to receive data and webhooks.
 
-### Langkah 1: Buat Webhook di Google Apps Script
-1. Buka browser dan login ke akun **`arinaranetwork@gmail.com`**.
-2. Kunjungi: [script.google.com](https://script.google.com/).
-3. Klik tombol **New project** (Proyek Baru) di pojok kiri atas.
-4. Beri nama proyek: `Fotara Feedback Notifier`.
-5. Hapus semua teks di editor `Code.gs`, lalu salin seluruh isi dari file:
+### Step 1: Create the Webhook in Google Apps Script
+1. Open your browser and log into **`arinaranetwork@gmail.com`**.
+2. Visit [script.google.com](https://script.google.com/).
+3. Click **New project** in the top left.
+4. Name the project: `Fotara Feedback Notifier`.
+5. Replace all code in `Code.gs` with the entire contents of:
    [`Docs/SupabaseEmailBridge.gs`](file:///c:/Users/sepli/OneDrive/Documents/File%20DD/Coding/Fotara/Docs/SupabaseEmailBridge.gs)
-6. Tempelkan ke editor Google Apps Script, lalu klik ikon **Save** (Ctrl+S / Cmd+S).
+6. Save the project (`Ctrl+S`).
 
-### Langkah 2: Deploy sebagai Web App
-1. Klik tombol **Deploy** di kanan atas &rarr; pilih **New deployment**.
-2. Klik ikon gerigi (Select type) di samping kiri &rarr; pilih **Web app**.
-3. Isi konfigurasi berikut:
+### Step 2: Deploy as a Web App
+1. Click **Deploy** in the top right &rarr; select **New deployment**.
+2. Click the gear icon (Select type) &rarr; select **Web app**.
+3. Configure the deployment:
    - **Description**: `Fotara Supabase Webhook Bridge v1`
    - **Execute as**: `Me (arinaranetwork@gmail.com)`
-   - **Who has access**: **`Anyone`** *(PENTING: Pilih "Anyone" agar server Supabase dapat mengirimkan POST data tanpa autentikasi browser Google)*.
-4. Klik tombol **Deploy**.
-5. Google akan meminta izin (*Authorize access*). Klik **Authorize Access**, pilih akun `arinaranetwork@gmail.com`, klik **Advanced** &rarr; klik **Go to Fotara Feedback Notifier (unsafe)**, lalu klik **Allow**.
-6. Salin **Web app URL** yang muncul (formatnya: `https://script.google.com/macros/s/AKfycb.../exec`).
+   - **Who has access**: **`Anyone`** *(Required so Supabase servers can post payloads without browser authentication)*.
+4. Click **Deploy**.
+5. Grant permissions (*Authorize Access*), choose `arinaranetwork@gmail.com`, click **Advanced** &rarr; **Go to Fotara Feedback Notifier (unsafe)**, and click **Allow**.
+6. Copy the **Web app URL** (`https://script.google.com/macros/s/AKfycb.../exec`).
 
-### Langkah 3: Pasang Webhook di Dashboard Supabase
-1. Buka dashboard proyek Supabase Anda:
+### Step 3: Register the Webhook in the Supabase Dashboard
+1. Open your Supabase project dashboard:
    `https://supabase.com/dashboard/project/nrvnhbizyvubcdqvzabv/database/hooks`
-2. Di menu kiri, pilih **Database** &rarr; **Webhooks**.
-3. Klik tombol **Create a webhook** (atau *Enable Webhooks* jika belum aktif).
-4. Masukkan data:
+2. In the left navigation, select **Database** &rarr; **Webhooks**.
+3. Click **Create a webhook**.
+4. Configure fields:
    - **Name**: `notify_feedback_email`
    - **Table**: `public.suggestions`
-   - **Events**: Centang hanya **`Insert`** (uncheck Update dan Delete).
+   - **Events**: Check only **`Insert`** (uncheck Update and Delete).
    - **Type of webhook**: `HTTP Request`
    - **HTTP method**: `POST`
-   - **URL**: Tempelkan *Web app URL* dari Langkah 2 di atas.
+   - **URL**: Paste the Web app URL obtained in Step 2.
    - **HTTP Headers**:
      - Key: `Content-Type`, Value: `application/json`
-5. Klik **Create webhook**.
+5. Click **Create webhook**.
 
 ---
 
-## 3. Tampilan & Desain Email yang Diterima
+## 3. Received Email Visual Hierarchy
 
-Email yang diterima di `arinaranetwork@gmail.com` telah dirancang secara premium dengan visual elegan:
+Emails delivered to `arinaranetwork@gmail.com` feature clean, high-contrast layouts:
 
-- **Subjek Terstruktur**:
-  - `Fotara [BUG REPORT]: Aplikasi freeze saat scan dokumen...`
-  - `Fotara [FEATURE IDEA]: Tambahkan fitur export PDF...`
-  - `Fotara [SUGGESTION]: Saran warna folder...`
-- **Badge Kategori Warna**:
-  - 🐞 **LAPORAN BUG**: Merah `#E63946` dengan latar merah muda lembut.
-  - 💡 **IDE FITUR BARU**: Amber Gold `#D97706` dengan latar kuning lembut.
-  - 💬 **SARAN & MASUKAN**: Emerald Teal `#059669` dengan latar hijau lembut.
-  - 📝 **MASUKAN UMUM**: Electric Blue `#2563EB` dengan latar biru lembut.
-- **Kartu Pesan Pengguna**:
-  - Teks pesan pengguna ditaruh di dalam wadah kutipan bergaris tepi warna kategori dengan tipografi nyaman dibaca.
-- **Rincian Metadata**:
-  - **Email Kontak**: Link interaktif satu ketuk `Balas Pengguna` langsung via Gmail. Jika tidak diisi, otomatis berlabel *Anonim*.
-  - **Waktu**: Dikonversi ke waktu lokal WIB (`Asia/Jakarta`) dan UTC.
-  - **Info Diagnostik**: Menampilkan model ponsel, versi Android, dan versi aplikasi jika disertakan oleh pengguna.
-- **Tombol Pintas**:
-  - Tombol langsung membuka tabel Supabase di browser untuk moderasi instan.
+- **Structured Subjects**:
+  - `Fotara [BUG REPORT]: App freezes when scanning document...`
+  - `Fotara [FEATURE IDEA]: Add PDF export option...`
+  - `Fotara [SUGGESTION]: Folder color suggestion...`
+- **Category Badges**:
+  - **BUG REPORT**: Crimson `#E63946` with soft pink background.
+  - **FEATURE IDEA**: Amber Gold `#D97706` with soft yellow background.
+  - **SUGGESTION**: Emerald Teal `#059669` with soft green background.
+  - **GENERAL FEEDBACK**: Electric Blue `#2563EB` with soft blue background.
+- **User Message Container**:
+  - Message body enclosed in a high-contrast container with category-colored left border.
+- **Metadata Details**:
+  - **Contact Email**: One-tap interactive `Reply to User` link via Gmail, or labeled *Anonymous*.
+  - **Timestamp**: Converted to UTC.
+  - **Diagnostic Info**: Device model, Android OS version, and app version when included.
+- **Action Shortcuts**:
+  - Direct button to navigate to the Supabase database editor.
 
 ---
 
-## 4. Pengujian Webhook (Test Verification)
+## 4. Webhook Test Verification
 
-Untuk memverifikasi bahwa alur pengiriman berjalan sempurna tanpa harus mengirim dari ponsel:
+To verify that the dispatch pipeline functions without sending from a physical device:
 
-1. Buka **SQL Editor** di Supabase:
+1. Open **SQL Editor** in Supabase:
    `https://supabase.com/dashboard/project/nrvnhbizyvubcdqvzabv/sql/new`
-2. Jalankan query pengujian berikut:
+2. Execute the following test query:
 
 ```sql
 INSERT INTO public.suggestions (
@@ -119,59 +119,20 @@ INSERT INTO public.suggestions (
 ) VALUES (
     'test-uuid-verification',
     'BUG_REPORT',
-    'Halo tim Arinara, ini adalah email uji coba otomatis sistem feedback Fotara. Jika Anda membaca pesan ini di arinaranetwork@gmail.com dengan badge merah BUG REPORT, berarti integrasi webhook database telah 100% BERHASIL dan SIAP PRODUKSI!',
-    'pengguna.test@example.com',
-    'Device: Google Pixel 8 Pro | Android: 14 (API 34) | App: v1.3.4 (Build 4)',
+    'Automated test submission for the Fotara feedback notification system. Delivery to arinaranetwork@gmail.com with the BUG REPORT badge confirms active webhook integration.',
+    'test.user@example.com',
+    'Device: Google Pixel 8 Pro | Android: 14 (API 34) | App: v1.5.0 (Build 13)',
     EXTRACT(EPOCH FROM NOW())::BIGINT * 1000
 );
 ```
 
-3. Buka Gmail di **`arinaranetwork@gmail.com`**. Dalam 3-5 detik, notifikasi email berformat rapi akan masuk ke inbox Anda!
-4. Anda dapat menghapus data pengujian tersebut kapan saja dari tabel `suggestions`.
+3. Open Gmail at **`arinaranetwork@gmail.com`**. Within 3-5 seconds, the formatted notification will arrive in your inbox.
+4. You may remove the test record from the `suggestions` table at any time.
 
 ---
 
-## 5. Metode Alternatif 2: SQL Trigger Langsung via `pg_net`
+## 5. Security & Privacy Summary
 
-Jika Anda lebih memilih seluruh konfigurasi berada di dalam skrip SQL database tanpa menggunakan menu Webhook UI Supabase:
-
-```sql
--- 1. Aktifkan ekstensi pg_net
-CREATE EXTENSION IF NOT EXISTS pg_net;
-
--- 2. Buat fungsi pemanggil webhook
-CREATE OR REPLACE FUNCTION public.forward_feedback_to_email()
-RETURNS TRIGGER AS $$
-DECLARE
-    webhook_url TEXT := 'TEMPELKAN_WEBAPP_URL_GOOGLE_APPS_SCRIPT_DISINI';
-BEGIN
-    PERFORM net.http_post(
-        url := webhook_url,
-        body := json_build_object(
-            'type', TG_OP,
-            'table', TG_TABLE_NAME,
-            'schema', TG_TABLE_SCHEMA,
-            'record', row_to_json(NEW)
-        )::jsonb,
-        headers := '{"Content-Type": "application/json"}'::jsonb
-    );
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 3. Pasang trigger setelah insert
-DROP TRIGGER IF EXISTS trg_forward_feedback_email ON public.suggestions;
-
-CREATE TRIGGER trg_forward_feedback_email
-AFTER INSERT ON public.suggestions
-FOR EACH ROW
-EXECUTE FUNCTION public.forward_feedback_to_email();
-```
-
----
-
-## 6. Ringkasan Keamanan & Privasi
-
-1. **Anon Insert-Only**: Pengguna aplikasi Android hanya memiliki hak `INSERT` dengan kuota 10 pengiriman per jam.
-2. **Kerahasiaan Data**: Klien umum (`anon`) tidak memiliki izin `SELECT` sehingga tidak dapat membaca masukan pengguna lain.
-3. **Penyampaian Aman**: Webhook berjalan di sisi server (*server-to-server*), tidak melibatkan eksposur email tujuan atau token rahasia di dalam binary APK ponsel.
+1. **Insert-Only Permissions**: Client applications connect with `anon` credentials restricted strictly to `INSERT` operations with a rolling 24-hour rate limit.
+2. **Data Confidentiality**: Client `anon` roles possess no `SELECT` permissions on `public.suggestions`, preventing inspection of other users' submissions.
+3. **Protected Dispatch**: Webhook operations execute server-to-server, with no developer credentials or email secrets embedded in client application binaries.

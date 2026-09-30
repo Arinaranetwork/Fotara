@@ -228,12 +228,12 @@ STATE 1: RESTING (HOME SCREEN)
 |  [=== Due Tomorrow Strip ===]                                         |
 |  [ Card 1 ]       [ Card 2 ]                                          |
 |                                                                       |
-|  (  🔍 Search notes, subjects, text...                           📷 ) | <-- Resting Dock (Z=16dp)
+|  (  Search notes, subjects, text...                             [Camera] ) | <-- Resting Dock (Z=16dp)
 +-----------------------------------------------------------------------+
 
 STATE 2: SEARCH ACTIVATED (KEYBOARD DEPLOYED)
 +-----------------------------------------------------------------------+
-|  <- [ bio                      ] [✕]                                  | <-- Repositioned Search Bar
+|  <- [ bio                      ] [Clear]                                | <-- Repositioned Search Bar
 |  [=========================== (Indeterminate Buffer Track) =========] |
 |  RESULTS (Instant keystroke query):                                   |
 |  • Biology > Cell Structure ("...ATP synthase in mitochondria...")     |
@@ -266,8 +266,8 @@ STATE 2: SEARCH ACTIVATED (KEYBOARD DEPLOYED)
      2. OCR text matches (displaying a photo thumbnail, folder path breadcrumb, and a 2-line snippet with the matched keyword bolded).
    - *Query with Zero Matches*: Displays a centered empty state: *"No notes found matching '[query]'. Check spelling or search by general topic."*
 3. **Clearing Query**:
-   - When text is present, a clear button (`✕`) appears at the right edge of the search bar.
-   - Tapping `✕` clears all text instantly and restores the 0-character state without closing the keyboard or exiting search mode.
+   - When text is present, a clear button appears at the right edge of the search bar.
+   - Tapping the clear button clears all text instantly and restores the 0-character state without closing the keyboard or exiting search mode.
 
 ### 5.3 Loading Indicator During Search (Video Buffering Pattern)
 1. **Visual Pattern**:

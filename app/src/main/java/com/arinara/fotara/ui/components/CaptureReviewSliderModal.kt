@@ -329,7 +329,7 @@ fun CaptureReviewSliderModal(
                                 .padding(vertical = 4.dp)
                         ) {
                             Text(
-                                text = "✓ $cropFeedbackMessage",
+                                text = cropFeedbackMessage ?: "",
                                 color = TagEmerald,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
@@ -418,7 +418,7 @@ fun CaptureReviewSliderModal(
                                                 )
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
-                                                    text = "✨ ${folderSuggestion.suggestedSubfolderName}",
+                                                    text = folderSuggestion.suggestedSubfolderName,
                                                     color = TagAmber,
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold

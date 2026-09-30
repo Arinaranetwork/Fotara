@@ -24,7 +24,7 @@ Released: 2026-09-23   Status: Beta
 - Photo Import: Integrated real Android photo picker (`PickMultipleVisualMedia`) copying full-res media and generating downscaled thumbnails.
 - ML Kit On-Device OCR: Integrated Google ML Kit offline text recognition directly indexing slide and whiteboard photos.
 - Offline SQLite Storage: Implemented SQLite database persistence with universal Android FTS4 full-text search virtual indexing.
-- Multi-Select & Bulk Delete: Added home screen folder multi-selection mode with custom card-level long-press menu ("Select" / "Pin to Top"), contextual action bar (`[✕] [N Selected] [Select All] [🗑️]`), and safety confirmation dialog detailing total folders, photos, and exact megabytes freed.
+- Multi-Select & Bulk Delete: Added home screen folder multi-selection mode with custom card-level long-press menu ("Select" / "Pin to Top"), contextual action bar (`[Close] [N Selected] [Select All] [Delete]`), and safety confirmation dialog detailing total folders, photos, and exact megabytes freed.
 - Offline PDF Export: Implemented multi-page A4 document generation (`PdfExporter`) directly shareable via Android system share sheet.
 - Assignment Deadline Alarms: Implemented Android `AlarmManager` and notification channel reminders.
 - Startup Crash Fix: Resolved launch crash (white screen followed by exit) caused by unsupported SQLite FTS5 module on Android devices by migrating to universal FTS4, adding automatic corrupt database recovery, installing a local crash logger (`crash.log`), and styling theme window background to dark.

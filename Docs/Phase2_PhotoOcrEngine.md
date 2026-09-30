@@ -39,25 +39,25 @@ Photos can have an attached `linked_deadline` timestamp. The home screen "Due To
 ```
 MULTI-CAPTURE CAMERA VIEW
 +------------------------------------------+
-|  [✕ Close]                    [⚡ Flash]  |
+|  [Close]                        [Flash]  |
 |                                          |
 |       +--------------------------+       |
 |       |   Document Viewfinder    |       |
 |       |   [Auto-Perspective]     |       |
 |       +--------------------------+       |
 |                                          |
-|  [Gallery]      ( 📸 Capture )   [Review (3)]
+|  [Gallery]      ( Capture )      [Review (3)]
 +------------------------------------------+
 
 PHOTO QUICK ACTION SHEET (LONG PRESS ON PHOTO)
 +------------------------------------------+
 |  Note #14: Lecture 4 Whiteboard          |
 |  --------------------------------------- |
-|  [📁] Move to Subfolder...               |
-|  [🏷️] Change Color Label...             |
-|  [📅] Set / Reschedule Deadline...       |
-|  [🔗] Copy Recognized OCR Text           |
-|  [🗑️] Delete Note                        |
+|  [Move] Move to Subfolder...             |
+|  [Label] Change Color Label...           |
+|  [Date] Set / Reschedule Deadline...     |
+|  [Copy] Copy Recognized OCR Text         |
+|  [Delete] Delete Note                    |
 +------------------------------------------+
 ```
 
