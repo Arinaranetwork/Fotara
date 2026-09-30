@@ -23,6 +23,8 @@ import com.arinara.fotara.data.repository.DocumentRepository
 import com.arinara.fotara.data.repository.SqliteDocumentRepository
 import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.data.repository.SqliteTextNoteRepository
+import com.arinara.fotara.data.repository.CanvasNoteRepository
+import com.arinara.fotara.data.repository.SqliteCanvasNoteRepository
 import com.arinara.fotara.online.UpdateManager
 import com.arinara.fotara.online.FeedbackManager
 import com.arinara.fotara.util.DeadlineNotificationManager
@@ -41,6 +43,7 @@ interface AppContainer {
     val settingsRepository: SettingsRepository
     val documentRepository: DocumentRepository
     val textNoteRepository: TextNoteRepository
+    val canvasNoteRepository: CanvasNoteRepository
     val updateManager: UpdateManager
     val feedbackManager: FeedbackManager
 }
@@ -96,6 +99,10 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
 
     override val textNoteRepository: TextNoteRepository by lazy {
         SqliteTextNoteRepository(dbHelper)
+    }
+
+    override val canvasNoteRepository: CanvasNoteRepository by lazy {
+        SqliteCanvasNoteRepository(dbHelper)
     }
 
     override val updateManager: UpdateManager by lazy {

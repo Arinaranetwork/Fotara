@@ -34,6 +34,13 @@ data class FeedbackSubmissionResult(
 
 class FeedbackManager(private val context: Context) {
 
+    companion object {
+        const val DAILY_LIMIT = 5
+        const val COOLDOWN_SECONDS = 60
+        const val COOLDOWN_MS = COOLDOWN_SECONDS * 1000L
+        private const val ROLLING_WINDOW_MS = 24 * 60 * 60 * 1000L
+    }
+
     private val prefs by lazy {
         context.getSharedPreferences("fotara_feedback", Context.MODE_PRIVATE)
     }
@@ -60,36 +67,67 @@ class FeedbackManager(private val context: Context) {
         return uuid
     }
 
-    private fun getDailySubmissionCount(): Int {
-        val today = System.currentTimeMillis() / (24 * 60 * 60 * 1000L)
-        val recordedDay = prefs.getLong("submission_day", 0L)
-        if (today != recordedDay) {
-            prefs.edit().putLong("submission_day", today).putInt("daily_count", 0).apply()
-            return 0
-        }
-        return prefs.getInt("daily_count", 0)
+    private fun getRecentSubmissionTimestamps(): List<Long> {
+        val now = System.currentTimeMillis()
+        val raw = prefs.getString("submission_timestamps", "[]") ?: "[]"
+        val list = mutableListOf<Long>()
+        try {
+            val array = JSONArray(raw)
+            for (i in 0 until array.length()) {
+                val ts = array.optLong(i, 0L)
+                if (ts > now - ROLLING_WINDOW_MS) {
+                    list.add(ts)
+                }
+            }
+        } catch (_: Exception) {}
+        return list
     }
 
     fun getRemainingDailyQuota(): Int {
-        return (30 - getDailySubmissionCount()).coerceAtLeast(0)
+        val count = getRecentSubmissionTimestamps().size
+        return (DAILY_LIMIT - count).coerceAtLeast(0)
     }
 
-    private fun incrementSubmissionCount() {
-        val today = System.currentTimeMillis() / (24 * 60 * 60 * 1000L)
-        val count = getDailySubmissionCount() + 1
-        prefs.edit().putLong("submission_day", today).putInt("daily_count", count).apply()
+    fun getTimeUntilNextSlotMs(): Long {
+        val timestamps = getRecentSubmissionTimestamps()
+        if (timestamps.size < DAILY_LIMIT) return 0L
+        val oldestInWindow = timestamps.minOrNull() ?: return 0L
+        val now = System.currentTimeMillis()
+        val nextSlotTime = oldestInWindow + ROLLING_WINDOW_MS
+        return (nextSlotTime - now).coerceAtLeast(0L)
+    }
+
+    private fun recordSubmissionTimestamp() {
+        val now = System.currentTimeMillis()
+        val valid = getRecentSubmissionTimestamps().toMutableList()
+        valid.add(now)
+        val array = JSONArray()
+        valid.forEach { array.put(it) }
+        prefs.edit().putString("submission_timestamps", array.toString()).apply()
+    }
+
+    fun getCooldownRemainingSeconds(): Int {
+        val lastSubmittedAt = prefs.getLong("last_submitted_at", 0L)
+        val elapsed = System.currentTimeMillis() - lastSubmittedAt
+        return if (elapsed < COOLDOWN_MS) {
+            (((COOLDOWN_MS - elapsed) + 999) / 1000).toInt().coerceAtLeast(1)
+        } else {
+            0
+        }
     }
 
     fun canSubmit(): Pair<Boolean, String?> {
-        val count = getDailySubmissionCount()
-        if (count >= 30) {
-            return false to "Batas harian pengiriman masukan tercapai (30/hari). Terima kasih telah membantu mengembangkan Fotara!"
+        val remainingQuota = getRemainingDailyQuota()
+        if (remainingQuota <= 0) {
+            val nextSlotMs = getTimeUntilNextSlotMs()
+            val hours = nextSlotMs / (60 * 60 * 1000L)
+            val minutes = (nextSlotMs % (60 * 60 * 1000L)) / (60 * 1000L)
+            val timeText = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+            return false to "Daily submission limit reached ($DAILY_LIMIT per 24 hours). Next slot opens in $timeText."
         }
-        val lastSubmittedAt = prefs.getLong("last_submitted_at", 0L)
-        val elapsed = System.currentTimeMillis() - lastSubmittedAt
-        if (elapsed < 3000L) {
-            val remainSec = ((3000L - elapsed) / 1000L).coerceAtLeast(1)
-            return false to "Harap tunggu $remainSec detik sebelum mengirim masukan berikutnya."
+        val cooldownSec = getCooldownRemainingSeconds()
+        if (cooldownSec > 0) {
+            return false to "Please wait $cooldownSec seconds before submitting your next feedback."
         }
         return true to null
     }
@@ -102,11 +140,11 @@ class FeedbackManager(private val context: Context) {
     ): FeedbackSubmissionResult = withContext(Dispatchers.IO) {
         val (allowed, error) = canSubmit()
         if (!allowed) {
-            return@withContext FeedbackSubmissionResult(false, error ?: "Tidak dapat mengirim saat ini")
+            return@withContext FeedbackSubmissionResult(false, error ?: "Cannot submit feedback at this time.")
         }
 
         if (content.trim().isBlank()) {
-            return@withContext FeedbackSubmissionResult(false, "Isi masukan tidak boleh kosong.")
+            return@withContext FeedbackSubmissionResult(false, "Feedback content cannot be empty.")
         }
 
         val appVersion = try {
@@ -114,7 +152,7 @@ class FeedbackManager(private val context: Context) {
             val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pInfo.longVersionCode else @Suppress("DEPRECATION") pInfo.versionCode.toLong()
             "Fotara v${pInfo.versionName} (Build $code)"
         } catch (_: Exception) {
-            "Fotara v1.4.0"
+            "Fotara v1.5.0"
         }
 
         val diagnosticInfo = if (includeDiagnostics) {
@@ -132,7 +170,7 @@ class FeedbackManager(private val context: Context) {
             put("submitted_at", System.currentTimeMillis())
         }
 
-        // 1. Persist locally first so no user input is ever lost
+        // 1. Save locally first so user work is never lost
         saveToLocalQueue(payload)
         prefs.edit().putLong("last_submitted_at", System.currentTimeMillis()).apply()
 
@@ -166,33 +204,43 @@ class FeedbackManager(private val context: Context) {
             }
 
             val code = connection.responseCode
+            val responseText = try {
+                if (code in 200..299) {
+                    connection.inputStream?.bufferedReader()?.use { it.readText() } ?: ""
+                } else {
+                    connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                }
+            } catch (_: Exception) { "" }
+
             if (code in 200..299) {
                 networkSuccess = true
                 markAsSyncedInLocalQueue(feedbackId)
-                incrementSubmissionCount()
-                resultMessage = "Terima kasih! Masukan Anda telah berhasil dikirim ke server dan diteruskan ke tim pengembang."
+                recordSubmissionTimestamp()
+                resultMessage = "Thank you! Your feedback has been successfully sent to the developers."
             } else {
-                val errorBody = try {
-                    connection.errorStream?.bufferedReader()?.use { it.readText() }
-                } catch (_: Exception) { null }
-                Log.e("FeedbackManager", "Supabase error HTTP $code: $errorBody")
-                if (code == 429) {
-                    resultMessage = "Batas frekuensi server tercapai (10 masukan/jam). Masukan tersimpan di antrean perangkat."
+                val isRateLimit = code == 429 ||
+                        responseText.contains("Rate limit", ignoreCase = true) ||
+                        responseText.contains("P0001", ignoreCase = true)
+
+                if (isRateLimit) {
+                    recordSubmissionTimestamp()
+                    resultMessage = "Server rate limit reached. Your feedback is safely stored on this device and will sync automatically."
+                } else if (code in 400..499) {
+                    // Permanent client error (e.g. malformed or rejected) - remove from queue so it doesn't loop
+                    removeFromLocalQueue(feedbackId)
+                    resultMessage = "The server rejected the submission format ($code). Details: $responseText"
                 } else {
-                    resultMessage = "Server merespons kode $code. Masukan Anda tersimpan di perangkat dan akan disinkronkan otomatis."
+                    // Server 5xx error
+                    resultMessage = "Server unavailable ($code). Your feedback is safely queued on device and will sync when online."
                 }
+                Log.e("FeedbackManager", "Supabase HTTP $code: $responseText")
             }
         } catch (e: Exception) {
-            Log.e("FeedbackManager", "Failed to connect to Supabase: ${e.message}", e)
+            Log.e("FeedbackManager", "Network connection error: ${e.message}", e)
             networkSuccess = false
-            resultMessage = "Tidak dapat terhubung ke server (${e.message ?: "Koneksi terputus"}). Masukan Anda tersimpan aman di perangkat dan akan dikirim saat online."
+            resultMessage = "Unable to connect to server (${e.message ?: "Connection lost"}). Your feedback is saved locally and will send when online."
         } finally {
             connection?.disconnect()
-        }
-
-        // 3. Flush any older unsynced queue items if network succeeded
-        if (networkSuccess) {
-            flushLocalQueue()
         }
 
         FeedbackSubmissionResult(networkSuccess, resultMessage)
@@ -201,19 +249,30 @@ class FeedbackManager(private val context: Context) {
     suspend fun flushLocalQueue(): Int = withContext(Dispatchers.IO) {
         var syncedCount = 0
         try {
+            // Check daily quota before flushing
+            if (getRemainingDailyQuota() <= 0) {
+                return@withContext 0
+            }
+
             val currentQueueStr = prefs.getString("feedback_queue", "[]") ?: "[]"
             val array = JSONArray(currentQueueStr)
             val updatedArray = JSONArray()
+
+            var sentThisRound = false
 
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
                 val isSynced = item.optBoolean("synced", false)
                 if (isSynced) {
+                    continue // Purge already synced items from queue
+                }
+
+                // Flush only one item at a time to respect server pacing
+                if (sentThisRound || getRemainingDailyQuota() <= 0) {
                     updatedArray.put(item)
                     continue
                 }
 
-                // Attempt to send pending item
                 var success = false
                 var conn: HttpURLConnection? = null
                 try {
@@ -243,10 +302,22 @@ class FeedbackManager(private val context: Context) {
                         out.flush()
                     }
 
-                    if (conn.responseCode in 200..299) {
+                    val code = conn.responseCode
+                    val resp = try {
+                        if (code in 200..299) conn.inputStream?.bufferedReader()?.use { it.readText() } ?: ""
+                        else conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    } catch (_: Exception) { "" }
+
+                    if (code in 200..299) {
                         success = true
-                        item.put("synced", true)
+                        recordSubmissionTimestamp()
+                        prefs.edit().putLong("last_submitted_at", System.currentTimeMillis()).apply()
                         syncedCount++
+                        sentThisRound = true
+                    } else if (code in 400..499 && !resp.contains("Rate limit", ignoreCase = true) && !resp.contains("P0001")) {
+                        // Permanent client error: drop item so queue is not poisoned
+                        Log.w("FeedbackManager", "Dropping malformed queued item: $resp")
+                        continue
                     }
                 } catch (e: Exception) {
                     Log.e("FeedbackManager", "Error flushing queued feedback item: ${e.message}")
@@ -254,7 +325,9 @@ class FeedbackManager(private val context: Context) {
                     conn?.disconnect()
                 }
 
-                updatedArray.put(item)
+                if (!success) {
+                    updatedArray.put(item)
+                }
             }
 
             prefs.edit().putString("feedback_queue", updatedArray.toString()).apply()
@@ -276,14 +349,31 @@ class FeedbackManager(private val context: Context) {
         try {
             val currentQueueStr = prefs.getString("feedback_queue", "[]") ?: "[]"
             val array = JSONArray(currentQueueStr)
+            val updated = JSONArray()
             for (i in 0 until array.length()) {
-                val obj = array.optJSONObject(i)
-                if (obj != null && obj.optString("id") == feedbackId) {
+                val obj = array.optJSONObject(i) ?: continue
+                if (obj.optString("id") == feedbackId) {
+                    // Mark synced or omit
                     obj.put("synced", true)
-                    break
+                }
+                updated.put(obj)
+            }
+            prefs.edit().putString("feedback_queue", updated.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    private fun removeFromLocalQueue(feedbackId: String) {
+        try {
+            val currentQueueStr = prefs.getString("feedback_queue", "[]") ?: "[]"
+            val array = JSONArray(currentQueueStr)
+            val updated = JSONArray()
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                if (obj.optString("id") != feedbackId) {
+                    updated.put(obj)
                 }
             }
-            prefs.edit().putString("feedback_queue", array.toString()).apply()
+            prefs.edit().putString("feedback_queue", updated.toString()).apply()
         } catch (_: Exception) {}
     }
 }

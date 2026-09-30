@@ -18,7 +18,9 @@ data class TextNote(
     val tagColor: String? = null,
     val linkedDeadline: Long? = null,
     val isTrashed: Boolean = false,
-    val deletedAt: Long? = null
+    val deletedAt: Long? = null,
+    val scheduledAt: Long? = null,
+    val alertType: String? = null
 ) {
     val isBlank: Boolean
         get() = title.isBlank() && bodyMarkdown.isBlank()

@@ -96,6 +96,7 @@ import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,6 +108,7 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     val context = LocalContext.current
     val (appVersionName, appVersionCode) = remember(context) {
         try {
@@ -116,16 +118,16 @@ fun SettingsScreen(
                 @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(context.packageName, 0)
             }
-            val vName = pInfo?.versionName ?: "1.4.0"
+            val vName = pInfo?.versionName ?: "1.5.0"
             val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                pInfo?.longVersionCode ?: 12L
+                pInfo?.longVersionCode ?: 13L
             } else {
                 @Suppress("DEPRECATION")
-                (pInfo?.versionCode ?: 12).toLong()
+                (pInfo?.versionCode ?: 13).toLong()
             }
             Pair(vName, vCode)
         } catch (_: Exception) {
-            Pair("1.4.0", 12L)
+            Pair("1.5.0", 13L)
         }
     }
 
@@ -234,12 +236,33 @@ fun SettingsScreen(
                 }
             }
 
-            // 3. Notifications
+            // 3. Notifications & Reminders
             item {
+                val notificationsEnabled = remember(context) {
+                    androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+                }
                 SettingsSection(
-                    title = "Notifications",
+                    title = "Notifications & Reminders",
                     icon = Icons.Default.Notifications
                 ) {
+                    SettingsRow(
+                        title = "System Notification Permission",
+                        subtitle = if (notificationsEnabled) "Permission granted" else "Notifications disabled in system settings",
+                        onClick = {
+                            try {
+                                val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                                val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = android.net.Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            }
+                        }
+                    )
+                    SettingsDivider()
                     val leadTimeText = when (uiState.userSettings.reminderLeadTimeHours) {
                         1 -> "1 hour before deadline"
                         3 -> "3 hours before deadline"
@@ -257,6 +280,19 @@ fun SettingsScreen(
                         subtitle = "Display urgent deadline alerts on home dashboard",
                         checked = uiState.userSettings.dueTomorrowRibbonEnabled,
                         onCheckedChange = { viewModel.updateDueTomorrowRibbon(it) }
+                    )
+                    SettingsDivider()
+                    SettingsActionRow(
+                        title = "Test Notification Alert",
+                        subtitle = "Trigger an immediate test study reminder notification",
+                        icon = Icons.Default.Notifications,
+                        isLoading = false,
+                        onClick = {
+                            com.arinara.fotara.util.NoteScheduleManager(context).sendTestAlert()
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Test alert dispatched. Check notification tray.")
+                            }
+                        }
                     )
                 }
             }

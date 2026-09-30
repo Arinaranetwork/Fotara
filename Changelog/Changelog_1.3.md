@@ -32,7 +32,7 @@ Released: 2026-09-25   Status: Beta
 ### 1.3.4 - 2026-09-26
 - Persistent Background Installer: Decoupled update download execution from the Compose UI lifecycle into an application-scoped background coroutine, preventing progress resets and file deletion when navigating away or switching apps.
 - Notification Bar Deep Linking: Added ongoing download progress notification and completion alert with direct deep linking into the installer prompt.
-- Explicit Download Cancellation: Added an in-app "Batalkan Unduhan" action to cleanly abort downloads and purge temporary `.part` files.
+- Explicit Download Cancellation: Added an in-app "Cancel Download" action to cleanly abort downloads and purge temporary `.part` files.
 - Automated Supabase Email Dispatch: Built an automated Google Apps Script and database webhook bridge forwarding user feedback, suggestions, and bug reports directly to `arinaranetwork@gmail.com` formatted in a clean, categorized HTML template.
 
 ### 1.3.3 - 2026-09-25

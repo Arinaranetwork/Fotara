@@ -30,7 +30,9 @@ data class Photo(
     val groupId: Long? = null,
     val tags: String? = null,
     val isTrashed: Boolean = false,
-    val deletedAt: Long? = null
+    val deletedAt: Long? = null,
+    val scheduledAt: Long? = null,
+    val alertType: String? = null
 ) {
     val tag: TagColor? get() = tagColor?.let { TagColor.fromHex(it) }
 

@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.ContentCopy
@@ -79,6 +80,7 @@ fun PhotoQuickActionSheet(
     onCopyTo: () -> Unit = {},
     isLinked: Boolean = false,
     onUnlink: () -> Unit = {},
+    onSchedule: () -> Unit = {},
     onDeletePhoto: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -333,6 +335,16 @@ fun PhotoQuickActionSheet(
                 title = if (photo.linkedDeadline != null) "Edit Deadline (Due soon)" else "Set Assignment Deadline...",
                 tint = if (photo.linkedDeadline != null) TagAmber else FolderTabCream,
                 onClick = { showDeadlinePicker = true }
+            )
+
+            ActionItem(
+                icon = Icons.Default.Alarm,
+                title = if (photo.scheduledAt != null) "Edit Schedule Reminder..." else "Schedule Reminder...",
+                tint = FolderTabCream,
+                onClick = {
+                    onSchedule()
+                    onDismiss()
+                }
             )
 
             if (!photo.ocrText.isNullOrBlank()) {

@@ -59,3 +59,10 @@ data object SupportNavKey : NavKey
 @Serializable
 data object WhatsNewNavKey : NavKey
 
+@Serializable
+data class CanvasNoteNavKey(
+    val canvasId: Long? = null,
+    val folderId: Long,
+    val subfolderId: Long? = null
+) : NavKey
+

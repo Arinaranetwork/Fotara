@@ -61,6 +61,7 @@ fun TextNoteQuickActionSheet(
     onMove: () -> Unit,
     onColorSelect: (String?) -> Unit,
     onSetDeadline: () -> Unit,
+    onSchedule: () -> Unit = {},
     onSelect: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit
@@ -133,6 +134,7 @@ fun TextNoteQuickActionSheet(
             ActionItem(icon = Icons.Default.Edit, label = "Rename") { onDismiss(); onRename() }
             ActionItem(icon = Icons.AutoMirrored.Filled.DriveFileMove, label = "Move to Folder") { onDismiss(); onMove() }
             ActionItem(icon = Icons.Default.Alarm, label = "Set Deadline") { onDismiss(); onSetDeadline() }
+            ActionItem(icon = Icons.Default.Alarm, label = if (note.scheduledAt != null) "Edit Schedule Reminder" else "Schedule Reminder") { onDismiss(); onSchedule() }
             ActionItem(icon = Icons.Default.CheckCircle, label = "Select Note") { onDismiss(); onSelect() }
             ActionItem(icon = Icons.Default.Share, label = "Share Note (MD / TXT)") { onDismiss(); onShare() }
             ActionItem(icon = Icons.Default.Delete, label = "Delete to Trash", isDanger = true) { onDismiss(); onDelete() }

@@ -84,10 +84,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDateRangePickerState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.arinara.fotara.data.model.DateRange
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.SearchDateFilter
+import com.arinara.fotara.data.model.SearchSortOrder
 import com.arinara.fotara.data.model.TagColor
 import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.theme.DockSlatePill
@@ -100,7 +112,7 @@ import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ActiveSearchBar(
     query: String,
@@ -119,6 +131,10 @@ fun ActiveSearchBar(
     smartTags: List<String> = emptyList(),
     selectedSmartTag: String? = null,
     onSelectSmartTag: (String?) -> Unit = {},
+    sortOrder: SearchSortOrder = SearchSortOrder.NEWEST_ADDED,
+    onToggleSortOrder: () -> Unit = {},
+    customDateRange: DateRange? = null,
+    onSelectCustomDateRange: (DateRange) -> Unit = {},
     onClearFilters: () -> Unit,
     onSearchSubmitted: (String) -> Unit,
     onRemoveRecentSearch: (String) -> Unit,
@@ -272,7 +288,7 @@ fun ActiveSearchBar(
                         Spacer(modifier = Modifier.height(28.dp))
 
                         Text(
-                            text = "💡 Tap any suggestion or type a keyword to search handwritten formulas, slide diagrams, and lecture notes indexed offline.",
+                            text = "Tap any suggestion or type a keyword to search handwritten formulas, slide diagrams, and lecture notes indexed offline.",
                             style = TextStyle(
                                 color = TextSecondary,
                                 fontSize = 13.sp,
@@ -428,6 +444,10 @@ fun ActiveSearchBar(
                 smartTags = smartTags,
                 selectedSmartTag = selectedSmartTag,
                 onSelectSmartTag = onSelectSmartTag,
+                sortOrder = sortOrder,
+                onToggleSortOrder = onToggleSortOrder,
+                customDateRange = customDateRange,
+                onSelectCustomDateRange = onSelectCustomDateRange,
                 onClearFilters = onClearFilters
             )
 
@@ -528,6 +548,7 @@ fun ActiveSearchBar(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchFilterChipRow(
     selectedDateFilter: SearchDateFilter,
@@ -537,9 +558,63 @@ fun SearchFilterChipRow(
     smartTags: List<String> = emptyList(),
     selectedSmartTag: String? = null,
     onSelectSmartTag: (String?) -> Unit = {},
+    sortOrder: SearchSortOrder = SearchSortOrder.NEWEST_ADDED,
+    onToggleSortOrder: () -> Unit = {},
+    customDateRange: DateRange? = null,
+    onSelectCustomDateRange: (DateRange) -> Unit = {},
     onClearFilters: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showCustomRangeDialog by remember { mutableStateOf(false) }
+
+    if (showCustomRangeDialog) {
+        val dateRangePickerState = rememberDateRangePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showCustomRangeDialog = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val start = dateRangePickerState.selectedStartDateMillis
+                        val end = dateRangePickerState.selectedEndDateMillis ?: start
+                        if (start != null) {
+                            onSelectCustomDateRange(DateRange(start, (end ?: start) + 86400000L - 1L))
+                        }
+                        showCustomRangeDialog = false
+                    }
+                ) {
+                    Text("Apply", color = FolderTabCream)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomRangeDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                containerColor = MidnightSurface
+            )
+        ) {
+            DateRangePicker(
+                state = dateRangePickerState,
+                title = {
+                    Text(
+                        text = "Select Date Range",
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
+                        color = TextPrimary
+                    )
+                },
+                headline = {
+                    Text(
+                        text = "Filter notes added between dates",
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, bottom = 12.dp),
+                        color = TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+            )
+        }
+    }
+
     val isAnyFilterActive = selectedDateFilter != SearchDateFilter.ALL || selectedColorFilter != null || selectedSmartTag != null
 
     Row(
@@ -551,6 +626,35 @@ fun SearchFilterChipRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Sort Order Toggle Chip
+        Surface(
+            color = DockSlatePill.copy(alpha = 0.65f),
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, FolderTabCream.copy(alpha = 0.5f)),
+            modifier = Modifier.clickable { onToggleSortOrder() }
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SwapVert,
+                    contentDescription = "Toggle Sort Order",
+                    tint = FolderTabCream,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = sortOrder.label,
+                    style = TextStyle(
+                        color = FolderTabCream,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            }
+        }
+
         if (isAnyFilterActive) {
             Surface(
                 color = TagColor.CRIMSON.composeColor.copy(alpha = 0.2f),
@@ -591,7 +695,13 @@ fun SearchFilterChipRow(
                     1.dp,
                     if (isSelected) FolderTabCream else MidnightCardOutline
                 ),
-                modifier = Modifier.clickable { onSelectDateFilter(filter) }
+                modifier = Modifier.clickable {
+                    if (filter == SearchDateFilter.CUSTOM_RANGE) {
+                        showCustomRangeDialog = true
+                    } else {
+                        onSelectDateFilter(filter)
+                    }
+                }
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

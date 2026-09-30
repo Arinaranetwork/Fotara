@@ -20,12 +20,14 @@ import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.PhotoSource
 import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.model.TextNote
+import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.repository.DocumentRepository
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.data.repository.SubfolderDeleteResult
 import com.arinara.fotara.data.repository.TextNoteRepository
+import com.arinara.fotara.data.repository.CanvasNoteRepository
 import com.arinara.fotara.data.storage.PhotoStorageManager
 import com.arinara.fotara.ocr.FolderSuggestEngine
 import com.arinara.fotara.ocr.OcrEngine
@@ -55,7 +57,8 @@ class FolderDetailViewModel(
     val targetGroupId: Long? = null,
     private val settingsRepository: SettingsRepository? = null,
     val documentRepository: DocumentRepository? = null,
-    val textNoteRepository: TextNoteRepository? = null
+    val textNoteRepository: TextNoteRepository? = null,
+    val canvasNoteRepository: CanvasNoteRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -114,6 +117,7 @@ class FolderDetailViewModel(
         val allGroups: List<PhotoGroup>,
         val allDocs: List<DocumentNote>,
         val allTextNotes: List<TextNote>,
+        val allCanvasNotes: List<CanvasNote>,
         val gridLinkGroups: List<LinkGroup>
     )
 
@@ -122,21 +126,34 @@ class FolderDetailViewModel(
         val groups: List<PhotoGroup>,
         val documents: List<DocumentNote>,
         val textNotes: List<TextNote>,
+        val canvasNotes: List<CanvasNote>,
         val gridItems: List<FolderGridItem>
     )
 
     private fun observePhotos() {
         val docFlow = documentRepository?.getDocumentNotesByFolder(folderId, null) ?: flowOf(emptyList())
         val textNoteFlow = textNoteRepository?.getTextNotesByFolder(folderId, null) ?: flowOf(emptyList())
+        val canvasFlow = canvasNoteRepository?.getCanvasNotesByFolder(folderId, null) ?: flowOf(emptyList())
 
         val sourceBundleFlow = combine(
-            photoRepository.getPhotosByFolder(folderId),
-            photoRepository.getGroupsByFolder(folderId),
-            docFlow,
-            textNoteFlow,
-            photoRepository.getGridLinkGroups()
-        ) { allPhotos, allGroups, allDocs, allTextNotes, gridLinkGroups ->
-            FolderDataBundle(allPhotos, allGroups, allDocs, allTextNotes, gridLinkGroups)
+            listOf(
+                photoRepository.getPhotosByFolder(folderId),
+                photoRepository.getGroupsByFolder(folderId),
+                docFlow,
+                textNoteFlow,
+                canvasFlow,
+                photoRepository.getGridLinkGroups()
+            )
+        ) { array ->
+            @Suppress("UNCHECKED_CAST")
+            FolderDataBundle(
+                allPhotos = array[0] as List<Photo>,
+                allGroups = array[1] as List<PhotoGroup>,
+                allDocs = array[2] as List<DocumentNote>,
+                allTextNotes = array[3] as List<TextNote>,
+                allCanvasNotes = array[4] as List<CanvasNote>,
+                gridLinkGroups = array[5] as List<LinkGroup>
+            )
         }
 
         viewModelScope.launch {
@@ -146,6 +163,7 @@ class FolderDetailViewModel(
                 val filteredGroups = if (currentSubfolder == null) bundle.allGroups else bundle.allGroups.filter { it.subfolderId == currentSubfolder }
                 val filteredDocs = if (currentSubfolder == null) bundle.allDocs else bundle.allDocs.filter { it.subfolderId == currentSubfolder }
                 val filteredTextNotes = if (currentSubfolder == null) bundle.allTextNotes else bundle.allTextNotes.filter { it.subfolderId == currentSubfolder }
+                val filteredCanvasNotes = if (currentSubfolder == null) bundle.allCanvasNotes else bundle.allCanvasNotes.filter { it.subfolderId == currentSubfolder }
 
                 val linkGroupMap = bundle.gridLinkGroups.associateBy { it.id }
                 val itemToLinkGroupMap = mutableMapOf<Long, LinkGroup>()
@@ -191,7 +209,14 @@ class FolderDetailViewModel(
                     )
                 }
 
-                val allItems = standaloneItems + groupItems + docItems + textNoteItems
+                val canvasNoteItems = filteredCanvasNotes.map { note ->
+                    FolderGridItem.CanvasNoteItem(
+                        canvasNote = note,
+                        linkGroupId = itemToLinkGroupMap[note.id + 3_000_000_000L]?.id
+                    )
+                }
+
+                val allItems = standaloneItems + groupItems + docItems + textNoteItems + canvasNoteItems
 
                 val sortedItems = when (state.sortOption) {
                     PhotoSortOption.UPLOAD_DATE_DESC -> allItems.sortedByDescending { it.sortCreatedAt }
@@ -232,7 +257,7 @@ class FolderDetailViewModel(
                     PhotoSortOption.COLOR_LABEL -> filteredPhotos.sortedBy { it.tagColor ?: "ZZZ" }
                 }
 
-                GridRenderPayload(sortedPhotos, filteredGroups, filteredDocs, filteredTextNotes, finalGridItems)
+                GridRenderPayload(sortedPhotos, filteredGroups, filteredDocs, filteredTextNotes, filteredCanvasNotes, finalGridItems)
             }.collect { payload ->
                 _uiState.update {
                     it.copy(
@@ -240,6 +265,7 @@ class FolderDetailViewModel(
                         groups = payload.groups,
                         documents = payload.documents,
                         textNotes = payload.textNotes,
+                        canvasNotes = payload.canvasNotes,
                         gridItems = payload.gridItems
                     )
                 }
@@ -1003,7 +1029,8 @@ class FolderDetailViewModel(
         val selectedGroupIds = _uiState.value.selectedGroupIds
         val selectedDocumentIds = _uiState.value.selectedDocumentIds
         val selectedTextNoteIds = _uiState.value.selectedTextNoteIds
-        val totalCount = selectedPhotoIds.size + selectedGroupIds.size + selectedDocumentIds.size + selectedTextNoteIds.size
+        val selectedCanvasNoteIds = _uiState.value.selectedCanvasNoteIds
+        val totalCount = selectedPhotoIds.size + selectedGroupIds.size + selectedDocumentIds.size + selectedTextNoteIds.size + selectedCanvasNoteIds.size
         if (totalCount == 0) return
 
         viewModelScope.launch {
@@ -1013,6 +1040,7 @@ class FolderDetailViewModel(
                     is FolderGridItem.Group -> item.group.id in selectedGroupIds
                     is FolderGridItem.Document -> item.documentNote.id in selectedDocumentIds
                     is FolderGridItem.TextNoteItem -> item.textNote.id in selectedTextNoteIds
+                    is FolderGridItem.CanvasNoteItem -> item.canvasNote.id in selectedCanvasNoteIds
                 }
             }
 
@@ -1023,6 +1051,7 @@ class FolderDetailViewModel(
                     is FolderGridItem.Group -> photoRepository.renameGroup(singleItem.group.id, baseName.trim())
                     is FolderGridItem.Document -> documentRepository?.renameDocumentNote(singleItem.documentNote.id, baseName.trim())
                     is FolderGridItem.TextNoteItem -> textNoteRepository?.renameTextNote(singleItem.textNote.id, baseName.trim())
+                    is FolderGridItem.CanvasNoteItem -> canvasNoteRepository?.renameCanvasNote(singleItem.canvasNote.id, baseName.trim())
                 }
             } else {
                 var index = 1
@@ -1033,6 +1062,7 @@ class FolderDetailViewModel(
                         is FolderGridItem.Group -> photoRepository.renameGroup(item.group.id, newName)
                         is FolderGridItem.Document -> documentRepository?.renameDocumentNote(item.documentNote.id, newName)
                         is FolderGridItem.TextNoteItem -> textNoteRepository?.renameTextNote(item.textNote.id, newName)
+                        is FolderGridItem.CanvasNoteItem -> canvasNoteRepository?.renameCanvasNote(item.canvasNote.id, newName)
                     }
                     index++
                 }
@@ -1251,6 +1281,44 @@ class FolderDetailViewModel(
         }
     }
 
+    fun refresh() {
+        viewModelScope.launch {
+            photoRepository.refresh()
+            documentRepository?.refresh()
+            textNoteRepository?.refresh()
+            canvasNoteRepository?.refresh()
+        }
+    }
+
+    fun deleteCanvasNote(canvasId: Long) {
+        viewModelScope.launch {
+            canvasNoteRepository?.deleteCanvasNote(canvasId)
+            _uiState.update { it.copy(userMessage = "Canvas note moved to Trash") }
+        }
+    }
+
+    fun renameCanvasNote(canvasId: Long, newTitle: String) {
+        viewModelScope.launch {
+            canvasNoteRepository?.renameCanvasNote(canvasId, newTitle)
+            _uiState.update { it.copy(userMessage = "Canvas note renamed") }
+        }
+    }
+
+    fun setCanvasNoteDeadline(canvasId: Long, deadlineMs: Long?) {
+        viewModelScope.launch {
+            canvasNoteRepository?.updateDeadline(canvasId, deadlineMs)
+            val msg = if (deadlineMs != null) "Deadline attached" else "Deadline removed"
+            _uiState.update { it.copy(userMessage = msg) }
+        }
+    }
+
+    fun moveCanvasNote(canvasId: Long, targetFolderId: Long, targetSubfolderId: Long?) {
+        viewModelScope.launch {
+            canvasNoteRepository?.moveCanvasNote(canvasId, targetFolderId, targetSubfolderId)
+            _uiState.update { it.copy(userMessage = "Canvas note moved") }
+        }
+    }
+
     fun deletePhoto(photoId: Long) {
         viewModelScope.launch {
             deadlineNotificationManager?.cancelReminder(photoId)
@@ -1350,7 +1418,8 @@ class FolderDetailViewModel(
             targetGroupId: Long? = null,
             settingsRepository: SettingsRepository? = null,
             documentRepository: DocumentRepository? = null,
-            textNoteRepository: TextNoteRepository? = null
+            textNoteRepository: TextNoteRepository? = null,
+            canvasNoteRepository: CanvasNoteRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -1367,7 +1436,8 @@ class FolderDetailViewModel(
                     targetGroupId = targetGroupId,
                     settingsRepository = settingsRepository,
                     documentRepository = documentRepository,
-                    textNoteRepository = textNoteRepository
+                    textNoteRepository = textNoteRepository,
+                    canvasNoteRepository = canvasNoteRepository
                 ) as T
             }
         }

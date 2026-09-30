@@ -17,6 +17,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -25,6 +30,7 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -32,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -44,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.online.FeedbackCategory
 import com.arinara.fotara.online.FeedbackManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val CardBg = Color(0xFF141936)
@@ -64,20 +72,40 @@ fun FeedbackDialog(
     var resultMessage by remember { mutableStateOf<String?>(null) }
     var isSuccess by remember { mutableStateOf(false) }
 
-    // Flush any pending queue items when dialog opens
+    var cooldownRemaining by remember {
+        mutableIntStateOf(feedbackManager.getCooldownRemainingSeconds())
+    }
+    var remainingQuota by remember {
+        mutableIntStateOf(feedbackManager.getRemainingDailyQuota())
+    }
+
+    // Cooldown countdown timer loop
     LaunchedEffect(Unit) {
         feedbackManager.flushLocalQueue()
+        while (true) {
+            cooldownRemaining = feedbackManager.getCooldownRemainingSeconds()
+            remainingQuota = feedbackManager.getRemainingDailyQuota()
+            delay(1000L)
+        }
     }
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
         title = {
-            Text(
-                text = "Send Suggestion & Feedback",
-                fontWeight = FontWeight.Bold,
-                color = TabCream,
-                fontSize = 18.sp
-            )
+            Column {
+                Text(
+                    text = "Send Suggestion & Feedback",
+                    fontWeight = FontWeight.Bold,
+                    color = TabCream,
+                    fontSize = 18.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Daily quota: $remainingQuota / ${FeedbackManager.DAILY_LIMIT} submissions remaining",
+                    color = TabCream.copy(alpha = 0.65f),
+                    fontSize = 12.sp
+                )
+            }
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -100,28 +128,46 @@ fun FeedbackDialog(
                     ) {
                         FilterChip(
                             selected = category == FeedbackCategory.BUG_REPORT,
-                            onClick = { 
+                            onClick = {
                                 category = FeedbackCategory.BUG_REPORT
                                 includeDiagnostics = true
                             },
-                            label = { Text("🐞 Bug Report", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.BugReport,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = { Text("Bug Report", fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Color(0xFFE63946),
                                 selectedLabelColor = Color.White,
+                                selectedLeadingIconColor = Color.White,
                                 containerColor = Color.Transparent,
-                                labelColor = TabCream
+                                labelColor = TabCream,
+                                iconColor = TabCream
                             ),
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = category == FeedbackCategory.SUGGESTION,
                             onClick = { category = FeedbackCategory.SUGGESTION },
-                            label = { Text("💬 Suggestion", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.ChatBubbleOutline,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = { Text("Suggestion", fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Color(0xFF2A9D8F),
                                 selectedLabelColor = Color.White,
+                                selectedLeadingIconColor = Color.White,
                                 containerColor = Color.Transparent,
-                                labelColor = TabCream
+                                labelColor = TabCream,
+                                iconColor = TabCream
                             ),
                             modifier = Modifier.weight(1f)
                         )
@@ -137,24 +183,42 @@ fun FeedbackDialog(
                         FilterChip(
                             selected = category == FeedbackCategory.FEATURE_IDEA,
                             onClick = { category = FeedbackCategory.FEATURE_IDEA },
-                            label = { Text("💡 Feature Idea", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Lightbulb,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = { Text("Feature Idea", fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = AccentGold,
                                 selectedLabelColor = Color.Black,
+                                selectedLeadingIconColor = Color.Black,
                                 containerColor = Color.Transparent,
-                                labelColor = TabCream
+                                labelColor = TabCream,
+                                iconColor = TabCream
                             ),
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = category == FeedbackCategory.GENERAL,
                             onClick = { category = FeedbackCategory.GENERAL },
-                            label = { Text("📝 General", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Description,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = { Text("General", fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Color(0xFF3A86FF),
                                 selectedLabelColor = Color.White,
+                                selectedLeadingIconColor = Color.White,
                                 containerColor = Color.Transparent,
-                                labelColor = TabCream
+                                labelColor = TabCream,
+                                iconColor = TabCream
                             ),
                             modifier = Modifier.weight(1f)
                         )
@@ -185,7 +249,7 @@ fun FeedbackDialog(
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("Email kontak (opsional untuk balasan)", color = TabCream.copy(alpha = 0.6f)) },
+                        label = { Text("Contact email (optional for reply)", color = TabCream.copy(alpha = 0.6f)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TabCream,
                             unfocusedTextColor = TabCream,
@@ -213,7 +277,7 @@ fun FeedbackDialog(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Sertakan info diagnostik (tipe HP & Android)",
+                            text = "Include device diagnostics (device model & Android version)",
                             color = TabCream.copy(alpha = 0.8f),
                             fontSize = 12.sp
                         )
@@ -227,9 +291,10 @@ fun FeedbackDialog(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGold)
                 ) {
-                    Text("Tutup", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text("Close", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
             } else {
+                val isButtonEnabled = !isSubmitting && content.isNotBlank() && cooldownRemaining == 0 && remainingQuota > 0
                 Button(
                     onClick = {
                         scope.launch {
@@ -243,9 +308,11 @@ fun FeedbackDialog(
                             isSubmitting = false
                             resultMessage = res.message
                             isSuccess = res.success
+                            cooldownRemaining = feedbackManager.getCooldownRemainingSeconds()
+                            remainingQuota = feedbackManager.getRemainingDailyQuota()
                         }
                     },
-                    enabled = !isSubmitting && content.isNotBlank(),
+                    enabled = isButtonEnabled,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGold)
                 ) {
                     if (isSubmitting) {
@@ -255,9 +322,13 @@ fun FeedbackDialog(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Mengirim...", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text("Submitting...", color = Color.Black, fontWeight = FontWeight.Bold)
+                    } else if (cooldownRemaining > 0) {
+                        Text("Wait (${cooldownRemaining}s)", color = Color.Black, fontWeight = FontWeight.Bold)
+                    } else if (remainingQuota <= 0) {
+                        Text("Daily Limit Reached", color = Color.Black, fontWeight = FontWeight.Bold)
                     } else {
-                        Text("Kirim Masukan", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text("Submit Feedback", color = Color.Black, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -268,7 +339,7 @@ fun FeedbackDialog(
                     onClick = onDismiss,
                     enabled = !isSubmitting
                 ) {
-                    Text("Batal", color = TabCream)
+                    Text("Cancel", color = TabCream)
                 }
             }
         },

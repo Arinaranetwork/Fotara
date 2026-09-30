@@ -73,7 +73,7 @@ class SqliteTextNoteRepository(
                 """
                 SELECT id, folder_id, subfolder_id, title, body_markdown,
                        created_at, updated_at, added_at, tag_color, linked_deadline,
-                       is_trashed, deleted_at
+                       is_trashed, deleted_at, scheduled_at, alert_type
                 FROM text_notes
                 ORDER BY updated_at DESC
                 """.trimIndent(),
@@ -94,7 +94,9 @@ class SqliteTextNoteRepository(
                         tagColor = if (c.isNull(8)) null else c.getString(8),
                         linkedDeadline = if (c.isNull(9)) null else c.getLong(9),
                         isTrashed = c.getInt(10) == 1,
-                        deletedAt = if (c.isNull(11)) null else c.getLong(11)
+                        deletedAt = if (c.isNull(11)) null else c.getLong(11),
+                        scheduledAt = if (c.columnCount > 12 && !c.isNull(12)) c.getLong(12) else null,
+                        alertType = if (c.columnCount > 13 && !c.isNull(13)) c.getString(13) else null
                     )
                     if (note.isTrashed) {
                         trashed.add(note)

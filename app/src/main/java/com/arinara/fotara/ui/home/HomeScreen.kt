@@ -827,6 +827,17 @@ fun HomeScreen(
                     smartTags = uiState.availableSmartTags,
                     selectedSmartTag = uiState.selectedSmartTag,
                     onSelectSmartTag = { viewModel.selectSmartTag(it) },
+                    sortOrder = uiState.searchSortOrder,
+                    onToggleSortOrder = {
+                        val next = if (uiState.searchSortOrder == com.arinara.fotara.data.model.SearchSortOrder.NEWEST_ADDED) {
+                            com.arinara.fotara.data.model.SearchSortOrder.OLDEST_ADDED
+                        } else {
+                            com.arinara.fotara.data.model.SearchSortOrder.NEWEST_ADDED
+                        }
+                        viewModel.setSortOrder(next)
+                    },
+                    customDateRange = uiState.customDateRange,
+                    onSelectCustomDateRange = { viewModel.setCustomDateRange(it) },
                     onClearFilters = { viewModel.clearFilters() },
                     onSearchSubmitted = { viewModel.submitSearch(it) },
                     onRemoveRecentSearch = { viewModel.removeRecentSearch(it) },

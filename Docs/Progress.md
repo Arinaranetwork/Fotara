@@ -1,8 +1,8 @@
 # Progress - Fotara
-Last Updated: 2026-09-29
+Last Updated: 2026-09-30
 
 ## Current Phase
-Phase 7 - NativeTextNotesAndAdvancedDocuments [Completed]
+Phase 8 - MasterV150EcosystemAndCanvas [Completed]
 
 ## Phases
 | Phase | Name                                | Status      |
@@ -14,6 +14,7 @@ Phase 7 - NativeTextNotesAndAdvancedDocuments [Completed]
 | 5     | GroupExpansionAndLinkIt             | Completed   |
 | 6     | DocumentNotesAndConnectedFeatures   | Completed   |
 | 7     | NativeTextNotesAndAdvancedDocuments | Completed   |
+| 8     | MasterV150EcosystemAndCanvas        | Completed   |
 
 ## Completed
 - [x] Analyze product brief and UI reference image - Phase 1
@@ -139,6 +140,27 @@ Phase 7 - NativeTextNotesAndAdvancedDocuments [Completed]
 - [x] Workstream 4: Native Text Notes (TextNote entity, markdown editor, autosave, grid integration, MD/TXT share) - Phase 7
 - [x] Package and sign Fotara_1.4.0_Beta.apk artifact - Phase 7
 - [x] Publish Fotara 1.4.0 Beta release notes and signed APK to GitHub Releases - Phase 7
+- [x] 1.5-A: Global English-only localization audit and resource restriction - Phase 8 (Milestone 1)
+- [x] 1.5-B: Feedback engine repair (schema alignment, HTTP 400 fix, 5/day rolling limit, 60s cooldown) - Phase 8 (Milestone 1)
+- [x] 1.5-C: PDF stability on 30+ pages, Split to Images white canvas & auto-grouping, remove "Sharp PDF Note" - Phase 8 (Milestone 1)
+- [x] 1.5-D: Virtualized in-doc PDF per-page pinch-to-zoom and freeform pan - Phase 8 (Milestone 1)
+- [x] 1.5-E: Immutable dateAdded metadata, Room migration, and search date filtering - Phase 8 (Milestone 1)
+- [x] 1.5-F: Text note editor toolbar repair (bold/italic/headings) and rich formatting expansion - Phase 8 (Milestone 1)
+- [x] 1.5-G: LinkIt corner glow redesign replacing amber badge with gradient stroke - Phase 8 (Milestone 1)
+- [x] 1.6-A: Universal note scheduling engine with notification and alarm alerts across all note types - Phase 8 (Milestone 2)
+- [x] 1.6-B: Jetpack Glance "Today" widget with due items, notes added today, and upcoming schedules - Phase 8 (Milestone 2)
+- [x] 1.6-C: Functional notification settings (permissions, alert style, snooze, test notification) - Phase 8 (Milestone 2)
+- [x] 1.6-D: Full Settings screen audit eliminating all dead toggles and placeholders - Phase 8 (Milestone 2)
+- [x] 1.7-A: Accepted content registration for ACTION_SEND / ACTION_SEND_MULTIPLE (max 30 items) - Phase 8 (Milestone 3)
+- [x] 1.7-B: Streaming staging into sandboxed cache with background thumbnailing - Phase 8 (Milestone 3)
+- [x] 1.7-C: Interactive destination placement screen with "Place Here (N)" and collapsible drawer - Phase 8 (Milestone 3)
+- [x] 1.7-D: Streamlined note placement mapping across photos, PDFs, DOCX, and text notes - Phase 8 (Milestone 3)
+- [x] 1.8-A: Unlimited Canvas 8-zone architectural layout (Z1-Z8) compliance - Phase 8 (Milestone 4)
+- [x] 1.8-B: Core canvas drawing engine (vector strokes, layers, tools, images, PNG export) - Phase 8 (Milestone 4)
+- [x] 1.8-C: Canvas persistence (compact binary serialization, chunked Room storage, cross-cutting hooks) - Phase 8 (Milestone 4)
+- [x] 1.8-D: Canvas extended features evaluation and implementation - Phase 8 (Milestone 4)
+- [x] 2.0-A to 2.0-G: Final hardening pass (cross-API regression, performance benchmarks, security audit, docs) - Phase 8 (Milestone 5)
+- [x] Package, sign, and publish Fotara 1.5.0 Beta release - Phase 8
 
 ## In Progress
 None.

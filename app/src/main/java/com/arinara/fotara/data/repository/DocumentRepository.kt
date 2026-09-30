@@ -103,7 +103,7 @@ class SqliteDocumentRepository(
                 """
                 SELECT id, folder_id, subfolder_id, name, doc_type, origin_file_uri,
                        extracted_text, created_at, added_at, tag_color, linked_deadline,
-                       is_trashed, deleted_at
+                       is_trashed, deleted_at, scheduled_at, alert_type
                 FROM document_notes
                 ORDER BY added_at DESC
                 """.trimIndent(),
@@ -125,7 +125,9 @@ class SqliteDocumentRepository(
                         tagColor = if (c.isNull(9)) null else c.getString(9),
                         linkedDeadline = if (c.isNull(10)) null else c.getLong(10),
                         isTrashed = c.getInt(11) == 1,
-                        deletedAt = if (c.isNull(12)) null else c.getLong(12)
+                        deletedAt = if (c.isNull(12)) null else c.getLong(12),
+                        scheduledAt = if (c.columnCount > 13 && !c.isNull(13)) c.getLong(13) else null,
+                        alertType = if (c.columnCount > 14 && !c.isNull(14)) c.getString(14) else null
                     )
                     if (note.isTrashed) {
                         trashedNotes.add(note)
@@ -395,6 +397,17 @@ class SqliteDocumentRepository(
             )
             val newPhotoId = photoRepository.addPhoto(photo)
             createdPhotoIds.add(newPhotoId)
+        }
+
+        // If PDF has >= 5 pages, package into a new Photo Group named after the PDF (page 1 is cover)
+        if (createdPhotoIds.size >= 5) {
+            photoRepository.createGroup(
+                folderId = note.folderId,
+                subfolderId = note.subfolderId,
+                name = note.name,
+                photoIds = createdPhotoIds,
+                tagColor = note.tagColor
+            )
         }
 
         // Permanently delete original PDF file

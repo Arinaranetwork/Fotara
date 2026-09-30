@@ -79,6 +79,7 @@ object ZipExporter {
                 is FolderGridItem.Group -> totalPhotos += item.memberPhotos.size
                 is FolderGridItem.Document -> totalPhotos += 1
                 is FolderGridItem.TextNoteItem -> totalPhotos += 1
+                is FolderGridItem.CanvasNoteItem -> totalPhotos += 1
             }
         }
         if (totalPhotos == 0) totalPhotos = 1
@@ -154,6 +155,26 @@ object ZipExporter {
                         zos.putNextEntry(ZipEntry(entryName))
                         zos.write(note.bodyMarkdown.toByteArray(Charsets.UTF_8))
                         zos.closeEntry()
+                        standaloneIndex++
+                        processedPhotos++
+                        onProgress?.invoke(processedPhotos.toFloat() / totalPhotos)
+                    }
+                    is FolderGridItem.CanvasNoteItem -> {
+                        val canvas = item.canvasNote
+                        val cleanName = canvas.title.take(40).replace(Regex("[^a-zA-Z0-9_-]"), "_")
+                        val thumbFile = canvas.thumbnailPath?.let { File(it) }
+                        if (thumbFile != null && thumbFile.exists()) {
+                            val entryName = String.format(Locale.US, "Canvas/%02d_%s.png", standaloneIndex, cleanName)
+                            zos.putNextEntry(ZipEntry(entryName))
+                            FileInputStream(thumbFile).use { fis -> fis.copyTo(zos) }
+                            zos.closeEntry()
+                        }
+                        if (canvas.dataBlob != null && canvas.dataBlob.isNotEmpty()) {
+                            val dataEntryName = String.format(Locale.US, "Canvas/%02d_%s.fotc", standaloneIndex, cleanName)
+                            zos.putNextEntry(ZipEntry(dataEntryName))
+                            zos.write(canvas.dataBlob)
+                            zos.closeEntry()
+                        }
                         standaloneIndex++
                         processedPhotos++
                         onProgress?.invoke(processedPhotos.toFloat() / totalPhotos)

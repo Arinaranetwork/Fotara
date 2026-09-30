@@ -25,5 +25,7 @@ data class DocumentNote(
     val linkedDeadline: Long? = null,
     val isTrashed: Boolean = false,
     val deletedAt: Long? = null,
-    val pageCount: Int = 0
+    val pageCount: Int = 0,
+    val scheduledAt: Long? = null,
+    val alertType: String? = null
 )

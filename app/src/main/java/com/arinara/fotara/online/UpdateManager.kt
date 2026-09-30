@@ -137,7 +137,7 @@ class UpdateManager(private val context: Context) {
                 val releasesArray = JSONArray(jsonStr)
                 if (releasesArray.length() == 0) {
                     _updateState.value = UpdateState.NO_UPDATE
-                    _statusNotice.value = "Tidak ada rilis yang tersedia di repositori."
+                    _statusNotice.value = "No releases available in repository."
                     return@withContext null
                 }
 
@@ -180,7 +180,7 @@ class UpdateManager(private val context: Context) {
 
                 if (newestRelease == null) {
                     _updateState.value = UpdateState.NO_UPDATE
-                    _statusNotice.value = "Tidak ditemukan paket APK pada rilis yang tersedia."
+                    _statusNotice.value = "No APK package found in available releases."
                     return@withContext null
                 }
 
@@ -202,9 +202,9 @@ class UpdateManager(private val context: Context) {
                             try { downloadedApkFile!!.delete() } catch (_: Exception) {}
                             downloadedApkFile = null
                         }
-                        _statusNotice.value = "Versi lebih baru ditemukan (${newestRelease.version})! Berhasil dialihkan ke rilis terbaru."
+                        _statusNotice.value = "Newer release discovered (${newestRelease.version})! Switched to newest release."
                     } else if (previousRelease != null && previousRelease.version == newestRelease.version) {
-                        _statusNotice.value = "Anda sudah berada pada rilis terbaru yang tersedia (${newestRelease.version})."
+                        _statusNotice.value = "You are already viewing the newest release available (${newestRelease.version})."
                     }
 
                     _latestRelease.value = newestRelease
@@ -226,7 +226,7 @@ class UpdateManager(private val context: Context) {
                     newestRelease
                 } else {
                     _updateState.value = UpdateState.NO_UPDATE
-                    _statusNotice.value = "Aplikasi Anda sudah dalam versi terbaru (v$currentVersion)."
+                    _statusNotice.value = "Your application is up to date (v$currentVersion)."
                     null
                 }
             } else {
@@ -430,8 +430,8 @@ class UpdateManager(private val context: Context) {
         )
 
         val notif = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("Mengunduh $title")
-            .setContentText("$progress% selesai")
+            .setContentTitle("Downloading $title")
+            .setContentText("$progress% completed")
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, progress, false)
             .setOngoing(true)
@@ -454,8 +454,8 @@ class UpdateManager(private val context: Context) {
         )
 
         val notif = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("Pembaruan Siap Dipasang")
-            .setContentText("$title telah selesai diunduh. Ketuk untuk memasang.")
+            .setContentTitle("Update Ready to Install")
+            .setContentText("$title has finished downloading. Tap to install.")
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

@@ -9,7 +9,9 @@ package com.arinara.fotara.ui.home
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
+import com.arinara.fotara.data.model.DateRange
 import com.arinara.fotara.data.model.SearchDateFilter
+import com.arinara.fotara.data.model.SearchSortOrder
 import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.data.repository.FolderBulkDeleteResult
 
@@ -26,6 +28,8 @@ data class HomeUiState(
     val textNoteSearchResults: List<TextNote> = emptyList(),
     val recentSearches: List<String> = emptyList(),
     val searchDateFilter: SearchDateFilter = SearchDateFilter.ALL,
+    val searchSortOrder: SearchSortOrder = SearchSortOrder.NEWEST_ADDED,
+    val customDateRange: DateRange? = null,
     val searchColorFilter: String? = null,
     val availableSmartTags: List<String> = emptyList(),
     val selectedSmartTag: String? = null,

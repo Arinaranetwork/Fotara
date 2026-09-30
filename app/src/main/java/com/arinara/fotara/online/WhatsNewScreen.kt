@@ -172,26 +172,29 @@ fun WhatsNewScreen(
         }
     }
 
-    val versionText = release?.version ?: "Fotara v1.4.0"
+    val versionText = release?.version ?: "Fotara v1.5.0"
     val defaultNotes = """
         ## What's New
-        - Native Rich-Text Notes: Create, format, and organize native text notes alongside photos, groups, and document files. Features a full Markdown-backed editor with live formatting (bold, italic, strikethrough, headings, lists, quotes, code, links), instant round-tripping, debounced autosave, and keyboard-docked formatting toolbar.
-        - In-App Reflowed DOCX Viewer: Directly view Microsoft Word (.docx) documents inside Fotara with rich styling (paragraphs, inline formatting, headings, bullet/numbered lists, tables, embedded graphics), progressive loading, and clear visual notices for unsupported elements.
-        - Dedicated Markdown & Plain-Text Sharing: Share text notes cleanly as raw Markdown (.md) or stripped Plain Text (.txt).
-        - Text Note Search Integration: Search indexing automatically includes text note titles and markdown body text for zero-latency retrieval.
+        - Unlimited Drawing Canvas (Alpha): Introducing an infinite 2D vector drawing canvas note type with freeform pan, pinch-to-zoom, pressure-sensitive pen, highlighter, eraser, multi-layer management, image attachments, and high-resolution PNG export.
+        - Universal Note Scheduling: Attach custom date and time reminder schedules to any note type (Photos, Groups, PDFs, Word DOCX, Text Notes, and Canvas) with user choice between standard notifications and ringing alarm alerts.
+        - Dedicated "Today" Home Widget: A new rectangular Jetpack Glance widget displaying assignments due today, newly captured study notes, and upcoming scheduled alerts with instant deep-linking.
+        - Share to Fotara: Seamlessly share images, PDFs, Word documents, Markdown, and plain text directly from other Android apps into Fotara with an intuitive multi-item destination placement screen.
+        - Search Date Filtering: Filter notes instantly by date added with quick chips (Today, Yesterday, This week, This month, This year) and custom single-day or date-range pickers.
+        - Rich Text Formatting Toolbar: Upgraded native text editor toolbar with full support for bold, italic, bold-italic, strikethrough, headings, inline code, link creation, dividers, and interactive checklists.
+        - In-Viewer PDF Zoom: Smooth pinch-to-zoom and two-axis panning directly on PDF pages inside the native viewer with sharp on-demand viewport rasterization.
 
         ## Changed
-        - High-Performance PDF Engine: Replaced low-resolution static page dumps with an on-demand, density-scaled PDF renderer with white canvas pre-fill, eliminating all black backgrounds and transparency artifacts.
-        - Virtualized PDF Page Viewer: Smooth, bounded memory rendering with LRU cache, single-writer thread-safe serialization, and instant page recycling.
-        - Pipelined PDF Import: First page viewable immediately while background OCR and remaining pages process asynchronously with a real progress bar.
-        - Unified Share As Discipline: Mixed selections containing text notes automatically restrict export to native files, cleanly skipping text notes during PDF/Word combine operations with helpful notification.
+        - Global English Standardization: Standardized all application text, dialogs, error messages, settings, notifications, widgets, and release notes exclusively in English.
+        - Redesigned LinkIt Corner Glow: Replaced the loud amber pill badge with a subtle, elegant radial corner glow that remains crisp and uniform from Android 7.0 (API 24) to Android 16 (API 36).
+        - Intelligent PDF Split to Images: PDF splitting now generates high-fidelity white-canvas images without dark artifacts, automatically grouping documents with 5 or more pages into a Photo Group while preserving page order.
+        - Tightened Feedback Limits: Enforced a 5-submission rolling 24-hour quota and a 60-second cooldown timer on feedback and bug reports to ensure reliable service delivery.
 
         ## Fixed
-        - Fixed black backgrounds and rendering glitches on transparent PDF pages.
-        - Resolved scroll lag and UI stutter when scrolling through multi-page PDFs.
-        - Added explicit error dialogs for password-protected and corrupted PDF documents.
-        - Fixed orphaned document and page file leaks when permanently purging folders.
-        - Fixed unhandled exceptions when importing damaged files.
+        - Fixed intermittent UI freezing and frame stutter when scrolling through 30+ page PDF documents.
+        - Fixed HTTP 400 Bad Request errors when submitting feedback and bug reports to the Supabase backend.
+        - Fixed non-functional bold, italic, strikethrough, heading, and quote buttons in the native text note editor.
+        - Fixed transparent page rasterization artifacts in PDF rendering and Split to Images export.
+        - Removed legacy "Sharp PDF Note" label across all screen subtitles and headers.
     """.trimIndent()
 
     val rawNotes = release?.releaseNotes?.ifBlank { defaultNotes } ?: defaultNotes
@@ -242,10 +245,10 @@ fun WhatsNewScreen(
                 border = BorderStroke(1.dp, CardBorder)
             ) {
                 val bannerModel = release?.bannerUrl?.takeIf { it.isNotBlank() }
-                    ?: R.drawable.fotara_banner_1_4
+                    ?: R.drawable.fotara_banner_1_5
                 AsyncImage(
                     model = bannerModel,
-                    contentDescription = "Fotara 1.4 Banner",
+                    contentDescription = "Fotara 1.5 Banner",
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)

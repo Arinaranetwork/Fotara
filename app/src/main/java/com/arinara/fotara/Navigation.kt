@@ -158,7 +158,8 @@ fun MainNavigation(
                         targetGroupId = key.targetGroupId,
                         settingsRepository = appContainer.settingsRepository,
                         documentRepository = appContainer.documentRepository,
-                        textNoteRepository = appContainer.textNoteRepository
+                        textNoteRepository = appContainer.textNoteRepository,
+                        canvasNoteRepository = appContainer.canvasNoteRepository
                     )
                 )
                 FolderDetailScreen(
@@ -176,6 +177,9 @@ fun MainNavigation(
                     },
                     onOpenDocx = { dId ->
                         backStack.add(DocxViewerNavKey(documentId = dId))
+                    },
+                    onOpenCanvasNote = { cId, fId, sId ->
+                        backStack.add(CanvasNoteNavKey(canvasId = cId, folderId = fId, subfolderId = sId))
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -279,6 +283,22 @@ fun MainNavigation(
                         }
                     )
                 }
+            }
+
+            entry<CanvasNoteNavKey> { key ->
+                val canvasViewModel: com.arinara.fotara.ui.canvas.CanvasViewModel = viewModel(
+                    key = "canvas_${key.canvasId}_${key.folderId}_${key.subfolderId}",
+                    factory = com.arinara.fotara.ui.canvas.CanvasViewModelFactory(
+                        canvasId = key.canvasId,
+                        folderId = key.folderId,
+                        subfolderId = key.subfolderId,
+                        canvasNoteRepository = appContainer.canvasNoteRepository
+                    )
+                )
+                com.arinara.fotara.ui.canvas.CanvasScreen(
+                    viewModel = canvasViewModel,
+                    onBack = { safePopBack() }
+                )
             }
 
             entry<UpdateNavKey> {

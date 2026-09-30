@@ -99,6 +99,17 @@ sealed interface FolderGridItem {
         override val sortDeadline: Long? get() = textNote.linkedDeadline
         override val sortColor: String? get() = textNote.tagColor
     }
+
+    data class CanvasNoteItem(
+        val canvasNote: com.arinara.fotara.data.model.CanvasNote,
+        override val linkGroupId: Long? = null
+    ) : FolderGridItem {
+        override val key: String get() = "canvas_note_${canvasNote.id}"
+        override val itemId: Long get() = canvasNote.id + 3_000_000_000L
+        override val sortCreatedAt: Long get() = canvasNote.addedAt
+        override val sortDeadline: Long? get() = canvasNote.linkedDeadline
+        override val sortColor: String? get() = canvasNote.tagColor
+    }
 }
 
 data class FolderDetailUiState(
@@ -109,6 +120,7 @@ data class FolderDetailUiState(
     val groups: List<PhotoGroup> = emptyList(),
     val documents: List<DocumentNote> = emptyList(),
     val textNotes: List<TextNote> = emptyList(),
+    val canvasNotes: List<com.arinara.fotara.data.model.CanvasNote> = emptyList(),
     val gridItems: List<FolderGridItem> = emptyList(),
     val sortOption: PhotoSortOption = PhotoSortOption.UPLOAD_DATE_DESC,
     val isBatchSelectMode: Boolean = false,
@@ -116,6 +128,7 @@ data class FolderDetailUiState(
     val selectedGroupIds: Set<Long> = emptySet(),
     val selectedDocumentIds: Set<Long> = emptySet(),
     val selectedTextNoteIds: Set<Long> = emptySet(),
+    val selectedCanvasNoteIds: Set<Long> = emptySet(),
     val isSubfolderMultiSelectMode: Boolean = false,
     val selectedSubfolderIds: Set<Long> = emptySet(),
     val availableFolders: List<Folder> = emptyList(),
@@ -130,5 +143,5 @@ data class FolderDetailUiState(
     val userMessage: String? = null,
     val pendingUndoAction: UndoAction? = null
 ) {
-    val totalSelectionCount: Int get() = selectedPhotoIds.size + selectedGroupIds.size + selectedDocumentIds.size + selectedTextNoteIds.size
+    val totalSelectionCount: Int get() = selectedPhotoIds.size + selectedGroupIds.size + selectedDocumentIds.size + selectedTextNoteIds.size + selectedCanvasNoteIds.size
 }

@@ -100,6 +100,9 @@ object PdfExporter {
                 is FolderGridItem.TextNoteItem -> {
                     // Under MD/TXT only sharing rules, text notes are skipped in PDF export
                 }
+                is FolderGridItem.CanvasNoteItem -> {
+                    // Canvas notes are exported as PNG or skipped in document PDF export
+                }
             }
         }
         if (totalPages == 0) totalPages = 1
@@ -230,6 +233,9 @@ object PdfExporter {
                 }
                 is FolderGridItem.TextNoteItem -> {
                     // Under MD/TXT only sharing rules, text notes are skipped in PDF export
+                }
+                is FolderGridItem.CanvasNoteItem -> {
+                    // Canvas notes are exported as PNG or skipped in document PDF export
                 }
             }
         }

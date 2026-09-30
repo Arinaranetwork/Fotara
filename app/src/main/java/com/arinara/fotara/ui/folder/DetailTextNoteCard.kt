@@ -43,6 +43,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.data.model.TextNote
+import com.arinara.fotara.ui.components.GlowCorner
+import com.arinara.fotara.ui.components.linkItCornerGlow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,6 +77,7 @@ fun DetailTextNoteCard(
             .fillMaxWidth()
             .aspectRatio(0.85f)
             .clip(RoundedCornerShape(14.dp))
+            .linkItCornerGlow(isLinked = noteItem.isLinked, corner = GlowCorner.TopLeft)
             .combinedClickable(
                 onClick = onCardClick,
                 onLongClick = onCardLongClick
@@ -128,25 +131,6 @@ fun DetailTextNoteCard(
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    // LinkIt indicator
-                    if (noteItem.isLinked) {
-                        Box(
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clip(CircleShape)
-                                .background(AccentGold.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Link,
-                                contentDescription = "Linked Note",
-                                tint = AccentGold,
-                                modifier = Modifier.size(11.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-
                     // Tag color dot
                     if (tagColor != null) {
                         Box(
@@ -190,7 +174,7 @@ fun DetailTextNoteCard(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val formattedDate = SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(note.updatedAt))
+                    val formattedDate = SimpleDateFormat("MMM d", Locale.US).format(Date(note.updatedAt))
                     Text(
                         text = formattedDate,
                         color = TabCream.copy(alpha = 0.5f),
@@ -198,6 +182,14 @@ fun DetailTextNoteCard(
                     )
 
                     Spacer(modifier = Modifier.weight(1f))
+
+                    if (note.scheduledAt != null) {
+                        com.arinara.fotara.ui.components.ScheduleBadge(
+                            scheduledAt = note.scheduledAt,
+                            alertType = note.alertType
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
 
                     if (note.linkedDeadline != null) {
                         Icon(

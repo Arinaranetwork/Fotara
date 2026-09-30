@@ -49,6 +49,8 @@ import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -81,9 +83,11 @@ import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.ui.components.BatchRenameDialog
+import com.arinara.fotara.ui.components.GlowCorner
 import com.arinara.fotara.ui.components.GroupSliderViewerModal
 import com.arinara.fotara.ui.components.ShareFormatChoice
 import com.arinara.fotara.ui.components.UnifiedShareDialog
+import com.arinara.fotara.ui.components.linkItCornerGlow
 import com.arinara.fotara.ui.document.PdfViewerScreen
 import com.arinara.fotara.util.CombineItem
 import com.arinara.fotara.util.CombineManager
@@ -160,7 +164,12 @@ import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
 import com.arinara.fotara.ui.components.CaptureReviewSliderModal
+import com.arinara.fotara.ui.components.ScheduleBadge
+import com.arinara.fotara.ui.components.ScheduleNoteDialog
 import com.arinara.fotara.ui.photo.PhotoViewerDialog
+import com.arinara.fotara.util.NoteScheduleManager
+import com.arinara.fotara.util.ScheduleAlertType
+import com.arinara.fotara.util.ScheduleNoteType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.arinara.fotara.data.model.TextNote
@@ -184,6 +193,7 @@ fun FolderDetailScreen(
     onOpenGroup: ((folderId: Long, groupId: Long, targetPhotoId: Long?) -> Unit)? = null,
     onOpenTextNote: ((noteId: Long?, folderId: Long, subfolderId: Long?) -> Unit)? = null,
     onOpenDocx: ((documentId: Long) -> Unit)? = null,
+    onOpenCanvasNote: ((canvasId: Long?, folderId: Long, subfolderId: Long?) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -275,6 +285,9 @@ fun FolderDetailScreen(
     var documentToMove by remember { mutableStateOf<DocumentNote?>(null) }
     var documentToDelete by remember { mutableStateOf<DocumentNote?>(null) }
     var pdfToSplit by remember { mutableStateOf<DocumentNote?>(null) }
+    var itemToSchedule by remember { mutableStateOf<Triple<ScheduleNoteType, Long, String>?>(null) }
+    var itemScheduledAt by remember { mutableStateOf<Long?>(null) }
+    var itemAlertType by remember { mutableStateOf(ScheduleAlertType.NOTIFICATION) }
 
     val bottomSheetState = rememberModalBottomSheetState()
     val gridState = rememberLazyGridState()
@@ -782,6 +795,7 @@ fun FolderDetailScreen(
                                                 is FolderGridItem.Group -> item.group.id in uiState.selectedGroupIds
                                                 is FolderGridItem.Document -> item.documentNote.id in uiState.selectedDocumentIds
                                                 is FolderGridItem.TextNoteItem -> item.textNote.id in uiState.selectedTextNoteIds
+                                                is FolderGridItem.CanvasNoteItem -> item.canvasNote.id in uiState.selectedCanvasNoteIds
                                             }
                                         }
                                         shareTargetItems = selected
@@ -1197,6 +1211,27 @@ fun FolderDetailScreen(
                                     }
                                 )
                             }
+                            is FolderGridItem.CanvasNoteItem -> {
+                                val canvasNote = gridItem.canvasNote
+                                DetailCanvasCard(
+                                    canvasItem = gridItem,
+                                    isBatchMode = uiState.isBatchSelectMode,
+                                    isSelected = false,
+                                    onCardClick = {
+                                        onOpenCanvasNote?.invoke(canvasNote.id, canvasNote.folderId, canvasNote.subfolderId)
+                                    },
+                                    onCardLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        itemToSchedule = Triple(ScheduleNoteType.CANVAS_NOTE, canvasNote.id, canvasNote.title)
+                                        itemScheduledAt = canvasNote.scheduledAt
+                                        itemAlertType = try {
+                                            ScheduleAlertType.valueOf(canvasNote.alertType ?: "NOTIFICATION")
+                                        } catch (_: Exception) {
+                                            ScheduleAlertType.NOTIFICATION
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -1223,6 +1258,55 @@ fun FolderDetailScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Option: New Canvas Note (v1.5 Alpha)
+                Surface(
+                    color = FolderBodyBlue.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, FolderTabCream.copy(alpha = 0.3f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showAddPhotoSheet = false
+                            onOpenCanvasNote?.invoke(null, viewModel.folderId, uiState.selectedSubfolderId)
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(FolderTabCream.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Brush,
+                                contentDescription = null,
+                                tint = FolderTabCream,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = "New Canvas Note",
+                                color = TextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Infinite vector drawing & whiteboard (Alpha)",
+                                color = TextSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Option 0: New Text Note (v1.4)
                 Surface(
@@ -1421,6 +1505,15 @@ fun FolderDetailScreen(
                 onSelectPhoto = { viewModel.startBatchSelection(photo.id) },
                 onCopyTo = { photoToCopy = photo },
                 onUnlink = { viewModel.unlinkGridItem(photo.id) },
+                onSchedule = {
+                    itemToSchedule = Triple(ScheduleNoteType.PHOTO, photo.id, photo.caption ?: "Photo Note")
+                    itemScheduledAt = photo.scheduledAt
+                    itemAlertType = try {
+                        ScheduleAlertType.valueOf(photo.alertType ?: "NOTIFICATION")
+                    } catch (_: Exception) {
+                        ScheduleAlertType.NOTIFICATION
+                    }
+                },
                 onDeletePhoto = { viewModel.deletePhoto(photo.id) },
                 onDismiss = { quickActionPhoto = null }
             )
@@ -2231,6 +2324,30 @@ fun FolderDetailScreen(
                     Text(text = "Rename", color = TextPrimary, fontSize = 15.sp)
                 }
 
+                // Action: Schedule Reminder
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            val toSchedule = g
+                            groupActionTarget = null
+                            itemToSchedule = Triple(ScheduleNoteType.PHOTO_GROUP, toSchedule.id, toSchedule.name)
+                            itemScheduledAt = toSchedule.scheduledAt
+                            itemAlertType = try {
+                                ScheduleAlertType.valueOf(toSchedule.alertType ?: "NOTIFICATION")
+                            } catch (_: Exception) {
+                                ScheduleAlertType.NOTIFICATION
+                            }
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Alarm, contentDescription = null, tint = FolderTabCream)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(text = "Schedule Reminder", color = TextPrimary, fontSize = 15.sp)
+                }
+
                 // Action 2: Ungroup (Non-destructive dissolution, no confirmation dialog)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -2486,6 +2603,7 @@ fun FolderDetailScreen(
                     is FolderGridItem.Group -> item.group.id in uiState.selectedGroupIds
                     is FolderGridItem.Document -> item.documentNote.id in uiState.selectedDocumentIds
                     is FolderGridItem.TextNoteItem -> item.textNote.id in uiState.selectedTextNoteIds
+                    is FolderGridItem.CanvasNoteItem -> item.canvasNote.id in uiState.selectedCanvasNoteIds
                 }
             }
         }
@@ -2496,6 +2614,7 @@ fun FolderDetailScreen(
                 is FolderGridItem.Group -> CombineItem.Group(item.group, item.memberPhotos)
                 is FolderGridItem.Document -> CombineItem.Document(item.documentNote, item.pages)
                 is FolderGridItem.TextNoteItem -> null
+                is FolderGridItem.CanvasNoteItem -> null
             }
         }
         val totalPages = combineItems.sumOf { it.pageCount() }
@@ -2610,6 +2729,20 @@ fun FolderDetailScreen(
                     leadingIcon = { Icon(Icons.Default.Event, null, tint = FolderTabCream) },
                     onClick = {
                         documentToDeadline = doc
+                        documentActionTarget = null
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Schedule Reminder", color = TextPrimary) },
+                    leadingIcon = { Icon(Icons.Default.Alarm, null, tint = FolderTabCream) },
+                    onClick = {
+                        itemToSchedule = Triple(ScheduleNoteType.DOCUMENT, doc.id, doc.name)
+                        itemScheduledAt = doc.scheduledAt
+                        itemAlertType = try {
+                            ScheduleAlertType.valueOf(doc.alertType ?: "NOTIFICATION")
+                        } catch (_: Exception) {
+                            ScheduleAlertType.NOTIFICATION
+                        }
                         documentActionTarget = null
                     }
                 )
@@ -2921,6 +3054,16 @@ fun FolderDetailScreen(
                     viewModel.setTextNoteDeadline(textNote.id, tomorrow)
                 }
             },
+            onSchedule = {
+                textNoteActionTarget = null
+                itemToSchedule = Triple(ScheduleNoteType.TEXT_NOTE, textNote.id, textNote.title)
+                itemScheduledAt = textNote.scheduledAt
+                itemAlertType = try {
+                    ScheduleAlertType.valueOf(textNote.alertType ?: "NOTIFICATION")
+                } catch (_: Exception) {
+                    ScheduleAlertType.NOTIFICATION
+                }
+            },
             onSelect = {
                 viewModel.startBatchSelectionWithTextNote(textNote.id)
                 textNoteActionTarget = null
@@ -3035,6 +3178,34 @@ fun FolderDetailScreen(
             onDismiss = { textNoteToMove = null }
         )
     }
+
+    itemToSchedule?.let { (noteType, noteId, title) ->
+        val currentFolderId = uiState.folder?.id ?: 0L
+        val scheduleManager = remember { NoteScheduleManager(context) }
+        ScheduleNoteDialog(
+            noteTitle = title,
+            initialScheduledAt = itemScheduledAt,
+            initialAlertType = itemAlertType,
+            onDismiss = { itemToSchedule = null },
+            onSaveSchedule = { scheduledAt, alertType ->
+                scheduleManager.scheduleNote(
+                    noteType = noteType,
+                    noteId = noteId,
+                    folderId = currentFolderId,
+                    title = title,
+                    triggerAtMillis = scheduledAt,
+                    alertType = alertType
+                )
+                viewModel.refresh()
+                itemToSchedule = null
+            },
+            onClearSchedule = {
+                scheduleManager.cancelSchedule(noteType, noteId)
+                viewModel.refresh()
+                itemToSchedule = null
+            }
+        )
+    }
 }
 
 @Composable
@@ -3053,7 +3224,7 @@ private fun DetailDocumentCard(
     val isPdf = doc.docType == DocumentType.PDF
     val firstPage = documentItem.pages.firstOrNull()
     val dateStr = remember(doc.addedAt) {
-        SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(doc.addedAt))
+        SimpleDateFormat("MMM d", Locale.US).format(Date(doc.addedAt))
     }
 
     Card(
@@ -3066,6 +3237,7 @@ private fun DetailDocumentCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
+            .linkItCornerGlow(isLinked = documentItem.isLinked, corner = GlowCorner.TopLeft)
             .combinedClickable(
                 onClick = onCardClick,
                 onLongClick = onCardLongClick
@@ -3138,26 +3310,6 @@ private fun DetailDocumentCard(
                         }
                     }
 
-                    if (documentItem.isLinked) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MidnightNavy.copy(alpha = 0.92f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF77F00)),
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(start = 74.dp, top = 8.dp)
-                                .size(22.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Link,
-                                    contentDescription = "Linked",
-                                    tint = Color(0xFFF77F00),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-                    }
 
                     // Multi-select Checkmark Badge
                     if (isBatchMode) {
@@ -3232,6 +3384,14 @@ private fun DetailDocumentCard(
 
                         Spacer(modifier = Modifier.weight(1f))
 
+                        if (doc.scheduledAt != null) {
+                            ScheduleBadge(
+                                scheduledAt = doc.scheduledAt,
+                                alertType = doc.alertType
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+
                         if (doc.linkedDeadline != null) {
                             Icon(
                                 imageVector = Icons.Default.Event,
@@ -3269,7 +3429,7 @@ internal fun DetailPhotoCard(
     modifier: Modifier = Modifier
 ) {
     val dateStr = remember(photo.addedAt) {
-        SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(photo.addedAt))
+        SimpleDateFormat("MMM d", Locale.US).format(Date(photo.addedAt))
     }
 
     Card(
@@ -3282,6 +3442,7 @@ internal fun DetailPhotoCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
+            .linkItCornerGlow(isLinked = isLinked, corner = GlowCorner.TopLeft)
             .combinedClickable(
                 onClick = onCardClick,
                 onLongClick = onCardLongClick
@@ -3329,26 +3490,6 @@ internal fun DetailPhotoCard(
                         )
                     }
 
-                    if (isLinked) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MidnightNavy.copy(alpha = 0.92f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF77F00)),
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(start = if (isBatchMode) 34.dp else 8.dp, top = 8.dp)
-                                .size(22.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Link,
-                                    contentDescription = "Linked",
-                                    tint = Color(0xFFF77F00),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-                    }
 
                     photo.tag?.let { tag ->
                         Surface(
@@ -3385,6 +3526,14 @@ internal fun DetailPhotoCard(
                         )
 
                         Spacer(modifier = Modifier.weight(1f))
+
+                        if (photo.scheduledAt != null) {
+                            ScheduleBadge(
+                                scheduledAt = photo.scheduledAt,
+                                alertType = photo.alertType
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
 
                         if (photo.linkedDeadline != null) {
                             Icon(
@@ -3426,7 +3575,7 @@ private fun DetailGroupCard(
     val memberCount = groupItem.memberPhotos.size
     val coverPhoto = groupItem.coverPhoto
     val dateStr = remember(group.createdAt) {
-        SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(group.createdAt))
+        SimpleDateFormat("MMM d", Locale.US).format(Date(group.createdAt))
     }
 
     Card(
@@ -3439,6 +3588,7 @@ private fun DetailGroupCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
+            .linkItCornerGlow(isLinked = groupItem.isLinked, corner = GlowCorner.TopLeft)
             .combinedClickable(
                 onClick = onCardClick,
                 onLongClick = onCardLongClick
@@ -3503,26 +3653,6 @@ private fun DetailGroupCard(
                         }
                     }
 
-                    if (groupItem.isLinked) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MidnightNavy.copy(alpha = 0.92f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF77F00)),
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(start = 58.dp, top = 8.dp)
-                                .size(22.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Link,
-                                    contentDescription = "Linked",
-                                    tint = Color(0xFFF77F00),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-                    }
 
                     // Multi-select Checkmark Badge
                     if (isBatchMode) {
@@ -3583,6 +3713,14 @@ private fun DetailGroupCard(
 
                         Spacer(modifier = Modifier.weight(1f))
 
+                        if (group.scheduledAt != null) {
+                            ScheduleBadge(
+                                scheduledAt = group.scheduledAt,
+                                alertType = group.alertType
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+
                         if (groupItem.sortDeadline != null) {
                             Icon(
                                 imageVector = Icons.Default.Event,
@@ -3630,7 +3768,7 @@ private fun CreateGroupDialog(
         text = {
             Column {
                 Text(
-                    text = "Enter a name for this group (e.g. Latihan 1.5).",
+                    text = "Enter a name for this group (e.g. Exercise 1.5).",
                     color = TextSecondary,
                     fontSize = 14.sp
                 )

@@ -108,7 +108,7 @@ class SqlitePhotoRepository(
                 SELECT id, file_path, thumbnail_path, folder_id, subfolder_id,
                        created_at, added_at, tag_color, caption, ocr_text,
                        source, linked_deadline, file_size_bytes, note,
-                       is_trashed, deleted_at, group_id, tags
+                       is_trashed, deleted_at, group_id, tags, scheduled_at, alert_type
                 FROM photos
                 WHERE is_trashed = 0
                 ORDER BY added_at DESC
@@ -137,7 +137,9 @@ class SqlitePhotoRepository(
                             isTrashed = c.getInt(14) == 1,
                             deletedAt = if (c.isNull(15)) null else c.getLong(15),
                             groupId = if (c.isNull(16)) null else c.getLong(16),
-                            tags = if (c.isNull(17)) null else c.getString(17)
+                            tags = if (c.isNull(17)) null else c.getString(17),
+                            scheduledAt = if (c.columnCount > 18 && !c.isNull(18)) c.getLong(18) else null,
+                            alertType = if (c.columnCount > 19 && !c.isNull(19)) c.getString(19) else null
                         )
                     )
                 }
@@ -151,7 +153,7 @@ class SqlitePhotoRepository(
                 SELECT id, file_path, thumbnail_path, folder_id, subfolder_id,
                        created_at, added_at, tag_color, caption, ocr_text,
                        source, linked_deadline, file_size_bytes, note,
-                       is_trashed, deleted_at, group_id, tags
+                       is_trashed, deleted_at, group_id, tags, scheduled_at, alert_type
                 FROM photos
                 WHERE is_trashed = 1
                 ORDER BY deleted_at DESC
@@ -179,7 +181,9 @@ class SqlitePhotoRepository(
                             isTrashed = true,
                             deletedAt = if (tc.isNull(15)) null else tc.getLong(15),
                             groupId = if (tc.isNull(16)) null else tc.getLong(16),
-                            tags = if (tc.isNull(17)) null else tc.getString(17)
+                            tags = if (tc.isNull(17)) null else tc.getString(17),
+                            scheduledAt = if (tc.columnCount > 18 && !tc.isNull(18)) tc.getLong(18) else null,
+                            alertType = if (tc.columnCount > 19 && !tc.isNull(19)) tc.getString(19) else null
                         )
                     )
                 }
@@ -192,7 +196,7 @@ class SqlitePhotoRepository(
                 """
                 SELECT id, folder_id, subfolder_id, name, tag_color,
                        created_at, cover_photo_id, is_trashed, deleted_at,
-                       linked_deadline
+                       linked_deadline, added_at, scheduled_at, alert_type
                 FROM photo_groups
                 WHERE is_trashed = 0
                 ORDER BY created_at DESC
@@ -201,6 +205,8 @@ class SqlitePhotoRepository(
             )
             groupCursor.use { gc ->
                 while (gc.moveToNext()) {
+                    val createdAt = gc.getLong(5)
+                    val addedAt = if (gc.columnCount > 10 && !gc.isNull(10)) gc.getLong(10) else createdAt
                     groupList.add(
                         PhotoGroup(
                             id = gc.getLong(0),
@@ -208,11 +214,14 @@ class SqlitePhotoRepository(
                             subfolderId = if (gc.isNull(2)) null else gc.getLong(2),
                             name = gc.getString(3),
                             tagColor = if (gc.isNull(4)) null else gc.getString(4),
-                            createdAt = gc.getLong(5),
+                            createdAt = createdAt,
+                            addedAt = if (addedAt == 0L) createdAt else addedAt,
                             coverPhotoId = if (gc.isNull(6)) null else gc.getLong(6),
                             isTrashed = gc.getInt(7) == 1,
                             deletedAt = if (gc.isNull(8)) null else gc.getLong(8),
-                            linkedDeadline = if (gc.isNull(9)) null else gc.getLong(9)
+                            linkedDeadline = if (gc.isNull(9)) null else gc.getLong(9),
+                            scheduledAt = if (gc.columnCount > 11 && !gc.isNull(11)) gc.getLong(11) else null,
+                            alertType = if (gc.columnCount > 12 && !gc.isNull(12)) gc.getString(12) else null
                         )
                     )
                 }
@@ -292,12 +301,14 @@ class SqlitePhotoRepository(
         db.beginTransaction()
         val insertedGroupId: Long
         try {
+            val now = System.currentTimeMillis()
             val groupValues = ContentValues().apply {
                 put("folder_id", folderId)
                 put("subfolder_id", subfolderId)
                 put("name", name.trim())
                 put("tag_color", tagColor)
-                put("created_at", System.currentTimeMillis())
+                put("created_at", now)
+                put("added_at", now)
                 put("cover_photo_id", coverPhotoId)
                 put("is_trashed", 0)
             }

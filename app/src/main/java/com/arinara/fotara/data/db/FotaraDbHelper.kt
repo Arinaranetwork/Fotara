@@ -65,10 +65,13 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 name TEXT NOT NULL,
                 tag_color TEXT,
                 created_at INTEGER NOT NULL,
+                added_at INTEGER NOT NULL DEFAULT 0,
                 cover_photo_id INTEGER,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 linked_deadline INTEGER,
+                scheduled_at INTEGER,
+                alert_type TEXT,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
                 FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
             )
@@ -101,6 +104,8 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 ocr_text TEXT,
                 source TEXT NOT NULL,
                 linked_deadline INTEGER,
+                scheduled_at INTEGER,
+                alert_type TEXT,
                 file_size_bytes INTEGER NOT NULL DEFAULT 0,
                 note TEXT,
                 group_id INTEGER,
@@ -128,6 +133,8 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 added_at INTEGER NOT NULL,
                 tag_color TEXT,
                 linked_deadline INTEGER,
+                scheduled_at INTEGER,
+                alert_type TEXT,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
@@ -162,6 +169,32 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 added_at INTEGER NOT NULL,
                 tag_color TEXT,
                 linked_deadline INTEGER,
+                scheduled_at INTEGER,
+                alert_type TEXT,
+                is_trashed INTEGER NOT NULL DEFAULT 0,
+                deleted_at INTEGER,
+                FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+                FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS canvas_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                folder_id INTEGER NOT NULL,
+                subfolder_id INTEGER,
+                title TEXT NOT NULL,
+                data_blob BLOB,
+                thumbnail_path TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                added_at INTEGER NOT NULL,
+                tag_color TEXT,
+                linked_deadline INTEGER,
+                scheduled_at INTEGER,
+                alert_type TEXT,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
@@ -334,6 +367,53 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 )
             } catch (_: Exception) {}
         }
+        if (oldVersion < 11) {
+            try {
+                db.execSQL("ALTER TABLE photo_groups ADD COLUMN added_at INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE photo_groups SET added_at = created_at WHERE added_at = 0")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("ALTER TABLE photos ADD COLUMN scheduled_at INTEGER")
+                db.execSQL("ALTER TABLE photos ADD COLUMN alert_type TEXT")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("ALTER TABLE photo_groups ADD COLUMN scheduled_at INTEGER")
+                db.execSQL("ALTER TABLE photo_groups ADD COLUMN alert_type TEXT")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("ALTER TABLE document_notes ADD COLUMN scheduled_at INTEGER")
+                db.execSQL("ALTER TABLE document_notes ADD COLUMN alert_type TEXT")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("ALTER TABLE text_notes ADD COLUMN scheduled_at INTEGER")
+                db.execSQL("ALTER TABLE text_notes ADD COLUMN alert_type TEXT")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS canvas_notes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        folder_id INTEGER NOT NULL,
+                        subfolder_id INTEGER,
+                        title TEXT NOT NULL,
+                        data_blob BLOB,
+                        thumbnail_path TEXT,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        added_at INTEGER NOT NULL,
+                        tag_color TEXT,
+                        linked_deadline INTEGER,
+                        scheduled_at INTEGER,
+                        alert_type TEXT,
+                        is_trashed INTEGER NOT NULL DEFAULT 0,
+                        deleted_at INTEGER,
+                        FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+                        FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+            } catch (_: Exception) {}
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -369,6 +449,6 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 10
+        const val DATABASE_VERSION = 11
     }
 }

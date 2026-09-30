@@ -9,11 +9,13 @@ package com.arinara.fotara.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.arinara.fotara.data.model.DateRange
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.LinkGroup
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.SearchDateFilter
+import com.arinara.fotara.data.model.SearchSortOrder
 import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
@@ -99,6 +101,30 @@ class HomeViewModel(
         executeSearch(_uiState.value.searchQuery, filter, _uiState.value.searchColorFilter, _uiState.value.selectedSmartTag)
     }
 
+    fun setSortOrder(order: SearchSortOrder) {
+        _uiState.update { it.copy(searchSortOrder = order) }
+        executeSearch(
+            _uiState.value.searchQuery,
+            _uiState.value.searchDateFilter,
+            _uiState.value.searchColorFilter,
+            _uiState.value.selectedSmartTag,
+            _uiState.value.customDateRange,
+            order
+        )
+    }
+
+    fun setCustomDateRange(range: DateRange) {
+        _uiState.update { it.copy(searchDateFilter = SearchDateFilter.CUSTOM_RANGE, customDateRange = range) }
+        executeSearch(
+            _uiState.value.searchQuery,
+            SearchDateFilter.CUSTOM_RANGE,
+            _uiState.value.searchColorFilter,
+            _uiState.value.selectedSmartTag,
+            range,
+            _uiState.value.searchSortOrder
+        )
+    }
+
     fun setColorFilter(colorHex: String?) {
         val newColor = if (_uiState.value.searchColorFilter == colorHex) null else colorHex
         _uiState.update { it.copy(searchColorFilter = newColor) }
@@ -157,15 +183,16 @@ class HomeViewModel(
         query: String,
         dateFilter: SearchDateFilter,
         colorFilter: String?,
-        smartTag: String? = _uiState.value.selectedSmartTag
+        smartTag: String? = _uiState.value.selectedSmartTag,
+        customRange: DateRange? = _uiState.value.customDateRange,
+        sortOrder: SearchSortOrder = _uiState.value.searchSortOrder
     ) {
         val trimmed = query.trim()
         val currentFolders = _uiState.value.folders
         val hasFilters = dateFilter != SearchDateFilter.ALL || colorFilter != null || smartTag != null
 
-        val now = System.currentTimeMillis()
-        val dateThreshold = when (dateFilter) {
-            SearchDateFilter.ALL -> 0L
+        val (startTime, endTime) = when (dateFilter) {
+            SearchDateFilter.ALL -> Pair(0L, Long.MAX_VALUE)
             SearchDateFilter.TODAY -> {
                 val cal = Calendar.getInstance().apply {
                     set(Calendar.HOUR_OF_DAY, 0)
@@ -173,10 +200,66 @@ class HomeViewModel(
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }
-                cal.timeInMillis
+                Pair(cal.timeInMillis, Long.MAX_VALUE)
             }
-            SearchDateFilter.THIS_WEEK -> now - (7L * 24 * 60 * 60 * 1000L)
-            SearchDateFilter.THIS_MONTH -> now - (30L * 24 * 60 * 60 * 1000L)
+            SearchDateFilter.YESTERDAY -> {
+                val calStart = Calendar.getInstance().apply {
+                    add(Calendar.DAY_OF_YEAR, -1)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                val calEnd = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                Pair(calStart.timeInMillis, calEnd.timeInMillis - 1)
+            }
+            SearchDateFilter.THIS_WEEK -> {
+                val cal = Calendar.getInstance().apply {
+                    set(Calendar.DAY_OF_WEEK, firstDayOfWeek)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                Pair(cal.timeInMillis, Long.MAX_VALUE)
+            }
+            SearchDateFilter.THIS_MONTH -> {
+                val cal = Calendar.getInstance().apply {
+                    set(Calendar.DAY_OF_MONTH, 1)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                Pair(cal.timeInMillis, Long.MAX_VALUE)
+            }
+            SearchDateFilter.THIS_YEAR -> {
+                val cal = Calendar.getInstance().apply {
+                    set(Calendar.DAY_OF_YEAR, 1)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                Pair(cal.timeInMillis, Long.MAX_VALUE)
+            }
+            SearchDateFilter.CUSTOM_RANGE -> {
+                val r = customRange ?: _uiState.value.customDateRange
+                if (r != null) Pair(r.startMs, r.endMs) else Pair(0L, Long.MAX_VALUE)
+            }
+        }
+
+        fun <T> sortResults(items: List<T>, timeSelector: (T) -> Long): List<T> {
+            return if (sortOrder == SearchSortOrder.OLDEST_ADDED) {
+                items.sortedBy(timeSelector)
+            } else {
+                items.sortedByDescending(timeSelector)
+            }
         }
 
         val matchesTag: (Photo) -> Boolean = { photo ->
@@ -185,12 +268,13 @@ class HomeViewModel(
         }
 
         val matchedFolders = if (trimmed.isNotBlank() || (hasFilters && smartTag == null)) {
-            currentFolders.filter { folder ->
+            val list = currentFolders.filter { folder ->
                 val matchesQuery = if (trimmed.isBlank()) true else folder.name.contains(trimmed, ignoreCase = true)
-                val matchesDate = folder.createdAt >= dateThreshold
+                val matchesDate = folder.createdAt in startTime..endTime
                 val matchesColor = if (colorFilter == null) true else folder.colorLabel.equals(colorFilter, ignoreCase = true)
                 matchesQuery && matchesDate && matchesColor
             }
+            sortResults(list) { it.createdAt }
         } else {
             emptyList()
         }
@@ -206,13 +290,13 @@ class HomeViewModel(
             viewModelScope.launch {
                 photoRepository.searchPhotos(trimmed).collect { results ->
                     val filtered = results.filter { photo ->
-                        val matchesDate = photo.createdAt >= dateThreshold
+                        val matchesDate = photo.addedAt in startTime..endTime
                         val matchesColor = if (colorFilter == null) true else photo.tagColor.equals(colorFilter, ignoreCase = true)
                         matchesDate && matchesColor && matchesTag(photo)
                     }
                     _uiState.update {
                         it.copy(
-                            searchResults = filtered,
+                            searchResults = sortResults(filtered) { p -> p.addedAt },
                             isSearchLoading = false
                         )
                     }
@@ -221,12 +305,12 @@ class HomeViewModel(
             viewModelScope.launch {
                 photoRepository.searchGroups(trimmed).collect { groups ->
                     val filtered = if (smartTag != null) emptyList() else groups.filter { group ->
-                        val matchesDate = group.createdAt >= dateThreshold
+                        val matchesDate = group.addedAt in startTime..endTime
                         val matchesColor = if (colorFilter == null) true else group.tagColor.equals(colorFilter, ignoreCase = true)
                         matchesDate && matchesColor
                     }
                     _uiState.update {
-                        it.copy(groupSearchResults = filtered)
+                        it.copy(groupSearchResults = sortResults(filtered) { g -> g.addedAt })
                     }
                 }
             }
@@ -234,12 +318,12 @@ class HomeViewModel(
                 viewModelScope.launch {
                     repo.searchNotes(trimmed).collect { notes ->
                         val filtered = if (smartTag != null) emptyList() else notes.filter { note ->
-                            val matchesDate = note.createdAt >= dateThreshold
+                            val matchesDate = note.addedAt in startTime..endTime
                             val matchesColor = if (colorFilter == null) true else note.tagColor.equals(colorFilter, ignoreCase = true)
                             matchesDate && matchesColor
                         }
                         _uiState.update {
-                            it.copy(textNoteSearchResults = filtered)
+                            it.copy(textNoteSearchResults = sortResults(filtered) { n -> n.addedAt })
                         }
                     }
                 }
@@ -252,13 +336,13 @@ class HomeViewModel(
                     photoRepository.getAllActivePhotos()
                 }
                 val filtered = basePhotos.filter { photo ->
-                    val matchesDate = photo.createdAt >= dateThreshold
+                    val matchesDate = photo.addedAt in startTime..endTime
                     val matchesColor = if (colorFilter == null) true else photo.tagColor.equals(colorFilter, ignoreCase = true)
                     matchesDate && matchesColor && matchesTag(photo)
                 }
                 _uiState.update {
                     it.copy(
-                        searchResults = filtered,
+                        searchResults = sortResults(filtered) { p -> p.addedAt },
                         textNoteSearchResults = emptyList(),
                         isSearchLoading = false
                     )
@@ -270,12 +354,12 @@ class HomeViewModel(
                 } else {
                     photoRepository.getAllActiveGroups().collect { groups ->
                         val filtered = groups.filter { group ->
-                            val matchesDate = group.createdAt >= dateThreshold
+                            val matchesDate = group.addedAt in startTime..endTime
                             val matchesColor = if (colorFilter == null) true else group.tagColor.equals(colorFilter, ignoreCase = true)
                             matchesDate && matchesColor
                         }
                         _uiState.update {
-                            it.copy(groupSearchResults = filtered)
+                            it.copy(groupSearchResults = sortResults(filtered) { g -> g.addedAt })
                         }
                     }
                 }

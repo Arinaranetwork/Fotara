@@ -151,7 +151,7 @@ fun PhotoViewerDialog(
     var copyMessage by remember { mutableStateOf<String?>(null) }
 
     val formattedDate = remember(currentPhoto.addedAt) {
-        SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault()).format(Date(currentPhoto.addedAt))
+        SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.US).format(Date(currentPhoto.addedAt))
     }
 
     Dialog(

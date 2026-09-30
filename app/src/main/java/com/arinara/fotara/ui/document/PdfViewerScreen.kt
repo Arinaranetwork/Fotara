@@ -9,8 +9,10 @@ package com.arinara.fotara.ui.document
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -139,7 +141,7 @@ fun PdfViewerScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${pdfRenderer?.pageCount ?: pages.size} pages • Sharp PDF Note",
+                        text = "${pdfRenderer?.pageCount ?: pages.size} pages • PDF Document",
                         color = TabCream.copy(alpha = 0.7f),
                         fontSize = 12.sp
                     )
@@ -265,8 +267,14 @@ fun PdfViewerScreen(
                 )
             },
             text = {
+                val totalCount = pdfRenderer?.pageCount ?: pages.size
+                val targetDesc = if (totalCount >= 5) {
+                    "a new Photo Group '${documentNote.name}'"
+                } else {
+                    "standalone photo notes"
+                }
                 Text(
-                    text = "This action permanently deletes the original PDF file and converts all pages into standalone photo notes in this folder. This action cannot be undone.",
+                    text = "This action permanently deletes the original PDF file and converts all $totalCount pages into $targetDesc in this folder. This action cannot be undone.",
                     color = TabCream.copy(alpha = 0.85f),
                     fontSize = 14.sp
                 )
@@ -308,8 +316,18 @@ private fun VirtualizedPdfPageView(
     var isRenderingSharp by remember { mutableStateOf(false) }
 
     val transformState = rememberTransformableState { zoomChange, offsetChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 4f)
-        offset = if (scale > 1f) offset + offsetChange else Offset.Zero
+        val newScale = (scale * zoomChange).coerceIn(1f, 4f)
+        scale = newScale
+        if (newScale > 1.02f) {
+            val maxOffsetX = (targetWidthPx * (newScale - 1f)) / 2f
+            val maxOffsetY = ((targetWidthPx / aspectRatio) * (newScale - 1f)) / 2f
+            val newX = (offset.x + offsetChange.x).coerceIn(-maxOffsetX, maxOffsetX)
+            val newY = (offset.y + offsetChange.y).coerceIn(-maxOffsetY, maxOffsetY)
+            offset = Offset(newX, newY)
+        } else {
+            scale = 1f
+            offset = Offset.Zero
+        }
     }
 
     // Determine real aspect ratio
@@ -381,6 +399,18 @@ private fun VirtualizedPdfPageView(
                     .aspectRatio(aspectRatio)
                     .background(Color.White)
                     .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                if (scale > 1.1f) {
+                                    scale = 1f
+                                    offset = Offset.Zero
+                                } else {
+                                    scale = 2.5f
+                                }
+                            }
+                        )
+                    }
                     .transformable(state = transformState),
                 contentAlignment = Alignment.Center
             ) {

@@ -13,10 +13,13 @@ data class PhotoGroup(
     val name: String,
     val tagColor: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    val addedAt: Long = createdAt,
     val coverPhotoId: Long? = null,
     val isTrashed: Boolean = false,
     val deletedAt: Long? = null,
-    val linkedDeadline: Long? = null
+    val linkedDeadline: Long? = null,
+    val scheduledAt: Long? = null,
+    val alertType: String? = null
 ) {
     val tag: TagColor? get() = tagColor?.let { TagColor.fromHex(it) }
 }

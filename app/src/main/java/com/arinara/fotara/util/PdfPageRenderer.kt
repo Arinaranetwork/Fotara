@@ -36,9 +36,8 @@ class PdfPageRenderer(val file: File) : Closeable {
         }
 
         override fun entryRemoved(evicted: Boolean, key: String, oldValue: Bitmap, newValue: Bitmap?) {
-            if (evicted && oldValue != newValue && !oldValue.isRecycled) {
-                oldValue.recycle()
-            }
+            // Do not call oldValue.recycle() here: active Jetpack Compose Image composables
+            // may still be drawing evicted frames during rapid list flings.
         }
     }
 

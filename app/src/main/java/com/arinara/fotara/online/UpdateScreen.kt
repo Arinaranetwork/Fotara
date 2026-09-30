@@ -387,7 +387,7 @@ fun UpdateScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             val bannerModel = rel?.bannerUrl?.takeIf { it.isNotBlank() }
-                                ?: com.arinara.fotara.R.drawable.fotara_banner_1_4
+                                ?: com.arinara.fotara.R.drawable.fotara_banner_1_5
                             AsyncImage(
                                 model = bannerModel,
                                 contentDescription = "Release Banner",
@@ -454,7 +454,7 @@ fun UpdateScreen(
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    text = "Mengunduh di latar belakang...",
+                                    text = "Downloading in background...",
                                     color = TabCream,
                                     fontSize = 13.sp
                                 )
@@ -478,7 +478,7 @@ fun UpdateScreen(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Unduhan aman berjalan di latar belakang. Anda dapat keluar dari layar ini atau menutup aplikasi; unduhan akan tetap berjalan dan memberitahu Anda saat selesai.",
+                                text = "Download runs securely in the background. You can leave this screen or minimize the app; the download will continue and notify you when finished.",
                                 color = TabCream.copy(alpha = 0.65f),
                                 fontSize = 11.5.sp,
                                 lineHeight = 16.sp
@@ -517,7 +517,7 @@ fun UpdateScreen(
                         if (updateState == UpdateState.DOWNLOADING) {
                             CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Mengunduh ($downloadProgress%)...", color = Color.Black, fontWeight = FontWeight.Bold)
+                            Text("Downloading ($downloadProgress%)...", color = Color.Black, fontWeight = FontWeight.Bold)
                         } else if (updateState == UpdateState.DOWNLOADED) {
                             Icon(imageVector = Icons.Default.SystemUpdate, contentDescription = null, tint = Color.Black)
                             Spacer(modifier = Modifier.width(8.dp))
@@ -542,7 +542,7 @@ fun UpdateScreen(
                         ) {
                             Icon(Icons.Default.Close, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Batalkan Unduhan", color = ErrorRed, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                            Text("Cancel Download", color = ErrorRed, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
                         }
                     }
 
