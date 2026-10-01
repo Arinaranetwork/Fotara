@@ -266,7 +266,26 @@ class SqliteCanvasNoteRepository(
 
     override suspend fun purgeCanvasNotePermanently(id: Long) = withContext(Dispatchers.IO) {
         val db = dbHelper.getSafeWritableDatabase()
-        db.delete("canvas_notes", "id = ?", arrayOf(id.toString()))
+        db.beginTransaction()
+        try {
+            // Delete disk asset files
+            try {
+                db.rawQuery("SELECT file_path FROM canvas_assets WHERE canvas_id = ?", arrayOf(id.toString())).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val path = cursor.getString(0)
+                        try { java.io.File(path).delete() } catch (_: Exception) {}
+                    }
+                }
+            } catch (_: Exception) {}
+
+            db.delete("canvas_elements", "canvas_id = ?", arrayOf(id.toString()))
+            db.delete("canvas_layers", "canvas_id = ?", arrayOf(id.toString()))
+            db.delete("canvas_assets", "canvas_id = ?", arrayOf(id.toString()))
+            db.delete("canvas_notes", "id = ?", arrayOf(id.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
         refreshSync()
     }
 

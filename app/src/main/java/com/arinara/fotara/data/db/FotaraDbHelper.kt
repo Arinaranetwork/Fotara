@@ -224,6 +224,62 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_scheduled_at ON document_notes(scheduled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_scheduled_at ON text_notes(scheduled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_scheduled_at ON canvas_notes(scheduled_at)")
+
+        // v14 Infinite Canvas schema: layers, chunked elements, and assets
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS canvas_layers (
+                id TEXT PRIMARY KEY,
+                canvas_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                is_visible INTEGER NOT NULL DEFAULT 1,
+                is_locked INTEGER NOT NULL DEFAULT 0,
+                opacity REAL NOT NULL DEFAULT 1.0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY(canvas_id) REFERENCES canvas_notes(id) ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS canvas_elements (
+                id TEXT PRIMARY KEY,
+                canvas_id INTEGER NOT NULL,
+                layer_id TEXT NOT NULL,
+                element_type TEXT NOT NULL,
+                bounds_left REAL NOT NULL,
+                bounds_top REAL NOT NULL,
+                bounds_right REAL NOT NULL,
+                bounds_bottom REAL NOT NULL,
+                z_index INTEGER NOT NULL DEFAULT 0,
+                data_chunk BLOB NOT NULL,
+                FOREIGN KEY(canvas_id) REFERENCES canvas_notes(id) ON DELETE CASCADE,
+                FOREIGN KEY(layer_id) REFERENCES canvas_layers(id) ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS canvas_assets (
+                asset_id TEXT PRIMARY KEY,
+                canvas_id INTEGER NOT NULL,
+                file_path TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                width INTEGER NOT NULL,
+                height INTEGER NOT NULL,
+                file_size INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY(canvas_id) REFERENCES canvas_notes(id) ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_layers_canvas_id ON canvas_layers(canvas_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_canvas_id ON canvas_elements(canvas_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_layer_id ON canvas_elements(layer_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_assets_canvas_id ON canvas_assets(canvas_id)")
     }
 
     private fun createFtsTable(db: SQLiteDatabase) {
@@ -471,6 +527,66 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v13 failed: ${e.message}")
             }
         }
+        if (oldVersion < 14) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS canvas_layers (
+                        id TEXT PRIMARY KEY,
+                        canvas_id INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        is_visible INTEGER NOT NULL DEFAULT 1,
+                        is_locked INTEGER NOT NULL DEFAULT 0,
+                        opacity REAL NOT NULL DEFAULT 1.0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(canvas_id) REFERENCES canvas_notes(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS canvas_elements (
+                        id TEXT PRIMARY KEY,
+                        canvas_id INTEGER NOT NULL,
+                        layer_id TEXT NOT NULL,
+                        element_type TEXT NOT NULL,
+                        bounds_left REAL NOT NULL,
+                        bounds_top REAL NOT NULL,
+                        bounds_right REAL NOT NULL,
+                        bounds_bottom REAL NOT NULL,
+                        z_index INTEGER NOT NULL DEFAULT 0,
+                        data_chunk BLOB NOT NULL,
+                        FOREIGN KEY(canvas_id) REFERENCES canvas_notes(id) ON DELETE CASCADE,
+                        FOREIGN KEY(layer_id) REFERENCES canvas_layers(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS canvas_assets (
+                        asset_id TEXT PRIMARY KEY,
+                        canvas_id INTEGER NOT NULL,
+                        file_path TEXT NOT NULL,
+                        mime_type TEXT NOT NULL,
+                        width INTEGER NOT NULL,
+                        height INTEGER NOT NULL,
+                        file_size INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        FOREIGN KEY(canvas_id) REFERENCES canvas_notes(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_layers_canvas_id ON canvas_layers(canvas_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_canvas_id ON canvas_elements(canvas_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_layer_id ON canvas_elements(layer_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_assets_canvas_id ON canvas_assets(canvas_id)")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v14 failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -506,7 +622,7 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 13
+        const val DATABASE_VERSION = 14
     }
 
     /**
