@@ -1114,14 +1114,34 @@ class FolderDetailViewModel(
         }
     }
 
+    private var currentSplitJob: Job? = null
+
+    fun cancelSplit() {
+        currentSplitJob?.cancel()
+        currentSplitJob = null
+        _uiState.update { it.copy(isLoading = false, splitProgress = null, userMessage = "Split cancelled") }
+    }
+
     fun splitPdfToImages(docId: Long) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+        currentSplitJob?.cancel()
+        currentSplitJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, splitProgress = Pair(0, 1)) }
             try {
-                val createdIds = documentRepository?.splitPdfToImages(docId) ?: emptyList()
-                _uiState.update { it.copy(isLoading = false, userMessage = "Split into ${createdIds.size} loose notes") }
+                val createdIds = documentRepository?.splitPdfToImages(docId) { current, total ->
+                    _uiState.update { it.copy(splitProgress = Pair(current, total)) }
+                } ?: emptyList()
+                val msg = if (createdIds.size >= 5) {
+                    "Split into Photo Group with ${createdIds.size} pages"
+                } else {
+                    "Split into ${createdIds.size} photos"
+                }
+                _uiState.update { it.copy(isLoading = false, splitProgress = null, userMessage = msg) }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                _uiState.update { it.copy(isLoading = false, splitProgress = null, userMessage = "Split cancelled") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, userMessage = "Split failed: ${e.message}") }
+                _uiState.update { it.copy(isLoading = false, splitProgress = null, userMessage = "Split failed: ${e.message}") }
+            } finally {
+                currentSplitJob = null
             }
         }
     }

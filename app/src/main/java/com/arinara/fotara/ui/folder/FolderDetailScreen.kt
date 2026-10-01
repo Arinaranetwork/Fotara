@@ -92,6 +92,7 @@ import com.arinara.fotara.ui.document.PdfViewerScreen
 import com.arinara.fotara.util.CombineItem
 import com.arinara.fotara.util.CombineManager
 import com.arinara.fotara.util.PageLimitExceededException
+import com.arinara.fotara.util.PdfSplitManager
 import com.arinara.fotara.util.ZipExporter
 import kotlinx.coroutines.flow.flowOf
 import androidx.compose.material3.HorizontalDivider
@@ -2765,7 +2766,7 @@ fun FolderDetailScreen(
                 )
                 if (doc.docType == DocumentType.PDF) {
                     DropdownMenuItem(
-                        text = { Text("Split to Loose Notes", color = FolderTabCream) },
+                        text = { Text("Split to Images", color = FolderTabCream) },
                         leadingIcon = { Icon(Icons.Default.LayersClear, null, tint = FolderTabCream) },
                         onClick = {
                             pdfToSplit = doc
@@ -2843,7 +2844,7 @@ fun FolderDetailScreen(
             title = { Text("Split PDF into Images?", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    text = "This will convert all ${doc.pageCount} pages of \"${doc.name}\" into loose photo notes in this folder. The original PDF file will be permanently deleted.",
+                    text = PdfSplitManager.getConfirmationDescription(doc.name, doc.pageCount),
                     color = TextSecondary,
                     fontSize = 14.sp
                 )
@@ -3000,6 +3001,70 @@ fun FolderDetailScreen(
             dismissButton = {
                 Button(
                     onClick = { viewModel.cancelImport() },
+                    colors = ButtonDefaults.buttonColors(containerColor = TagCrimson.copy(alpha = 0.2f))
+                ) {
+                    Text("Cancel", color = TagCrimson)
+                }
+            }
+        )
+    }
+
+    // Determinate PDF Split Progress Dialog (Chunk C2)
+    if (uiState.splitProgress != null) {
+        val (current, total) = uiState.splitProgress!!
+        AlertDialog(
+            onDismissRequest = { /* Cannot dismiss without cancel */ },
+            containerColor = MidnightSurface,
+            shape = RoundedCornerShape(18.dp),
+            title = {
+                Text(
+                    text = "Splitting PDF into Images",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = if (total > 0) "Rendering page $current of $total..." else "Preparing pages...",
+                        color = TextSecondary,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    if (total > 0) {
+                        LinearProgressIndicator(
+                            progress = { (current.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = FolderBodyBlue,
+                            trackColor = MidnightCardOutline
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = FolderBodyBlue,
+                            trackColor = MidnightCardOutline
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${if (total > 0) (current * 100 / total) else 0}% complete",
+                        color = TextMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.align(Alignment.End)
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                Button(
+                    onClick = { viewModel.cancelSplit() },
                     colors = ButtonDefaults.buttonColors(containerColor = TagCrimson.copy(alpha = 0.2f))
                 ) {
                     Text("Cancel", color = TagCrimson)

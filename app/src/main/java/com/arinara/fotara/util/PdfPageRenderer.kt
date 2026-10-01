@@ -10,8 +10,11 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -36,12 +39,13 @@ class PdfPageRenderer(val file: File) : Closeable {
         }
 
         override fun entryRemoved(evicted: Boolean, key: String, oldValue: Bitmap, newValue: Bitmap?) {
-            // Do not call oldValue.recycle() here: active Jetpack Compose Image composables
-            // may still be drawing evicted frames during rapid list flings.
+            // Do not call oldValue.recycle() directly here: active Compose Image composables
+            // may still be drawing frames during fast scrolling. The Android GC handles unreferenced bitmaps safely.
         }
     }
 
     val pageCount: Int
+    private val aspectRatioCache: FloatArray
 
     init {
         if (!file.exists() || file.length() == 0L) {
@@ -53,6 +57,7 @@ class PdfPageRenderer(val file: File) : Closeable {
             val r = PdfRenderer(descriptor)
             renderer = r
             pageCount = r.pageCount
+            aspectRatioCache = FloatArray(pageCount) { 0f }
         } catch (e: SecurityException) {
             close()
             throw PdfPasswordException("Password required to read: ${file.name}")
@@ -64,15 +69,31 @@ class PdfPageRenderer(val file: File) : Closeable {
 
     suspend fun getPageAspectRatio(pageIndex: Int): Float = withContext(Dispatchers.IO) {
         if (pageIndex < 0 || pageIndex >= pageCount) return@withContext 0.707f
+
+        // Fast path: cached aspect ratio without locking renderMutex
+        val cached = aspectRatioCache[pageIndex]
+        if (cached > 0f) return@withContext cached
+
+        currentCoroutineContext().ensureActive()
+
         renderMutex.withLock {
+            // Double check inside lock
+            if (aspectRatioCache[pageIndex] > 0f) return@withContext aspectRatioCache[pageIndex]
+
             val r = renderer ?: return@withContext 0.707f
+            var page: PdfRenderer.Page? = null
             try {
-                val page = r.openPage(pageIndex)
+                page = r.openPage(pageIndex)
                 val ratio = if (page.height > 0) page.width.toFloat() / page.height.toFloat() else 0.707f
-                page.close()
+                aspectRatioCache[pageIndex] = ratio
                 ratio
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w("PdfPageRenderer", "Error reading aspect ratio for page $pageIndex: ${e.message}")
                 0.707f
+            } finally {
+                try {
+                    page?.close()
+                } catch (_: Exception) {}
             }
         }
     }
@@ -85,40 +106,72 @@ class PdfPageRenderer(val file: File) : Closeable {
     ): Bitmap? = withContext(Dispatchers.IO) {
         if (pageIndex < 0 || pageIndex >= pageCount) return@withContext null
 
-        // Cap dimensions to avoid OutOfMemory on huge displays or extreme zoom
+        currentCoroutineContext().ensureActive()
+
+        // Cap dimensions to avoid OutOfMemory on extreme scales or huge displays
         val targetWidth = ((destWidth * renderScale).toInt().coerceIn(100, 2560))
         val targetHeight = ((destHeight * renderScale).toInt().coerceIn(100, 2560))
         val cacheKey = "${pageIndex}_${targetWidth}x${targetHeight}"
 
-        // Check bounded cache first
+        // Fast path: check bounded cache first without lock
         pageBitmapCache.get(cacheKey)?.let { cached ->
             if (!cached.isRecycled) return@withContext cached
         }
 
+        currentCoroutineContext().ensureActive()
+
         renderMutex.withLock {
+            currentCoroutineContext().ensureActive()
+
+            // Double check cache after acquiring lock
+            pageBitmapCache.get(cacheKey)?.let { cached ->
+                if (!cached.isRecycled) return@withContext cached
+            }
+
             val r = renderer ?: return@withContext null
             var page: PdfRenderer.Page? = null
             try {
                 page = r.openPage(pageIndex)
 
+                // Cache aspect ratio if not yet set
+                if (aspectRatioCache[pageIndex] <= 0f && page.height > 0) {
+                    aspectRatioCache[pageIndex] = page.width.toFloat() / page.height.toFloat()
+                }
+
+                currentCoroutineContext().ensureActive()
+
                 val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
 
-                // CRITICAL DEFECT REPAIR: Pre-fill canvas with opaque white
-                // PdfRenderer draws vector/text over transparent pixels by default; without white fill,
-                // transparent backgrounds render as black or glitchy artifacts.
+                // DEFECT FIX: Fill destination canvas with opaque white before rendering.
+                // PdfRenderer draws vectors/text over transparent pixels by default.
+                // Without an opaque white pre-fill, transparent areas render as black artifacts.
                 bitmap.eraseColor(Color.WHITE)
 
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 pageBitmapCache.put(cacheKey, bitmap)
                 bitmap
             } catch (e: Exception) {
-                android.util.Log.e("PdfPageRenderer", "Error rendering page $pageIndex: ${e.message}")
+                Log.e("PdfPageRenderer", "Error rendering page $pageIndex: ${e.message}")
                 null
             } finally {
                 try {
                     page?.close()
                 } catch (_: Exception) {}
             }
+        }
+    }
+
+    suspend fun prefetchPage(pageIndex: Int, destWidth: Int, destHeight: Int) {
+        if (pageIndex < 0 || pageIndex >= pageCount) return
+        withContext(Dispatchers.IO) {
+            val targetWidth = destWidth.coerceIn(100, 2560)
+            val targetHeight = destHeight.coerceIn(100, 2560)
+            val cacheKey = "${pageIndex}_${targetWidth}x${targetHeight}"
+            if (pageBitmapCache.get(cacheKey) != null) return@withContext
+
+            try {
+                renderPage(pageIndex, targetWidth, targetHeight, 1.0f)
+            } catch (_: Exception) {}
         }
     }
 

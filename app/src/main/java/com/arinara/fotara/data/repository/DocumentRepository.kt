@@ -59,7 +59,10 @@ interface DocumentRepository {
         subfolderId: Long?,
         name: String
     ): Long
-    suspend fun splitPdfToImages(documentNoteId: Long): List<Long>
+    suspend fun splitPdfToImages(
+        documentNoteId: Long,
+        onProgress: ((current: Int, total: Int) -> Unit)? = null
+    ): List<Long>
     suspend fun renameDocumentNote(id: Long, newName: String)
     suspend fun deleteDocumentNote(id: Long)
     suspend fun deleteDocumentNotes(ids: List<Long>)
@@ -375,54 +378,115 @@ class SqliteDocumentRepository(
         return sb.toString().trim()
     }
 
-    override suspend fun splitPdfToImages(documentNoteId: Long): List<Long> = withContext(Dispatchers.IO) {
+    override suspend fun splitPdfToImages(
+        documentNoteId: Long,
+        onProgress: ((current: Int, total: Int) -> Unit)?
+    ): List<Long> = withContext(Dispatchers.IO) {
         val note = getDocumentNoteById(documentNoteId) ?: return@withContext emptyList()
-        val pages = documentPagesFlow.value[documentNoteId] ?: emptyList()
+        val originalFile = File(note.originFileUri)
+        if (!originalFile.exists() || originalFile.length() == 0L) {
+            return@withContext emptyList()
+        }
+
+        val existingPages = documentPagesFlow.value[documentNoteId] ?: emptyList()
+        val existingOcrMap = existingPages.associate { it.pageIndex to it.ocrText }
 
         val createdPhotoIds = mutableListOf<Long>()
+        val createdPhotoFiles = mutableListOf<File>()
         val now = System.currentTimeMillis()
 
-        for (page in pages) {
-            val photo = Photo(
-                fileUri = page.imageUri,
-                thumbnailUri = page.imageUri,
-                folderId = note.folderId,
-                subfolderId = note.subfolderId,
-                caption = "${note.name} P${page.pageIndex + 1}",
-                ocrText = page.ocrText,
-                source = PhotoSource.IMPORT,
-                addedAt = now + page.pageIndex,
-                tagColor = note.tagColor,
-                linkedDeadline = note.linkedDeadline
-            )
-            val newPhotoId = photoRepository.addPhoto(photo)
-            createdPhotoIds.add(newPhotoId)
-        }
+        var pfd: ParcelFileDescriptor? = null
+        var renderer: PdfRenderer? = null
 
-        // If PDF has >= 5 pages, package into a new Photo Group named after the PDF (page 1 is cover)
-        if (createdPhotoIds.size >= 5) {
-            photoRepository.createGroup(
-                folderId = note.folderId,
-                subfolderId = note.subfolderId,
-                name = note.name,
-                photoIds = createdPhotoIds,
-                tagColor = note.tagColor
-            )
-        }
-
-        // Permanently delete original PDF file
         try {
-            val file = File(note.originFileUri)
-            if (file.exists()) file.delete()
-        } catch (_: Exception) {}
+            pfd = ParcelFileDescriptor.open(originalFile, ParcelFileDescriptor.MODE_READ_ONLY)
+            renderer = PdfRenderer(pfd)
+            val totalPages = renderer.pageCount
 
-        // Delete document note and pages records
-        val db = dbHelper.getSafeWritableDatabase()
-        db.delete("document_pages", "document_note_id = ?", arrayOf(documentNoteId.toString()))
-        db.delete("document_notes", "id = ?", arrayOf(documentNoteId.toString()))
+            for (i in 0 until totalPages) {
+                currentCoroutineContext().ensureActive()
+                onProgress?.invoke(i + 1, totalPages)
 
-        refreshSync()
-        createdPhotoIds
+                var page: PdfRenderer.Page? = null
+                try {
+                    page = renderer.openPage(i)
+                    // High-fidelity density-scaled rendering matching the viewer
+                    val renderWidth = (page.width * 2).coerceIn(1200, 2560)
+                    val renderHeight = (page.height * 2).coerceIn(1200, 2560)
+                    val bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+
+                    // DEFECT REPAIR: Fill canvas with opaque white before rendering.
+                    // Eliminates transparent/black compression artifacts.
+                    bitmap.eraseColor(Color.WHITE)
+
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+
+                    val saved = photoStorageManager.saveBitmapAsPhoto(bitmap)
+                    createdPhotoFiles.add(saved.photoFile)
+                    createdPhotoFiles.add(saved.thumbFile)
+                    bitmap.recycle()
+
+                    val photo = Photo(
+                        fileUri = saved.photoFile.absolutePath,
+                        thumbnailUri = saved.thumbFile.absolutePath,
+                        folderId = note.folderId,
+                        subfolderId = note.subfolderId,
+                        caption = "${note.name} P${i + 1}",
+                        ocrText = existingOcrMap[i] ?: "",
+                        source = PhotoSource.IMPORT,
+                        addedAt = now + i,
+                        tagColor = note.tagColor,
+                        linkedDeadline = note.linkedDeadline
+                    )
+                    val newPhotoId = photoRepository.addPhoto(photo)
+                    createdPhotoIds.add(newPhotoId)
+                } finally {
+                    try { page?.close() } catch (_: Exception) {}
+                }
+            }
+
+            // Grouping Rule: If PDF has 5 or more pages (more than 4), bundle into a new Photo Group
+            if (PdfSplitManager.shouldCreateGroup(createdPhotoIds.size)) {
+                photoRepository.createGroup(
+                    folderId = note.folderId,
+                    subfolderId = note.subfolderId,
+                    name = note.name,
+                    photoIds = createdPhotoIds, // page 1 is createdPhotoIds[0], serving as cover
+                    tagColor = note.tagColor
+                )
+            }
+
+            // Operation succeeded: permanently delete original PDF file and cached previews
+            try {
+                if (originalFile.exists()) originalFile.delete()
+            } catch (_: Exception) {}
+
+            for (p in existingPages) {
+                try {
+                    val pagePreview = File(p.imageUri)
+                    if (pagePreview.exists()) pagePreview.delete()
+                } catch (_: Exception) {}
+            }
+
+            val db = dbHelper.getSafeWritableDatabase()
+            db.delete("document_pages", "document_note_id = ?", arrayOf(documentNoteId.toString()))
+            db.delete("document_notes", "id = ?", arrayOf(documentNoteId.toString()))
+
+            refreshSync()
+            createdPhotoIds
+        } catch (e: Exception) {
+            // Rollback on cancellation or failure: purge created photos to leave no partial garbage
+            for (photoId in createdPhotoIds) {
+                try { photoRepository.deletePhoto(photoId) } catch (_: Exception) {}
+            }
+            for (f in createdPhotoFiles) {
+                try { if (f.exists()) f.delete() } catch (_: Exception) {}
+            }
+            throw e
+        } finally {
+            try { renderer?.close() } catch (_: Exception) {}
+            try { pfd?.close() } catch (_: Exception) {}
+        }
     }
 
     override suspend fun renameDocumentNote(id: Long, newName: String) = withContext(Dispatchers.IO) {

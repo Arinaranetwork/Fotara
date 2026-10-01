@@ -136,7 +136,7 @@ fun ZoomablePhotoViewport(
                             val event = awaitPointerEvent()
                             if (event.changes.size >= 2) {
                                 val zoom = event.calculateZoom()
-                                if (zoom > 1.02f) {
+                                if (kotlin.math.abs(zoom - 1f) > 0.01f) {
                                     targetScale = (targetScale * zoom).coerceIn(1f, maxScale)
                                     event.changes.forEach { it.consume() }
                                 }

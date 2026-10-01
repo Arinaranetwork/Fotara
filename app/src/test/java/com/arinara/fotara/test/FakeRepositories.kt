@@ -911,7 +911,10 @@ class FakeDocumentRepository(
         return id
     }
 
-    override suspend fun splitPdfToImages(documentNoteId: Long): List<Long> {
+    override suspend fun splitPdfToImages(
+        documentNoteId: Long,
+        onProgress: ((current: Int, total: Int) -> Unit)?
+    ): List<Long> {
         val note = getDocumentNoteById(documentNoteId) ?: return emptyList()
         notesFlow.value = notesFlow.value.filter { it.id != documentNoteId }
         val pages = pagesFlow.value[documentNoteId] ?: emptyList()

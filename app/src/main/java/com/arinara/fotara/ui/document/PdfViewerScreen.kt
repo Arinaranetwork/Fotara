@@ -9,10 +9,12 @@ package com.arinara.fotara.ui.document
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -56,14 +58,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -78,7 +81,9 @@ import com.arinara.fotara.data.model.DocumentPage
 import com.arinara.fotara.util.PdfCorruptException
 import com.arinara.fotara.util.PdfPageRenderer
 import com.arinara.fotara.util.PdfPasswordException
+import com.arinara.fotara.util.PdfSplitManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 
 private val ScreenNavy = Color(0xFF03071E)
@@ -122,6 +127,9 @@ fun PdfViewerScreen(
         }
     }
 
+    val totalPages = pdfRenderer?.pageCount ?: pages.size
+    val subtitleText = if (totalPages == 1) "1 page" else "$totalPages pages"
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -141,7 +149,7 @@ fun PdfViewerScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${pdfRenderer?.pageCount ?: pages.size} pages • PDF Document",
+                        text = subtitleText,
                         color = TabCream.copy(alpha = 0.7f),
                         fontSize = 12.sp
                     )
@@ -187,7 +195,6 @@ fun PdfViewerScreen(
 
         when {
             err != null -> {
-                // Error state: Clear message instead of crash
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -230,7 +237,6 @@ fun PdfViewerScreen(
                 }
             }
             else -> {
-                // Continuous Virtualized Vertical List of PDF pages
                 val totalCount = renderer.pageCount
                 val configuration = LocalConfiguration.current
                 val density = LocalDensity.current
@@ -257,6 +263,7 @@ fun PdfViewerScreen(
     }
 
     if (showSplitConfirmDialog) {
+        val totalCount = pdfRenderer?.pageCount ?: pages.size
         AlertDialog(
             onDismissRequest = { showSplitConfirmDialog = false },
             title = {
@@ -267,14 +274,8 @@ fun PdfViewerScreen(
                 )
             },
             text = {
-                val totalCount = pdfRenderer?.pageCount ?: pages.size
-                val targetDesc = if (totalCount >= 5) {
-                    "a new Photo Group '${documentNote.name}'"
-                } else {
-                    "standalone photo notes"
-                }
                 Text(
-                    text = "This action permanently deletes the original PDF file and converts all $totalCount pages into $targetDesc in this folder. This action cannot be undone.",
+                    text = PdfSplitManager.getConfirmationDescription(documentNote.name, totalCount),
                     color = TabCream.copy(alpha = 0.85f),
                     fontSize = 14.sp
                 )
@@ -309,50 +310,63 @@ private fun VirtualizedPdfPageView(
     targetWidthPx: Int,
     placeholderUri: String?
 ) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    val coroutineScope = rememberCoroutineScope()
+    val zoomState = remember { PdfPageZoomState() }
+
+    var baseBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var highResBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var aspectRatio by remember { mutableFloatStateOf(0.707f) }
     var isRenderingSharp by remember { mutableStateOf(false) }
 
-    val transformState = rememberTransformableState { zoomChange, offsetChange, _ ->
-        val newScale = (scale * zoomChange).coerceIn(1f, 4f)
-        scale = newScale
-        if (newScale > 1.02f) {
-            val maxOffsetX = (targetWidthPx * (newScale - 1f)) / 2f
-            val maxOffsetY = ((targetWidthPx / aspectRatio) * (newScale - 1f)) / 2f
-            val newX = (offset.x + offsetChange.x).coerceIn(-maxOffsetX, maxOffsetX)
-            val newY = (offset.y + offsetChange.y).coerceIn(-maxOffsetY, maxOffsetY)
-            offset = Offset(newX, newY)
-        } else {
-            scale = 1f
-            offset = Offset.Zero
-        }
-    }
-
-    // Determine real aspect ratio
+    // Read aspect ratio from cache or renderer
     LaunchedEffect(pageIndex) {
         aspectRatio = renderer.getPageAspectRatio(pageIndex)
     }
 
-    // Re-render sharply on scale or page display with debounce
-    LaunchedEffect(pageIndex, targetWidthPx, (scale * 10).toInt()) {
-        isRenderingSharp = true
+    // Prefetch adjacent pages in background without blocking UI
+    LaunchedEffect(pageIndex, targetWidthPx) {
         val targetHeightPx = (targetWidthPx / aspectRatio).toInt().coerceAtLeast(100)
-        // Debounce zoom re-render
-        if (scale > 1.05f) {
-            delay(120)
+        coroutineScope.launch {
+            if (pageIndex > 0) renderer.prefetchPage(pageIndex - 1, targetWidthPx, targetHeightPx)
+            if (pageIndex < totalPages - 1) renderer.prefetchPage(pageIndex + 1, targetWidthPx, targetHeightPx)
         }
+    }
+
+    // 1. Base resolution render (1.0x display density)
+    LaunchedEffect(pageIndex, targetWidthPx) {
+        val targetHeightPx = (targetWidthPx / aspectRatio).toInt().coerceAtLeast(100)
         val rendered = renderer.renderPage(
             pageIndex = pageIndex,
             destWidth = targetWidthPx,
             destHeight = targetHeightPx,
-            renderScale = scale.coerceIn(1f, 2.5f)
+            renderScale = 1.0f
         )
         if (rendered != null) {
-            highResBitmap = rendered
+            baseBitmap = rendered
         }
-        isRenderingSharp = false
+    }
+
+    // 2. High-resolution on-demand render when zoomed in
+    LaunchedEffect(pageIndex, targetWidthPx, zoomState.isZoomed) {
+        if (zoomState.isZoomed) {
+            isRenderingSharp = true
+            delay(150) // Debounce rapid pinch operations
+            val targetHeightPx = (targetWidthPx / aspectRatio).toInt().coerceAtLeast(100)
+            val sharpRender = renderer.renderPage(
+                pageIndex = pageIndex,
+                destWidth = targetWidthPx,
+                destHeight = targetHeightPx,
+                renderScale = 2.0f
+            )
+            if (sharpRender != null) {
+                highResBitmap = sharpRender
+            }
+            isRenderingSharp = false
+        } else {
+            // Free high-res bitmap immediately when returning to 1.0x to conserve RAM
+            highResBitmap = null
+            isRenderingSharp = false
+        }
     }
 
     Card(
@@ -384,9 +398,9 @@ private fun VirtualizedPdfPageView(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                if (scale > 1.05f) {
+                if (zoomState.scale > 1.05f) {
                     Text(
-                        text = "${(scale * 100).toInt()}%",
+                        text = "${(zoomState.scale * 100).toInt()}%",
                         color = AccentGold,
                         fontSize = 11.sp
                     )
@@ -399,39 +413,63 @@ private fun VirtualizedPdfPageView(
                     .aspectRatio(aspectRatio)
                     .background(Color.White)
                     .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
+                    // Double-tap detector
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onDoubleTap = {
-                                if (scale > 1.1f) {
-                                    scale = 1f
-                                    offset = Offset.Zero
-                                } else {
-                                    scale = 2.5f
-                                }
+                            onDoubleTap = { tapOffset ->
+                                val viewW = size.width.toFloat()
+                                val viewH = size.height.toFloat()
+                                zoomState.onDoubleTap(tapOffset, viewW, viewH)
                             }
                         )
                     }
-                    .transformable(state = transformState),
+                    // Zoom and Pan gesture detector with native scroll pass-through at 1.0x
+                    .pointerInput(zoomState.scale) {
+                        val viewW = size.width.toFloat()
+                        val viewH = size.height.toFloat()
+
+                        if (zoomState.isZoomed) {
+                            // Zoomed in: consume both two-axis pan and pinch
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                zoomState.onPinch(zoom, pan, viewW, viewH)
+                            }
+                        } else {
+                            // At 1.0x scale: ONLY detect two-finger pinch.
+                            // Single-finger vertical dragging passes freely to LazyColumn for smooth scrolling.
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                do {
+                                    val event = awaitPointerEvent()
+                                    if (event.changes.size >= 2) {
+                                        val zoom = event.calculateZoom()
+                                        val pan = event.calculatePan()
+                                        if (zoom > 1.02f) {
+                                            zoomState.onPinch(zoom, pan, viewW, viewH)
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    }
+                                } while (event.changes.any { it.pressed })
+                            }
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
-                val sharp = highResBitmap
-                if (sharp != null && !sharp.isRecycled) {
-                    // Crisp sharp density-scaled render with white pre-fill
+                val currentBitmap = highResBitmap ?: baseBitmap
+                if (currentBitmap != null && !currentBitmap.isRecycled) {
                     Image(
-                        bitmap = sharp.asImageBitmap(),
+                        bitmap = currentBitmap.asImageBitmap(),
                         contentDescription = "Page ${pageIndex + 1}",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer(
-                                scaleX = if (scale > 2.5f) scale / 2.5f else 1f,
-                                scaleY = if (scale > 2.5f) scale / 2.5f else 1f,
-                                translationX = offset.x,
-                                translationY = offset.y
+                                scaleX = zoomState.scale,
+                                scaleY = zoomState.scale,
+                                translationX = zoomState.offsetX,
+                                translationY = zoomState.offsetY
                             )
                     )
                 } else if (placeholderUri != null && File(placeholderUri).exists()) {
-                    // Instant low-res stored placeholder while sharp render is processing
                     AsyncImage(
                         model = File(placeholderUri),
                         contentDescription = "Page ${pageIndex + 1} Preview",
@@ -439,10 +477,10 @@ private fun VirtualizedPdfPageView(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer(
-                                scaleX = scale,
-                                scaleY = scale,
-                                translationX = offset.x,
-                                translationY = offset.y
+                                scaleX = zoomState.scale,
+                                scaleY = zoomState.scale,
+                                translationX = zoomState.offsetX,
+                                translationY = zoomState.offsetY
                             )
                     )
                 } else {

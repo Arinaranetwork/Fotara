@@ -137,6 +137,7 @@ data class FolderDetailUiState(
     val gridDensity: Int = 3,
     val isLoading: Boolean = false,
     val importProgress: Pair<Int, Int>? = null,
+    val splitProgress: Pair<Int, Int>? = null,
     val showAddSubfolderDialog: Boolean = false,
     val highlightedPhotoId: Long? = null,
     val highlightedGroupId: Long? = null,

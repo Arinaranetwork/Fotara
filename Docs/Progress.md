@@ -163,12 +163,15 @@ Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [In Progress]
 - [x] C1-0 Setup: Audit repository state, confirm branch release/1.5.0, set versionName to '1.5.0 Beta', raise versionCode to 14, confirm dynamic version resolution in Settings and Update screens, create structured 1.5.0 Changelog and What's New source - Phase 8 (Chunk C1)
 - [x] C1-A English-Only App: Global audit, eliminate Indonesian text, enforce English resource restriction via resourceConfigurations = ['en'], enforce explicit Locale.US on all date formatters, verify zero emojis across repo - Phase 8 (Chunk C1)
 - [x] C1-B Suggestions & Bug Reports: Fix HTTP 400 root causes (schema alignment, category check constraint support for Title Case and UPPER_CASE, Content-Length byte accuracy, Prefer: return=minimal, PostgREST P0001 trigger classification, offline queue poison prevention, collapsible technical details, 60s cooldown countdown, 5/24h rolling quota, Supabase migration SQL, unit tests, and C11 verification script) - Phase 8 (Chunk C1)
+- [x] C2-A PDF Stability & Freeze Root Cause: Identified LazyColumn gesture competition and repeated page open mutex contention; eliminated transformable at 1.0x, implemented lazy page aspect ratio cache, cooperative cancellation of off-screen page render jobs, 32MB bounded LRU bitmap cache, and adjacent page prefetching - Phase 8 (Chunk C2)
+- [x] C2-B Split to Images: Fixed dark/black compression artifacts with pre-filled opaque white canvas, unified density-scaled renderer path (1200-2560px), implemented 5+ page Photo Group packaging rule (with Page 1 cover and preserved order) vs <= 4 standalone notes, added determinate progress dialog with cancellation and rollback cleanup, and unit tests - Phase 8 (Chunk C2)
+- [x] C2-C Header Text: Removed all occurrences of 'Sharp PDF Note', simplified TopAppBar subtitle to clean page count only ('N pages' / '1 page') across the codebase - Phase 8 (Chunk C2)
+- [x] C2-D Virtualized Per-Page Zoom & Freeform Pan: Implemented decoupled testable `PdfPageZoomState` state holder, free two-axis pan with boundary clamping, continuous pinch scale (1.0x-4.0x), double-tap zoom/reset, on-demand high-density 2.0x rendering for visible zoomed regions, memory release on return to 1.0x, smooth pinch activation in shared photo viewport, and unit tests - Phase 8 (Chunk C2)
 
 ## In Progress
-None (Chunk C1 complete, awaiting next chunk).
+None (Chunk C2 complete, awaiting Chunk C3).
 
 ## Pending
-- [ ] Chunk C2: PDF stability, Split to Images, header text, per-page zoom
 - [ ] Chunk C3: date added metadata, date filters, LinkIt corner glow
 - [ ] Chunk C4: text note editor (toolbar and live rendering)
 - [ ] Chunk C5: schedules on every note type
