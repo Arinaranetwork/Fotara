@@ -24,5 +24,24 @@ data class StagedShareItem(
     val fileSizeBytes: Long,
     val textBody: String? = null,
     val thumbnailPath: String? = null,
-    val isSelected: Boolean = true
-)
+    val isSelected: Boolean = true,
+    val errorMessage: String? = null
+) {
+    val isError: Boolean get() = errorMessage != null
+
+    val isPlaceable: Boolean get() = !isError
+
+    fun canPlaceInDestination(isGroupDestination: Boolean): Boolean {
+        if (isError) return false
+        if (isGroupDestination && itemType != StagedItemType.IMAGE) return false
+        return true
+    }
+
+    fun getIneligibilityReason(isGroupDestination: Boolean): String? {
+        if (errorMessage != null) return errorMessage
+        if (isGroupDestination && itemType != StagedItemType.IMAGE) {
+            return "Photo Groups can only contain images"
+        }
+        return null
+    }
+}

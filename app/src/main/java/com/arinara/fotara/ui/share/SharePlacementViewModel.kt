@@ -12,22 +12,25 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.arinara.fotara.data.model.DestinationType
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.PhotoSource
+import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.model.Subfolder
-import com.arinara.fotara.data.model.TagColor
+import com.arinara.fotara.data.repository.DocumentRepository
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
-import com.arinara.fotara.data.repository.DocumentRepository
-import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.data.repository.SettingsRepository
+import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.data.storage.PhotoStorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +41,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.util.UUID
+import java.util.zip.ZipInputStream
 
 data class SharePlacementUiState(
     val stagedItems: List<StagedShareItem> = emptyList(),
@@ -50,13 +55,20 @@ data class SharePlacementUiState(
     val selectedSubfolderId: Long? = null,
     val availableGroups: List<PhotoGroup> = emptyList(),
     val selectedGroupId: Long? = null,
-    val isDrawerOpen: Boolean = false,
+    val recentDestinations: List<RecentDestination> = emptyList(),
+    val unlockedFolderIds: Set<Long> = emptySet(),
+    val folderToUnlock: Folder? = null,
+    val isSidePanelOpen: Boolean = false,
     val isPlacing: Boolean = false,
     val placementProgress: Pair<Int, Int>? = null,
     val statusMessage: String? = null,
-    val isFinished: Boolean = false
+    val isFinished: Boolean = false,
+    val showExitConfirmDialog: Boolean = false
 ) {
-    val selectedCount: Int get() = stagedItems.count { it.isSelected }
+    val isGroupDestination: Boolean get() = selectedGroupId != null
+    val placeableCount: Int get() = ShareSessionEngine.computePlaceableCount(stagedItems, isGroupDestination)
+    val placeButtonLabel: String get() = ShareSessionEngine.formatPlaceButtonLabel(placeableCount)
+    val shouldShowSidePanel: Boolean get() = ShareSessionEngine.shouldShowSidePanel(stagedItems.size)
     val totalRemaining: Int get() = stagedItems.size
 }
 
@@ -93,22 +105,35 @@ class SharePlacementViewModel(
                 _uiState.value.selectedFolder?.let { loadFolderDetails(it.id) }
             }
         }
+
+        // Load recent destinations
+        refreshRecentDestinations()
+    }
+
+    fun refreshRecentDestinations() {
+        val recents = settingsRepository.getRecentDestinations()
+        _uiState.update { it.copy(recentDestinations = recents) }
     }
 
     fun processIncomingIntent(intent: Intent) {
         viewModelScope.launch {
             _uiState.update { it.copy(isStaging = true) }
-            val items = withContext(Dispatchers.IO) {
+            val (newItems, skipped) = withContext(Dispatchers.IO) {
                 stageIncomingData(intent)
             }
-            _uiState.update {
-                it.copy(
-                    stagedItems = items.first,
-                    skippedCount = items.second,
+            _uiState.update { state ->
+                val combined = state.stagedItems + newItems
+                val totalSkipped = state.skippedCount + skipped
+                state.copy(
+                    stagedItems = combined,
+                    skippedCount = totalSkipped,
                     isStaging = false,
-                    isFinished = items.first.isEmpty()
+                    isFinished = combined.isEmpty()
                 )
             }
+
+            // Generate thumbnails in background
+            generateThumbnailsAsync(newItems)
         }
     }
 
@@ -116,9 +141,10 @@ class SharePlacementViewModel(
         val action = intent.action
         val incomingUris = mutableListOf<Uri>()
         var incomingText: String? = null
+        val incomingSubject: String? = intent.getStringExtra(Intent.EXTRA_SUBJECT)
 
         if (action == Intent.ACTION_SEND) {
-            val streamUri = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val streamUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
             } else {
                 @Suppress("DEPRECATION")
@@ -130,7 +156,7 @@ class SharePlacementViewModel(
                 incomingText = intent.getStringExtra(Intent.EXTRA_TEXT)
             }
         } else if (action == Intent.ACTION_SEND_MULTIPLE) {
-            val list = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val list = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
             } else {
                 @Suppress("DEPRECATION")
@@ -141,38 +167,41 @@ class SharePlacementViewModel(
             }
         }
 
-        val totalIncoming = incomingUris.size + if (incomingText != null) 1 else 0
-        val cappedUris = incomingUris.take(30)
-        val skipped = (totalIncoming - 30).coerceAtLeast(0)
+        val totalIncoming = incomingUris.size + (if (incomingText != null) 1 else 0)
+        val existingCount = _uiState.value.stagedItems.size
+        val (canTake, skipped) = ShareSessionEngine.computeCapBounds(existingCount, totalIncoming)
 
         val result = mutableListOf<StagedShareItem>()
+        var itemsTaken = 0
 
-        // 1. Process capped URIs
-        for (uri in cappedUris) {
+        // 1. Process URIs up to capacity
+        for (uri in incomingUris) {
+            if (itemsTaken >= canTake) break
             try {
-                val item = stageUri(uri)
+                val item = stageUri(uri, incomingSubject)
                 if (item != null) {
                     result.add(item)
+                    itemsTaken++
                 }
             } catch (e: Exception) {
-                android.util.Log.e("SharePlacementVM", "Failed to stage uri: $uri", e)
+                Log.e("SharePlacementVM", "Failed to stage uri: $uri", e)
             }
         }
 
-        // 2. Process text if space remains in 30 cap
-        if (incomingText != null && result.size < 30) {
+        // 2. Process text if space remains
+        if (incomingText != null && itemsTaken < canTake) {
             try {
-                val textItem = stageText(incomingText)
+                val textItem = stageText(incomingText, incomingSubject)
                 result.add(textItem)
             } catch (e: Exception) {
-                android.util.Log.e("SharePlacementVM", "Failed to stage text", e)
+                Log.e("SharePlacementVM", "Failed to stage text", e)
             }
         }
 
         return Pair(result, skipped)
     }
 
-    private fun stageUri(uri: Uri): StagedShareItem? {
+    private fun stageUri(uri: Uri, subject: String?): StagedShareItem? {
         val cr = appContext.contentResolver
         var displayName = "Shared_Item"
         var mime = cr.getType(uri) ?: "application/octet-stream"
@@ -191,41 +220,103 @@ class SharePlacementViewModel(
 
         val lowerName = displayName.lowercase()
         val itemType = when {
-            mime.startsWith("image/") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png") || lowerName.endsWith(".webp") -> StagedItemType.IMAGE
+            mime.startsWith("image/") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") ||
+                lowerName.endsWith(".png") || lowerName.endsWith(".webp") || lowerName.endsWith(".gif") ||
+                lowerName.endsWith(".bmp") || lowerName.endsWith(".heic") || lowerName.endsWith(".heif") -> StagedItemType.IMAGE
             mime == "application/pdf" || lowerName.endsWith(".pdf") -> StagedItemType.PDF
-            mime.contains("wordprocessingml") || mime.contains("msword") || lowerName.endsWith(".docx") || lowerName.endsWith(".doc") -> StagedItemType.DOCX
+            mime.contains("wordprocessingml") || mime.contains("msword") ||
+                lowerName.endsWith(".docx") || lowerName.endsWith(".doc") -> StagedItemType.DOCX
             mime.startsWith("text/") || lowerName.endsWith(".txt") || lowerName.endsWith(".md") -> StagedItemType.TEXT
-            else -> StagedItemType.IMAGE // Default fallback
+            else -> StagedItemType.IMAGE
         }
 
         val ext = when (itemType) {
             StagedItemType.IMAGE -> if (lowerName.contains('.')) lowerName.substringAfterLast('.') else "jpg"
             StagedItemType.PDF -> "pdf"
             StagedItemType.DOCX -> "docx"
-            StagedItemType.TEXT -> "txt"
+            StagedItemType.TEXT -> if (lowerName.endsWith(".md")) "md" else "txt"
         }
 
         val id = UUID.randomUUID().toString()
         val stagedFile = File(stagingDir, "stage_${id}.$ext")
 
-        cr.openInputStream(uri)?.use { input ->
-            FileOutputStream(stagedFile).use { output ->
-                input.copyTo(output)
-            }
-        } ?: return null
-
-        var thumbPath: String? = null
-        if (itemType == StagedItemType.IMAGE) {
-            thumbPath = generateImageThumbnail(stagedFile)
-        } else if (itemType == StagedItemType.PDF) {
-            thumbPath = generatePdfThumbnail(stagedFile)
+        try {
+            cr.openInputStream(uri)?.use { input ->
+                FileOutputStream(stagedFile).use { output ->
+                    input.copyTo(output, bufferSize = 8192)
+                }
+            } ?: return null
+        } catch (e: Exception) {
+            Log.e("SharePlacementVM", "Failed to stream copy uri: $uri", e)
+            return null
         }
 
-        var snippet: String? = null
-        if (itemType == StagedItemType.TEXT) {
-            try {
-                snippet = stagedFile.readText().take(300)
-            } catch (_: Exception) {}
+        // Validate content integrity
+        var errorMsg: String? = null
+        var textSnippet: String? = null
+
+        when (itemType) {
+            StagedItemType.IMAGE -> {
+                try {
+                    val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(stagedFile.absolutePath, opts)
+                    if (opts.outWidth <= 0 || opts.outHeight <= 0) {
+                        errorMsg = "Corrupt image file"
+                    }
+                } catch (e: Exception) {
+                    errorMsg = "Unreadable image"
+                }
+            }
+            StagedItemType.PDF -> {
+                var pfd: ParcelFileDescriptor? = null
+                var renderer: PdfRenderer? = null
+                try {
+                    pfd = ParcelFileDescriptor.open(stagedFile, ParcelFileDescriptor.MODE_READ_ONLY)
+                    renderer = PdfRenderer(pfd)
+                    if (renderer.pageCount == 0) {
+                        errorMsg = "Empty or corrupt PDF"
+                    }
+                } catch (se: SecurityException) {
+                    errorMsg = "Password-protected PDF"
+                } catch (e: Exception) {
+                    errorMsg = "Corrupt or unreadable PDF"
+                } finally {
+                    try { renderer?.close() } catch (_: Exception) {}
+                    try { pfd?.close() } catch (_: Exception) {}
+                }
+            }
+            StagedItemType.DOCX -> {
+                try {
+                    stagedFile.inputStream().use { inStream ->
+                        val zip = ZipInputStream(inStream)
+                        var hasDocXml = false
+                        var entry = zip.nextEntry
+                        while (entry != null) {
+                            if (entry.name == "word/document.xml") {
+                                hasDocXml = true
+                                break
+                            }
+                            entry = zip.nextEntry
+                        }
+                        if (!hasDocXml) {
+                            errorMsg = "Invalid Word document structure"
+                        }
+                    }
+                } catch (e: Exception) {
+                    errorMsg = "Corrupt Word document"
+                }
+            }
+            StagedItemType.TEXT -> {
+                try {
+                    val content = stagedFile.readText()
+                    textSnippet = content.take(300)
+                    if (displayName == "Shared_Item" || displayName.startsWith("stage_")) {
+                        displayName = ShareSessionEngine.deriveTextTitle(subject, displayName, content)
+                    }
+                } catch (e: Exception) {
+                    errorMsg = "Unreadable text file"
+                }
+            }
         }
 
         return StagedShareItem(
@@ -235,19 +326,23 @@ class SharePlacementViewModel(
             mimeType = mime,
             stagedFile = stagedFile,
             fileSizeBytes = stagedFile.length(),
-            textBody = snippet,
-            thumbnailPath = thumbPath,
-            isSelected = true
+            textBody = textSnippet,
+            thumbnailPath = null,
+            isSelected = errorMsg == null,
+            errorMessage = errorMsg
         )
     }
 
-    private fun stageText(text: String): StagedShareItem {
+    private fun stageText(text: String, subject: String?): StagedShareItem {
         val id = UUID.randomUUID().toString()
         val stagedFile = File(stagingDir, "stage_${id}.txt")
         stagedFile.writeText(text)
 
-        val firstLine = text.lineSequence().firstOrNull { it.isNotBlank() } ?: "Shared Note"
-        val title = if (firstLine.length > 40) firstLine.take(40) + "..." else firstLine
+        val title = ShareSessionEngine.deriveTextTitle(
+            subject = subject,
+            fileName = null,
+            textBody = text
+        )
 
         return StagedShareItem(
             id = id,
@@ -258,8 +353,36 @@ class SharePlacementViewModel(
             fileSizeBytes = stagedFile.length(),
             textBody = text.take(300),
             thumbnailPath = null,
-            isSelected = true
+            isSelected = true,
+            errorMessage = null
         )
+    }
+
+    private fun generateThumbnailsAsync(items: List<StagedShareItem>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            for (item in items) {
+                if (item.isError) continue
+                var thumbPath: String? = null
+                when (item.itemType) {
+                    StagedItemType.IMAGE -> {
+                        thumbPath = generateImageThumbnail(item.stagedFile)
+                    }
+                    StagedItemType.PDF -> {
+                        thumbPath = generatePdfThumbnail(item.stagedFile)
+                    }
+                    else -> {}
+                }
+
+                if (thumbPath != null) {
+                    _uiState.update { state ->
+                        val updated = state.stagedItems.map {
+                            if (it.id == item.id) it.copy(thumbnailPath = thumbPath) else it
+                        }
+                        state.copy(stagedItems = updated)
+                    }
+                }
+            }
+        }
     }
 
     private fun generateImageThumbnail(file: File): String? {
@@ -311,6 +434,14 @@ class SharePlacementViewModel(
     }
 
     fun selectFolder(folder: Folder) {
+        if (folder.isLocked && !_uiState.value.unlockedFolderIds.contains(folder.id)) {
+            _uiState.update { it.copy(folderToUnlock = folder) }
+            return
+        }
+        applyFolderSelection(folder)
+    }
+
+    private fun applyFolderSelection(folder: Folder) {
         _uiState.update {
             it.copy(
                 selectedFolder = folder,
@@ -319,6 +450,23 @@ class SharePlacementViewModel(
             )
         }
         loadFolderDetails(folder.id)
+    }
+
+    fun unlockFolderSuccess(folderId: Long) {
+        val folder = _uiState.value.folders.find { it.id == folderId }
+        _uiState.update {
+            it.copy(
+                unlockedFolderIds = it.unlockedFolderIds + folderId,
+                folderToUnlock = null
+            )
+        }
+        if (folder != null) {
+            applyFolderSelection(folder)
+        }
+    }
+
+    fun dismissFolderUnlock() {
+        _uiState.update { it.copy(folderToUnlock = null) }
     }
 
     private fun loadFolderDetails(folderId: Long) {
@@ -342,18 +490,32 @@ class SharePlacementViewModel(
         _uiState.update { it.copy(selectedGroupId = groupId) }
     }
 
+    fun selectRecentDestination(recent: RecentDestination) {
+        val folder = _uiState.value.folders.find { it.id == recent.folderId } ?: return
+        if (folder.isLocked && !_uiState.value.unlockedFolderIds.contains(folder.id)) {
+            _uiState.update { it.copy(folderToUnlock = folder) }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                selectedFolder = folder,
+                selectedSubfolderId = recent.subfolderId,
+                selectedGroupId = recent.groupId
+            )
+        }
+        loadFolderDetails(folder.id)
+    }
+
     fun toggleItemSelection(itemId: String) {
         _uiState.update { state ->
-            val updated = state.stagedItems.map {
-                if (it.id == itemId) it.copy(isSelected = !it.isSelected) else it
-            }
+            val updated = ShareSessionEngine.toggleItemSelection(state.stagedItems, itemId)
             state.copy(stagedItems = updated)
         }
     }
 
     fun setAllSelected(selected: Boolean) {
         _uiState.update { state ->
-            val updated = state.stagedItems.map { it.copy(isSelected = selected) }
+            val updated = ShareSessionEngine.setAllSelected(state.stagedItems, selected)
             state.copy(stagedItems = updated)
         }
     }
@@ -373,15 +535,17 @@ class SharePlacementViewModel(
         }
     }
 
-    fun setDrawerOpen(open: Boolean) {
-        _uiState.update { it.copy(isDrawerOpen = open) }
+    fun setSidePanelOpen(open: Boolean) {
+        _uiState.update { it.copy(isSidePanelOpen = open) }
     }
 
     fun createFolder(name: String, colorHex: String) {
         viewModelScope.launch {
             val newId = folderRepository.createFolder(name = name.trim(), colorLabel = colorHex, isPinned = false)
-            val updatedFolders = folderRepository.getFolders()
-            // Selected will update via flow
+            val newFolder = folderRepository.getFolderById(newId)
+            if (newFolder != null) {
+                applyFolderSelection(newFolder)
+            }
         }
     }
 
@@ -396,23 +560,24 @@ class SharePlacementViewModel(
     fun placeSelectedItems() {
         val state = _uiState.value
         val folder = state.selectedFolder ?: return
-        val itemsToPlace = state.stagedItems.filter { it.isSelected }
+        val isGroup = state.isGroupDestination
+        val itemsToPlace = state.stagedItems.filter { it.isSelected && it.canPlaceInDestination(isGroup) }
         if (itemsToPlace.isEmpty()) return
 
         viewModelScope.launch {
             _uiState.update { it.copy(isPlacing = true, placementProgress = Pair(0, itemsToPlace.size)) }
 
-            val remainingItems = state.stagedItems.toMutableList()
+            val placedIds = mutableSetOf<String>()
             var placedCount = 0
 
             withContext(Dispatchers.IO) {
                 for ((index, item) in itemsToPlace.withIndex()) {
                     _uiState.update { it.copy(placementProgress = Pair(index + 1, itemsToPlace.size)) }
                     try {
+                        val now = System.currentTimeMillis()
                         when (item.itemType) {
                             StagedItemType.IMAGE -> {
                                 val savedFile = photoStorageManager.saveUriAsPhoto(Uri.fromFile(item.stagedFile))
-                                val now = System.currentTimeMillis()
                                 val photo = Photo(
                                     id = 0L,
                                     fileUri = savedFile.filePath,
@@ -461,40 +626,83 @@ class SharePlacementViewModel(
                             }
                         }
 
-                        // Cleanup temp file
+                        // Cleanup temp file for successfully placed item
                         item.stagedFile.delete()
                         item.thumbnailPath?.let { File(it).delete() }
-                        remainingItems.remove(item)
+                        placedIds.add(item.id)
                         placedCount++
                     } catch (e: Exception) {
-                        android.util.Log.e("SharePlacementVM", "Error importing item ${item.displayName}", e)
+                        Log.e("SharePlacementVM", "Error placing item ${item.displayName}", e)
                     }
                 }
             }
 
-            if (remainingItems.isEmpty()) {
+            // Record recent destination
+            val groupName = state.availableGroups.find { it.id == state.selectedGroupId }?.name
+            val subName = state.subfolders.find { it.id == state.selectedSubfolderId }?.name
+            val destType = when {
+                state.selectedGroupId != null -> DestinationType.GROUP
+                state.selectedSubfolderId != null -> DestinationType.SUBFOLDER
+                else -> DestinationType.FOLDER
+            }
+            val destTitle = when {
+                groupName != null -> groupName
+                subName != null -> subName
+                else -> folder.name
+            }
+            settingsRepository.addRecentDestination(
+                RecentDestination(
+                    type = destType,
+                    folderId = folder.id,
+                    subfolderId = state.selectedSubfolderId,
+                    groupId = state.selectedGroupId,
+                    title = destTitle,
+                    subtitle = if (destType != DestinationType.FOLDER) folder.name else null
+                )
+            )
+            refreshRecentDestinations()
+
+            // Update remaining items
+            val remaining = ShareSessionEngine.removePlacedItems(state.stagedItems, placedIds)
+
+            if (remaining.isEmpty()) {
                 _uiState.update {
                     it.copy(
                         stagedItems = emptyList(),
                         isPlacing = false,
                         placementProgress = null,
-                        statusMessage = "All $placedCount item${if (placedCount > 1) "s" else ""} saved to ${folder.name}!",
+                        statusMessage = "All $placedCount items saved to ${folder.name}!",
                         isFinished = true
                     )
                 }
             } else {
-                // Select all remaining items for convenience in next placement
-                val updatedRemaining = remainingItems.map { it.copy(isSelected = true) }
                 _uiState.update {
                     it.copy(
-                        stagedItems = updatedRemaining,
+                        stagedItems = remaining,
                         isPlacing = false,
                         placementProgress = null,
-                        statusMessage = "Placed $placedCount items in ${folder.name}. ${updatedRemaining.size} items remaining to place."
+                        statusMessage = "Placed $placedCount item${if (placedCount > 1) "s" else ""} in ${folder.name}. ${remaining.size} items remaining."
                     )
                 }
             }
         }
+    }
+
+    fun requestExit() {
+        if (_uiState.value.totalRemaining > 0) {
+            _uiState.update { it.copy(showExitConfirmDialog = true) }
+        } else {
+            cancelAndCleanup()
+        }
+    }
+
+    fun dismissExitConfirm() {
+        _uiState.update { it.copy(showExitConfirmDialog = false) }
+    }
+
+    fun confirmExit() {
+        _uiState.update { it.copy(showExitConfirmDialog = false) }
+        cancelAndCleanup()
     }
 
     fun cancelAndCleanup() {

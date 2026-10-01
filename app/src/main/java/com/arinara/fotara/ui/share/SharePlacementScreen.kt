@@ -21,37 +21,34 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -90,7 +87,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
-import com.arinara.fotara.data.model.Folder
+import com.arinara.fotara.data.model.DestinationType
 import com.arinara.fotara.theme.DockSlatePill
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
@@ -102,6 +99,7 @@ import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.ui.components.FolderUnlockDialog
 import com.arinara.fotara.ui.components.NewFolderDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -140,56 +138,36 @@ fun SharePlacementScreen(
                         Text(
                             text = "Save to Fotara",
                             color = TextPrimary,
-                            fontSize = 19.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        if (!uiState.isStaging) {
+                        if (!uiState.isStaging && uiState.totalRemaining > 0) {
+                            val destSummary = uiState.selectedFolder?.let { f ->
+                                val sub = uiState.subfolders.find { it.id == uiState.selectedSubfolderId }?.name
+                                val grp = uiState.availableGroups.find { it.id == uiState.selectedGroupId }?.name
+                                when {
+                                    grp != null -> "${f.name} > Group: $grp"
+                                    sub != null -> "${f.name} > $sub"
+                                    else -> f.name
+                                }
+                            } ?: "Select destination folder"
                             Text(
-                                text = "${uiState.selectedCount} of ${uiState.totalRemaining} items selected",
+                                text = destSummary,
                                 color = FolderTabCream,
-                                fontSize = 12.sp
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.cancelAndCleanup() }) {
+                    IconButton(onClick = { viewModel.requestExit() }) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Cancel",
+                            contentDescription = "Cancel Share Session",
                             tint = FolderTabCream
                         )
-                    }
-                },
-                actions = {
-                    if (!uiState.isStaging && uiState.totalRemaining > 0) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = FolderBodyBlue,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
-                            modifier = Modifier
-                                .padding(end = 12.dp)
-                                .clickable { viewModel.setDrawerOpen(true) }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Collections,
-                                    contentDescription = null,
-                                    tint = FolderTabCream,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Items (${uiState.selectedCount})",
-                                    color = TextPrimary,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
@@ -200,38 +178,18 @@ fun SharePlacementScreen(
                 Surface(
                     color = MidnightSurface,
                     border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
-                        val folder = uiState.selectedFolder
-                        val destLabel = if (folder != null) {
-                            val subName = uiState.subfolders.find { it.id == uiState.selectedSubfolderId }?.name
-                            val groupName = uiState.availableGroups.find { it.id == uiState.selectedGroupId }?.name
-                            when {
-                                groupName != null -> "${folder.name} > Group: $groupName"
-                                subName != null -> "${folder.name} > $subName"
-                                else -> "${folder.name} (Folder Root)"
-                            }
-                        } else {
-                            "Select destination folder above"
-                        }
-
-                        Text(
-                            text = "Destination: $destLabel",
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
                         Button(
                             onClick = { viewModel.placeSelectedItems() },
-                            enabled = uiState.selectedCount > 0 && uiState.selectedFolder != null && !uiState.isPlacing,
+                            enabled = uiState.placeableCount > 0 && uiState.selectedFolder != null && !uiState.isPlacing,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = FolderTabCream,
                                 contentColor = MidnightNavy,
@@ -241,7 +199,7 @@ fun SharePlacementScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .height(50.dp)
                         ) {
                             if (uiState.isPlacing) {
                                 CircularProgressIndicator(
@@ -265,7 +223,7 @@ fun SharePlacementScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Place Here (${uiState.selectedCount} Items)",
+                                    text = uiState.placeButtonLabel,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
                                 )
@@ -276,269 +234,287 @@ fun SharePlacementScreen(
             }
         },
         modifier = modifier
+            .fillMaxSize()
+            .statusBarsPadding()
     ) { innerPadding ->
-        if (uiState.isStaging) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = FolderTabCream)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Staging shared items...",
-                        color = TextPrimary,
-                        fontSize = 16.sp
-                    )
-                }
-            }
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = innerPadding.calculateTopPadding() + 8.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 16.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Overflow cap warning banner
-                if (uiState.skippedCount > 0) {
-                    item {
-                        Surface(
-                            color = MidnightSurface,
-                            shape = RoundedCornerShape(10.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, TagAmber.copy(alpha = 0.5f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = null,
-                                    tint = TagAmber,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "Share bundle capped to 30 items. ${uiState.skippedCount} excess items were skipped.",
-                                    color = TagAmber,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Section 1: Choose Folder
-                item {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            if (uiState.isStaging) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = FolderTabCream)
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Select Coursework Folder",
+                            text = "Staging shared items...",
                             color = TextPrimary,
                             fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Medium
                         )
-                        TextButton(
-                            onClick = { showNewFolderDialog = true },
-                            colors = ButtonDefaults.textButtonColors(contentColor = FolderTabCream)
-                        ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "New Folder", fontSize = 13.sp)
-                        }
                     }
                 }
-
-                // Folders Grid
-                item {
-                    val folders = uiState.folders
-                    if (folders.isEmpty()) {
-                        Surface(
-                            color = MidnightSurface,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(24.dp)
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Capped overflow notice banner
+                    if (uiState.skippedCount > 0) {
+                        item {
+                            Surface(
+                                color = MidnightSurface,
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, TagAmber.copy(alpha = 0.5f)),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(
-                                    text = "No folders created yet",
-                                    color = TextSecondary,
-                                    fontSize = 14.sp
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Button(
-                                    onClick = { showNewFolderDialog = true },
-                                    colors = ButtonDefaults.buttonColors(containerColor = FolderTabCream, contentColor = MidnightNavy)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(12.dp)
                                 ) {
-                                    Text("Create First Folder")
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = TagAmber,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "Maximum 30 items per share. ${uiState.skippedCount} excess item${if (uiState.skippedCount > 1) "s were" else " was"} skipped.",
+                                        color = TagAmber,
+                                        fontSize = 13.sp
+                                    )
                                 }
                             }
                         }
-                    } else {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(folders) { folder ->
-                                val isSelected = uiState.selectedFolder?.id == folder.id
-                                val cardColor = try {
-                                    Color(android.graphics.Color.parseColor(folder.colorLabel))
-                                } catch (_: Exception) {
-                                    FolderTabCream
-                                }
+                    }
 
-                                Surface(
-                                    color = if (isSelected) FolderBodyBlue else MidnightSurface,
-                                    shape = RoundedCornerShape(12.dp),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        width = if (isSelected) 2.dp else 1.dp,
-                                        color = if (isSelected) FolderTabCream else MidnightCardOutline
-                                    ),
-                                    modifier = Modifier
-                                        .width(140.dp)
-                                        .height(96.dp)
-                                        .clickable { viewModel.selectFolder(folder) }
+                    // Section 1: Recent Destinations
+                    if (uiState.recentDestinations.isNotEmpty()) {
+                        item {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = "Recent Destinations",
+                                    color = FolderTabCream,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(10.dp),
-                                        verticalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            modifier = Modifier.fillMaxWidth()
+                                    items(uiState.recentDestinations) { recent ->
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = DockSlatePill.copy(alpha = 0.5f),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
+                                            modifier = Modifier.clickable { viewModel.selectRecentDestination(recent) }
                                         ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .clip(CircleShape)
-                                                    .background(cardColor)
-                                            )
-                                            if (isSelected) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                            ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Check,
+                                                    imageVector = when (recent.type) {
+                                                        DestinationType.GROUP -> Icons.Default.Layers
+                                                        DestinationType.SUBFOLDER -> Icons.AutoMirrored.Filled.DriveFileMove
+                                                        DestinationType.FOLDER -> Icons.Default.Folder
+                                                    },
                                                     contentDescription = null,
                                                     tint = FolderTabCream,
                                                     modifier = Modifier.size(14.dp)
                                                 )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = recent.title,
+                                                    color = TextPrimary,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
                                             }
                                         }
-                                        Text(
-                                            text = folder.name,
-                                            color = TextPrimary,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                // Section 2: Subfolders & Groups (if folder selected)
-                if (uiState.selectedFolder != null) {
+                    // Section 2: Choose Coursework Folder
                     item {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Coursework Folders",
+                                color = TextPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            TextButton(
+                                onClick = { showNewFolderDialog = true },
+                                colors = ButtonDefaults.textButtonColors(contentColor = FolderTabCream)
                             ) {
-                                Text(
-                                    text = "Placement Target",
-                                    color = TextPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                TextButton(
-                                    onClick = {
-                                        newSubfolderName = ""
-                                        showNewSubfolderDialog = true
-                                    },
-                                    colors = ButtonDefaults.textButtonColors(contentColor = FolderTabCream)
+                                Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "New Folder", fontSize = 13.sp)
+                            }
+                        }
+                    }
+
+                    // Folders Grid / Row
+                    item {
+                        val folders = uiState.folders
+                        if (folders.isEmpty()) {
+                            Surface(
+                                color = MidnightSurface,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(24.dp)
                                 ) {
-                                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = "Add Subfolder", fontSize = 12.sp)
+                                    Text(
+                                        text = "No folders created yet",
+                                        color = TextSecondary,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(
+                                        onClick = { showNewFolderDialog = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = FolderTabCream, contentColor = MidnightNavy)
+                                    ) {
+                                        Text("Create First Folder")
+                                    }
                                 }
                             }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
+                        } else {
                             LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                // Root option
-                                item {
-                                    FilterChip(
-                                        selected = uiState.selectedSubfolderId == null && uiState.selectedGroupId == null,
-                                        onClick = {
-                                            viewModel.selectSubfolder(null)
-                                            viewModel.selectGroup(null)
-                                        },
-                                        label = { Text("Folder Root") },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = FolderTabCream,
-                                            selectedLabelColor = MidnightNavy,
-                                            containerColor = MidnightSurface,
-                                            labelColor = TextSecondary
-                                        )
-                                    )
-                                }
+                                items(folders) { folder ->
+                                    val isSelected = uiState.selectedFolder?.id == folder.id
+                                    val isLocked = folder.isLocked && !uiState.unlockedFolderIds.contains(folder.id)
+                                    val cardColor = try {
+                                        Color(android.graphics.Color.parseColor(folder.colorLabel))
+                                    } catch (_: Exception) {
+                                        FolderTabCream
+                                    }
 
-                                // Subfolders
-                                items(uiState.subfolders) { sub ->
-                                    val isSubSelected = uiState.selectedSubfolderId == sub.id && uiState.selectedGroupId == null
-                                    FilterChip(
-                                        selected = isSubSelected,
-                                        onClick = { viewModel.selectSubfolder(sub.id) },
-                                        label = { Text(sub.name) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = FolderTabCream,
-                                            selectedLabelColor = MidnightNavy,
-                                            containerColor = MidnightSurface,
-                                            labelColor = TextSecondary
-                                        )
-                                    )
-                                }
-
-                                // Photo Groups (if images are present)
-                                val hasImages = uiState.stagedItems.any { it.itemType == StagedItemType.IMAGE && it.isSelected }
-                                if (hasImages) {
-                                    items(uiState.availableGroups) { grp ->
-                                        val isGrpSelected = uiState.selectedGroupId == grp.id
-                                        FilterChip(
-                                            selected = isGrpSelected,
-                                            onClick = { viewModel.selectGroup(grp.id) },
-                                            label = {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        color = if (isSelected) FolderBodyBlue else MidnightSurface,
+                                        shape = RoundedCornerShape(12.dp),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) FolderTabCream else MidnightCardOutline
+                                        ),
+                                        modifier = Modifier
+                                            .width(140.dp)
+                                            .height(96.dp)
+                                            .clickable { viewModel.selectFolder(folder) }
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(10.dp),
+                                            verticalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(10.dp)
+                                                        .clip(CircleShape)
+                                                        .background(cardColor)
+                                                )
+                                                if (isLocked) {
                                                     Icon(
-                                                        imageVector = Icons.Default.Layers,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(12.dp)
+                                                        imageVector = Icons.Default.Lock,
+                                                        contentDescription = "Locked",
+                                                        tint = TagAmber,
+                                                        modifier = Modifier.size(14.dp)
                                                     )
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text(grp.name)
+                                                } else if (isSelected) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = null,
+                                                        tint = FolderTabCream,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
                                                 }
+                                            }
+                                            Text(
+                                                text = folder.name,
+                                                color = TextPrimary,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Section 3: Subfolders & Groups
+                    if (uiState.selectedFolder != null) {
+                        item {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Subfolders & Groups",
+                                        color = TextPrimary,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            newSubfolderName = ""
+                                            showNewSubfolderDialog = true
+                                        },
+                                        colors = ButtonDefaults.textButtonColors(contentColor = FolderTabCream)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(text = "Add Subfolder", fontSize = 12.sp)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    // Root option
+                                    item {
+                                        FilterChip(
+                                            selected = uiState.selectedSubfolderId == null && uiState.selectedGroupId == null,
+                                            onClick = {
+                                                viewModel.selectSubfolder(null)
+                                                viewModel.selectGroup(null)
                                             },
+                                            label = { Text("Folder Root") },
                                             colors = FilterChipDefaults.filterChipColors(
                                                 selectedContainerColor = FolderTabCream,
                                                 selectedLabelColor = MidnightNavy,
@@ -547,61 +523,118 @@ fun SharePlacementScreen(
                                             )
                                         )
                                     }
+
+                                    // Subfolders
+                                    items(uiState.subfolders) { sub ->
+                                        val isSubSelected = uiState.selectedSubfolderId == sub.id && uiState.selectedGroupId == null
+                                        FilterChip(
+                                            selected = isSubSelected,
+                                            onClick = { viewModel.selectSubfolder(sub.id) },
+                                            label = { Text(sub.name) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = FolderTabCream,
+                                                selectedLabelColor = MidnightNavy,
+                                                containerColor = MidnightSurface,
+                                                labelColor = TextSecondary
+                                            )
+                                        )
+                                    }
+
+                                    // Photo Groups
+                                    val hasImages = uiState.stagedItems.any { it.itemType == StagedItemType.IMAGE && it.isSelected }
+                                    if (hasImages) {
+                                        items(uiState.availableGroups) { grp ->
+                                            val isGrpSelected = uiState.selectedGroupId == grp.id
+                                            FilterChip(
+                                                selected = isGrpSelected,
+                                                onClick = { viewModel.selectGroup(grp.id) },
+                                                label = {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Layers,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(12.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text(grp.name)
+                                                    }
+                                                },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = FolderTabCream,
+                                                    selectedLabelColor = MidnightNavy,
+                                                    containerColor = MidnightSurface,
+                                                    labelColor = TextSecondary
+                                                )
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // Section 3: Staged Items Preview Summary
-                item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Staged Notes (${uiState.stagedItems.size})",
-                                color = TextPrimary,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Row {
-                                TextButton(
-                                    onClick = {
-                                        val anySelected = uiState.stagedItems.any { it.isSelected }
-                                        viewModel.setAllSelected(!anySelected)
-                                    },
-                                    colors = ButtonDefaults.textButtonColors(contentColor = FolderTabCream)
-                                ) {
-                                    val anySelected = uiState.stagedItems.any { it.isSelected }
-                                    Text(if (anySelected) "Deselect All" else "Select All", fontSize = 12.sp)
-                                }
+                    // Section 4: Single Item Preview (When exactly 1 item shared)
+                    if (!uiState.shouldShowSidePanel && uiState.stagedItems.isNotEmpty()) {
+                        item {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = "Item to Place",
+                                    color = TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                val single = uiState.stagedItems.first()
+                                StagedItemRow(
+                                    item = single,
+                                    isGroupDestination = uiState.isGroupDestination,
+                                    showCheckbox = false,
+                                    onToggle = {},
+                                    onRemove = { viewModel.removeStagedItem(single.id) }
+                                )
                             }
                         }
+                    }
+                }
+            }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Compact list of items
-                        uiState.stagedItems.forEach { item ->
-                            StagedItemRow(
-                                item = item,
-                                onToggle = { viewModel.toggleItemSelection(item.id) },
-                                onRemove = { viewModel.removeStagedItem(item.id) }
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                        }
+            // Right-side floating tab (shown ONLY when more than 1 item was shared)
+            if (uiState.shouldShowSidePanel && !uiState.isStaging) {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
+                    color = FolderTabCream,
+                    shadowElevation = 6.dp,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .clickable { viewModel.setSidePanelOpen(true) }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Collections,
+                            contentDescription = "View items",
+                            tint = MidnightNavy,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "${uiState.stagedItems.size} items",
+                            color = MidnightNavy,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
         }
     }
 
-    // Collapsible Drawer / Modal Bottom Sheet for Items Tray
-    if (uiState.isDrawerOpen) {
+    // Right-Side Panel Modal Sheet (Listing shared items with checkboxes and previews)
+    if (uiState.isSidePanelOpen && uiState.shouldShowSidePanel) {
         ModalBottomSheet(
-            onDismissRequest = { viewModel.setDrawerOpen(false) },
+            onDismissRequest = { viewModel.setSidePanelOpen(false) },
             containerColor = MidnightSurface,
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ) {
@@ -616,20 +649,19 @@ fun SharePlacementScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Notes to Save (${uiState.stagedItems.size})",
+                        text = "Shared Items (${uiState.stagedItems.size})",
                         color = TextPrimary,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    TextButton(
-                        onClick = {
-                            val anySelected = uiState.stagedItems.any { it.isSelected }
-                            viewModel.setAllSelected(!anySelected)
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = FolderTabCream)
-                    ) {
-                        val anySelected = uiState.stagedItems.any { it.isSelected }
-                        Text(if (anySelected) "Deselect All" else "Select All")
+                    Row {
+                        val allSelected = uiState.stagedItems.all { it.isSelected || it.isError }
+                        TextButton(
+                            onClick = { viewModel.setAllSelected(!allSelected) },
+                            colors = ButtonDefaults.textButtonColors(contentColor = FolderTabCream)
+                        ) {
+                            Text(if (allSelected) "Deselect All" else "Select All")
+                        }
                     }
                 }
 
@@ -644,6 +676,8 @@ fun SharePlacementScreen(
                     items(uiState.stagedItems) { item ->
                         StagedItemRow(
                             item = item,
+                            isGroupDestination = uiState.isGroupDestination,
+                            showCheckbox = true,
                             onToggle = { viewModel.toggleItemSelection(item.id) },
                             onRemove = { viewModel.removeStagedItem(item.id) }
                         )
@@ -653,16 +687,65 @@ fun SharePlacementScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Button(
-                    onClick = { viewModel.setDrawerOpen(false) },
+                    onClick = { viewModel.setSidePanelOpen(false) },
                     colors = ButtonDefaults.buttonColors(containerColor = FolderTabCream, contentColor = MidnightNavy),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Done Selecting (${uiState.selectedCount})", fontWeight = FontWeight.Bold)
+                    Text("Done Selecting (${uiState.placeableCount})", fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+
+    // Privacy-Locked Folder Unlock Dialog
+    if (uiState.folderToUnlock != null) {
+        val folder = uiState.folderToUnlock!!
+        FolderUnlockDialog(
+            folder = folder,
+            onDismiss = { viewModel.dismissFolderUnlock() },
+            onUnlocked = { viewModel.unlockFolderSuccess(folder.id) },
+            onUseDeviceLock = {},
+            onForgotPin = {}
+        )
+    }
+
+    // Cancellation Confirmation Dialog
+    if (uiState.showExitConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissExitConfirm() },
+            containerColor = MidnightSurface,
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Text(
+                    text = "Discard Unplaced Items?",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "You still have ${uiState.totalRemaining} unplaced item${if (uiState.totalRemaining > 1) "s" else ""}. If you exit now, unplaced items will be discarded. (Already placed items will remain saved in their folders).",
+                    color = TextSecondary,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.confirmExit() },
+                    colors = ButtonDefaults.buttonColors(containerColor = TagCrimson)
+                ) {
+                    Text("Discard & Exit", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissExitConfirm() }) {
+                    Text("Stay", color = FolderTabCream)
+                }
+            }
+        )
     }
 
     // Create New Folder Dialog
@@ -738,31 +821,44 @@ fun SharePlacementScreen(
 @Composable
 private fun StagedItemRow(
     item: StagedShareItem,
+    isGroupDestination: Boolean,
+    showCheckbox: Boolean,
     onToggle: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val ineligibilityReason = item.getIneligibilityReason(isGroupDestination)
+    val isItemDisabled = ineligibilityReason != null
+
     Surface(
         color = MidnightSurface,
         shape = RoundedCornerShape(10.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (item.isError) TagCrimson.copy(alpha = 0.5f) else MidnightCardOutline
+        ),
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onToggle() }
+            .clickable(enabled = !isItemDisabled) { onToggle() }
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(8.dp)
         ) {
-            Checkbox(
-                checked = item.isSelected,
-                onCheckedChange = { onToggle() },
-                colors = CheckboxDefaults.colors(
-                    checkedColor = FolderTabCream,
-                    checkmarkColor = MidnightNavy,
-                    uncheckedColor = TextSecondary
+            if (showCheckbox) {
+                Checkbox(
+                    checked = item.isSelected && !isItemDisabled,
+                    onCheckedChange = { onToggle() },
+                    enabled = !isItemDisabled,
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = FolderTabCream,
+                        checkmarkColor = MidnightNavy,
+                        uncheckedColor = TextSecondary,
+                        disabledCheckedColor = DockSlatePill,
+                        disabledUncheckedColor = DockSlatePill
+                    )
                 )
-            )
+            }
 
             // Thumbnail / Icon Preview
             Box(
@@ -786,11 +882,13 @@ private fun StagedItemRow(
                         StagedItemType.DOCX -> Icons.Default.Description
                         StagedItemType.TEXT -> Icons.Default.TextFields
                     }
-                    val iconTint = when (item.itemType) {
-                        StagedItemType.IMAGE -> FolderTabCream
-                        StagedItemType.PDF -> TagCrimson
-                        StagedItemType.DOCX -> Color(0xFF4A90E2)
-                        StagedItemType.TEXT -> TagAmber
+                    val iconTint = when {
+                        item.isError -> TagCrimson
+                        item.itemType == StagedItemType.IMAGE -> FolderTabCream
+                        item.itemType == StagedItemType.PDF -> TagCrimson
+                        item.itemType == StagedItemType.DOCX -> Color(0xFF4A90E2)
+                        item.itemType == StagedItemType.TEXT -> TagAmber
+                        else -> TextSecondary
                     }
                     Icon(
                         imageVector = icon,
@@ -806,53 +904,63 @@ private fun StagedItemRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.displayName,
-                    color = TextPrimary,
+                    color = if (item.isError) TagCrimson else TextPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val typeLabel = item.itemType.name
-                    val pillColor = when (item.itemType) {
-                        StagedItemType.IMAGE -> FolderTabCream.copy(alpha = 0.2f)
-                        StagedItemType.PDF -> TagCrimson.copy(alpha = 0.2f)
-                        StagedItemType.DOCX -> Color(0xFF4A90E2).copy(alpha = 0.2f)
-                        StagedItemType.TEXT -> TagAmber.copy(alpha = 0.2f)
-                    }
-                    val textColor = when (item.itemType) {
-                        StagedItemType.IMAGE -> FolderTabCream
-                        StagedItemType.PDF -> TagCrimson
-                        StagedItemType.DOCX -> Color(0xFF4A90E2)
-                        StagedItemType.TEXT -> TagAmber
-                    }
-                    Surface(
-                        color = pillColor,
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
+
+                if (ineligibilityReason != null) {
+                    Text(
+                        text = ineligibilityReason,
+                        color = if (item.isError) TagCrimson else TagAmber,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val typeLabel = item.itemType.name
+                        val pillColor = when (item.itemType) {
+                            StagedItemType.IMAGE -> FolderTabCream.copy(alpha = 0.2f)
+                            StagedItemType.PDF -> TagCrimson.copy(alpha = 0.2f)
+                            StagedItemType.DOCX -> Color(0xFF4A90E2).copy(alpha = 0.2f)
+                            StagedItemType.TEXT -> TagAmber.copy(alpha = 0.2f)
+                        }
+                        val textColor = when (item.itemType) {
+                            StagedItemType.IMAGE -> FolderTabCream
+                            StagedItemType.PDF -> TagCrimson
+                            StagedItemType.DOCX -> Color(0xFF4A90E2)
+                            StagedItemType.TEXT -> TagAmber
+                        }
+                        Surface(
+                            color = pillColor,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = typeLabel,
+                                color = textColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        val sizeFormatted = formatFileSize(item.fileSizeBytes)
                         Text(
-                            text = typeLabel,
-                            color = textColor,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            text = sizeFormatted,
+                            color = TextMuted,
+                            fontSize = 11.sp
                         )
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    val sizeFormatted = formatFileSize(item.fileSizeBytes)
-                    Text(
-                        text = sizeFormatted,
-                        color = TextMuted,
-                        fontSize = 11.sp
-                    )
                 }
             }
 
             IconButton(onClick = onRemove) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Remove",
+                    contentDescription = "Remove item",
                     tint = TextSecondary,
                     modifier = Modifier.size(18.dp)
                 )
