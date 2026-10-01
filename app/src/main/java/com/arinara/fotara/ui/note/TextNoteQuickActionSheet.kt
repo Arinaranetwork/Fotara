@@ -85,6 +85,19 @@ fun TextNoteQuickActionSheet(
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
+                modifier = Modifier.padding(bottom = 2.dp)
+            )
+
+            val addedDateStr = remember(note.addedAt) {
+                if (note.addedAt > 0) {
+                    val sdf = java.text.SimpleDateFormat("MMM d, yyyy · h:mm a", java.util.Locale.US)
+                    "Added " + sdf.format(java.util.Date(note.addedAt))
+                } else "Text Note"
+            }
+            Text(
+                text = addedDateStr,
+                color = TabCream.copy(alpha = 0.6f),
+                fontSize = 12.sp,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 

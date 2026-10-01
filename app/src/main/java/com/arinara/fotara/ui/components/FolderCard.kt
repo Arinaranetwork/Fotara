@@ -121,7 +121,12 @@ fun FolderCard(
             .aspectRatio(0.82f)
             .then(borderModifier)
             .clip(RoundedCornerShape(cornerRadiusDp))
-            .linkItCornerGlow(isLinked = folder.linkGroupId != null, corner = GlowCorner.TopLeft)
+            .linkItCornerGlow(
+                isLinked = folder.linkGroupId != null,
+                corner = GlowCorner.BottomLeft,
+                linkedDescription = "Linked folder ${folder.name}",
+                cornerRadiusDp = cornerRadiusDp
+            )
             .combinedClickable(
                 enabled = !isEditing,
                 onClick = onClick,

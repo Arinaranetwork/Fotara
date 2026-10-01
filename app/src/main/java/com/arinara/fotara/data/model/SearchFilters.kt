@@ -13,6 +13,7 @@ enum class SearchDateFilter(val label: String) {
     THIS_WEEK("This Week"),
     THIS_MONTH("This Month"),
     THIS_YEAR("This Year"),
+    SINGLE_DAY("Single Day"),
     CUSTOM_RANGE("Custom Range")
 }
 

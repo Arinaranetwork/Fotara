@@ -81,20 +81,25 @@ import androidx.compose.ui.zIndex
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.DateRange
+import com.arinara.fotara.data.model.DocumentNote
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
@@ -123,6 +128,8 @@ fun ActiveSearchBar(
     groupResults: List<PhotoGroup> = emptyList(),
     photoResults: List<Photo>,
     textNoteResults: List<TextNote> = emptyList(),
+    documentResults: List<DocumentNote> = emptyList(),
+    canvasNoteResults: List<CanvasNote> = emptyList(),
     recentSearches: List<String>,
     selectedDateFilter: SearchDateFilter,
     onSelectDateFilter: (SearchDateFilter) -> Unit,
@@ -143,6 +150,8 @@ fun ActiveSearchBar(
     onGroupClick: (PhotoGroup) -> Unit = {},
     onPhotoClick: (Photo) -> Unit,
     onTextNoteClick: (TextNote) -> Unit = {},
+    onDocumentClick: (DocumentNote) -> Unit = {},
+    onCanvasClick: (CanvasNote) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -296,7 +305,7 @@ fun ActiveSearchBar(
                             )
                         )
                     }
-                } else if (folderResults.isEmpty() && groupResults.isEmpty() && photoResults.isEmpty() && textNoteResults.isEmpty() && !isLoading) {
+                } else if (folderResults.isEmpty() && groupResults.isEmpty() && photoResults.isEmpty() && textNoteResults.isEmpty() && documentResults.isEmpty() && canvasNoteResults.isEmpty() && !isLoading) {
                     // Zero Results Empty State
                     Column(
                         modifier = Modifier
@@ -322,7 +331,11 @@ fun ActiveSearchBar(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Check spelling or search by general coursework topic or chapter.",
+                            text = if (selectedDateFilter != SearchDateFilter.ALL) {
+                                "No coursework or notes added during the selected date period."
+                            } else {
+                                "Check spelling or search by general coursework topic or chapter."
+                            },
                             style = TextStyle(
                                 color = TextSecondary,
                                 fontSize = 13.sp,
@@ -330,6 +343,25 @@ fun ActiveSearchBar(
                             ),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
+
+                        val hasActiveFilters = selectedDateFilter != SearchDateFilter.ALL || selectedColorFilter != null || selectedSmartTag != null
+                        if (hasActiveFilters) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            androidx.compose.material3.Button(
+                                onClick = onClearFilters,
+                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = FolderBodyBlue),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = null,
+                                    tint = FolderTabCream,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Reset Filters", color = FolderTabCream, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
                     }
                 } else {
                     // Populate Live Results
@@ -424,6 +456,50 @@ fun ActiveSearchBar(
                                     note = note,
                                     query = query,
                                     onClick = { onTextNoteClick(note) }
+                                )
+                            }
+                        }
+
+                        if (documentResults.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "DOCUMENTS (${documentResults.size})",
+                                    style = TextStyle(
+                                        color = TextSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    ),
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            }
+                            items(documentResults, key = { "doc_${it.id}" }) { doc ->
+                                SearchDocumentResultCard(
+                                    document = doc,
+                                    onClick = { onDocumentClick(doc) }
+                                )
+                            }
+                        }
+
+                        if (canvasNoteResults.isNotEmpty()) {
+                            item {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "CANVAS NOTES (${canvasNoteResults.size})",
+                                    style = TextStyle(
+                                        color = TextSecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    ),
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            }
+                            items(canvasNoteResults, key = { "canvas_${it.id}" }) { canvas ->
+                                SearchCanvasResultCard(
+                                    canvasNote = canvas,
+                                    onClick = { onCanvasClick(canvas) }
                                 )
                             }
                         }
@@ -566,6 +642,55 @@ fun SearchFilterChipRow(
     modifier: Modifier = Modifier
 ) {
     var showCustomRangeDialog by remember { mutableStateOf(false) }
+    var showSingleDayDialog by remember { mutableStateOf(false) }
+
+    if (showSingleDayDialog) {
+        val singleDatePickerState = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showSingleDayDialog = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selected = singleDatePickerState.selectedDateMillis
+                        if (selected != null) {
+                            onSelectCustomDateRange(DateRange(selected, selected + 86400000L - 1L))
+                            onSelectDateFilter(SearchDateFilter.SINGLE_DAY)
+                        }
+                        showSingleDayDialog = false
+                    }
+                ) {
+                    Text("Apply", color = FolderTabCream)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSingleDayDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                containerColor = MidnightSurface
+            )
+        ) {
+            DatePicker(
+                state = singleDatePickerState,
+                title = {
+                    Text(
+                        text = "Select Single Day",
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
+                        color = TextPrimary
+                    )
+                },
+                headline = {
+                    Text(
+                        text = "Filter notes added on specific day",
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, bottom = 12.dp),
+                        color = TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+            )
+        }
+    }
 
     if (showCustomRangeDialog) {
         val dateRangePickerState = rememberDateRangePickerState()
@@ -578,6 +703,7 @@ fun SearchFilterChipRow(
                         val end = dateRangePickerState.selectedEndDateMillis ?: start
                         if (start != null) {
                             onSelectCustomDateRange(DateRange(start, (end ?: start) + 86400000L - 1L))
+                            onSelectDateFilter(SearchDateFilter.CUSTOM_RANGE)
                         }
                         showCustomRangeDialog = false
                     }
@@ -685,6 +811,129 @@ fun SearchFilterChipRow(
             }
         }
 
+        // Removable Active Date Filter Chip
+        if (selectedDateFilter != SearchDateFilter.ALL) {
+            Surface(
+                color = FolderTabCream.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, FolderTabCream),
+                modifier = Modifier.clickable { onSelectDateFilter(SearchDateFilter.ALL) }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        tint = FolderTabCream,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    val dateLabel = when (selectedDateFilter) {
+                        SearchDateFilter.SINGLE_DAY -> {
+                            if (customDateRange != null) {
+                                val sdf = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US)
+                                sdf.format(java.util.Date(customDateRange.startMs))
+                            } else "Single Day"
+                        }
+                        SearchDateFilter.CUSTOM_RANGE -> {
+                            if (customDateRange != null) {
+                                val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.US)
+                                "${sdf.format(java.util.Date(customDateRange.startMs))} - ${sdf.format(java.util.Date(customDateRange.endMs))}"
+                            } else "Custom Range"
+                        }
+                        else -> selectedDateFilter.label
+                    }
+                    Text(
+                        text = dateLabel,
+                        style = TextStyle(
+                            color = FolderTabCream,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remove Date Filter",
+                        tint = FolderTabCream,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+        }
+
+        // Removable Active Color Filter Chip
+        if (selectedColorFilter != null) {
+            val tag = TagColor.fromHex(selectedColorFilter)
+            Surface(
+                color = tag.composeColor.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, tag.composeColor),
+                modifier = Modifier.clickable { onSelectColorFilter(null) }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(tag.composeColor)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = tag.displayName,
+                        style = TextStyle(
+                            color = tag.composeColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remove Color Filter",
+                        tint = tag.composeColor,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+        }
+
+        // Removable Active Smart Tag Chip
+        if (selectedSmartTag != null) {
+            Surface(
+                color = TagAmber.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, TagAmber),
+                modifier = Modifier.clickable { onSelectSmartTag(null) }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = selectedSmartTag,
+                        style = TextStyle(
+                            color = TagAmber,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remove Smart Tag Filter",
+                        tint = TagAmber,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+        }
+
         // Date Filter Chips
         SearchDateFilter.entries.forEach { filter ->
             val isSelected = selectedDateFilter == filter
@@ -696,10 +945,10 @@ fun SearchFilterChipRow(
                     if (isSelected) FolderTabCream else MidnightCardOutline
                 ),
                 modifier = Modifier.clickable {
-                    if (filter == SearchDateFilter.CUSTOM_RANGE) {
-                        showCustomRangeDialog = true
-                    } else {
-                        onSelectDateFilter(filter)
+                    when (filter) {
+                        SearchDateFilter.CUSTOM_RANGE -> showCustomRangeDialog = true
+                        SearchDateFilter.SINGLE_DAY -> showSingleDayDialog = true
+                        else -> onSelectDateFilter(filter)
                     }
                 }
             ) {
@@ -910,13 +1159,23 @@ fun SearchFolderResultCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = "${folder.photoCount} note photos",
-                    style = TextStyle(
-                        color = TextSecondary,
-                        fontSize = 12.sp
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${folder.photoCount} note photos",
+                        style = TextStyle(
+                            color = TextSecondary,
+                            fontSize = 12.sp
+                        )
                     )
-                )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "· ${formatAddedDate(folder.createdAt)}",
+                        style = TextStyle(
+                            color = TextSecondary.copy(alpha = 0.75f),
+                            fontSize = 11.sp
+                        )
+                    )
+                }
             }
             // Tag color indicator
             val tagColor = try {
@@ -979,6 +1238,14 @@ fun SearchPhotoResultCard(
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = formatAddedDate(photo.addedAt),
+                    style = TextStyle(
+                        color = FolderTabCream.copy(alpha = 0.75f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 )
                 if (!photo.ocrText.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -1044,7 +1311,7 @@ fun SearchGroupResultCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Photo Group",
+                    text = "Photo Group · ${formatAddedDate(group.addedAt)}",
                     style = TextStyle(
                         color = TextSecondary,
                         fontSize = 12.sp
@@ -1116,6 +1383,14 @@ fun SearchTextNoteResultCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Text(
+                    text = formatAddedDate(note.addedAt),
+                    style = TextStyle(
+                        color = FolderTabCream.copy(alpha = 0.75f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                )
                 if (note.bodyMarkdown.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -1149,4 +1424,138 @@ fun SearchTextNoteResultCard(
             }
         }
     }
+}
+
+@Composable
+fun SearchDocumentResultCard(
+    document: DocumentNote,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MidnightCardOutline),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(FolderBodyBlue.copy(alpha = 0.35f))
+                    .border(0.8.dp, MidnightCardOutline, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = null,
+                    tint = FolderTabCream,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = document.name,
+                    style = TextStyle(
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${document.docType.name} Document · ${formatAddedDate(document.addedAt)}",
+                    style = TextStyle(
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                )
+                if (!document.extractedText.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "“${document.extractedText.take(90)}...”",
+                        style = TextStyle(
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 16.sp
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SearchCanvasResultCard(
+    canvasNote: CanvasNote,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MidnightCardOutline),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(TagAmber.copy(alpha = 0.25f))
+                    .border(0.8.dp, MidnightCardOutline, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Brush,
+                    contentDescription = null,
+                    tint = TagAmber,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = canvasNote.title,
+                    style = TextStyle(
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Canvas Note · ${formatAddedDate(canvasNote.addedAt)}",
+                    style = TextStyle(
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                )
+            }
+        }
+    }
+}
+
+private fun formatAddedDate(epochMs: Long): String {
+    if (epochMs <= 0) return "Recently"
+    val sdf = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US)
+    return "Added " + sdf.format(java.util.Date(epochMs))
 }

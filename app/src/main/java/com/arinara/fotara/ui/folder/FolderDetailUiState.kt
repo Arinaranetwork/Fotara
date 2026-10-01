@@ -72,7 +72,7 @@ sealed interface FolderGridItem {
     ) : FolderGridItem {
         override val key: String get() = "group_${group.id}"
         override val itemId: Long get() = -group.id
-        override val sortCreatedAt: Long get() = group.createdAt
+        override val sortCreatedAt: Long get() = group.addedAt
         override val sortDeadline: Long? get() = group.linkedDeadline ?: memberPhotos.mapNotNull { it.linkedDeadline }.minOrNull()
         override val sortColor: String? get() = group.tagColor
     }

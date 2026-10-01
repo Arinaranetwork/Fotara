@@ -105,7 +105,9 @@ fun MainNavigation(
                         photoRepository = appContainer.photoRepository,
                         deadlineNotificationManager = appContainer.deadlineNotificationManager,
                         settingsRepository = appContainer.settingsRepository,
-                        textNoteRepository = appContainer.textNoteRepository
+                        textNoteRepository = appContainer.textNoteRepository,
+                        documentRepository = appContainer.documentRepository,
+                        canvasNoteRepository = appContainer.canvasNoteRepository
                     )
                 )
                 HomeScreen(

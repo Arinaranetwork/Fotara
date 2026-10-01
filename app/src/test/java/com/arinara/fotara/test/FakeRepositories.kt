@@ -30,6 +30,10 @@ import com.arinara.fotara.data.model.DocumentNote
 import com.arinara.fotara.data.model.DocumentPage
 import com.arinara.fotara.data.model.DocumentType
 import com.arinara.fotara.data.repository.DocumentRepository
+import com.arinara.fotara.data.model.TextNote
+import com.arinara.fotara.data.repository.TextNoteRepository
+import com.arinara.fotara.data.model.CanvasNote
+import com.arinara.fotara.data.repository.CanvasNoteRepository
 import android.net.Uri
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -975,9 +979,253 @@ class FakeDocumentRepository(
     override fun getTrashedDocumentNotes(): Flow<List<DocumentNote>> =
         notesFlow.map { list -> list.filter { it.isTrashed } }
 
+    override fun getAllActiveDocumentNotes(): Flow<List<DocumentNote>> =
+        notesFlow.map { list -> list.filter { !it.isTrashed } }
+
+    override suspend fun searchDocuments(query: String): List<DocumentNote> {
+        val q = query.trim().lowercase()
+        return notesFlow.value.filter { note ->
+            !note.isTrashed && (
+                note.name.lowercase().contains(q) ||
+                (note.extractedText?.lowercase()?.contains(q) == true)
+            )
+        }
+    }
+
     override suspend fun refresh() {
         // no-op for in-memory fake
     }
+}
+
+class FakeTextNoteRepository(
+    initialNotes: List<TextNote> = emptyList()
+) : TextNoteRepository {
+    private val notesFlow = MutableStateFlow(initialNotes)
+    private val nextId = AtomicLong(100L)
+
+    override fun getAllActiveTextNotes(): Flow<List<TextNote>> =
+        notesFlow.map { list -> list.filter { !it.isTrashed } }
+
+    override fun getTextNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<TextNote>> =
+        notesFlow.map { list ->
+            list.filter { !it.isTrashed && it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) }
+        }
+
+    override fun getTextNoteById(id: Long): Flow<TextNote?> =
+        notesFlow.map { list -> list.firstOrNull { it.id == id } }
+
+    override suspend fun getTextNoteByIdOnce(id: Long): TextNote? =
+        notesFlow.value.firstOrNull { it.id == id }
+
+    override suspend fun createTextNote(
+        folderId: Long,
+        subfolderId: Long?,
+        title: String,
+        bodyMarkdown: String,
+        tagColor: String?,
+        deadlineMs: Long?
+    ): Long {
+        val id = nextId.incrementAndGet()
+        val now = System.currentTimeMillis()
+        val note = TextNote(
+            id = id,
+            folderId = folderId,
+            subfolderId = subfolderId,
+            title = title,
+            bodyMarkdown = bodyMarkdown,
+            tagColor = tagColor,
+            linkedDeadline = deadlineMs,
+            createdAt = now,
+            addedAt = now,
+            updatedAt = now
+        )
+        notesFlow.value = notesFlow.value + note
+        return id
+    }
+
+    override suspend fun updateTextNote(id: Long, title: String, bodyMarkdown: String) {
+        val now = System.currentTimeMillis()
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(title = title, bodyMarkdown = bodyMarkdown, updatedAt = now) else it
+        }
+    }
+
+    override suspend fun renameTextNote(id: Long, newTitle: String) {
+        val now = System.currentTimeMillis()
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(title = newTitle, updatedAt = now) else it
+        }
+    }
+
+    override suspend fun updateTagColor(id: Long, colorHex: String?) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(tagColor = colorHex) else it
+        }
+    }
+
+    override suspend fun updateDeadline(id: Long, deadlineMs: Long?) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(linkedDeadline = deadlineMs) else it
+        }
+    }
+
+    override suspend fun moveTextNote(id: Long, targetFolderId: Long, targetSubfolderId: Long?) {
+        moveTextNotes(listOf(id), targetFolderId, targetSubfolderId)
+    }
+
+    override suspend fun moveTextNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?) {
+        notesFlow.value = notesFlow.value.map {
+            if (ids.contains(it.id)) it.copy(folderId = targetFolderId, subfolderId = targetSubfolderId) else it
+        }
+    }
+
+    override suspend fun deleteTextNote(id: Long) {
+        deleteTextNotes(listOf(id))
+    }
+
+    override suspend fun deleteTextNotes(ids: List<Long>) {
+        val now = System.currentTimeMillis()
+        notesFlow.value = notesFlow.value.map {
+            if (ids.contains(it.id)) it.copy(isTrashed = true, deletedAt = now) else it
+        }
+    }
+
+    override suspend fun restoreTextNote(id: Long) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(isTrashed = false, deletedAt = null) else it
+        }
+    }
+
+    override suspend fun purgeTextNotePermanently(id: Long) {
+        notesFlow.value = notesFlow.value.filter { it.id != id }
+    }
+
+    override fun getTrashedTextNotes(): Flow<List<TextNote>> =
+        notesFlow.map { list -> list.filter { it.isTrashed } }
+
+    override fun searchNotes(query: String): Flow<List<TextNote>> {
+        val q = query.trim().lowercase()
+        return notesFlow.map { list ->
+            list.filter { !it.isTrashed && (it.title.lowercase().contains(q) || it.bodyMarkdown.lowercase().contains(q)) }
+        }
+    }
+
+    override suspend fun refresh() {}
+}
+
+class FakeCanvasNoteRepository(
+    initialNotes: List<CanvasNote> = emptyList()
+) : CanvasNoteRepository {
+    private val notesFlow = MutableStateFlow(initialNotes)
+    private val nextId = AtomicLong(100L)
+
+    override fun getAllActiveCanvasNotes(): Flow<List<CanvasNote>> =
+        notesFlow.map { list -> list.filter { !it.isTrashed } }
+
+    override fun searchCanvasNotes(query: String): Flow<List<CanvasNote>> {
+        val q = query.trim().lowercase()
+        return notesFlow.map { list ->
+            list.filter { !it.isTrashed && it.title.lowercase().contains(q) }
+        }
+    }
+
+    override fun getCanvasNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<CanvasNote>> =
+        notesFlow.map { list ->
+            list.filter { !it.isTrashed && it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) }
+        }
+
+    override fun getCanvasNoteById(id: Long): Flow<CanvasNote?> =
+        notesFlow.map { list -> list.firstOrNull { it.id == id } }
+
+    override suspend fun getCanvasNoteByIdOnce(id: Long): CanvasNote? =
+        notesFlow.value.firstOrNull { it.id == id }
+
+    override suspend fun createCanvasNote(
+        folderId: Long,
+        subfolderId: Long?,
+        title: String,
+        dataBlob: ByteArray?,
+        tagColor: String?,
+        scheduledAt: Long?,
+        alertType: String?
+    ): Long {
+        val id = nextId.incrementAndGet()
+        val now = System.currentTimeMillis()
+        val note = CanvasNote(
+            id = id,
+            folderId = folderId,
+            subfolderId = subfolderId,
+            title = title,
+            dataBlob = dataBlob,
+            tagColor = tagColor,
+            scheduledAt = scheduledAt,
+            alertType = alertType,
+            createdAt = now,
+            addedAt = now,
+            updatedAt = now
+        )
+        notesFlow.value = notesFlow.value + note
+        return id
+    }
+
+    override suspend fun updateCanvasNoteData(id: Long, dataBlob: ByteArray, thumbnailPath: String?) {
+        val now = System.currentTimeMillis()
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(dataBlob = dataBlob, thumbnailPath = thumbnailPath ?: it.thumbnailPath, updatedAt = now) else it
+        }
+    }
+
+    override suspend fun renameCanvasNote(id: Long, newTitle: String) {
+        val now = System.currentTimeMillis()
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(title = newTitle, updatedAt = now) else it
+        }
+    }
+
+    override suspend fun updateTagColor(id: Long, colorHex: String?) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(tagColor = colorHex) else it
+        }
+    }
+
+    override suspend fun updateDeadline(id: Long, deadlineMs: Long?) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(scheduledAt = deadlineMs) else it
+        }
+    }
+
+    override suspend fun deleteCanvasNote(id: Long) {
+        deleteCanvasNotes(listOf(id))
+    }
+
+    override suspend fun deleteCanvasNotes(ids: List<Long>) {
+        val now = System.currentTimeMillis()
+        notesFlow.value = notesFlow.value.map {
+            if (ids.contains(it.id)) it.copy(isTrashed = true, deletedAt = now) else it
+        }
+    }
+
+    override suspend fun restoreCanvasNote(id: Long) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(isTrashed = false, deletedAt = null) else it
+        }
+    }
+
+    override suspend fun purgeCanvasNotePermanently(id: Long) {
+        notesFlow.value = notesFlow.value.filter { it.id != id }
+    }
+
+    override suspend fun moveCanvasNote(id: Long, targetFolderId: Long, targetSubfolderId: Long?) {
+        moveCanvasNotes(listOf(id), targetFolderId, targetSubfolderId)
+    }
+
+    override suspend fun moveCanvasNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?) {
+        notesFlow.value = notesFlow.value.map {
+            if (ids.contains(it.id)) it.copy(folderId = targetFolderId, subfolderId = targetSubfolderId) else it
+        }
+    }
+
+    override suspend fun refresh() {}
 }
 
 

@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 interface CanvasNoteRepository {
+    fun getAllActiveCanvasNotes(): Flow<List<CanvasNote>>
+    fun searchCanvasNotes(query: String): Flow<List<CanvasNote>>
     fun getCanvasNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<CanvasNote>>
     fun getCanvasNoteById(id: Long): Flow<CanvasNote?>
     suspend fun getCanvasNoteByIdOnce(id: Long): CanvasNote?
@@ -109,6 +111,19 @@ class SqliteCanvasNoteRepository(
             android.util.Log.e("SqliteCanvasRepo", "Failed to refresh canvas notes: ${e.message}", e)
         }
     }
+
+    override fun getAllActiveCanvasNotes(): Flow<List<CanvasNote>> = canvasNotesFlow.asStateFlow()
+
+    override fun searchCanvasNotes(query: String): Flow<List<CanvasNote>> =
+        canvasNotesFlow.map { notes ->
+            val trimmed = query.trim().lowercase()
+            if (trimmed.isBlank()) emptyList()
+            else {
+                notes.filter { note ->
+                    note.title.lowercase().contains(trimmed)
+                }
+            }
+        }
 
     override fun getCanvasNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<CanvasNote>> {
         return canvasNotesFlow.map { list ->

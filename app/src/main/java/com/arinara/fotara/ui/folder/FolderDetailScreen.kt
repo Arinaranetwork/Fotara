@@ -3302,7 +3302,12 @@ private fun DetailDocumentCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .linkItCornerGlow(isLinked = documentItem.isLinked, corner = GlowCorner.TopLeft)
+            .linkItCornerGlow(
+                isLinked = documentItem.isLinked,
+                corner = GlowCorner.BottomLeft,
+                linkedDescription = "Linked document ${documentItem.documentNote.name}",
+                cornerRadiusDp = 16f
+            )
             .combinedClickable(
                 onClick = onCardClick,
                 onLongClick = onCardLongClick
@@ -3507,7 +3512,12 @@ internal fun DetailPhotoCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .linkItCornerGlow(isLinked = isLinked, corner = GlowCorner.TopLeft)
+            .linkItCornerGlow(
+                isLinked = isLinked,
+                corner = GlowCorner.BottomLeft,
+                linkedDescription = "Linked note",
+                cornerRadiusDp = 16f
+            )
             .combinedClickable(
                 onClick = onCardClick,
                 onLongClick = onCardLongClick
@@ -3653,7 +3663,12 @@ private fun DetailGroupCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .linkItCornerGlow(isLinked = groupItem.isLinked, corner = GlowCorner.TopLeft)
+            .linkItCornerGlow(
+                isLinked = groupItem.isLinked,
+                corner = GlowCorner.BottomLeft,
+                linkedDescription = "Linked group ${groupItem.group.name}",
+                cornerRadiusDp = 16f
+            )
             .combinedClickable(
                 onClick = onCardClick,
                 onLongClick = onCardLongClick

@@ -43,6 +43,8 @@ import java.io.InputStream
 import java.util.zip.ZipInputStream
 
 interface DocumentRepository {
+    fun getAllActiveDocumentNotes(): Flow<List<DocumentNote>>
+    fun searchDocuments(query: String): Flow<List<DocumentNote>>
     fun getDocumentNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<DocumentNote>>
     fun getDocumentPages(documentNoteId: Long): Flow<List<DocumentPage>>
     suspend fun getDocumentNoteById(id: Long): DocumentNote?
@@ -178,6 +180,20 @@ class SqliteDocumentRepository(
             android.util.Log.e("SqliteDocRepo", "Error refreshing document notes: ${e.message}")
         }
     }
+
+    override fun getAllActiveDocumentNotes(): Flow<List<DocumentNote>> = documentNotesFlow.asStateFlow()
+
+    override fun searchDocuments(query: String): Flow<List<DocumentNote>> =
+        documentNotesFlow.map { docs ->
+            val trimmed = query.trim().lowercase()
+            if (trimmed.isBlank()) emptyList()
+            else {
+                docs.filter { doc ->
+                    doc.name.lowercase().contains(trimmed) ||
+                    (doc.extractedText?.lowercase()?.contains(trimmed) == true)
+                }
+            }
+        }
 
     override fun getDocumentNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<DocumentNote>> =
         documentNotesFlow.map { list ->

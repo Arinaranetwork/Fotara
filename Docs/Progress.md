@@ -167,12 +167,14 @@ Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [In Progress]
 - [x] C2-B Split to Images: Fixed dark/black compression artifacts with pre-filled opaque white canvas, unified density-scaled renderer path (1200-2560px), implemented 5+ page Photo Group packaging rule (with Page 1 cover and preserved order) vs <= 4 standalone notes, added determinate progress dialog with cancellation and rollback cleanup, and unit tests - Phase 8 (Chunk C2)
 - [x] C2-C Header Text: Removed all occurrences of 'Sharp PDF Note', simplified TopAppBar subtitle to clean page count only ('N pages' / '1 page') across the codebase - Phase 8 (Chunk C2)
 - [x] C2-D Virtualized Per-Page Zoom & Freeform Pan: Implemented decoupled testable `PdfPageZoomState` state holder, free two-axis pan with boundary clamping, continuous pinch scale (1.0x-4.0x), double-tap zoom/reset, on-demand high-density 2.0x rendering for visible zoomed regions, memory release on return to 1.0x, smooth pinch activation in shared photo viewport, and unit tests - Phase 8 (Chunk C2)
+- [x] C3-A Date Added Metadata: Added immutable `added_at` epoch ms timestamp across all note entities (`Photo`, `PhotoGroup`, `DocumentNote`, `TextNote`, `CanvasNote`), bumped database version to 12 with 5 B-tree indexes (`idx_*_added_at`), backfilled legacy `added_at <= 0` using `created_at` (never zero/null), implemented shared `getNotesAddedBetween(startTime, endTime)` query for widget/date-only search, and verified timestamp semantics (split-to-images timestamp, copy-to new timestamp, preserve on move/rename/trash/restore) - Phase 8 (Chunk C3)
+- [x] C3-B Date Filters in Search: Pure class `DateRangeCalculator` computing exact midnight-to-midnight ranges across timezones, daylight saving transitions, leap years, and Sunday vs Monday week starts; extended `SearchDateFilter` with `SINGLE_DAY`; integrated date filtering across all 5 note types in `HomeViewModel`; optimized date-only searches to skip full-text OCR scan; updated `ActiveSearchBar` with Single Day date picker, removable active filter chips, "Reset Filters" action in empty state, and "Added MMM d, yyyy" badges on all search result cards; updated detail inspectors and quick action sheets with formatted added timestamp - Phase 8 (Chunk C3)
+- [x] C3-C LinkIt Corner Glow Redesign: Replaced prominent amber badge/icon/text with subtle, elegant corner glow (`Modifier.linkItCornerGlow`) using `drawWithCache` (soft radial gradient corner bleed + 1.8dp corner arc stroke + fading linear gradients); positioned at `GlowCorner.BottomLeft` on royal blue body avoiding folder tab and color dot / schedule badges; full API 24 to 36 hardware acceleration compatibility without RenderEffect/blur runtime overhead; updated across folder cards, detail grid notes, groups, documents, text notes, and canvas cards - Phase 8 (Chunk C3)
 
 ## In Progress
-None (Chunk C2 complete, awaiting Chunk C3).
+None (Chunk C3 complete, awaiting Chunk C4).
 
 ## Pending
-- [ ] Chunk C3: date added metadata, date filters, LinkIt corner glow
 - [ ] Chunk C4: text note editor (toolbar and live rendering)
 - [ ] Chunk C5: schedules on every note type
 - [ ] Chunk C6: Today widget, notification settings, settings audit

@@ -80,7 +80,12 @@ fun DetailCanvasCard(
             .fillMaxWidth()
             .aspectRatio(0.85f)
             .clip(RoundedCornerShape(14.dp))
-            .linkItCornerGlow(isLinked = canvasItem.isLinked, corner = GlowCorner.TopLeft)
+            .linkItCornerGlow(
+                isLinked = canvasItem.isLinked,
+                corner = GlowCorner.BottomLeft,
+                linkedDescription = "Linked canvas ${note.title}",
+                cornerRadiusDp = 14f
+            )
             .combinedClickable(
                 onClick = onCardClick,
                 onLongClick = onCardLongClick

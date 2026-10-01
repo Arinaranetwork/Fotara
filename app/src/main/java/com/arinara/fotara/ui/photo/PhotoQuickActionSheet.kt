@@ -142,8 +142,14 @@ fun PhotoQuickActionSheet(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    val addedDateStr = remember(photo.addedAt) {
+                        if (photo.addedAt > 0) {
+                            val sdf = java.text.SimpleDateFormat("MMM d, yyyy · h:mm a", java.util.Locale.US)
+                            "Added " + sdf.format(java.util.Date(photo.addedAt))
+                        } else "Quick Actions"
+                    }
                     Text(
-                        text = "Quick Actions",
+                        text = addedDateStr,
                         color = TextSecondary,
                         fontSize = 12.sp
                     )

@@ -43,6 +43,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.RotateRight
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Crop
@@ -599,6 +600,31 @@ fun PhotoViewerDialog(
                         Spacer(modifier = Modifier.height(10.dp))
                         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MidnightCardOutline))
                         Spacer(modifier = Modifier.height(10.dp))
+
+                        // Note metadata: Date added
+                        if (currentPhoto.addedAt > 0) {
+                            val sdf = java.text.SimpleDateFormat("MMMM d, yyyy · h:mm a", java.util.Locale.US)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    tint = FolderTabCream.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Added " + sdf.format(java.util.Date(currentPhoto.addedAt)),
+                                    color = TextSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
 
                         // Header of OCR drawer
                         Row(

@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.arinara.fotara.data.model.DateRange
+import com.arinara.fotara.data.model.DocumentNote
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.LinkGroup
 import com.arinara.fotara.data.model.Photo
@@ -17,10 +18,14 @@ import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.SearchDateFilter
 import com.arinara.fotara.data.model.SearchSortOrder
 import com.arinara.fotara.data.model.TextNote
+import com.arinara.fotara.data.model.CanvasNote
+import com.arinara.fotara.data.repository.DocumentRepository
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.data.repository.TextNoteRepository
+import com.arinara.fotara.data.repository.CanvasNoteRepository
+import com.arinara.fotara.util.DateRangeCalculator
 import com.arinara.fotara.util.DeadlineNotificationManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,7 +41,9 @@ class HomeViewModel(
     private val photoRepository: PhotoRepository,
     private val deadlineNotificationManager: DeadlineNotificationManager? = null,
     private val settingsRepository: SettingsRepository? = null,
-    private val textNoteRepository: TextNoteRepository? = null
+    private val textNoteRepository: TextNoteRepository? = null,
+    private val documentRepository: DocumentRepository? = null,
+    private val canvasNoteRepository: CanvasNoteRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -88,10 +95,13 @@ class HomeViewModel(
                 groupSearchResults = emptyList(),
                 searchResults = emptyList(),
                 textNoteSearchResults = emptyList(),
+                documentSearchResults = emptyList(),
+                canvasNoteSearchResults = emptyList(),
                 isSearchLoading = false,
                 searchDateFilter = SearchDateFilter.ALL,
                 searchColorFilter = null,
-                selectedSmartTag = null
+                selectedSmartTag = null,
+                customDateRange = null
             )
         }
     }
@@ -191,68 +201,12 @@ class HomeViewModel(
         val currentFolders = _uiState.value.folders
         val hasFilters = dateFilter != SearchDateFilter.ALL || colorFilter != null || smartTag != null
 
-        val (startTime, endTime) = when (dateFilter) {
-            SearchDateFilter.ALL -> Pair(0L, Long.MAX_VALUE)
-            SearchDateFilter.TODAY -> {
-                val cal = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                Pair(cal.timeInMillis, Long.MAX_VALUE)
-            }
-            SearchDateFilter.YESTERDAY -> {
-                val calStart = Calendar.getInstance().apply {
-                    add(Calendar.DAY_OF_YEAR, -1)
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                val calEnd = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                Pair(calStart.timeInMillis, calEnd.timeInMillis - 1)
-            }
-            SearchDateFilter.THIS_WEEK -> {
-                val cal = Calendar.getInstance().apply {
-                    set(Calendar.DAY_OF_WEEK, firstDayOfWeek)
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                Pair(cal.timeInMillis, Long.MAX_VALUE)
-            }
-            SearchDateFilter.THIS_MONTH -> {
-                val cal = Calendar.getInstance().apply {
-                    set(Calendar.DAY_OF_MONTH, 1)
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                Pair(cal.timeInMillis, Long.MAX_VALUE)
-            }
-            SearchDateFilter.THIS_YEAR -> {
-                val cal = Calendar.getInstance().apply {
-                    set(Calendar.DAY_OF_YEAR, 1)
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                Pair(cal.timeInMillis, Long.MAX_VALUE)
-            }
-            SearchDateFilter.CUSTOM_RANGE -> {
-                val r = customRange ?: _uiState.value.customDateRange
-                if (r != null) Pair(r.startMs, r.endMs) else Pair(0L, Long.MAX_VALUE)
-            }
-        }
+        val computedRange = DateRangeCalculator.calculateRange(
+            filter = dateFilter,
+            customRange = customRange ?: _uiState.value.customDateRange
+        )
+        val startTime = computedRange.startMs
+        val endTime = computedRange.endMs
 
         fun <T> sortResults(items: List<T>, timeSelector: (T) -> Long): List<T> {
             return if (sortOrder == SearchSortOrder.OLDEST_ADDED) {
@@ -328,6 +282,33 @@ class HomeViewModel(
                     }
                 }
             }
+            documentRepository?.let { repo ->
+                viewModelScope.launch {
+                    val docs = repo.searchDocuments(trimmed)
+                    val filtered = if (smartTag != null) emptyList() else docs.filter { doc ->
+                        val matchesDate = doc.addedAt in startTime..endTime
+                        val matchesColor = if (colorFilter == null) true else doc.tagColor.equals(colorFilter, ignoreCase = true)
+                        matchesDate && matchesColor
+                    }
+                    _uiState.update {
+                        it.copy(documentSearchResults = sortResults(filtered) { d -> d.addedAt })
+                    }
+                }
+            }
+            canvasNoteRepository?.let { repo ->
+                viewModelScope.launch {
+                    repo.searchCanvasNotes(trimmed).collect { canvases ->
+                        val filtered = if (smartTag != null) emptyList() else canvases.filter { c ->
+                            val matchesDate = c.addedAt in startTime..endTime
+                            val matchesColor = if (colorFilter == null) true else c.tagColor.equals(colorFilter, ignoreCase = true)
+                            matchesDate && matchesColor
+                        }
+                        _uiState.update {
+                            it.copy(canvasNoteSearchResults = sortResults(filtered) { c -> c.addedAt })
+                        }
+                    }
+                }
+            }
         } else if (hasFilters) {
             viewModelScope.launch {
                 val basePhotos = if (smartTag != null) {
@@ -343,7 +324,6 @@ class HomeViewModel(
                 _uiState.update {
                     it.copy(
                         searchResults = sortResults(filtered) { p -> p.addedAt },
-                        textNoteSearchResults = emptyList(),
                         isSearchLoading = false
                     )
                 }
@@ -364,12 +344,68 @@ class HomeViewModel(
                     }
                 }
             }
+            textNoteRepository?.let { repo ->
+                viewModelScope.launch {
+                    if (smartTag != null) {
+                        _uiState.update { it.copy(textNoteSearchResults = emptyList()) }
+                    } else {
+                        repo.getAllActiveTextNotes().collect { notes ->
+                            val filtered = notes.filter { note ->
+                                val matchesDate = note.addedAt in startTime..endTime
+                                val matchesColor = if (colorFilter == null) true else note.tagColor.equals(colorFilter, ignoreCase = true)
+                                matchesDate && matchesColor
+                            }
+                            _uiState.update {
+                                it.copy(textNoteSearchResults = sortResults(filtered) { n -> n.addedAt })
+                            }
+                        }
+                    }
+                }
+            }
+            documentRepository?.let { repo ->
+                viewModelScope.launch {
+                    if (smartTag != null) {
+                        _uiState.update { it.copy(documentSearchResults = emptyList()) }
+                    } else {
+                        repo.getAllActiveDocumentNotes().collect { docs ->
+                            val filtered = docs.filter { doc ->
+                                val matchesDate = doc.addedAt in startTime..endTime
+                                val matchesColor = if (colorFilter == null) true else doc.tagColor.equals(colorFilter, ignoreCase = true)
+                                matchesDate && matchesColor
+                            }
+                            _uiState.update {
+                                it.copy(documentSearchResults = sortResults(filtered) { d -> d.addedAt })
+                            }
+                        }
+                    }
+                }
+            }
+            canvasNoteRepository?.let { repo ->
+                viewModelScope.launch {
+                    if (smartTag != null) {
+                        _uiState.update { it.copy(canvasNoteSearchResults = emptyList()) }
+                    } else {
+                        repo.getAllActiveCanvasNotes().collect { canvases ->
+                            val filtered = canvases.filter { c ->
+                                val matchesDate = c.addedAt in startTime..endTime
+                                val matchesColor = if (colorFilter == null) true else c.tagColor.equals(colorFilter, ignoreCase = true)
+                                matchesDate && matchesColor
+                            }
+                            _uiState.update {
+                                it.copy(canvasNoteSearchResults = sortResults(filtered) { c -> c.addedAt })
+                            }
+                        }
+                    }
+                }
+            }
         } else {
             _uiState.update {
                 it.copy(
                     searchResults = emptyList(),
                     groupSearchResults = emptyList(),
                     textNoteSearchResults = emptyList(),
+                    documentSearchResults = emptyList(),
+                    canvasNoteSearchResults = emptyList(),
                     isSearchLoading = false
                 )
             }
@@ -717,11 +753,21 @@ class HomeViewModel(
             photoRepository: PhotoRepository,
             deadlineNotificationManager: DeadlineNotificationManager? = null,
             settingsRepository: SettingsRepository? = null,
-            textNoteRepository: TextNoteRepository? = null
+            textNoteRepository: TextNoteRepository? = null,
+            documentRepository: DocumentRepository? = null,
+            canvasNoteRepository: CanvasNoteRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return HomeViewModel(folderRepository, photoRepository, deadlineNotificationManager, settingsRepository, textNoteRepository) as T
+                return HomeViewModel(
+                    folderRepository,
+                    photoRepository,
+                    deadlineNotificationManager,
+                    settingsRepository,
+                    textNoteRepository,
+                    documentRepository,
+                    canvasNoteRepository
+                ) as T
             }
         }
     }

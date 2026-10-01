@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 interface TextNoteRepository {
+    fun getAllActiveTextNotes(): Flow<List<TextNote>>
     fun getTextNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<TextNote>>
     fun getTextNoteById(id: Long): Flow<TextNote?>
     suspend fun getTextNoteByIdOnce(id: Long): TextNote?
@@ -112,6 +113,8 @@ class SqliteTextNoteRepository(
             Log.e("SqliteTextNoteRepo", "Error refreshing text notes: ${e.message}", e)
         }
     }
+
+    override fun getAllActiveTextNotes(): Flow<List<TextNote>> = textNotesFlow.asStateFlow()
 
     override fun getTextNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<TextNote>> =
         textNotesFlow.map { list ->

@@ -819,6 +819,8 @@ fun HomeScreen(
                     groupResults = uiState.groupSearchResults,
                     photoResults = uiState.searchResults,
                     textNoteResults = uiState.textNoteSearchResults,
+                    documentResults = uiState.documentSearchResults,
+                    canvasNoteResults = uiState.canvasNoteSearchResults,
                     recentSearches = uiState.recentSearches,
                     selectedDateFilter = uiState.searchDateFilter,
                     onSelectDateFilter = { viewModel.setDateFilter(it) },
@@ -884,6 +886,30 @@ fun HomeScreen(
                         } else {
                             viewModel.onTextNoteSearchResultClicked(note) { folderId, noteId ->
                                 onNavigateToTextNote(folderId, noteId)
+                            }
+                        }
+                    },
+                    onDocumentClick = { doc ->
+                        val targetFolder = uiState.folders.firstOrNull { it.id == doc.folderId }
+                        if (targetFolder != null) {
+                            if (targetFolder.isLocked) {
+                                folderToUnlock = targetFolder
+                            } else {
+                                viewModel.submitSearch(uiState.searchQuery)
+                                viewModel.deactivateSearch()
+                                onFolderClick(targetFolder)
+                            }
+                        }
+                    },
+                    onCanvasClick = { canvas ->
+                        val targetFolder = uiState.folders.firstOrNull { it.id == canvas.folderId }
+                        if (targetFolder != null) {
+                            if (targetFolder.isLocked) {
+                                folderToUnlock = targetFolder
+                            } else {
+                                viewModel.submitSearch(uiState.searchQuery)
+                                viewModel.deactivateSearch()
+                                onFolderClick(targetFolder)
                             }
                         }
                     }

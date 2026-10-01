@@ -77,7 +77,12 @@ fun DetailTextNoteCard(
             .fillMaxWidth()
             .aspectRatio(0.85f)
             .clip(RoundedCornerShape(14.dp))
-            .linkItCornerGlow(isLinked = noteItem.isLinked, corner = GlowCorner.TopLeft)
+            .linkItCornerGlow(
+                isLinked = noteItem.isLinked,
+                corner = GlowCorner.BottomLeft,
+                linkedDescription = "Linked note ${note.title}",
+                cornerRadiusDp = 14f
+            )
             .combinedClickable(
                 onClick = onCardClick,
                 onLongClick = onCardLongClick
@@ -174,7 +179,7 @@ fun DetailTextNoteCard(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val formattedDate = SimpleDateFormat("MMM d", Locale.US).format(Date(note.updatedAt))
+                    val formattedDate = SimpleDateFormat("MMM d", Locale.US).format(Date(note.addedAt))
                     Text(
                         text = formattedDate,
                         color = TabCream.copy(alpha = 0.5f),

@@ -205,6 +205,13 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
 
         // SQLite FTS4 Virtual Table for Instant Search (compatible with standard Android libsqlite)
         createFtsTable(db)
+
+        // High-performance B-tree indexes on added_at columns for instant date filtering & widget queries
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_added_at ON photos(added_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_added_at ON photo_groups(added_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_added_at ON document_notes(added_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_added_at ON text_notes(added_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_added_at ON canvas_notes(added_at)")
     }
 
     private fun createFtsTable(db: SQLiteDatabase) {
@@ -414,6 +421,25 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 )
             } catch (_: Exception) {}
         }
+        if (oldVersion < 12) {
+            try {
+                // 1. Backfill any 0 or null added_at timestamps using created_at
+                db.execSQL("UPDATE photos SET added_at = created_at WHERE added_at <= 0")
+                db.execSQL("UPDATE photo_groups SET added_at = created_at WHERE added_at <= 0")
+                db.execSQL("UPDATE document_notes SET added_at = created_at WHERE added_at <= 0")
+                db.execSQL("UPDATE text_notes SET added_at = created_at WHERE added_at <= 0")
+                db.execSQL("UPDATE canvas_notes SET added_at = created_at WHERE added_at <= 0")
+
+                // 2. High-performance B-tree indexes on added_at
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_added_at ON photos(added_at)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_added_at ON photo_groups(added_at)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_added_at ON document_notes(added_at)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_added_at ON text_notes(added_at)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_added_at ON canvas_notes(added_at)")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v12 failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -449,6 +475,179 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 11
+        const val DATABASE_VERSION = 12
+    }
+
+    /**
+     * Shared query across all non-trashed note types added within [startTime..endTime].
+     * Utilizes B-tree indexes on added_at columns for zero-scan offline performance.
+     * Reused by search date filters and the Today home widget.
+     */
+    fun getNotesAddedBetween(startTime: Long, endTime: Long): List<NoteAddedSummary> {
+        val results = mutableListOf<NoteAddedSummary>()
+        val db = getSafeReadableDatabase()
+        val args = arrayOf(startTime.toString(), endTime.toString())
+
+        // 1. Photos (standalone only, not part of a group)
+        try {
+            db.rawQuery(
+                """
+                SELECT id, caption, folder_id, subfolder_id, added_at, tag_color, file_path, thumbnail_path
+                FROM photos
+                WHERE is_trashed = 0 AND group_id IS NULL AND added_at BETWEEN ? AND ?
+                ORDER BY added_at DESC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteAddedSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.PHOTO,
+                            title = cursor.getString(1) ?: "Photo Note",
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            addedAt = cursor.getLong(4),
+                            tagColor = cursor.getString(5),
+                            fileUriOrThumbnail = cursor.getString(7) ?: cursor.getString(6)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 2. Photo Groups
+        try {
+            db.rawQuery(
+                """
+                SELECT id, name, folder_id, subfolder_id, added_at, tag_color
+                FROM photo_groups
+                WHERE is_trashed = 0 AND added_at BETWEEN ? AND ?
+                ORDER BY added_at DESC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteAddedSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.GROUP,
+                            title = cursor.getString(1),
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            addedAt = cursor.getLong(4),
+                            tagColor = cursor.getString(5),
+                            fileUriOrThumbnail = null
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 3. Document Notes
+        try {
+            db.rawQuery(
+                """
+                SELECT id, name, folder_id, subfolder_id, added_at, tag_color, origin_file_uri
+                FROM document_notes
+                WHERE is_trashed = 0 AND added_at BETWEEN ? AND ?
+                ORDER BY added_at DESC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteAddedSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.DOCUMENT,
+                            title = cursor.getString(1),
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            addedAt = cursor.getLong(4),
+                            tagColor = cursor.getString(5),
+                            fileUriOrThumbnail = cursor.getString(6)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 4. Text Notes
+        try {
+            db.rawQuery(
+                """
+                SELECT id, title, folder_id, subfolder_id, added_at, tag_color
+                FROM text_notes
+                WHERE is_trashed = 0 AND added_at BETWEEN ? AND ?
+                ORDER BY added_at DESC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteAddedSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.TEXT,
+                            title = cursor.getString(1),
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            addedAt = cursor.getLong(4),
+                            tagColor = cursor.getString(5),
+                            fileUriOrThumbnail = null
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 5. Canvas Notes
+        try {
+            db.rawQuery(
+                """
+                SELECT id, title, folder_id, subfolder_id, added_at, tag_color, thumbnail_path
+                FROM canvas_notes
+                WHERE is_trashed = 0 AND added_at BETWEEN ? AND ?
+                ORDER BY added_at DESC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteAddedSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.CANVAS,
+                            title = cursor.getString(1),
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            addedAt = cursor.getLong(4),
+                            tagColor = cursor.getString(5),
+                            fileUriOrThumbnail = cursor.getString(6)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        return results.sortedByDescending { it.addedAt }
     }
 }
+
+enum class NoteType {
+    PHOTO,
+    GROUP,
+    DOCUMENT,
+    TEXT,
+    CANVAS
+}
+
+data class NoteAddedSummary(
+    val id: Long,
+    val type: NoteType,
+    val title: String,
+    val folderId: Long,
+    val subfolderId: Long?,
+    val addedAt: Long,
+    val tagColor: String? = null,
+    val fileUriOrThumbnail: String? = null
+)
+

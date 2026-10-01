@@ -6,6 +6,8 @@
 
 package com.arinara.fotara.ui.home
 
+import com.arinara.fotara.data.model.DocumentNote
+import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
@@ -26,6 +28,8 @@ data class HomeUiState(
     val groupSearchResults: List<PhotoGroup> = emptyList(),
     val searchResults: List<Photo> = emptyList(),
     val textNoteSearchResults: List<TextNote> = emptyList(),
+    val documentSearchResults: List<DocumentNote> = emptyList(),
+    val canvasNoteSearchResults: List<CanvasNote> = emptyList(),
     val recentSearches: List<String> = emptyList(),
     val searchDateFilter: SearchDateFilter = SearchDateFilter.ALL,
     val searchSortOrder: SearchSortOrder = SearchSortOrder.NEWEST_ADDED,
