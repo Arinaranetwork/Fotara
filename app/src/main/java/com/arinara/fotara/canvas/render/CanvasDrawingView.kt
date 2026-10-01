@@ -48,7 +48,8 @@ class CanvasDrawingView(
     private val toolController: CanvasToolController,
     private val historyManager: CanvasHistoryManager,
     private val spatialIndex: QuadTreeSpatialIndex,
-    var onDocumentChanged: ((CanvasDocument, CanvasRect?) -> Unit)? = null
+    var onDocumentChanged: ((CanvasDocument, CanvasRect?) -> Unit)? = null,
+    var onViewportChanged: ((ViewportState) -> Unit)? = null
 ) : View(context) {
 
     var viewport: ViewportState = ViewportState()
@@ -170,6 +171,7 @@ class CanvasDrawingView(
                         focalScreenY = action.focalScreenY,
                         zoomDelta = action.zoomFactor
                     )
+                    onViewportChanged?.invoke(viewport)
                     needsInvalidate = true
                 }
                 is PointerAction.Fling -> {
@@ -232,6 +234,7 @@ class CanvasDrawingView(
                 translateX = scroller.currX.toFloat(),
                 translateY = scroller.currY.toFloat()
             )
+            onViewportChanged?.invoke(viewport)
             postInvalidateOnAnimation()
         }
     }
@@ -280,6 +283,14 @@ class CanvasDrawingView(
             screenHeight = height.toFloat()
         )
         tileCacheManager.invalidateAll()
+        onViewportChanged?.invoke(viewport)
+        invalidate()
+    }
+
+    fun resetZoom() {
+        viewport = ViewportState(scale = 1.0f, translateX = 0f, translateY = 0f)
+        tileCacheManager.invalidateAll()
+        onViewportChanged?.invoke(viewport)
         invalidate()
     }
 

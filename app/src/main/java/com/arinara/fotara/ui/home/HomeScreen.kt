@@ -119,6 +119,7 @@ fun HomeScreen(
     onNavigateToPhoto: (folderId: Long, subfolderId: Long?, photoId: Long) -> Unit = { _, _, _ -> },
     onNavigateToGroup: (folderId: Long, subfolderId: Long?, groupId: Long) -> Unit = { _, _, _ -> },
     onNavigateToTextNote: (folderId: Long, noteId: Long) -> Unit = { _, _ -> },
+    onNavigateToCanvasNote: (folderId: Long, canvasId: Long) -> Unit = { _, _ -> },
     onOpenTrash: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenUpdates: () -> Unit = {},
@@ -145,6 +146,7 @@ fun HomeScreen(
     var pendingPhotoSearchResult by remember { mutableStateOf<Photo?>(null) }
     var pendingGroupSearchResult by remember { mutableStateOf<PhotoGroup?>(null) }
     var pendingTextNoteSearchResult by remember { mutableStateOf<TextNote?>(null) }
+    var pendingCanvasSearchResult by remember { mutableStateOf<CanvasNote?>(null) }
 
     val deviceLockLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -177,6 +179,12 @@ fun HomeScreen(
                     pendingTextNoteSearchResult = null
                     viewModel.onTextNoteSearchResultClicked(note) { folderId, noteId ->
                         onNavigateToTextNote(folderId, noteId)
+                    }
+                } else if (pendingCanvasSearchResult != null) {
+                    val canvas = pendingCanvasSearchResult!!
+                    pendingCanvasSearchResult = null
+                    viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
+                        onNavigateToCanvasNote(folderId, canvasId)
                     }
                 } else {
                     onFolderClick(target)
@@ -694,6 +702,13 @@ fun HomeScreen(
                                     onNavigateToTextNote(folderId, noteId)
                                 }
                             }
+                            pendingCanvasSearchResult != null -> {
+                                val canvas = pendingCanvasSearchResult!!
+                                pendingCanvasSearchResult = null
+                                viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
+                                    onNavigateToCanvasNote(folderId, canvasId)
+                                }
+                            }
                             else -> {
                                 onFolderClick(target)
                             }
@@ -903,13 +918,12 @@ fun HomeScreen(
                     },
                     onCanvasClick = { canvas ->
                         val targetFolder = uiState.folders.firstOrNull { it.id == canvas.folderId }
-                        if (targetFolder != null) {
-                            if (targetFolder.isLocked) {
-                                folderToUnlock = targetFolder
-                            } else {
-                                viewModel.submitSearch(uiState.searchQuery)
-                                viewModel.deactivateSearch()
-                                onFolderClick(targetFolder)
+                        if (targetFolder != null && targetFolder.isLocked) {
+                            pendingCanvasSearchResult = canvas
+                            folderToUnlock = targetFolder
+                        } else {
+                            viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
+                                onNavigateToCanvasNote(folderId, canvasId)
                             }
                         }
                     }

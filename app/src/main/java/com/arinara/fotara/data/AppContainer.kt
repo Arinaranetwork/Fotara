@@ -45,6 +45,8 @@ interface AppContainer {
     val textNoteRepository: TextNoteRepository
     val canvasNoteRepository: CanvasNoteRepository
     val canvasRepository: com.arinara.fotara.canvas.persistence.CanvasRepository
+    val canvasAssetManager: com.arinara.fotara.canvas.persistence.CanvasAssetManager
+    val noteScheduleManager: com.arinara.fotara.util.NoteScheduleManager
     val updateManager: UpdateManager
     val feedbackManager: FeedbackManager
 }
@@ -106,10 +108,18 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         SqliteCanvasNoteRepository(dbHelper)
     }
 
+    override val canvasAssetManager: com.arinara.fotara.canvas.persistence.CanvasAssetManager by lazy {
+        com.arinara.fotara.canvas.persistence.CanvasAssetManager(context)
+    }
+
+    override val noteScheduleManager: com.arinara.fotara.util.NoteScheduleManager by lazy {
+        com.arinara.fotara.util.NoteScheduleManager(context)
+    }
+
     override val canvasRepository: com.arinara.fotara.canvas.persistence.CanvasRepository by lazy {
         com.arinara.fotara.canvas.persistence.DefaultCanvasRepository(
             canvasDao = com.arinara.fotara.canvas.persistence.SqliteCanvasDao(dbHelper),
-            assetManager = com.arinara.fotara.canvas.persistence.CanvasAssetManager(context),
+            assetManager = canvasAssetManager,
             dbHelper = dbHelper
         )
     }

@@ -34,10 +34,11 @@ data class CanvasAssetInfo(
  * Handles downsampling to a safe maximum dimension (2048px), applying EXIF orientation,
  * storing inside app storage (`filesDir/canvas_assets/`), and purging unreferenced files.
  */
-class CanvasAssetManager(private val context: Context) {
+class CanvasAssetManager(private val context: Context? = null) {
 
     private val assetDir: File by lazy {
-        File(context.filesDir, "canvas_assets").apply {
+        val baseDir = context?.filesDir ?: File(System.getProperty("java.io.tmpdir"), "canvas_assets")
+        File(baseDir, "canvas_assets").apply {
             if (!exists()) mkdirs()
         }
     }
@@ -134,6 +135,13 @@ class CanvasAssetManager(private val context: Context) {
         } catch (_: Exception) {
             null
         }
+    }
+
+    /**
+     * Resolves the on-disk file for a given asset ID.
+     */
+    fun getAssetFile(assetId: String): File {
+        return File(assetDir, "${assetId}.jpg")
     }
 
     /**

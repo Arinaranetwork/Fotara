@@ -7,6 +7,7 @@
 package com.arinara.fotara.canvas.render
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
@@ -29,6 +30,7 @@ import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokePoint
 import com.arinara.fotara.canvas.model.StrokeToolType
+import com.arinara.fotara.canvas.persistence.CanvasAssetManager
 import kotlin.math.max
 
 /**
@@ -36,7 +38,8 @@ import kotlin.math.max
  * Renders background patterns, cached tiles, in-progress live strokes, and selection handles.
  */
 class CanvasRenderer(
-    private val tileCacheManager: TileCacheManager
+    private val tileCacheManager: TileCacheManager,
+    private val assetManager: CanvasAssetManager? = null
 ) {
 
     // Pre-allocated reusable Paint objects (strictly zero allocations during onDraw)
@@ -95,6 +98,10 @@ class CanvasRenderer(
     private val tileSrcRect = Rect()
     private val tileDestRect = Rect()
     private val transformMatrix = Matrix()
+    private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val imageSrcRect = Rect()
+    private val imageDstRectF = RectF()
+    private val imageBitmapCache = LinkedHashMap<String, Bitmap>(16, 0.75f, true)
 
     /**
      * Main render function called per frame.
@@ -282,7 +289,28 @@ class CanvasRenderer(
                     }
                 }
                 is ImageElement -> {
-                    // Direct image bounds rendering
+                    val file = assetManager?.getAssetFile(element.assetId)
+                    if (file != null && file.exists()) {
+                        val bmp = imageBitmapCache.getOrPut(element.assetId) {
+                            try {
+                                BitmapFactory.decodeFile(file.absolutePath)
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
+                        if (bmp != null) {
+                            canvas.save()
+                            canvas.translate(element.x, element.y)
+                            if (element.rotationDegrees != 0f) {
+                                canvas.rotate(element.rotationDegrees, element.width / 2f, element.height / 2f)
+                            }
+                            imageSrcRect.set(0, 0, bmp.width, bmp.height)
+                            imageDstRectF.set(0f, 0f, element.width, element.height)
+                            imagePaint.alpha = (255 * layer.opacity).toInt().coerceIn(0, 255)
+                            canvas.drawBitmap(bmp, imageSrcRect, imageDstRectF, imagePaint)
+                            canvas.restore()
+                        }
+                    }
                 }
             }
         }

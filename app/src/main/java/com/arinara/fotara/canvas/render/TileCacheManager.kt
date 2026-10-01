@@ -7,9 +7,12 @@
 package com.arinara.fotara.canvas.render
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
 import com.arinara.fotara.canvas.engine.CanvasRect
 import com.arinara.fotara.canvas.engine.QuadTreeSpatialIndex
 import com.arinara.fotara.canvas.engine.ViewportState
@@ -19,6 +22,7 @@ import com.arinara.fotara.canvas.model.CanvasElement
 import com.arinara.fotara.canvas.model.CanvasLayer
 import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.StrokeElement
+import com.arinara.fotara.canvas.persistence.CanvasAssetManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -89,6 +93,7 @@ object TileGridHelper {
 class TileCacheManager(
     private val maxMemoryBytes: Long = 32 * 1024 * 1024L, // 32MB fixed budget
     val tileSizePixels: Int = 512,
+    private val assetManager: CanvasAssetManager? = null,
     private val cacheScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 ) {
 
@@ -219,7 +224,27 @@ class TileCacheManager(
                     }
                 }
                 is ImageElement -> {
-                    // Image elements rendered via cached downsampled bitmaps
+                    val file = assetManager?.getAssetFile(element.assetId)
+                    if (file != null && file.exists()) {
+                        try {
+                            val imgBmp = BitmapFactory.decodeFile(file.absolutePath)
+                            if (imgBmp != null) {
+                                canvas.save()
+                                canvas.translate(element.x, element.y)
+                                if (element.rotationDegrees != 0f) {
+                                    canvas.rotate(element.rotationDegrees, element.width / 2f, element.height / 2f)
+                                }
+                                val src = Rect(0, 0, imgBmp.width, imgBmp.height)
+                                val dst = RectF(0f, 0f, element.width, element.height)
+                                val imgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                    alpha = (255 * layer.opacity).toInt().coerceIn(0, 255)
+                                }
+                                canvas.drawBitmap(imgBmp, src, dst, imgPaint)
+                                canvas.restore()
+                                imgBmp.recycle()
+                            }
+                        } catch (_: Exception) {}
+                    }
                 }
             }
         }

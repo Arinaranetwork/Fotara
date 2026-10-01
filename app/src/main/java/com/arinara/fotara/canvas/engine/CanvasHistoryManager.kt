@@ -6,6 +6,7 @@
 
 package com.arinara.fotara.canvas.engine
 
+import com.arinara.fotara.canvas.model.CanvasBackgroundStyle
 import com.arinara.fotara.canvas.model.CanvasDocument
 import com.arinara.fotara.canvas.model.CanvasDocumentOperations
 import com.arinara.fotara.canvas.model.CanvasElement
@@ -223,6 +224,30 @@ class AreaEraseCommand(
         val remaining = document.elements.filter { it.id !in replacementIds }
         return document.copy(
             elements = remaining + originalStrokes,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+}
+
+/**
+ * Changes document background style.
+ */
+class SetBackgroundStyleCommand(
+    private val oldStyle: CanvasBackgroundStyle,
+    private val newStyle: CanvasBackgroundStyle,
+    override val description: String = "Change Background Style"
+) : CanvasCommand {
+
+    override fun apply(document: CanvasDocument): CanvasDocument {
+        return document.copy(
+            backgroundStyle = newStyle,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+
+    override fun undo(document: CanvasDocument): CanvasDocument {
+        return document.copy(
+            backgroundStyle = oldStyle,
             updatedAt = System.currentTimeMillis()
         )
     }

@@ -462,6 +462,26 @@ class HomeViewModel(
         }
     }
 
+    fun onCanvasSearchResultClicked(
+        canvas: CanvasNote,
+        onNavigate: (folderId: Long, canvasId: Long) -> Unit
+    ) {
+        if (_uiState.value.searchQuery.isNotBlank()) {
+            submitSearch(_uiState.value.searchQuery)
+        }
+        viewModelScope.launch {
+            val freshCanvas = canvasNoteRepository?.getCanvasNoteByIdOnce(canvas.id)
+            val parentFolder = folderRepository.getFolderById(canvas.folderId).firstOrNull()
+            if (freshCanvas != null && !freshCanvas.isTrashed && parentFolder != null && !parentFolder.isTrashed) {
+                deactivateSearch()
+                onNavigate(canvas.folderId, canvas.id)
+            } else {
+                _uiState.update { it.copy(userMessage = "Canvas is no longer in this folder") }
+                executeSearch(_uiState.value.searchQuery, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter)
+            }
+        }
+    }
+
     fun renameFolder(folderId: Long, newName: String) {
         val trimmed = newName.trim()
         if (trimmed.isBlank()) {

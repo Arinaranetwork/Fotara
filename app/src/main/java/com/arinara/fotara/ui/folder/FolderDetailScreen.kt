@@ -1296,7 +1296,7 @@ fun FolderDetailScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
                             Text(
-                                text = "New Canvas Note",
+                                text = "New Canvas (Alpha)",
                                 color = TextPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold

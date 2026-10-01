@@ -124,6 +124,9 @@ fun MainNavigation(
                     onNavigateToTextNote = { folderId, noteId ->
                         backStack.add(TextNoteEditorNavKey(folderId = folderId, noteId = noteId))
                     },
+                    onNavigateToCanvasNote = { folderId, canvasId ->
+                        backStack.add(CanvasNoteNavKey(canvasId = canvasId, folderId = folderId, subfolderId = null))
+                    },
                     onOpenTrash = {
                         backStack.add(TrashNavKey)
                     },
@@ -294,7 +297,13 @@ fun MainNavigation(
                         canvasId = key.canvasId,
                         folderId = key.folderId,
                         subfolderId = key.subfolderId,
-                        canvasNoteRepository = appContainer.canvasNoteRepository
+                        canvasNoteRepository = appContainer.canvasNoteRepository,
+                        canvasRepository = appContainer.canvasRepository,
+                        canvasAssetManager = appContainer.canvasAssetManager,
+                        photoRepository = appContainer.photoRepository,
+                        folderRepository = appContainer.folderRepository,
+                        settingsRepository = appContainer.settingsRepository,
+                        scheduleManager = appContainer.noteScheduleManager
                     )
                 )
                 com.arinara.fotara.ui.canvas.CanvasScreen(
