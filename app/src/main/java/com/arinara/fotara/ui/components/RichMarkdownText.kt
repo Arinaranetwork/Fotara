@@ -405,6 +405,60 @@ fun RichMarkdownColumn(
                     )
                 }
 
+                // Checklist items (- [ ] or - [x])
+                trimmed.startsWith("- [ ] ") || trimmed.startsWith("* [ ] ") -> {
+                    val itemContent = trimmed.substring(6).trim()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = "☐",
+                            color = primaryTextColor.copy(alpha = 0.7f),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 1.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        RichMarkdownText(
+                            text = itemContent,
+                            color = primaryTextColor.copy(alpha = 0.92f),
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
+                            accentColor = accentColor
+                        )
+                    }
+                }
+
+                trimmed.startsWith("- [x] ") || trimmed.startsWith("- [X] ") ||
+                trimmed.startsWith("* [x] ") || trimmed.startsWith("* [X] ") -> {
+                    val itemContent = trimmed.substring(6).trim()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = "☑",
+                            color = accentColor,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 1.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        RichMarkdownText(
+                            text = itemContent,
+                            color = primaryTextColor.copy(alpha = 0.5f),
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
+                            accentColor = accentColor
+                        )
+                    }
+                }
+
                 // Bullet item (- Item or * Item)
                 trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
                     val itemContent = trimmed.substring(2).trim()

@@ -6,14 +6,11 @@
 
 package com.arinara.fotara.ui.note
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,22 +32,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FindReplace
-import androidx.compose.material.icons.filled.FormatBold
-import androidx.compose.material.icons.filled.FormatClear
-import androidx.compose.material.icons.filled.FormatItalic
-import androidx.compose.material.icons.filled.FormatListNumbered
-import androidx.compose.material.icons.filled.FormatQuote
-import androidx.compose.material.icons.filled.FormatStrikethrough
-import androidx.compose.material.icons.filled.HorizontalRule
-import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
@@ -68,7 +54,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,31 +62,30 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.ui.components.RichMarkdownColumn
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import com.arinara.fotara.ui.note.editor.EditorActions
+import com.arinara.fotara.ui.note.editor.EditorToolbar
+import com.arinara.fotara.ui.note.editor.MarkdownVisualTransformation
+import com.arinara.fotara.ui.note.editor.rememberEditorState
 import kotlinx.coroutines.launch
 
 private val ScreenNavy = Color(0xFF03071E)
 private val TabCream = Color(0xFFEAE3D2)
 private val AccentGold = Color(0xFFF77F00)
 private val CardBg = Color(0xFF141936)
-private val ToolbarBg = Color(0xFF141936)
-private val ToolbarBorder = Color(0xFF242C56)
+private val ToolbarBorder = Color(0xFF28325E)
 private val TextMuted = Color(0xFF8E9AAF)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,206 +98,38 @@ fun TextNoteEditorScreen(
     onBack: () -> Unit,
     onShare: (TextNote) -> Unit
 ) {
-    var activeNoteId by remember { mutableStateOf(noteId) }
-    var title by remember { mutableStateOf("") }
-    var bodyValue by remember { mutableStateOf(TextFieldValue("")) }
-
-    // Preview mode and Search/Replace bar toggles
-    var isPreviewMode by remember { mutableStateOf(false) }
-    var showSearchBar by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
-    var replaceQuery by remember { mutableStateOf("") }
-
-    // Link insertion modal
-    var showLinkDialog by remember { mutableStateOf(false) }
-    var linkLabel by remember { mutableStateOf("") }
-    var linkTargetUrl by remember { mutableStateOf("https://") }
-
-    // Undo / Redo history stacks
-    val undoStack = remember { mutableListOf<TextFieldValue>() }
-    val redoStack = remember { mutableListOf<TextFieldValue>() }
-
     val coroutineScope = rememberCoroutineScope()
-    var autosaveJob by remember { mutableStateOf<Job?>(null) }
-    var isAutosaving by remember { mutableStateOf(false) }
+    val state = rememberEditorState(
+        initialNoteId = noteId,
+        folderId = folderId,
+        subfolderId = subfolderId,
+        textNoteRepository = textNoteRepository,
+        coroutineScope = coroutineScope
+    )
 
-    // Load existing note if editing
-    LaunchedEffect(noteId) {
-        if (noteId != null && noteId > 0) {
-            val note = textNoteRepository.getTextNoteByIdOnce(noteId)
-            if (note != null) {
-                title = note.title
-                bodyValue = TextFieldValue(note.bodyMarkdown, selection = TextRange(note.bodyMarkdown.length))
+    var isPreviewMode by remember { mutableStateOf(false) }
+
+    val handleExit = {
+        coroutineScope.launch {
+            val purged = state.purgeIfCompletelyBlank()
+            if (!purged) {
+                state.flushAutosaveNow()
             }
+            onBack()
         }
     }
 
-    // Debounced autosave mechanism (300ms)
-    fun scheduleAutosave(newTitle: String, newBody: String) {
-        autosaveJob?.cancel()
-        if (newTitle.isBlank() && newBody.isBlank() && activeNoteId == null) {
-            return
-        }
-        autosaveJob = coroutineScope.launch {
-            delay(300)
-            isAutosaving = true
-            val currentId = activeNoteId
-            if (currentId == null || currentId <= 0) {
-                val effectiveTitle = newTitle.ifBlank { "Untitled Note" }
-                val createdId = textNoteRepository.createTextNote(
-                    folderId = folderId,
-                    subfolderId = subfolderId,
-                    title = effectiveTitle,
-                    bodyMarkdown = newBody
-                )
-                activeNoteId = createdId
-            } else {
-                textNoteRepository.updateTextNote(
-                    id = currentId,
-                    title = newTitle.ifBlank { "Untitled Note" },
-                    bodyMarkdown = newBody
-                )
-            }
-            isAutosaving = false
-        }
+    BackHandler {
+        handleExit()
     }
 
-    fun updateBodyWithUndo(newValue: TextFieldValue) {
-        if (newValue.text != bodyValue.text) {
-            undoStack.add(bodyValue)
-            if (undoStack.size > 50) undoStack.removeAt(0)
-            redoStack.clear()
-        }
-        bodyValue = newValue
-        scheduleAutosave(title, newValue.text)
-    }
-
-    // Interactive selection-wrap & unwrap toggle
-    fun applyWrapFormatting(prefix: String, suffix: String) {
-        val sel = bodyValue.selection
-        val text = bodyValue.text
-        val start = sel.min.coerceIn(0, text.length)
-        val end = sel.max.coerceIn(0, text.length)
-
-        if (start < end) {
-            val selectedText = text.substring(start, end)
-            // If already wrapped internally: unwrap
-            if (selectedText.startsWith(prefix) && selectedText.endsWith(suffix) && selectedText.length >= prefix.length + suffix.length) {
-                val unwrapped = selectedText.substring(prefix.length, selectedText.length - suffix.length)
-                val newText = text.substring(0, start) + unwrapped + text.substring(end)
-                updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(start, start + unwrapped.length)))
-                return
-            }
-            // If text immediately outside selection is wrapped: unwrap
-            if (start >= prefix.length && end + suffix.length <= text.length) {
-                val before = text.substring(start - prefix.length, start)
-                val after = text.substring(end, end + suffix.length)
-                if (before == prefix && after == suffix) {
-                    val newText = text.substring(0, start - prefix.length) + selectedText + text.substring(end + suffix.length)
-                    updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(start - prefix.length, end - prefix.length)))
-                    return
-                }
-            }
-            // Otherwise, wrap selection
-            val newText = text.substring(0, start) + prefix + selectedText + suffix + text.substring(end)
-            updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(start + prefix.length, end + prefix.length)))
-        } else {
-            // Collapsed cursor
-            if (start >= prefix.length && start + suffix.length <= text.length) {
-                val before = text.substring(start - prefix.length, start)
-                val after = text.substring(start, start + suffix.length)
-                if (before == prefix && after == suffix) {
-                    val newText = text.substring(0, start - prefix.length) + text.substring(start + suffix.length)
-                    updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(start - prefix.length)))
-                    return
-                }
-            }
-            val newText = text.substring(0, start) + prefix + suffix + text.substring(start)
-            updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(start + prefix.length)))
-        }
-    }
-
-    // Line prefix formatting (Headings, Lists, Blockquotes, Checklists)
-    fun applyLinePrefix(linePrefix: String) {
-        val sel = bodyValue.selection
-        val text = bodyValue.text
-        val cursor = sel.min.coerceIn(0, text.length)
-        val lineStart = text.lastIndexOf('\n', (cursor - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
-        val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
-        val currentLine = text.substring(lineStart, lineEnd)
-
-        // Check if the current line already starts with linePrefix
-        if (currentLine.startsWith(linePrefix)) {
-            // Toggle off: remove prefix
-            val newText = text.substring(0, lineStart) + currentLine.removePrefix(linePrefix) + text.substring(lineEnd)
-            val newCursor = (cursor - linePrefix.length).coerceAtLeast(lineStart)
-            updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(newCursor)))
-            return
-        }
-
-        // Strip existing heading or list prefix if replacing
-        val headingRegex = Regex("""^#{1,3}\s+""")
-        val listRegex = Regex("""^([-*+]\s+|1\.\s+|-\s*\[[ xX]\]\s+|>\s+)""")
-
-        var strippedLine = currentLine
-        var removedLen = 0
-        if (linePrefix.startsWith("#")) {
-            val m = headingRegex.find(currentLine)
-            if (m != null) {
-                strippedLine = currentLine.substring(m.range.last + 1)
-                removedLen = m.value.length
-            }
-        } else if (linePrefix.startsWith("-") || linePrefix.startsWith("1.") || linePrefix.startsWith(">")) {
-            val m = listRegex.find(currentLine)
-            if (m != null) {
-                strippedLine = currentLine.substring(m.range.last + 1)
-                removedLen = m.value.length
-            }
-        }
-
-        val newLine = linePrefix + strippedLine
-        val newText = text.substring(0, lineStart) + newLine + text.substring(lineEnd)
-        val newCursor = (cursor - removedLen + linePrefix.length).coerceIn(lineStart, lineStart + newLine.length)
-        updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(newCursor)))
-    }
-
-    fun clearFormattingOnSelection() {
-        val sel = bodyValue.selection
-        val text = bodyValue.text
-        val start = sel.min.coerceIn(0, text.length)
-        val end = sel.max.coerceIn(0, text.length)
-
-        if (start < end) {
-            val selected = text.substring(start, end)
-            val cleaned = TextNote.stripMarkdownFormatting(selected)
-            val newText = text.substring(0, start) + cleaned + text.substring(end)
-            updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(start, start + cleaned.length)))
-        } else {
-            val lineStart = text.lastIndexOf('\n', (start - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
-            val lineEnd = text.indexOf('\n', start).let { if (it == -1) text.length else it }
-            val line = text.substring(lineStart, lineEnd)
-            val cleaned = TextNote.stripMarkdownFormatting(line)
-            val newText = text.substring(0, lineStart) + cleaned + text.substring(lineEnd)
-            updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(lineStart + cleaned.length)))
-        }
-    }
-
-    val handleBack = {
-        // Discard note if completely blank upon exit
-        if (title.isBlank() && bodyValue.text.isBlank() && activeNoteId != null) {
+    DisposableEffect(Unit) {
+        onDispose {
             coroutineScope.launch {
-                textNoteRepository.purgeTextNotePermanently(activeNoteId!!)
+                state.flushAutosaveNow()
             }
         }
-        onBack()
     }
-
-    // Word and character counters
-    val wordCount = remember(bodyValue.text) {
-        val trimmed = bodyValue.text.trim()
-        if (trimmed.isEmpty()) 0 else trimmed.split(Regex("\\s+")).filter { it.isNotBlank() }.size
-    }
-    val charCount = bodyValue.text.length
 
     Column(
         modifier = Modifier
@@ -328,12 +145,12 @@ fun TextNoteEditorScreen(
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = if (activeNoteId == null) "New Text Note" else "Edit Text Note",
+                            text = if (state.noteId == null) "New Text Note" else "Edit Text Note",
                             color = TabCream,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        if (isAutosaving) {
+                        if (state.isSaving) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Saving…",
@@ -343,14 +160,14 @@ fun TextNoteEditorScreen(
                         }
                     }
                     Text(
-                        text = "$wordCount words • $charCount characters",
+                        text = "${state.wordCount} words • ${state.charCount} characters",
                         color = TabCream.copy(alpha = 0.6f),
                         fontSize = 11.5.sp
                     )
                 }
             },
             navigationIcon = {
-                IconButton(onClick = handleBack) {
+                IconButton(onClick = { handleExit() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
@@ -360,15 +177,15 @@ fun TextNoteEditorScreen(
             },
             actions = {
                 // Find & Replace toggle
-                IconButton(onClick = { showSearchBar = !showSearchBar }) {
+                IconButton(onClick = { state.showFindReplace = !state.showFindReplace }) {
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "Find and Replace",
-                        tint = if (showSearchBar) AccentGold else TabCream
+                        tint = if (state.showFindReplace) AccentGold else TabCream
                     )
                 }
 
-                // Preview toggle
+                // Preview mode toggle
                 IconButton(onClick = { isPreviewMode = !isPreviewMode }) {
                     Icon(
                         imageVector = if (isPreviewMode) Icons.Default.EditNote else Icons.Default.Visibility,
@@ -377,27 +194,27 @@ fun TextNoteEditorScreen(
                     )
                 }
 
-                // Share Note
+                // Share note
                 IconButton(
                     onClick = {
-                        val currentId = activeNoteId ?: 0L
+                        val currentId = state.noteId ?: 0L
                         val note = TextNote(
                             id = currentId,
                             folderId = folderId,
                             subfolderId = subfolderId,
-                            title = title.ifBlank { "Untitled Note" },
-                            bodyMarkdown = bodyValue.text,
+                            title = state.title.ifBlank { "Untitled Note" },
+                            bodyMarkdown = state.bodyValue.text,
                             createdAt = System.currentTimeMillis(),
                             updatedAt = System.currentTimeMillis()
                         )
                         onShare(note)
                     },
-                    enabled = title.isNotBlank() || bodyValue.text.isNotBlank()
+                    enabled = state.title.isNotBlank() || state.bodyValue.text.isNotBlank()
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
                         contentDescription = "Share Note",
-                        tint = if (title.isNotBlank() || bodyValue.text.isNotBlank()) TabCream else TextMuted
+                        tint = if (state.title.isNotBlank() || state.bodyValue.text.isNotBlank()) TabCream else TextMuted
                     )
                 }
             },
@@ -406,7 +223,7 @@ fun TextNoteEditorScreen(
 
         // Find & Replace Bar
         AnimatedVisibility(
-            visible = showSearchBar,
+            visible = state.showFindReplace,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
@@ -414,14 +231,14 @@ fun TextNoteEditorScreen(
                 color = CardBg,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         BasicTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
+                            value = state.searchQuery,
+                            onValueChange = { state.onSearchQueryChange(it) },
                             textStyle = TextStyle(color = TabCream, fontSize = 13.5.sp),
                             cursorBrush = SolidColor(AccentGold),
                             singleLine = true,
@@ -430,16 +247,16 @@ fun TextNoteEditorScreen(
                                 .background(ScreenNavy, RoundedCornerShape(8.dp))
                                 .padding(horizontal = 10.dp, vertical = 8.dp),
                             decorationBox = { inner ->
-                                if (searchQuery.isEmpty()) {
+                                if (state.searchQuery.isEmpty()) {
                                     Text("Find in note…", color = TextMuted, fontSize = 13.5.sp)
                                 }
                                 inner()
                             }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         BasicTextField(
-                            value = replaceQuery,
-                            onValueChange = { replaceQuery = it },
+                            value = state.replaceQuery,
+                            onValueChange = { state.replaceQuery = it },
                             textStyle = TextStyle(color = TabCream, fontSize = 13.5.sp),
                             cursorBrush = SolidColor(AccentGold),
                             singleLine = true,
@@ -448,30 +265,94 @@ fun TextNoteEditorScreen(
                                 .background(ScreenNavy, RoundedCornerShape(8.dp))
                                 .padding(horizontal = 10.dp, vertical = 8.dp),
                             decorationBox = { inner ->
-                                if (replaceQuery.isEmpty()) {
+                                if (state.replaceQuery.isEmpty()) {
                                     Text("Replace with…", color = TextMuted, fontSize = 13.5.sp)
                                 }
                                 inner()
                             }
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (state.searchQuery.isNotEmpty()) {
+                                if (state.searchMatchCount > 0) "${state.currentMatchIndex + 1}/${state.searchMatchCount}" else "0 matches"
+                            } else "",
+                            color = TextMuted,
+                            fontSize = 11.5.sp
+                        )
+
                         Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(
+
+                        // Case sensitive toggle
+                        TextButton(
                             onClick = {
-                                if (searchQuery.isNotEmpty()) {
-                                    val newText = bodyValue.text.replace(searchQuery, replaceQuery)
-                                    updateBodyWithUndo(TextFieldValue(newText))
-                                }
-                            },
+                                state.caseSensitive = !state.caseSensitive
+                                state.onSearchQueryChange(state.searchQuery)
+                            }
+                        ) {
+                            Text(
+                                text = "Aa",
+                                color = if (state.caseSensitive) AccentGold else TextMuted,
+                                fontWeight = if (state.caseSensitive) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        // Prev match
+                        IconButton(
+                            onClick = { state.findPrevious() },
+                            modifier = Modifier.size(34.dp),
+                            enabled = state.searchMatchCount > 0
+                        ) {
+                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Previous Match", tint = TabCream)
+                        }
+
+                        // Next match
+                        IconButton(
+                            onClick = { state.findNext() },
+                            modifier = Modifier.size(34.dp),
+                            enabled = state.searchMatchCount > 0
+                        ) {
+                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Next Match", tint = TabCream)
+                        }
+
+                        // Replace one
+                        TextButton(
+                            onClick = { state.replaceCurrent() },
+                            enabled = state.searchMatchCount > 0
+                        ) {
+                            Text("Replace", color = AccentGold, fontSize = 12.sp)
+                        }
+
+                        // Replace All
+                        TextButton(
+                            onClick = { state.replaceAll() },
+                            enabled = state.searchMatchCount > 0
+                        ) {
+                            Text("All", color = AccentGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Close bar
+                        IconButton(
+                            onClick = { state.showFindReplace = false },
                             modifier = Modifier.size(34.dp)
                         ) {
-                            Icon(Icons.Default.FindReplace, contentDescription = "Replace All", tint = AccentGold)
+                            Icon(Icons.Default.Close, contentDescription = "Close Find", tint = TextMuted)
                         }
                     }
                 }
             }
         }
 
-        // Main Editor or Markdown Preview
+        // Editor Body or Markdown Preview
         if (isPreviewMode) {
             Column(
                 modifier = Modifier
@@ -482,14 +363,14 @@ fun TextNoteEditorScreen(
             ) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = title.ifBlank { "Untitled Note" },
+                    text = state.title.ifBlank { "Untitled Note" },
                     color = TabCream,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 RichMarkdownColumn(
-                    markdown = bodyValue.text.ifBlank { "*This note is empty. Switch to edit mode to start typing.*" },
+                    markdown = state.bodyValue.text.ifBlank { "*This note is empty. Switch to edit mode to start typing.*" },
                     primaryTextColor = TabCream,
                     accentColor = AccentGold,
                     cardBg = CardBg,
@@ -507,13 +388,10 @@ fun TextNoteEditorScreen(
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Title Field
+                // Title Input
                 BasicTextField(
-                    value = title,
-                    onValueChange = {
-                        title = it
-                        scheduleAutosave(it, bodyValue.text)
-                    },
+                    value = state.title,
+                    onValueChange = { state.onTitleChange(it) },
                     textStyle = TextStyle(
                         color = TabCream,
                         fontSize = 22.sp,
@@ -523,7 +401,7 @@ fun TextNoteEditorScreen(
                     modifier = Modifier.fillMaxWidth(),
                     decorationBox = { innerTextField ->
                         Box(modifier = Modifier.fillMaxWidth()) {
-                            if (title.isEmpty()) {
+                            if (state.title.isEmpty()) {
                                 Text(
                                     text = "Note Title…",
                                     color = TextMuted,
@@ -538,23 +416,69 @@ fun TextNoteEditorScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Markdown Body Field
+                // Rich Markdown Body with Live Styling VisualTransformation
+                val visualTransformation = remember(state.bodyValue.selection) {
+                    MarkdownVisualTransformation(
+                        cursorStart = state.bodyValue.selection.start,
+                        cursorEnd = state.bodyValue.selection.end,
+                        hideUntouchedMarkers = true,
+                        textColor = TabCream,
+                        accentColor = AccentGold,
+                        codeBgColor = Color(0xFF1E254A),
+                        codeTextColor = Color(0xFFE2E8F0),
+                        linkColor = Color(0xFF64B5F6),
+                        mutedColor = TextMuted
+                    )
+                }
+
                 BasicTextField(
-                    value = bodyValue,
-                    onValueChange = { updateBodyWithUndo(it) },
+                    value = state.bodyValue,
+                    onValueChange = { newBody ->
+                        val oldBody = state.bodyValue
+                        // Intercept Enter key for list continuation
+                        if (newBody.text.length == oldBody.text.length + 1 &&
+                            oldBody.selection.min in oldBody.text.indices &&
+                            newBody.text[oldBody.selection.min] == '\n'
+                        ) {
+                            val handled = EditorActions.handleEnterKey(oldBody)
+                            if (handled != null) {
+                                state.onBodyChange(handled)
+                                return@BasicTextField
+                            }
+                        }
+
+                        // Intercept Backspace key for list marker exit
+                        if (newBody.text.length == oldBody.text.length - 1 &&
+                            oldBody.selection.min == oldBody.selection.max &&
+                            oldBody.selection.min > 0
+                        ) {
+                            val handled = EditorActions.handleBackspaceKey(oldBody)
+                            if (handled != null) {
+                                state.onBodyChange(handled)
+                                return@BasicTextField
+                            }
+                        }
+
+                        state.onBodyChange(newBody)
+                    },
+                    visualTransformation = visualTransformation,
                     textStyle = TextStyle(
                         color = TabCream,
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp,
+                        fontSize = 15.5.sp,
+                        lineHeight = 23.sp,
                         fontFamily = FontFamily.Default
                     ),
                     cursorBrush = SolidColor(AccentGold),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Default
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f, fill = false),
                     decorationBox = { innerTextField ->
                         Box(modifier = Modifier.fillMaxWidth()) {
-                            if (bodyValue.text.isEmpty()) {
+                            if (state.bodyValue.text.isEmpty()) {
                                 Text(
                                     text = "Start writing with markdown formatting (e.g. **bold**, *italic*, # heading, - list, - [ ] checklist)…",
                                     color = TextMuted.copy(alpha = 0.7f),
@@ -570,136 +494,18 @@ fun TextNoteEditorScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Anchored Keyboard Formatting Toolbar
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = ToolbarBg,
-                shadowElevation = 8.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Undo
-                    ToolbarIconButton(
-                        icon = Icons.AutoMirrored.Filled.Undo,
-                        description = "Undo",
-                        enabled = undoStack.isNotEmpty()
-                    ) {
-                        if (undoStack.isNotEmpty()) {
-                            redoStack.add(bodyValue)
-                            val prev = undoStack.removeAt(undoStack.lastIndex)
-                            bodyValue = prev
-                            scheduleAutosave(title, prev.text)
-                        }
-                    }
-
-                    // Redo
-                    ToolbarIconButton(
-                        icon = Icons.AutoMirrored.Filled.Redo,
-                        description = "Redo",
-                        enabled = redoStack.isNotEmpty()
-                    ) {
-                        if (redoStack.isNotEmpty()) {
-                            undoStack.add(bodyValue)
-                            val next = redoStack.removeAt(redoStack.lastIndex)
-                            bodyValue = next
-                            scheduleAutosave(title, next.text)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Bold
-                    ToolbarIconButton(icon = Icons.Default.FormatBold, description = "Bold") {
-                        applyWrapFormatting("**", "**")
-                    }
-
-                    // Italic
-                    ToolbarIconButton(icon = Icons.Default.FormatItalic, description = "Italic") {
-                        applyWrapFormatting("*", "*")
-                    }
-
-                    // Strikethrough
-                    ToolbarIconButton(icon = Icons.Default.FormatStrikethrough, description = "Strike") {
-                        applyWrapFormatting("~~", "~~")
-                    }
-
-                    // Inline Code
-                    ToolbarIconButton(icon = Icons.Default.Code, description = "Inline Code") {
-                        applyWrapFormatting("`", "`")
-                    }
-
-                    // Headings
-                    ToolbarTextButton(label = "H1") { applyLinePrefix("# ") }
-                    ToolbarTextButton(label = "H2") { applyLinePrefix("## ") }
-                    ToolbarTextButton(label = "H3") { applyLinePrefix("### ") }
-
-                    // Blockquote
-                    ToolbarIconButton(icon = Icons.Default.FormatQuote, description = "Quote") {
-                        applyLinePrefix("> ")
-                    }
-
-                    // Bullet List
-                    ToolbarIconButton(icon = Icons.AutoMirrored.Filled.FormatListBulleted, description = "Bullet List") {
-                        applyLinePrefix("- ")
-                    }
-
-                    // Numbered List
-                    ToolbarIconButton(icon = Icons.Default.FormatListNumbered, description = "Numbered List") {
-                        applyLinePrefix("1. ")
-                    }
-
-                    // Checklist
-                    ToolbarIconButton(icon = Icons.Default.CheckBox, description = "Checklist") {
-                        applyLinePrefix("- [ ] ")
-                    }
-
-                    // Code Block
-                    ToolbarTextButton(label = "</>") {
-                        applyWrapFormatting("\n```\n", "\n```\n")
-                    }
-
-                    // Horizontal Rule
-                    ToolbarIconButton(icon = Icons.Default.HorizontalRule, description = "Divider") {
-                        val sel = bodyValue.selection
-                        val text = bodyValue.text
-                        val start = sel.min.coerceIn(0, text.length)
-                        val end = sel.max.coerceIn(0, text.length)
-                        val newText = text.substring(0, start) + "\n---\n" + text.substring(end)
-                        updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(start + 5)))
-                    }
-
-                    // Link Dialog Trigger
-                    ToolbarIconButton(icon = Icons.Default.Link, description = "Insert Link") {
-                        val sel = bodyValue.selection
-                        val text = bodyValue.text
-                        val start = sel.min.coerceIn(0, text.length)
-                        val end = sel.max.coerceIn(0, text.length)
-                        linkLabel = if (start < end) text.substring(start, end) else ""
-                        linkTargetUrl = "https://"
-                        showLinkDialog = true
-                    }
-
-                    // Clear Formatting
-                    ToolbarIconButton(icon = Icons.Default.FormatClear, description = "Clear Formatting") {
-                        clearFormattingOnSelection()
-                    }
-                }
-            }
+            // Keyboard-Docked Formatting Toolbar
+            EditorToolbar(state = state)
         }
     }
 
-    // Link Insertion Dialog
-    if (showLinkDialog) {
+    // Link Insertion and Edit Dialog
+    if (state.showLinkDialog) {
         AlertDialog(
-            onDismissRequest = { showLinkDialog = false },
+            onDismissRequest = { state.showLinkDialog = false },
             title = {
                 Text(
-                    text = "Insert Link",
+                    text = "Insert or Edit Link",
                     fontWeight = FontWeight.Bold,
                     color = TabCream
                 )
@@ -707,8 +513,8 @@ fun TextNoteEditorScreen(
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
-                        value = linkLabel,
-                        onValueChange = { linkLabel = it },
+                        value = state.linkDialogLabel,
+                        onValueChange = { state.linkDialogLabel = it },
                         label = { Text("Link Text", color = TextMuted) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = AccentGold,
@@ -721,8 +527,8 @@ fun TextNoteEditorScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
-                        value = linkTargetUrl,
-                        onValueChange = { linkTargetUrl = it },
+                        value = state.linkDialogUrl,
+                        onValueChange = { state.linkDialogUrl = it },
                         label = { Text("Web URL", color = TextMuted) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = AccentGold,
@@ -737,69 +543,19 @@ fun TextNoteEditorScreen(
             },
             confirmButton = {
                 Button(
-                    onClick = {
-                        val text = linkLabel.ifBlank { "link" }
-                        val url = linkTargetUrl.trim().ifBlank { "https://" }
-                        val markdownLink = "[$text]($url)"
-                        val sel = bodyValue.selection
-                        val oldText = bodyValue.text
-                        val start = sel.min.coerceIn(0, oldText.length)
-                        val end = sel.max.coerceIn(0, oldText.length)
-                        val newText = oldText.substring(0, start) + markdownLink + oldText.substring(end)
-                        updateBodyWithUndo(TextFieldValue(newText, selection = TextRange(start + markdownLink.length)))
-                        showLinkDialog = false
-                    },
+                    onClick = { state.confirmLinkDialog() },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGold)
                 ) {
-                    Text("Insert", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text("Apply", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLinkDialog = false }) {
+                TextButton(onClick = { state.showLinkDialog = false }) {
                     Text("Cancel", color = TabCream)
                 }
             },
             containerColor = CardBg,
             shape = RoundedCornerShape(16.dp)
-        )
-    }
-}
-
-@Composable
-private fun ToolbarIconButton(
-    icon: ImageVector,
-    description: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit
-) {
-    IconButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(38.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = if (enabled) TabCream else TextMuted.copy(alpha = 0.4f),
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-@Composable
-private fun ToolbarTextButton(
-    label: String,
-    onClick: () -> Unit
-) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(38.dp)
-    ) {
-        Text(
-            text = label,
-            color = TabCream,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold
         )
     }
 }
