@@ -20,25 +20,134 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 
-enum class FeedbackCategory(val displayName: String) {
-    BUG_REPORT("Bug Report"),
-    SUGGESTION("Suggestion"),
-    FEATURE_IDEA("Feature Idea"),
-    GENERAL("General")
+enum class FeedbackCategory(val dbValue: String, val displayName: String) {
+    BUG_REPORT("Bug Report", "Bug Report"),
+    SUGGESTION("Suggestion", "Suggestion"),
+    FEATURE_IDEA("Feature Idea", "Feature Idea"),
+    GENERAL("General", "General");
+
+    companion object {
+        fun fromString(value: String): FeedbackCategory {
+            return entries.firstOrNull {
+                it.name.equals(value, ignoreCase = true) ||
+                it.dbValue.equals(value, ignoreCase = true) ||
+                it.displayName.equals(value, ignoreCase = true)
+            } ?: GENERAL
+        }
+    }
 }
 
 data class FeedbackSubmissionResult(
     val success: Boolean,
-    val message: String
+    val message: String,
+    val technicalDetails: String? = null,
+    val isRateLimited: Boolean = false,
+    val isQueuedOffline: Boolean = false
 )
+
+data class ParsedFeedbackError(
+    val isRateLimit: Boolean,
+    val isPermanentClientError: Boolean,
+    val userFriendlyMessage: String,
+    val technicalDetails: String
+)
+
+object FeedbackPayloadBuilder {
+    fun buildPayload(
+        id: String,
+        installUuid: String,
+        category: FeedbackCategory,
+        content: String,
+        email: String?,
+        diagnosticInfo: String?,
+        submittedAt: Long = System.currentTimeMillis()
+    ): JSONObject {
+        return JSONObject().apply {
+            put("id", id)
+            put("uuid", installUuid)
+            put("category", category.dbValue)
+            put("content", content.trim().take(5000))
+            if (!email.isNullOrBlank()) {
+                put("email", email.trim().take(255))
+            }
+            if (!diagnosticInfo.isNullOrBlank()) {
+                put("diagnostic_info", diagnosticInfo.trim().take(2000))
+            }
+            put("submitted_at", submittedAt)
+        }
+    }
+
+    fun parseResponse(code: Int, responseBody: String): ParsedFeedbackError {
+        val trimmedBody = responseBody.trim()
+        val isTriggerRateLimit = code == 400 && (
+            trimmedBody.contains("P0001", ignoreCase = true) ||
+            trimmedBody.contains("Rate limit", ignoreCase = true) ||
+            trimmedBody.contains("rate limit", ignoreCase = true)
+        )
+        val isHttp429 = code == 429
+        val isRateLimit = isTriggerRateLimit || isHttp429
+
+        if (isRateLimit) {
+            val friendlyMsg = if (trimmedBody.contains("60 seconds", ignoreCase = true)) {
+                "Rate limit active. Please wait 60 seconds between submissions. Your feedback is safely stored on device and will sync automatically."
+            } else {
+                "Daily submission limit reached (5 submissions per 24 hours). Your feedback is safely stored on device and will sync when the next slot opens."
+            }
+            return ParsedFeedbackError(
+                isRateLimit = true,
+                isPermanentClientError = false,
+                userFriendlyMessage = friendlyMsg,
+                technicalDetails = "HTTP $code (Rate limit trigger): ${trimmedBody.ifBlank { "Rate limit exceeded" }}"
+            )
+        }
+
+        if (code in 400..499) {
+            val isSchemaCheck = trimmedBody.contains("violates check constraint", ignoreCase = true) ||
+                    trimmedBody.contains("invalid input syntax", ignoreCase = true) ||
+                    trimmedBody.contains("null value in column", ignoreCase = true)
+            val friendly = if (isSchemaCheck) {
+                "The server rejected the submission format. Please check your input and try again."
+            } else {
+                "The server could not process the submission request ($code)."
+            }
+            return ParsedFeedbackError(
+                isRateLimit = false,
+                isPermanentClientError = true,
+                userFriendlyMessage = friendly,
+                technicalDetails = "HTTP $code (Client Error): ${trimmedBody.ifBlank { "Bad Request" }}"
+            )
+        }
+
+        if (code in 500..599) {
+            return ParsedFeedbackError(
+                isRateLimit = false,
+                isPermanentClientError = false,
+                userFriendlyMessage = "The feedback server is temporarily unavailable. Your feedback is saved on device and will sync when online.",
+                technicalDetails = "HTTP $code (Server Error): ${trimmedBody.ifBlank { "Internal Server Error" }}"
+            )
+        }
+
+        return ParsedFeedbackError(
+            isRateLimit = false,
+            isPermanentClientError = false,
+            userFriendlyMessage = "Unexpected server response ($code). Your feedback is saved locally.",
+            technicalDetails = "HTTP $code: $trimmedBody"
+        )
+    }
+}
 
 class FeedbackManager(private val context: Context) {
 
     companion object {
-        const val DAILY_LIMIT = 5
-        const val COOLDOWN_SECONDS = 60
-        const val COOLDOWN_MS = COOLDOWN_SECONDS * 1000L
-        private const val ROLLING_WINDOW_MS = 24 * 60 * 60 * 1000L
+        const val FEEDBACK_DAILY_LIMIT = 5
+        const val FEEDBACK_COOLDOWN_SECONDS = 60L
+        const val FEEDBACK_COOLDOWN_MS = FEEDBACK_COOLDOWN_SECONDS * 1000L
+        const val FEEDBACK_ROLLING_WINDOW_MS = 24 * 60 * 60 * 1000L
+
+        // Backward compatibility constants
+        const val DAILY_LIMIT = FEEDBACK_DAILY_LIMIT
+        const val COOLDOWN_SECONDS = FEEDBACK_COOLDOWN_SECONDS.toInt()
+        const val COOLDOWN_MS = FEEDBACK_COOLDOWN_MS
     }
 
     private val prefs by lazy {
@@ -75,7 +184,7 @@ class FeedbackManager(private val context: Context) {
             val array = JSONArray(raw)
             for (i in 0 until array.length()) {
                 val ts = array.optLong(i, 0L)
-                if (ts > now - ROLLING_WINDOW_MS) {
+                if (ts > now - FEEDBACK_ROLLING_WINDOW_MS) {
                     list.add(ts)
                 }
             }
@@ -85,15 +194,15 @@ class FeedbackManager(private val context: Context) {
 
     fun getRemainingDailyQuota(): Int {
         val count = getRecentSubmissionTimestamps().size
-        return (DAILY_LIMIT - count).coerceAtLeast(0)
+        return (FEEDBACK_DAILY_LIMIT - count).coerceAtLeast(0)
     }
 
     fun getTimeUntilNextSlotMs(): Long {
         val timestamps = getRecentSubmissionTimestamps()
-        if (timestamps.size < DAILY_LIMIT) return 0L
+        if (timestamps.size < FEEDBACK_DAILY_LIMIT) return 0L
         val oldestInWindow = timestamps.minOrNull() ?: return 0L
         val now = System.currentTimeMillis()
-        val nextSlotTime = oldestInWindow + ROLLING_WINDOW_MS
+        val nextSlotTime = oldestInWindow + FEEDBACK_ROLLING_WINDOW_MS
         return (nextSlotTime - now).coerceAtLeast(0L)
     }
 
@@ -109,8 +218,8 @@ class FeedbackManager(private val context: Context) {
     fun getCooldownRemainingSeconds(): Int {
         val lastSubmittedAt = prefs.getLong("last_submitted_at", 0L)
         val elapsed = System.currentTimeMillis() - lastSubmittedAt
-        return if (elapsed < COOLDOWN_MS) {
-            (((COOLDOWN_MS - elapsed) + 999) / 1000).toInt().coerceAtLeast(1)
+        return if (elapsed < FEEDBACK_COOLDOWN_MS) {
+            (((FEEDBACK_COOLDOWN_MS - elapsed) + 999) / 1000).toInt().coerceAtLeast(1)
         } else {
             0
         }
@@ -123,7 +232,7 @@ class FeedbackManager(private val context: Context) {
             val hours = nextSlotMs / (60 * 60 * 1000L)
             val minutes = (nextSlotMs % (60 * 60 * 1000L)) / (60 * 1000L)
             val timeText = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
-            return false to "Daily submission limit reached ($DAILY_LIMIT per 24 hours). Next slot opens in $timeText."
+            return false to "Daily submission limit reached ($FEEDBACK_DAILY_LIMIT per 24 hours). Next slot opens in $timeText."
         }
         val cooldownSec = getCooldownRemainingSeconds()
         if (cooldownSec > 0) {
@@ -140,11 +249,19 @@ class FeedbackManager(private val context: Context) {
     ): FeedbackSubmissionResult = withContext(Dispatchers.IO) {
         val (allowed, error) = canSubmit()
         if (!allowed) {
-            return@withContext FeedbackSubmissionResult(false, error ?: "Cannot submit feedback at this time.")
+            return@withContext FeedbackSubmissionResult(
+                success = false,
+                message = error ?: "Cannot submit feedback at this time.",
+                technicalDetails = null,
+                isRateLimited = getRemainingDailyQuota() <= 0 || getCooldownRemainingSeconds() > 0
+            )
         }
 
         if (content.trim().isBlank()) {
-            return@withContext FeedbackSubmissionResult(false, "Feedback content cannot be empty.")
+            return@withContext FeedbackSubmissionResult(
+                success = false,
+                message = "Feedback content cannot be empty."
+            )
         }
 
         val appVersion = try {
@@ -152,7 +269,7 @@ class FeedbackManager(private val context: Context) {
             val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pInfo.longVersionCode else @Suppress("DEPRECATION") pInfo.versionCode.toLong()
             "Fotara v${pInfo.versionName} (Build $code)"
         } catch (_: Exception) {
-            "Fotara v1.5.0"
+            "Fotara v1.5.0 Beta"
         }
 
         val diagnosticInfo = if (includeDiagnostics) {
@@ -160,23 +277,26 @@ class FeedbackManager(private val context: Context) {
         } else null
 
         val feedbackId = UUID.randomUUID().toString()
-        val payload = JSONObject().apply {
-            put("id", feedbackId)
-            put("uuid", getInstallUuid())
-            put("category", category.name)
-            put("content", content.trim())
-            if (!email.isNullOrBlank()) put("email", email.trim())
-            if (diagnosticInfo != null) put("diagnostic_info", diagnosticInfo)
-            put("submitted_at", System.currentTimeMillis())
-        }
+        val payload = FeedbackPayloadBuilder.buildPayload(
+            id = feedbackId,
+            installUuid = getInstallUuid(),
+            category = category,
+            content = content,
+            email = email,
+            diagnosticInfo = diagnosticInfo,
+            submittedAt = System.currentTimeMillis()
+        )
 
-        // 1. Save locally first so user work is never lost
+        // 1. Save locally first so user feedback is never lost
         saveToLocalQueue(payload)
         prefs.edit().putLong("last_submitted_at", System.currentTimeMillis()).apply()
 
-        // 2. Perform direct remote sync to Supabase
+        // 2. Perform direct remote sync to Supabase PostgREST endpoint
         var networkSuccess = false
         var resultMessage: String
+        var technicalDetails: String? = null
+        var isRateLimited = false
+        var isQueuedOffline = false
         var connection: HttpURLConnection? = null
 
         try {
@@ -218,39 +338,50 @@ class FeedbackManager(private val context: Context) {
                 recordSubmissionTimestamp()
                 resultMessage = "Thank you! Your feedback has been successfully sent to the developers."
             } else {
-                val isRateLimit = code == 429 ||
-                        responseText.contains("Rate limit", ignoreCase = true) ||
-                        responseText.contains("P0001", ignoreCase = true)
+                val parsed = FeedbackPayloadBuilder.parseResponse(code, responseText)
+                resultMessage = parsed.userFriendlyMessage
+                technicalDetails = parsed.technicalDetails
 
-                if (isRateLimit) {
+                if (parsed.isRateLimit) {
+                    isRateLimited = true
+                    isQueuedOffline = true
                     recordSubmissionTimestamp()
-                    resultMessage = "Server rate limit reached. Your feedback is safely stored on this device and will sync automatically."
-                } else if (code in 400..499) {
-                    // Permanent client error (e.g. malformed or rejected) - remove from queue so it doesn't loop
+                } else if (parsed.isPermanentClientError) {
+                    // Permanent client error: drop from local queue so it does not retry endlessly
                     removeFromLocalQueue(feedbackId)
-                    resultMessage = "The server rejected the submission format ($code). Details: $responseText"
                 } else {
-                    // Server 5xx error
-                    resultMessage = "Server unavailable ($code). Your feedback is safely queued on device and will sync when online."
+                    // Server 5xx error: keep in queue for future retry
+                    isQueuedOffline = true
                 }
                 Log.e("FeedbackManager", "Supabase HTTP $code: $responseText")
             }
         } catch (e: Exception) {
             Log.e("FeedbackManager", "Network connection error: ${e.message}", e)
             networkSuccess = false
+            isQueuedOffline = true
             resultMessage = "Unable to connect to server (${e.message ?: "Connection lost"}). Your feedback is saved locally and will send when online."
+            technicalDetails = "Network Error: ${e.javaClass.simpleName} - ${e.message}"
         } finally {
             connection?.disconnect()
         }
 
-        FeedbackSubmissionResult(networkSuccess, resultMessage)
+        FeedbackSubmissionResult(
+            success = networkSuccess,
+            message = resultMessage,
+            technicalDetails = technicalDetails,
+            isRateLimited = isRateLimited,
+            isQueuedOffline = isQueuedOffline
+        )
     }
 
     suspend fun flushLocalQueue(): Int = withContext(Dispatchers.IO) {
         var syncedCount = 0
         try {
-            // Check daily quota before flushing
+            // Check daily quota and cooldown before flushing
             if (getRemainingDailyQuota() <= 0) {
+                return@withContext 0
+            }
+            if (getCooldownRemainingSeconds() > 0) {
                 return@withContext 0
             }
 
@@ -264,11 +395,11 @@ class FeedbackManager(private val context: Context) {
                 val item = array.optJSONObject(i) ?: continue
                 val isSynced = item.optBoolean("synced", false)
                 if (isSynced) {
-                    continue // Purge already synced items from queue
+                    continue // Purge already synced items
                 }
 
-                // Flush only one item at a time to respect server pacing
-                if (sentThisRound || getRemainingDailyQuota() <= 0) {
+                // Flush strictly ONE item at a time to respect server pacing
+                if (sentThisRound || getRemainingDailyQuota() <= 0 || getCooldownRemainingSeconds() > 0) {
                     updatedArray.put(item)
                     continue
                 }
@@ -314,13 +445,20 @@ class FeedbackManager(private val context: Context) {
                         prefs.edit().putLong("last_submitted_at", System.currentTimeMillis()).apply()
                         syncedCount++
                         sentThisRound = true
-                    } else if (code in 400..499 && !resp.contains("Rate limit", ignoreCase = true) && !resp.contains("P0001")) {
-                        // Permanent client error: drop item so queue is not poisoned
-                        Log.w("FeedbackManager", "Dropping malformed queued item: $resp")
-                        continue
+                    } else {
+                        val parsed = FeedbackPayloadBuilder.parseResponse(code, resp)
+                        if (parsed.isPermanentClientError) {
+                            // Drop permanently malformed item from queue
+                            Log.w("FeedbackManager", "Dropping malformed queued feedback item: $resp")
+                            continue
+                        } else if (parsed.isRateLimit) {
+                            // Rate limit reached: pause flush and retain item
+                            sentThisRound = true
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("FeedbackManager", "Error flushing queued feedback item: ${e.message}")
+                    sentThisRound = true
                 } finally {
                     conn?.disconnect()
                 }
@@ -353,7 +491,6 @@ class FeedbackManager(private val context: Context) {
             for (i in 0 until array.length()) {
                 val obj = array.optJSONObject(i) ?: continue
                 if (obj.optString("id") == feedbackId) {
-                    // Mark synced or omit
                     obj.put("synced", true)
                 }
                 updated.put(obj)

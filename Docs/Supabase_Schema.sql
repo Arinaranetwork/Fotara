@@ -15,7 +15,7 @@
 -- 4. Your suggestions table is now securely provisioned with:
 --    - Row Level Security (RLS) allowing mobile anon clients to INSERT only.
 --    - Zero SELECT permissions for anon (user feedback & email remain private).
---    - Postgres trigger enforcing max 10 submissions/hour per installation UUID.
+--    - Postgres trigger enforcing max 5 submissions/24-hours and 60-second cooldown per installation UUID.
 -- ============================================================================
 
 -- 1. Enable UUID Extension
@@ -25,7 +25,10 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.suggestions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     uuid TEXT NOT NULL,
-    category TEXT NOT NULL CHECK (category IN ('FEATURE_IDEA', 'BUG_REPORT', 'SUGGESTION', 'GENERAL')),
+    category TEXT NOT NULL CHECK (category IN (
+        'Bug Report', 'Suggestion', 'Feature Idea', 'General',
+        'BUG_REPORT', 'SUGGESTION', 'FEATURE_IDEA', 'GENERAL'
+    )),
     content TEXT NOT NULL,
     email TEXT,
     diagnostic_info TEXT,
@@ -73,20 +76,37 @@ USING (true)
 WITH CHECK (true);
 
 -- 6. Rate Limiting Function & Trigger (Database Level)
--- Enforces a maximum of 10 submissions per hour per unique installation UUID.
+-- Enforces:
+-- 1) 60-second cooldown per installation UUID
+-- 2) Maximum of 5 submissions per rolling 24 hours per installation UUID
 CREATE OR REPLACE FUNCTION public.check_feedback_rate_limit()
 RETURNS TRIGGER AS $$
 DECLARE
     recent_submissions_count INT;
+    last_submission_time TIMESTAMPTZ;
 BEGIN
+    -- 1. Enforce 60-second cooldown per installation UUID
+    SELECT created_at
+    INTO last_submission_time
+    FROM public.suggestions
+    WHERE uuid = NEW.uuid
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    IF last_submission_time IS NOT NULL AND last_submission_time > (NOW() - INTERVAL '60 seconds') THEN
+        RAISE EXCEPTION 'Rate limit exceeded: Please wait 60 seconds between feedback submissions.'
+            USING ERRCODE = 'P0001';
+    END IF;
+
+    -- 2. Enforce rolling 24-hour limit (max 5 submissions per installation UUID)
     SELECT COUNT(*)
     INTO recent_submissions_count
     FROM public.suggestions
     WHERE uuid = NEW.uuid
-      AND created_at > (NOW() - INTERVAL '1 hour');
+      AND created_at > (NOW() - INTERVAL '24 hours');
 
-    IF recent_submissions_count >= 10 THEN
-        RAISE EXCEPTION 'Rate limit exceeded: A maximum of 10 submissions per hour per installation is permitted.'
+    IF recent_submissions_count >= 5 THEN
+        RAISE EXCEPTION 'Rate limit exceeded: A maximum of 5 submissions per 24 hours per installation is permitted.'
             USING ERRCODE = 'P0001';
     END IF;
 
@@ -115,37 +135,4 @@ GRANT ALL ON TABLE public.suggestions TO service_role;
 -- Docs/Supabase_Email_Notification_Guide.md and Docs/SupabaseEmailBridge.gs
 --
 -- Recommended setup: Use Supabase Dashboard > Database > Webhooks with Google Apps Script.
--- Alternatively, if using pg_net in Postgres:
 -- ============================================================================
-
--- Uncomment below if you prefer a native SQL pg_net trigger:
-/*
-CREATE EXTENSION IF NOT EXISTS pg_net;
-
-CREATE OR REPLACE FUNCTION public.forward_feedback_to_email()
-RETURNS TRIGGER AS $$
-DECLARE
-    -- Replace with your deployed Google Apps Script Web App URL:
-    webhook_url TEXT := 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
-BEGIN
-    PERFORM net.http_post(
-        url := webhook_url,
-        body := json_build_object(
-            'type', TG_OP,
-            'table', TG_TABLE_NAME,
-            'schema', TG_TABLE_SCHEMA,
-            'record', row_to_json(NEW)
-        )::jsonb,
-        headers := '{"Content-Type": "application/json"}'::jsonb
-    );
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-DROP TRIGGER IF EXISTS trg_forward_feedback_email ON public.suggestions;
-
-CREATE TRIGGER trg_forward_feedback_email
-AFTER INSERT ON public.suggestions
-FOR EACH ROW
-EXECUTE FUNCTION public.forward_feedback_to_email();
-*/

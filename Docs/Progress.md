@@ -1,8 +1,8 @@
 # Progress - Fotara
-Last Updated: 2026-09-30
+Last Updated: 2026-10-01
 
 ## Current Phase
-Phase 8 - MasterV150EcosystemAndCanvas [Completed]
+Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [In Progress]
 
 ## Phases
 | Phase | Name                                | Status      |
@@ -14,7 +14,7 @@ Phase 8 - MasterV150EcosystemAndCanvas [Completed]
 | 5     | GroupExpansionAndLinkIt             | Completed   |
 | 6     | DocumentNotesAndConnectedFeatures   | Completed   |
 | 7     | NativeTextNotesAndAdvancedDocuments | Completed   |
-| 8     | MasterV150EcosystemAndCanvas        | Completed   |
+| 8     | MasterV150EcosystemAndCanvas        | In Progress |
 
 ## Completed
 - [x] Analyze product brief and UI reference image - Phase 1
@@ -160,13 +160,24 @@ Phase 8 - MasterV150EcosystemAndCanvas [Completed]
 - [x] 1.8-C: Canvas persistence (compact binary serialization, chunked Room storage, cross-cutting hooks) - Phase 8 (Milestone 4)
 - [x] 1.8-D: Canvas extended features evaluation and implementation - Phase 8 (Milestone 4)
 - [x] 2.0-A to 2.0-G: Final hardening pass (cross-API regression, performance benchmarks, security audit, docs) - Phase 8 (Milestone 5)
-- [x] Package, sign, and publish Fotara 1.5.0 Beta release - Phase 8
+- [x] C1-0 Setup: Audit repository state, confirm branch release/1.5.0, set versionName to '1.5.0 Beta', raise versionCode to 14, confirm dynamic version resolution in Settings and Update screens, create structured 1.5.0 Changelog and What's New source - Phase 8 (Chunk C1)
+- [x] C1-A English-Only App: Global audit, eliminate Indonesian text, enforce English resource restriction via resourceConfigurations = ['en'], enforce explicit Locale.US on all date formatters, verify zero emojis across repo - Phase 8 (Chunk C1)
+- [x] C1-B Suggestions & Bug Reports: Fix HTTP 400 root causes (schema alignment, category check constraint support for Title Case and UPPER_CASE, Content-Length byte accuracy, Prefer: return=minimal, PostgREST P0001 trigger classification, offline queue poison prevention, collapsible technical details, 60s cooldown countdown, 5/24h rolling quota, Supabase migration SQL, unit tests, and C11 verification script) - Phase 8 (Chunk C1)
 
 ## In Progress
-None.
+None (Chunk C1 complete, awaiting next chunk).
 
 ## Pending
-None.
+- [ ] Chunk C2: PDF stability, Split to Images, header text, per-page zoom
+- [ ] Chunk C3: date added metadata, date filters, LinkIt corner glow
+- [ ] Chunk C4: text note editor (toolbar and live rendering)
+- [ ] Chunk C5: schedules on every note type
+- [ ] Chunk C6: Today widget, notification settings, settings audit
+- [ ] Chunk C7: Share to Fotara
+- [ ] Chunk C8: canvas part 1: engine, data model, persistence (no UI)
+- [ ] Chunk C9: canvas part 2: rendering, gestures, drawing
+- [ ] Chunk C10: canvas part 3: tools, layers, images, export
+- [ ] Chunk C11: integration, hardening, end-to-end verification, release build
 
 ## Blocked
 None.

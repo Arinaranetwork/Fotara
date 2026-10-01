@@ -186,9 +186,9 @@ class UpdateManager(private val context: Context) {
 
                 // Check version comparison dynamically against installed app version
                 val currentVersion = try {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.4.0"
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.5.0 Beta"
                 } catch (_: Exception) {
-                    "1.4.0"
+                    "1.5.0 Beta"
                 }
 
                 val previousRelease = _latestRelease.value
@@ -252,11 +252,11 @@ class UpdateManager(private val context: Context) {
         val cleanRemote = remoteTag
             .replace("Fotara", "", ignoreCase = true)
             .trim('_', '-', ' ', 'v', 'V')
-            .split("-", "_")[0]
+            .split("-", "_", " ")[0]
         val cleanCurrent = currentTag
             .replace("Fotara", "", ignoreCase = true)
             .trim('_', '-', ' ', 'v', 'V')
-            .split("-", "_")[0]
+            .split("-", "_", " ")[0]
 
         val remoteParts = cleanRemote.split(".").mapNotNull { it.toIntOrNull() }
         val currentParts = cleanCurrent.split(".").mapNotNull { it.toIntOrNull() }

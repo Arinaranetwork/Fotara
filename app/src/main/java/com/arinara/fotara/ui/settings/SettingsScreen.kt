@@ -118,16 +118,16 @@ fun SettingsScreen(
                 @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(context.packageName, 0)
             }
-            val vName = pInfo?.versionName ?: "1.5.0"
+            val vName = pInfo?.versionName ?: "1.5.0 Beta"
             val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                pInfo?.longVersionCode ?: 13L
+                pInfo?.longVersionCode ?: 14L
             } else {
                 @Suppress("DEPRECATION")
-                (pInfo?.versionCode ?: 13).toLong()
+                (pInfo?.versionCode ?: 14).toLong()
             }
             Pair(vName, vCode)
         } catch (_: Exception) {
-            Pair("1.5.0", 13L)
+            Pair("1.5.0 Beta", 14L)
         }
     }
 
@@ -420,8 +420,13 @@ fun SettingsScreen(
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
+                        val displayVersion = if (appVersionName.contains("Beta", ignoreCase = true)) {
+                            appVersionName
+                        } else {
+                            "$appVersionName Beta"
+                        }
                         Text(
-                            text = "Version $appVersionName Beta (Build $appVersionCode)",
+                            text = "Version $displayVersion (Build $appVersionCode)",
                             color = FolderTabCream,
                             fontSize = 14.sp
                         )

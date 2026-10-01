@@ -32,31 +32,40 @@ function doPost(e) {
     var createdAt = record.created_at || new Date().toISOString();
 
     // Map Category to Visual Badges & Titles
+    var bugReportConfig = {
+      label: "BUG REPORT",
+      color: "#E63946",
+      bgColor: "#FFE3E5",
+      subjectPrefix: "[BUG REPORT]"
+    };
+    var featureIdeaConfig = {
+      label: "FEATURE IDEA",
+      color: "#D97706",
+      bgColor: "#FEF3C7",
+      subjectPrefix: "[FEATURE IDEA]"
+    };
+    var suggestionConfig = {
+      label: "SUGGESTION",
+      color: "#059669",
+      bgColor: "#D1FAE5",
+      subjectPrefix: "[SUGGESTION]"
+    };
+    var generalConfig = {
+      label: "GENERAL FEEDBACK",
+      color: "#2563EB",
+      bgColor: "#DBEAFE",
+      subjectPrefix: "[FEEDBACK]"
+    };
+
     var categoryConfig = {
-      "BUG_REPORT": {
-        label: "BUG REPORT",
-        color: "#E63946",
-        bgColor: "#FFE3E5",
-        subjectPrefix: "[BUG REPORT]"
-      },
-      "FEATURE_IDEA": {
-        label: "FEATURE IDEA",
-        color: "#D97706",
-        bgColor: "#FEF3C7",
-        subjectPrefix: "[FEATURE IDEA]"
-      },
-      "SUGGESTION": {
-        label: "SUGGESTION",
-        color: "#059669",
-        bgColor: "#D1FAE5",
-        subjectPrefix: "[SUGGESTION]"
-      },
-      "GENERAL": {
-        label: "GENERAL FEEDBACK",
-        color: "#2563EB",
-        bgColor: "#DBEAFE",
-        subjectPrefix: "[FEEDBACK]"
-      }
+      "BUG_REPORT": bugReportConfig,
+      "Bug Report": bugReportConfig,
+      "FEATURE_IDEA": featureIdeaConfig,
+      "Feature Idea": featureIdeaConfig,
+      "SUGGESTION": suggestionConfig,
+      "Suggestion": suggestionConfig,
+      "GENERAL": generalConfig,
+      "General": generalConfig
     };
 
     var cat = categoryConfig[category] || categoryConfig["GENERAL"];

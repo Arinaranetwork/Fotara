@@ -7,7 +7,10 @@
 package com.arinara.fotara.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,11 +19,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -33,12 +40,14 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,6 +67,10 @@ import kotlinx.coroutines.launch
 private val CardBg = Color(0xFF141936)
 private val TabCream = Color(0xFFEAE3D2)
 private val AccentGold = Color(0xFFF77F00)
+private val ColorGreen = Color(0xFF2A9D8F)
+private val ColorRed = Color(0xFFE63946)
+private val ColorBlue = Color(0xFF3A86FF)
+private val DetailsBg = Color(0xFF0A0E24)
 
 @Composable
 fun FeedbackDialog(
@@ -70,7 +84,9 @@ fun FeedbackDialog(
     var includeDiagnostics by remember { mutableStateOf(true) }
     var isSubmitting by remember { mutableStateOf(false) }
     var resultMessage by remember { mutableStateOf<String?>(null) }
+    var technicalDetails by remember { mutableStateOf<String?>(null) }
     var isSuccess by remember { mutableStateOf(false) }
+    var showTechnicalDetails by remember { mutableStateOf(false) }
 
     var cooldownRemaining by remember {
         mutableIntStateOf(feedbackManager.getCooldownRemainingSeconds())
@@ -78,15 +94,25 @@ fun FeedbackDialog(
     var remainingQuota by remember {
         mutableIntStateOf(feedbackManager.getRemainingDailyQuota())
     }
+    var nextSlotMs by remember {
+        mutableLongStateOf(feedbackManager.getTimeUntilNextSlotMs())
+    }
 
-    // Cooldown countdown timer loop
+    // Cooldown countdown timer loop (1 second updates)
     LaunchedEffect(Unit) {
         feedbackManager.flushLocalQueue()
         while (true) {
             cooldownRemaining = feedbackManager.getCooldownRemainingSeconds()
             remainingQuota = feedbackManager.getRemainingDailyQuota()
+            nextSlotMs = feedbackManager.getTimeUntilNextSlotMs()
             delay(1000L)
         }
+    }
+
+    val formatNextSlotText: (Long) -> String = { ms ->
+        val hours = ms / (60 * 60 * 1000L)
+        val minutes = (ms % (60 * 60 * 1000L)) / (60 * 1000L)
+        if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
     }
 
     AlertDialog(
@@ -100,24 +126,88 @@ fun FeedbackDialog(
                     fontSize = 18.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Daily quota: $remainingQuota / ${FeedbackManager.DAILY_LIMIT} submissions remaining",
-                    color = TabCream.copy(alpha = 0.65f),
-                    fontSize = 12.sp
-                )
+                if (remainingQuota > 0) {
+                    Text(
+                        text = "Daily quota: $remainingQuota / ${FeedbackManager.FEEDBACK_DAILY_LIMIT} submissions remaining",
+                        color = TabCream.copy(alpha = 0.7f),
+                        fontSize = 12.sp
+                    )
+                } else {
+                    Text(
+                        text = "Daily limit reached (0 / ${FeedbackManager.FEEDBACK_DAILY_LIMIT}). Next slot opens in ${formatNextSlotText(nextSlotMs)}.",
+                        color = ColorRed,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Result / Status Banner
                 if (resultMessage != null) {
-                    Text(
-                        text = resultMessage!!,
-                        color = if (isSuccess) Color(0xFF2A9D8F) else Color(0xFFE63946),
-                        fontSize = 13.5.sp,
-                        lineHeight = 18.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    ) {
+                        Text(
+                            text = resultMessage!!,
+                            color = if (isSuccess) ColorGreen else ColorRed,
+                            fontSize = 13.5.sp,
+                            lineHeight = 18.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        // Collapsible technical details toggle
+                        if (!technicalDetails.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clickable { showTechnicalDetails = !showTechnicalDetails }
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (showTechnicalDetails) "Hide technical details" else "Show technical details",
+                                    color = TabCream.copy(alpha = 0.65f),
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = if (showTechnicalDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = TabCream.copy(alpha = 0.65f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+
+                            if (showTechnicalDetails) {
+                                Surface(
+                                    color = DetailsBg,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E2548)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp)
+                                ) {
+                                    Text(
+                                        text = technicalDetails!!,
+                                        color = TabCream.copy(alpha = 0.75f),
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp,
+                                        modifier = Modifier.padding(10.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (!isSuccess) {
@@ -141,7 +231,7 @@ fun FeedbackDialog(
                             },
                             label = { Text("Bug Report", fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFFE63946),
+                                selectedContainerColor = ColorRed,
                                 selectedLabelColor = Color.White,
                                 selectedLeadingIconColor = Color.White,
                                 containerColor = Color.Transparent,
@@ -162,7 +252,7 @@ fun FeedbackDialog(
                             },
                             label = { Text("Suggestion", fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFF2A9D8F),
+                                selectedContainerColor = ColorGreen,
                                 selectedLabelColor = Color.White,
                                 selectedLeadingIconColor = Color.White,
                                 containerColor = Color.Transparent,
@@ -213,7 +303,7 @@ fun FeedbackDialog(
                             },
                             label = { Text("General", fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFF3A86FF),
+                                selectedContainerColor = ColorBlue,
                                 selectedLabelColor = Color.White,
                                 selectedLeadingIconColor = Color.White,
                                 containerColor = Color.Transparent,
@@ -307,9 +397,11 @@ fun FeedbackDialog(
                             )
                             isSubmitting = false
                             resultMessage = res.message
+                            technicalDetails = res.technicalDetails
                             isSuccess = res.success
                             cooldownRemaining = feedbackManager.getCooldownRemainingSeconds()
                             remainingQuota = feedbackManager.getRemainingDailyQuota()
+                            nextSlotMs = feedbackManager.getTimeUntilNextSlotMs()
                         }
                     },
                     enabled = isButtonEnabled,

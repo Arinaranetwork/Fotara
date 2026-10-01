@@ -172,7 +172,7 @@ fun WhatsNewScreen(
         }
     }
 
-    val versionText = release?.version ?: "Fotara v1.5.0"
+    val versionText = release?.version ?: "Fotara v1.5.0 Beta"
     val defaultNotes = """
         ## What's New
         - Unlimited Drawing Canvas (Alpha): Introducing an infinite 2D vector drawing canvas note type with freeform pan, pinch-to-zoom, pressure-sensitive pen, highlighter, eraser, multi-layer management, image attachments, and high-resolution PNG export.

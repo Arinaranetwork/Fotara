@@ -131,8 +131,13 @@ INSERT INTO public.suggestions (
 
 ---
 
-## 5. Security & Privacy Summary
+## 5. Security, Rate Limits & Privacy Summary
 
-1. **Insert-Only Permissions**: Client applications connect with `anon` credentials restricted strictly to `INSERT` operations with a rolling 24-hour rate limit.
-2. **Data Confidentiality**: Client `anon` roles possess no `SELECT` permissions on `public.suggestions`, preventing inspection of other users' submissions.
-3. **Protected Dispatch**: Webhook operations execute server-to-server, with no developer credentials or email secrets embedded in client application binaries.
+1. **Insert-Only Permissions**: Client applications connect with `anon` credentials restricted strictly to `INSERT` operations with `Prefer: return=minimal`. Anonymous clients possess zero `SELECT` permissions.
+2. **Tightened Rate Limits**: Enforced on both client and database trigger:
+   - **Cooldown**: 60 seconds between submissions per installation UUID.
+   - **Daily Quota**: Maximum of 5 submissions per rolling 24-hour window per installation UUID.
+   - **Database Trigger Exception**: Returns error code `P0001` allowing the mobile client to distinguish rate-limit pauses from malformed requests.
+3. **Database Migration Script**: To update existing live Supabase instances to the new constraints and trigger, run [`Docs/Migration_2026-10-01_Feedback_Limits_And_Categories.sql`](file:///c:/Users/sepli/OneDrive/Documents/File%20DD/Coding/Fotara/Docs/Migration_2026-10-01_Feedback_Limits_And_Categories.sql).
+4. **Data Confidentiality**: Client `anon` roles possess no `SELECT` permissions on `public.suggestions`, preventing inspection of other users' submissions.
+5. **Protected Dispatch**: Webhook operations execute server-to-server, with no developer credentials or email secrets embedded in client application binaries.
