@@ -12,7 +12,7 @@
 ### Intelligent Local-First Coursework & Study Note Organization for Android
 
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%2B)-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
-[![Version](https://img.shields.io/badge/Release-v1.5.0%20Beta-00B4D8?style=flat-square)](https://github.com/Arinaranetwork/Fotara/releases)
+[![Version](https://img.shields.io/badge/Release-v1.5.1%20Beta-00B4D8?style=flat-square)](https://github.com/Arinaranetwork/Fotara/releases)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Distribution](https://img.shields.io/badge/License-Proprietary%20%26%20Educational-2A9D8F?style=flat-square)](#distribution--license)
@@ -22,7 +22,7 @@
   <b>Fotara</b> is a high-performance, private, on-device study organization ecosystem built for students, researchers, and lifelong learners. Effortlessly structure, search, schedule, and review whiteboard captures, textbook excerpts, handwritten equations, rich text notes, multi-page PDFs, Word documents, and infinite drawing canvases with zero cloud lock-in.
 </p>
 
-[Download Latest APK (v1.5.0 Beta)](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.0_Beta) • [Features](#key-features) • [Installation](#installation) • [Architecture](#architecture--tech-stack) • [Issues & Feedback](https://github.com/Arinaranetwork/Fotara/issues)
+[Download Latest APK (v1.5.1 Beta)](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.1_Beta) • [Features](#key-features) • [Installation](#installation) • [Architecture](#architecture--tech-stack) • [Issues & Feedback](https://github.com/Arinaranetwork/Fotara/issues)
 
 </div>
 
@@ -38,7 +38,7 @@ Traditional mobile gallery apps dump educational material alongside casual snaps
 - **Dedicated Glance "Today" Widget**: Rectangular home screen widget displaying coursework due today, newly captured study notes, and upcoming scheduled alerts with instant deep-linking.
 - **Share to Fotara**: Receive up to 30 external images, PDFs, Word documents, Markdown files, or plain text notes directly into Fotara with an intuitive destination placement screen.
 - **Native Rich-Text Notes**: Write and format notes with a live Markdown-backed editor, formatting toolbar (bold, italic, strikethrough, headings, lists, quotes, code, links), and instant debounced autosave.
-- **High-Fidelity Document Viewer**: Direct in-app rendering for Microsoft Word (.docx) and virtualized PDFs with on-demand viewport rasterization, smooth pinch-to-zoom, and two-axis panning.
+- **High-Fidelity Document Viewer**: Direct in-app rendering for Microsoft Word (.docx) and virtualized PDFs with on-demand viewport rasterization, smooth pinch-to-zoom, two-axis panning, and a dedicated photo-style Page Viewer.
 - **On-Device Optical Character Recognition (OCR)**: Google ML Kit extracts text from photo notes locally and populates an SQLite FTS4 full-text search index for sub-second retrieval.
 - **Private & Safe**: Device biometrics, PIN encryption, and a 30-day soft-delete trash retention policy keep study materials secure and recoverable.
 
@@ -69,7 +69,7 @@ Traditional mobile gallery apps dump educational material alongside casual snaps
 - **Placement Interface**: Browse target folders and subfolders with live item counts, collapsible staged preview tray, and single-tap "Place Here" confirmation.
 
 ### High-Fidelity Documents & Rich Text
-- **In-Viewer PDF Zoom**: Native per-page pinch-to-zoom and pan with on-demand viewport density scaling, eliminating black borders and rasterization artifacts.
+- **In-Viewer PDF Zoom & Photo-Style Page Viewer**: Dedicated fullscreen page viewer with pinch-to-zoom up to 4.0x, two-axis pan, double-tap zoom, zoom-gated swipe navigation, and recognized OCR text drawer, alongside viewport-level list zoom with free two-axis pan.
 - **Intelligent Split to Images**: Convert PDF documents into white-canvas photos, automatically grouping documents with 5 or more pages into a Photo Group.
 - **Native Markdown Notes**: Full markdown formatting toolbar with word count, character count, find/replace, and dedicated raw MD / TXT sharing.
 
@@ -89,7 +89,7 @@ Traditional mobile gallery apps dump educational material alongside casual snaps
 
 | Metric | Status |
 |---|---|
-| **Current Build** | `v1.5.0 Beta` (Build Code: `14`) |
+| **Current Build** | `v1.5.1 Beta` (Build Code: `15`) |
 | **Release Channel** | Beta |
 | **Supported Devices** | Android 7.0 (API 24) through Android 16 (API 36) |
 | **Issue Tracker** | **Active & Open** — Bug reports and suggestions are welcome via [GitHub Issues](https://github.com/Arinaranetwork/Fotara/issues). |
@@ -109,8 +109,8 @@ Fotara is distributed under the **Arinara Network Proprietary & Educational Soft
 
 ## Installation
 
-1. Navigate to the **[v1.5.0 Beta Release](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.0_Beta)** page.
-2. Under **Assets**, download `Fotara_1.5.0_Beta.apk`.
+1. Navigate to the **[v1.5.1 Beta Release](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.1_Beta)** page.
+2. Under **Assets**, download `Fotara_1.5.1_Beta.apk`.
 3. On your Android device, open the downloaded `.apk` file.
 4. If prompted, grant permission to *Install from Unknown Sources* for your browser or file manager.
 5. Launch Fotara, complete the guided first-run onboarding, and organize your study notes!

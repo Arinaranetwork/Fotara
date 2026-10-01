@@ -24,3 +24,11 @@ Released: 2026-09-30   Status: Beta
 - Fixed non-functional bold, italic, strikethrough, heading, and quote buttons in the native text note editor.
 - Fixed transparent page rasterization artifacts in PDF rendering and Split to Images export.
 - Removed legacy "Sharp PDF Note" label across all screen subtitles and headers.
+
+## Patches
+### 1.5.1 - 2026-10-01
+- Photo-Style PDF Page Viewer: New Page View button in the PDF header opens a dedicated fullscreen page viewer with pinch-to-zoom up to 4.0x, free two-axis pan, double-tap zoom, zoom-gated horizontal swipe, and a collapsible Recognized OCR Text bottom sheet with instant copy.
+- Viewport-Level List Zoom: Rebuilt PDF list viewer zoom to transform the entire document viewport with natural two-axis pan, double-tap to zoom or reset, and live amber status indicator.
+- Resolved slim and distorted PDF page rendering at 1.0x by eliminating the default aspect ratio race condition and computing exact target dimensions with unified layout math.
+- Fixed boxed in-card zoom constraints so zooming in the PDF list no longer feels boxed into a single page.
+- Fixed high-density bitmap allocation during pinch gestures with memory-bounded caching and automatic resource reclamation.

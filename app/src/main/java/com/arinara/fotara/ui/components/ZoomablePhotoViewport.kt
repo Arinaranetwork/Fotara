@@ -52,17 +52,19 @@ import java.io.File
  * - Pinching back out (< 1.05f) resets to 1.0f and centers offset.
  * - Reports zoom state to parent via [onZoomChanged] so HorizontalPager can disable swiping.
  */
+/**
+ * Generic ZoomableBox implementing zoom-gated swipe navigation, pinch-to-zoom,
+ * continuous 2-axis panning, and animated double-tap toggling.
+ * Reused across Photo Viewer, Review Sliders, and PDF Page Viewer.
+ */
 @Composable
-fun ZoomablePhotoViewport(
-    photo: Photo,
-    imageVersion: Long = 0L,
+fun ZoomableBox(
     modifier: Modifier = Modifier,
-    maxScale: Float = 3.0f,
+    maxScale: Float = 4.0f,
     doubleTapScale: Float = 2.0f,
-    onZoomChanged: (Boolean) -> Unit = {}
+    onZoomChanged: (Boolean) -> Unit = {},
+    content: @Composable (scale: Float) -> Unit
 ) {
-    val context = LocalContext.current
-
     var targetScale by remember { mutableFloatStateOf(1f) }
     var targetOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -147,7 +149,6 @@ fun ZoomablePhotoViewport(
             },
         contentAlignment = Alignment.Center
     ) {
-        val file = File(photo.fileUri)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -159,31 +160,62 @@ fun ZoomablePhotoViewport(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            if (file.exists()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(file)
-                        .setParameter("v", imageVersion)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = photo.caption ?: "Note photo",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize()
+            content(animatedScale)
+        }
+    }
+}
+
+/**
+ * ZoomablePhotoViewport implements v1.1 Addendum 6:
+ * - Gates horizontal swipe navigation on scale == 1.0f (fit-to-screen).
+ * - Enables pinch-to-zoom up to maxScale = 3.0f (proposed default).
+ * - Enables panning when zoomed in (scale > 1.0f).
+ * - Double-tap toggles between 1.0f and 2.0f with a 250ms animation (proposed default).
+ * - Pinching back out (< 1.05f) resets to 1.0f and centers offset.
+ * - Reports zoom state to parent via [onZoomChanged] so HorizontalPager can disable swiping.
+ */
+@Composable
+fun ZoomablePhotoViewport(
+    photo: Photo,
+    imageVersion: Long = 0L,
+    modifier: Modifier = Modifier,
+    maxScale: Float = 3.0f,
+    doubleTapScale: Float = 2.0f,
+    onZoomChanged: (Boolean) -> Unit = {}
+) {
+    val context = LocalContext.current
+    val file = remember(photo.fileUri) { File(photo.fileUri) }
+
+    ZoomableBox(
+        modifier = modifier,
+        maxScale = maxScale,
+        doubleTapScale = doubleTapScale,
+        onZoomChanged = onZoomChanged
+    ) {
+        if (file.exists()) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(file)
+                    .setParameter("v", imageVersion)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = photo.caption ?: "Note photo",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize(0.85f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF070B1F))
+                    .border(1.dp, MidnightCardOutline, RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.material3.Text(
+                    text = photo.caption ?: "Note Photo",
+                    color = Color.White
                 )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize(0.85f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF070B1F))
-                        .border(1.dp, MidnightCardOutline, RoundedCornerShape(16.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.material3.Text(
-                        text = photo.caption ?: "Note Photo",
-                        color = Color.White
-                    )
-                }
             }
         }
     }

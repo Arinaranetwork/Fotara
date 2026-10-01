@@ -58,6 +58,21 @@ class PdfPageRenderer(val file: File) : Closeable {
             renderer = r
             pageCount = r.pageCount
             aspectRatioCache = FloatArray(pageCount) { 0f }
+
+            // Pre-populate aspect ratio cache immediately for all pages so list layout is final before any bitmap exists
+            for (i in 0 until pageCount) {
+                var page: PdfRenderer.Page? = null
+                try {
+                    page = r.openPage(i)
+                    val w = page.width.toFloat()
+                    val h = page.height.toFloat()
+                    aspectRatioCache[i] = if (h > 0f) w / h else 0.707f
+                } catch (_: Exception) {
+                    aspectRatioCache[i] = 0.707f
+                } finally {
+                    try { page?.close() } catch (_: Exception) {}
+                }
+            }
         } catch (e: SecurityException) {
             close()
             throw PdfPasswordException("Password required to read: ${file.name}")
@@ -67,35 +82,10 @@ class PdfPageRenderer(val file: File) : Closeable {
         }
     }
 
-    suspend fun getPageAspectRatio(pageIndex: Int): Float = withContext(Dispatchers.IO) {
-        if (pageIndex < 0 || pageIndex >= pageCount) return@withContext 0.707f
-
-        // Fast path: cached aspect ratio without locking renderMutex
+    fun getPageAspectRatio(pageIndex: Int): Float {
+        if (pageIndex < 0 || pageIndex >= pageCount) return 0.707f
         val cached = aspectRatioCache[pageIndex]
-        if (cached > 0f) return@withContext cached
-
-        currentCoroutineContext().ensureActive()
-
-        renderMutex.withLock {
-            // Double check inside lock
-            if (aspectRatioCache[pageIndex] > 0f) return@withContext aspectRatioCache[pageIndex]
-
-            val r = renderer ?: return@withContext 0.707f
-            var page: PdfRenderer.Page? = null
-            try {
-                page = r.openPage(pageIndex)
-                val ratio = if (page.height > 0) page.width.toFloat() / page.height.toFloat() else 0.707f
-                aspectRatioCache[pageIndex] = ratio
-                ratio
-            } catch (e: Exception) {
-                Log.w("PdfPageRenderer", "Error reading aspect ratio for page $pageIndex: ${e.message}")
-                0.707f
-            } finally {
-                try {
-                    page?.close()
-                } catch (_: Exception) {}
-            }
-        }
+        return if (cached > 0f) cached else 0.707f
     }
 
     suspend fun renderPage(
@@ -108,9 +98,14 @@ class PdfPageRenderer(val file: File) : Closeable {
 
         currentCoroutineContext().ensureActive()
 
-        // Cap dimensions to avoid OutOfMemory on extreme scales or huge displays
-        val targetWidth = ((destWidth * renderScale).toInt().coerceIn(100, 2560))
-        val targetHeight = ((destHeight * renderScale).toInt().coerceIn(100, 2560))
+        // Single, unit-safe function computes target dimensions strictly preserving aspect ratio
+        val targetSize = PdfLayoutMath.computeTargetSize(
+            cardWidthPx = destWidth,
+            aspectRatio = getPageAspectRatio(pageIndex),
+            zoomFactor = renderScale
+        )
+        val targetWidth = targetSize.widthPx
+        val targetHeight = targetSize.heightPx
         val cacheKey = "${pageIndex}_${targetWidth}x${targetHeight}"
 
         // Fast path: check bounded cache first without lock

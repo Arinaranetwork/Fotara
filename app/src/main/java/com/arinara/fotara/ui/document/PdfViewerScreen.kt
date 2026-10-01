@@ -7,15 +7,19 @@
 package com.arinara.fotara.ui.document
 
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -30,12 +34,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CallSplit
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -44,6 +53,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,22 +62,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.foundation.border
-import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.ui.platform.LocalContext
-import com.arinara.fotara.ui.components.NoteDetailScheduleChip
-import com.arinara.fotara.ui.components.ScheduleNoteDialog
-import com.arinara.fotara.util.NoteScheduleManager
-import com.arinara.fotara.util.ScheduleNoteType
-import com.arinara.fotara.util.ScheduleAlertType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -74,12 +74,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -89,10 +91,16 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.arinara.fotara.data.model.DocumentNote
 import com.arinara.fotara.data.model.DocumentPage
+import com.arinara.fotara.ui.components.NoteDetailScheduleChip
+import com.arinara.fotara.ui.components.ScheduleNoteDialog
+import com.arinara.fotara.util.NoteScheduleManager
 import com.arinara.fotara.util.PdfCorruptException
+import com.arinara.fotara.util.PdfLayoutMath
 import com.arinara.fotara.util.PdfPageRenderer
 import com.arinara.fotara.util.PdfPasswordException
 import com.arinara.fotara.util.PdfSplitManager
+import com.arinara.fotara.util.ScheduleAlertType
+import com.arinara.fotara.util.ScheduleNoteType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -115,6 +123,7 @@ fun PdfViewerScreen(
     onDelete: () -> Unit
 ) {
     var showSplitConfirmDialog by remember { mutableStateOf(false) }
+    var showPageViewer by remember { mutableStateOf(false) }
     var pdfRenderer by remember { mutableStateOf<PdfPageRenderer?>(null) }
     var openErrorMessage by remember { mutableStateOf<String?>(null) }
     var currentScheduledAt by remember { mutableStateOf(documentNote.scheduledAt) }
@@ -122,6 +131,7 @@ fun PdfViewerScreen(
     var currentScheduleTitle by remember { mutableStateOf(documentNote.scheduleTitle) }
     var showScheduleDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     val file = remember(documentNote.originFileUri) { File(documentNote.originFileUri) }
 
@@ -147,6 +157,13 @@ fun PdfViewerScreen(
     val totalPages = pdfRenderer?.pageCount ?: pages.size
     val subtitleText = if (totalPages == 1) "1 page" else "$totalPages pages"
 
+    val listState = rememberLazyListState()
+    val zoomState = remember { PdfViewportZoomState() }
+
+    BackHandler(enabled = zoomState.isZoomed) {
+        zoomState.reset()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -166,9 +183,14 @@ fun PdfViewerScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = subtitleText,
-                        color = TabCream.copy(alpha = 0.7f),
-                        fontSize = 12.sp
+                        text = if (zoomState.isZoomed) {
+                            "Zoomed: Pan enabled · Double-tap to reset"
+                        } else {
+                            subtitleText
+                        },
+                        color = if (zoomState.isZoomed) AccentGold else TabCream.copy(alpha = 0.7f),
+                        fontSize = 12.sp,
+                        fontWeight = if (zoomState.isZoomed) FontWeight.SemiBold else FontWeight.Normal
                     )
                     if (currentScheduledAt != null) {
                         Spacer(modifier = Modifier.height(2.dp))
@@ -182,7 +204,13 @@ fun PdfViewerScreen(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = {
+                    if (zoomState.isZoomed) {
+                        zoomState.reset()
+                    } else {
+                        onBack()
+                    }
+                }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
@@ -191,6 +219,19 @@ fun PdfViewerScreen(
                 }
             },
             actions = {
+                // P2-A: FIRST (leftmost) action: Page View button
+                IconButton(
+                    onClick = { showPageViewer = true },
+                    enabled = pdfRenderer != null
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoStories,
+                        contentDescription = "Page view",
+                        tint = TabCream
+                    )
+                }
+
+                // Split to Images
                 IconButton(onClick = { showSplitConfirmDialog = true }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.CallSplit,
@@ -198,6 +239,8 @@ fun PdfViewerScreen(
                         tint = AccentGold
                     )
                 }
+
+                // Share
                 IconButton(onClick = onShare) {
                     Icon(
                         imageVector = Icons.Default.Share,
@@ -205,6 +248,8 @@ fun PdfViewerScreen(
                         tint = TabCream
                     )
                 }
+
+                // Delete
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
@@ -296,24 +341,100 @@ fun PdfViewerScreen(
                 val density = LocalDensity.current
                 val screenWidthPx = with(density) { (configuration.screenWidthDp.dp - 32.dp).roundToPx() }
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp)
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clipToBounds()
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = { tapOffset ->
+                                    val viewW = size.width.toFloat()
+                                    val viewH = size.height.toFloat()
+                                    zoomState.updateViewport(viewW, viewH)
+                                    zoomState.onDoubleTap(tapOffset.x, tapOffset.y)
+                                }
+                            )
+                        }
+                        .pointerInput(zoomState.scale) {
+                            val viewW = size.width.toFloat()
+                            val viewH = size.height.toFloat()
+                            zoomState.updateViewport(viewW, viewH)
+
+                            if (zoomState.isZoomed) {
+                                detectTransformGestures { centroid, pan, zoom, _ ->
+                                    zoomState.onPinch(zoom, pan.x, pan.y, centroid.x, centroid.y)
+                                }
+                            } else {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.size >= 2) {
+                                            val zoom = event.calculateZoom()
+                                            val pan = event.calculatePan()
+                                            if (zoom > 1.02f) {
+                                                zoomState.onPinch(zoom, pan.x, pan.y)
+                                                event.changes.forEach { it.consume() }
+                                            }
+                                        }
+                                    } while (event.changes.any { it.pressed })
+                                }
+                            }
+                        }
                 ) {
-                    items(totalCount, key = { index -> "${documentNote.id}_page_$index" }) { pageIndex ->
-                        val placeholderPage = pages.getOrNull(pageIndex)
-                        VirtualizedPdfPageView(
-                            pageIndex = pageIndex,
-                            totalPages = totalCount,
-                            renderer = renderer,
-                            targetWidthPx = screenWidthPx,
-                            placeholderUri = placeholderPage?.imageUri
+                    LaunchedEffect(maxWidth, maxHeight) {
+                        zoomState.updateViewport(
+                            with(density) { maxWidth.toPx() },
+                            with(density) { maxHeight.toPx() }
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    LazyColumn(
+                        state = listState,
+                        userScrollEnabled = !zoomState.isZoomed,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = zoomState.scale,
+                                scaleY = zoomState.scale,
+                                translationX = zoomState.panX,
+                                translationY = zoomState.panY
+                            ),
+                        contentPadding = PaddingValues(16.dp)
+                    ) {
+                        items(totalCount, key = { index -> "${documentNote.id}_page_$index" }) { pageIndex ->
+                            val placeholderPage = pages.getOrNull(pageIndex)
+                            VirtualizedPdfPageView(
+                                pageIndex = pageIndex,
+                                totalPages = totalCount,
+                                renderer = renderer,
+                                targetWidthPx = screenWidthPx,
+                                placeholderUri = placeholderPage?.imageUri,
+                                isZoomed = zoomState.isZoomed
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
                     }
                 }
             }
         }
+    }
+
+    if (showPageViewer && pdfRenderer != null) {
+        val initialPage = listState.firstVisibleItemIndex.coerceIn(0, (totalPages - 1).coerceAtLeast(0))
+        PdfPageViewerDialog(
+            documentNote = documentNote,
+            pages = pages,
+            renderer = pdfRenderer!!,
+            initialPageIndex = initialPage,
+            onDismiss = { lastPageIndex ->
+                showPageViewer = false
+                coroutineScope.launch {
+                    listState.scrollToItem(lastPageIndex.coerceIn(0, (totalPages - 1).coerceAtLeast(0)))
+                }
+            },
+            onShare = onShare
+        )
     }
 
     if (showSplitConfirmDialog) {
@@ -399,24 +520,21 @@ private fun VirtualizedPdfPageView(
     totalPages: Int,
     renderer: PdfPageRenderer,
     targetWidthPx: Int,
-    placeholderUri: String?
+    placeholderUri: String?,
+    isZoomed: Boolean = false
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val zoomState = remember { PdfPageZoomState() }
+    var baseBitmap by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
+    var highResBitmap by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
+    var renderError by remember(pageIndex) { mutableStateOf(false) }
+    var retryCount by remember(pageIndex) { mutableIntStateOf(0) }
 
-    var baseBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var highResBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var aspectRatio by remember { mutableFloatStateOf(0.707f) }
-    var isRenderingSharp by remember { mutableStateOf(false) }
-
-    // Read aspect ratio from cache or renderer
-    LaunchedEffect(pageIndex) {
-        aspectRatio = renderer.getPageAspectRatio(pageIndex)
-    }
+    // Read true aspect ratio synchronously from renderer cache (no default 0.707f race)
+    val aspectRatio = remember(pageIndex) { renderer.getPageAspectRatio(pageIndex) }
 
     // Prefetch adjacent pages in background without blocking UI
     LaunchedEffect(pageIndex, targetWidthPx) {
-        val targetHeightPx = (targetWidthPx / aspectRatio).toInt().coerceAtLeast(100)
+        val targetHeightPx = PdfLayoutMath.computeTargetSize(targetWidthPx, aspectRatio).heightPx
         coroutineScope.launch {
             if (pageIndex > 0) renderer.prefetchPage(pageIndex - 1, targetWidthPx, targetHeightPx)
             if (pageIndex < totalPages - 1) renderer.prefetchPage(pageIndex + 1, targetWidthPx, targetHeightPx)
@@ -424,8 +542,9 @@ private fun VirtualizedPdfPageView(
     }
 
     // 1. Base resolution render (1.0x display density)
-    LaunchedEffect(pageIndex, targetWidthPx) {
-        val targetHeightPx = (targetWidthPx / aspectRatio).toInt().coerceAtLeast(100)
+    LaunchedEffect(pageIndex, targetWidthPx, retryCount) {
+        val targetHeightPx = PdfLayoutMath.computeTargetSize(targetWidthPx, aspectRatio).heightPx
+        renderError = false
         val rendered = renderer.renderPage(
             pageIndex = pageIndex,
             destWidth = targetWidthPx,
@@ -434,15 +553,16 @@ private fun VirtualizedPdfPageView(
         )
         if (rendered != null) {
             baseBitmap = rendered
+        } else {
+            renderError = true
         }
     }
 
-    // 2. High-resolution on-demand render when zoomed in
-    LaunchedEffect(pageIndex, targetWidthPx, zoomState.isZoomed) {
-        if (zoomState.isZoomed) {
-            isRenderingSharp = true
+    // 2. High-resolution on-demand render when list is zoomed
+    LaunchedEffect(pageIndex, targetWidthPx, isZoomed, retryCount) {
+        if (isZoomed) {
             delay(150) // Debounce rapid pinch operations
-            val targetHeightPx = (targetWidthPx / aspectRatio).toInt().coerceAtLeast(100)
+            val targetHeightPx = PdfLayoutMath.computeTargetSize(targetWidthPx, aspectRatio).heightPx
             val sharpRender = renderer.renderPage(
                 pageIndex = pageIndex,
                 destWidth = targetWidthPx,
@@ -452,11 +572,8 @@ private fun VirtualizedPdfPageView(
             if (sharpRender != null) {
                 highResBitmap = sharpRender
             }
-            isRenderingSharp = false
         } else {
-            // Free high-res bitmap immediately when returning to 1.0x to conserve RAM
             highResBitmap = null
-            isRenderingSharp = false
         }
     }
 
@@ -481,19 +598,11 @@ private fun VirtualizedPdfPageView(
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                if (isRenderingSharp && highResBitmap == null) {
+                if (isZoomed && highResBitmap == null && !renderError) {
                     Text(
-                        text = "Rendering…",
+                        text = "Sharpening…",
                         color = TabCream.copy(alpha = 0.5f),
                         fontSize = 10.sp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                if (zoomState.scale > 1.05f) {
-                    Text(
-                        text = "${(zoomState.scale * 100).toInt()}%",
-                        color = AccentGold,
-                        fontSize = 11.sp
                     )
                 }
             }
@@ -503,83 +612,69 @@ private fun VirtualizedPdfPageView(
                     .fillMaxWidth()
                     .aspectRatio(aspectRatio)
                     .background(Color.White)
-                    .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
-                    // Double-tap detector
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onDoubleTap = { tapOffset ->
-                                val viewW = size.width.toFloat()
-                                val viewH = size.height.toFloat()
-                                zoomState.onDoubleTap(tapOffset, viewW, viewH)
-                            }
-                        )
-                    }
-                    // Zoom and Pan gesture detector with native scroll pass-through at 1.0x
-                    .pointerInput(zoomState.scale) {
-                        val viewW = size.width.toFloat()
-                        val viewH = size.height.toFloat()
-
-                        if (zoomState.isZoomed) {
-                            // Zoomed in: consume both two-axis pan and pinch
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                zoomState.onPinch(zoom, pan, viewW, viewH)
-                            }
-                        } else {
-                            // At 1.0x scale: ONLY detect two-finger pinch.
-                            // Single-finger vertical dragging passes freely to LazyColumn for smooth scrolling.
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                do {
-                                    val event = awaitPointerEvent()
-                                    if (event.changes.size >= 2) {
-                                        val zoom = event.calculateZoom()
-                                        val pan = event.calculatePan()
-                                        if (zoom > 1.02f) {
-                                            zoomState.onPinch(zoom, pan, viewW, viewH)
-                                            event.changes.forEach { it.consume() }
-                                        }
-                                    }
-                                } while (event.changes.any { it.pressed })
-                            }
-                        }
-                    },
+                    .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 val currentBitmap = highResBitmap ?: baseBitmap
-                if (currentBitmap != null && !currentBitmap.isRecycled) {
-                    Image(
-                        bitmap = currentBitmap.asImageBitmap(),
-                        contentDescription = "Page ${pageIndex + 1}",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer(
-                                scaleX = zoomState.scale,
-                                scaleY = zoomState.scale,
-                                translationX = zoomState.offsetX,
-                                translationY = zoomState.offsetY
+                when {
+                    renderError && currentBitmap == null -> {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = DangerRed,
+                                modifier = Modifier.size(32.dp)
                             )
-                    )
-                } else if (placeholderUri != null && File(placeholderUri).exists()) {
-                    AsyncImage(
-                        model = File(placeholderUri),
-                        contentDescription = "Page ${pageIndex + 1} Preview",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer(
-                                scaleX = zoomState.scale,
-                                scaleY = zoomState.scale,
-                                translationX = zoomState.offsetX,
-                                translationY = zoomState.offsetY
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Failed to render page",
+                                color = CardBg,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
                             )
-                    )
-                } else {
-                    CircularProgressIndicator(
-                        color = AccentGold,
-                        modifier = Modifier.size(32.dp),
-                        strokeWidth = 2.dp
-                    )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { retryCount++ },
+                                colors = ButtonDefaults.buttonColors(containerColor = CardBg)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = TabCream,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Retry", color = TabCream, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                    currentBitmap != null && !currentBitmap.isRecycled -> {
+                        Image(
+                            bitmap = currentBitmap.asImageBitmap(),
+                            contentDescription = "Page ${pageIndex + 1}",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    placeholderUri != null && File(placeholderUri).exists() -> {
+                        AsyncImage(
+                            model = File(placeholderUri),
+                            contentDescription = "Page ${pageIndex + 1} Preview",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    else -> {
+                        CircularProgressIndicator(
+                            color = AccentGold,
+                            modifier = Modifier.size(32.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
                 }
             }
         }

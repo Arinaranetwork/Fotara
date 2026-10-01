@@ -2,7 +2,7 @@
 Last Updated: 2026-10-01
 
 ## Current Phase
-Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [Completed]
+Phase 9 - PdfViewerEnhancementsAndFixes (Master Brief 1.5.1 Beta) [Completed]
 
 ## Phases
 | Phase | Name                                | Status      |
@@ -15,6 +15,7 @@ Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [Completed]
 | 6     | DocumentNotesAndConnectedFeatures   | Completed   |
 | 7     | NativeTextNotesAndAdvancedDocuments | Completed   |
 | 8     | MasterV150EcosystemAndCanvas        | Completed   |
+| 9     | PdfViewerEnhancementsAndFixes       | Completed   |
 
 ## Completed
 - [x] Analyze product brief and UI reference image - Phase 1
@@ -183,6 +184,18 @@ Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [Completed]
 - [x] C11-D: Finalize documentation (What's New, Changelog_1.5.md, README.md, CanvasZoneMap.md, Progress.md) - Phase 8 (Chunk C11)
 - [x] C11-E: Signing check (SHA-256 matching v1.4.0), secrets scan, release artifact packaging (Fotara_1.5.0_Beta.apk), git branch merge & tag protocol - Phase 8 (Chunk C11)
 - [x] C11-F: Final Report and full combined Wiring Table - Phase 8 (Chunk C11)
+- [x] P1-0 Root cause analysis: Identify 0.707f default aspect ratio race condition and fix via pre-populated renderer cache - Phase 9 (Chunk P1)
+- [x] P1-A Pure math layout utilities: Implement PdfLayoutMath with unit tests for size clamping and aspect preservation - Phase 9 (Chunk P1)
+- [x] P1-B Rebuild list-mode zoom: Viewport-level zoom with PdfViewportZoomState, two-axis pan, double-tap toggle, and amber status - Phase 9 (Chunk P1)
+- [x] P2-A Header Page View button: Add leftmost icon button to PDF header opening fullscreen page viewer - Phase 9 (Chunk P2)
+- [x] P2-B Photo viewer parity: Extract ZoomableBox and reuse across photo viewer and PDF page viewer with zero code duplication - Phase 9 (Chunk P2)
+- [x] P2-C Layout and OCR bottom sheet: Implement PdfPageViewerDialog with collapsible OCR text drawer and copy button - Phase 9 (Chunk P2)
+- [x] P2-D Rendering & state sync: Density-aware sharp render, adjacent page prefetching, retry state, and scroll position sync - Phase 9 (Chunk P2)
+- [x] P3-A Version housekeeping: Update versionName to '1.5.1 Beta', versionCode to 15, update changelog, What's New, and README - Phase 9 (Chunk P3)
+- [x] P3-B Verification & tests: 290 unit tests passing 100% across all suites - Phase 9 (Chunk P3)
+- [x] P3-C Release build & signing: Assemble release APK, verify signing certificate, packaging, and checksum - Phase 9 (Chunk P3)
+- [x] P3-D GitHub publishing protocol: Tag Fotara_1.5.1_Beta, merge to main, and publish GitHub release - Phase 9 (Chunk P3)
+- [x] P3-E Final report: Wiring table, slim pages root cause, list zoom strategy, hidden sections report - Phase 9 (Chunk P3)
 
 ## In Progress
 None.

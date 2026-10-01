@@ -269,7 +269,7 @@ class FeedbackManager(private val context: Context) {
             val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pInfo.longVersionCode else @Suppress("DEPRECATION") pInfo.versionCode.toLong()
             "Fotara v${pInfo.versionName} (Build $code)"
         } catch (_: Exception) {
-            "Fotara v1.5.0 Beta"
+            "Fotara v1.5.1 Beta"
         }
 
         val diagnosticInfo = if (includeDiagnostics) {
