@@ -45,16 +45,17 @@ class DueTomorrowRemoteViewsFactory(private val context: Context) : RemoteViewsS
 
             val cursor = db.rawQuery(
                 """
-                SELECT p.id, f.name, f.color_label, p.caption, p.ocr_text, p.linked_deadline
+                SELECT p.id, f.name, f.color_label, p.caption, p.ocr_text,
+                       COALESCE(p.scheduled_at, p.linked_deadline) AS due_time
                 FROM photos p
                 INNER JOIN folders f ON p.folder_id = f.id
                 WHERE p.is_trashed = 0 AND f.is_trashed = 0
-                  AND p.linked_deadline IS NOT NULL
-                  AND p.linked_deadline >= ? AND p.linked_deadline <= ?
-                ORDER BY p.linked_deadline ASC
+                  AND ((p.scheduled_at IS NOT NULL AND p.scheduled_at >= ? AND p.scheduled_at <= ?)
+                    OR (p.linked_deadline IS NOT NULL AND p.linked_deadline >= ? AND p.linked_deadline <= ?))
+                ORDER BY due_time ASC
                 LIMIT 25
                 """.trimIndent(),
-                arrayOf(now.toString(), windowEnd.toString())
+                arrayOf(now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString())
             )
 
             cursor.use { c ->

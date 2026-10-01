@@ -43,6 +43,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.RotateRight
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -52,12 +53,15 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.LayersClear
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -96,8 +100,12 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.ui.components.ZoomablePhotoViewport
+import com.arinara.fotara.ui.components.NoteDetailScheduleChip
+import com.arinara.fotara.ui.components.ScheduleNoteDialog
+import com.arinara.fotara.util.NoteScheduleManager
+import com.arinara.fotara.util.ScheduleNoteType
+import com.arinara.fotara.util.ScheduleAlertType
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.MidnightCardOutline
@@ -150,6 +158,7 @@ fun PhotoViewerDialog(
 
     var isOcrExpanded by remember { mutableStateOf(false) }
     var copyMessage by remember { mutableStateOf<String?>(null) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
 
     val formattedDate = remember(currentPhoto.addedAt) {
         SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.US).format(Date(currentPhoto.addedAt))
@@ -271,6 +280,15 @@ fun PhotoViewerDialog(
                                 color = if (isCurrentPhotoZoomed) TagAmber else TextSecondary,
                                 fontSize = 11.sp
                             )
+                            if (currentPhoto.scheduledAt != null) {
+                                Spacer(modifier = Modifier.height(3.dp))
+                                NoteDetailScheduleChip(
+                                    scheduledAt = currentPhoto.scheduledAt,
+                                    alertType = currentPhoto.alertType,
+                                    scheduleTitle = currentPhoto.scheduleTitle,
+                                    onClick = { showScheduleDialog = true }
+                                )
+                            }
                         }
 
                         // Rotate 90° Clockwise Button
@@ -354,6 +372,34 @@ fun PhotoViewerDialog(
                                 contentDescription = "Share Note",
                                 tint = FolderTabCream
                             )
+                        }
+
+                        // Overflow menu for Schedule...
+                        Box {
+                            var showMenu by remember { mutableStateOf(false) }
+                            IconButton(onClick = { showMenu = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More Options",
+                                    tint = FolderTabCream
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false },
+                                modifier = Modifier
+                                    .background(MidnightSurface)
+                                    .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Schedule...", color = TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Default.Alarm, null, tint = FolderTabCream) },
+                                    onClick = {
+                                        showMenu = false
+                                        showScheduleDialog = true
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -728,6 +774,37 @@ fun PhotoViewerDialog(
                         }
                     }
                 }
+            }
+
+            if (showScheduleDialog) {
+                val scheduleManager = remember { NoteScheduleManager(context) }
+                ScheduleNoteDialog(
+                    noteTitle = currentPhoto.caption ?: "Photo Note",
+                    initialScheduledAt = currentPhoto.scheduledAt,
+                    initialAlertType = try {
+                        ScheduleAlertType.valueOf(currentPhoto.alertType ?: "NOTIFICATION")
+                    } catch (_: Exception) {
+                        ScheduleAlertType.NOTIFICATION
+                    },
+                    initialScheduleTitle = currentPhoto.scheduleTitle,
+                    onDismiss = { showScheduleDialog = false },
+                    onSaveSchedule = { scheduledAt, alertType, scheduleTitle ->
+                        scheduleManager.scheduleNote(
+                            noteType = ScheduleNoteType.PHOTO,
+                            noteId = currentPhoto.id,
+                            folderId = currentPhoto.folderId,
+                            title = currentPhoto.caption ?: "Photo Note",
+                            triggerAtMillis = scheduledAt,
+                            alertType = alertType,
+                            scheduleTitle = scheduleTitle
+                        )
+                        showScheduleDialog = false
+                    },
+                    onClearSchedule = {
+                        scheduleManager.cancelSchedule(ScheduleNoteType.PHOTO, currentPhoto.id)
+                        showScheduleDialog = false
+                    }
+                )
             }
         }
     }

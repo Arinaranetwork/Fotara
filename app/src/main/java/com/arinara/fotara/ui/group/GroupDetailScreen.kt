@@ -118,9 +118,14 @@ import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
 import com.arinara.fotara.ui.capture.MultiCaptureScreen
-import com.arinara.fotara.ui.components.CaptureReviewSliderModal
 import com.arinara.fotara.ui.folder.DetailPhotoCard
 import com.arinara.fotara.ui.photo.PhotoViewerDialog
+import androidx.compose.material.icons.filled.Alarm
+import com.arinara.fotara.ui.components.NoteDetailScheduleChip
+import com.arinara.fotara.ui.components.ScheduleNoteDialog
+import com.arinara.fotara.util.NoteScheduleManager
+import com.arinara.fotara.util.ScheduleNoteType
+import com.arinara.fotara.util.ScheduleAlertType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -148,6 +153,7 @@ fun GroupDetailScreen(
     var showMultiCapture by remember { mutableStateOf(false) }
     var showDeadlineDialog by remember { mutableStateOf(false) }
     var showMoveGroupDialog by remember { mutableStateOf(false) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
     var showExportGroupDialog by remember { mutableStateOf(false) }
 
     var capturedBatchPhotos by remember { mutableStateOf<List<Photo>?>(null) }
@@ -232,6 +238,17 @@ fun GroupDetailScreen(
                                 modifier = Modifier.size(10.dp)
                             ) {}
                         }
+                        uiState.group?.let { group ->
+                            if (group.scheduledAt != null) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                NoteDetailScheduleChip(
+                                    scheduledAt = group.scheduledAt,
+                                    alertType = group.alertType,
+                                    scheduleTitle = group.scheduleTitle,
+                                    onClick = { showScheduleDialog = true }
+                                )
+                            }
+                        }
                     }
                 },
                 navigationIcon = {
@@ -304,6 +321,14 @@ fun GroupDetailScreen(
                                 onClick = {
                                     showOverflowMenu = false
                                     showDeadlineDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Schedule...", color = TextPrimary) },
+                                leadingIcon = { Icon(Icons.Default.Alarm, null, tint = FolderTabCream) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showScheduleDialog = true
                                 }
                             )
                             DropdownMenuItem(
@@ -897,6 +922,41 @@ fun GroupDetailScreen(
                 TextButton(onClick = { showExportGroupDialog = false }) {
                     Text("Cancel", color = TextSecondary)
                 }
+            }
+        )
+    }
+
+    // Dialog: Schedule Note Group
+    if (showScheduleDialog && uiState.group != null) {
+        val group = uiState.group!!
+        val scheduleManager = remember { NoteScheduleManager(context) }
+        ScheduleNoteDialog(
+            noteTitle = group.name,
+            initialScheduledAt = group.scheduledAt,
+            initialAlertType = try {
+                ScheduleAlertType.valueOf(group.alertType ?: "NOTIFICATION")
+            } catch (_: Exception) {
+                ScheduleAlertType.NOTIFICATION
+            },
+            initialScheduleTitle = group.scheduleTitle,
+            onDismiss = { showScheduleDialog = false },
+            onSaveSchedule = { scheduledAt, alertType, scheduleTitle ->
+                scheduleManager.scheduleNote(
+                    noteType = ScheduleNoteType.PHOTO_GROUP,
+                    noteId = group.id,
+                    folderId = group.folderId,
+                    title = group.name,
+                    triggerAtMillis = scheduledAt,
+                    alertType = alertType,
+                    scheduleTitle = scheduleTitle
+                )
+                viewModel.refresh()
+                showScheduleDialog = false
+            },
+            onClearSchedule = {
+                scheduleManager.cancelSchedule(ScheduleNoteType.PHOTO_GROUP, group.id)
+                viewModel.refresh()
+                showScheduleDialog = false
             }
         )
     }

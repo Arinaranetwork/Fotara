@@ -101,10 +101,10 @@ class DueTomorrowWidgetProvider : AppWidgetProvider() {
                 FROM photos p
                 INNER JOIN folders f ON p.folder_id = f.id
                 WHERE p.is_trashed = 0 AND f.is_trashed = 0
-                  AND p.linked_deadline IS NOT NULL
-                  AND p.linked_deadline >= ? AND p.linked_deadline <= ?
+                  AND ((p.scheduled_at IS NOT NULL AND p.scheduled_at >= ? AND p.scheduled_at <= ?)
+                    OR (p.linked_deadline IS NOT NULL AND p.linked_deadline >= ? AND p.linked_deadline <= ?))
                 """.trimIndent(),
-                arrayOf(now.toString(), windowEnd.toString())
+                arrayOf(now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString())
             )
             cursor.use { c ->
                 if (c.moveToNext()) c.getInt(0) else 0

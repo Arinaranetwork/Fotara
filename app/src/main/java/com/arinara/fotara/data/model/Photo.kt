@@ -6,6 +6,8 @@
 
 package com.arinara.fotara.data.model
 
+import com.arinara.fotara.util.ScheduleNoteType
+
 enum class PhotoSource {
     CAMERA,
     SCREENSHOT,
@@ -13,11 +15,11 @@ enum class PhotoSource {
 }
 
 data class Photo(
-    val id: Long = 0,
+    override val id: Long = 0,
     val fileUri: String,
     val thumbnailUri: String? = null,
-    val folderId: Long,
-    val subfolderId: Long? = null,
+    override val folderId: Long,
+    override val subfolderId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val addedAt: Long = System.currentTimeMillis(),
     val tagColor: String? = null,
@@ -31,9 +33,12 @@ data class Photo(
     val tags: String? = null,
     val isTrashed: Boolean = false,
     val deletedAt: Long? = null,
-    val scheduledAt: Long? = null,
-    val alertType: String? = null
-) {
+    override val scheduledAt: Long? = null,
+    override val alertType: String? = null,
+    override val scheduleTitle: String? = null
+) : SchedulableNote {
+    override val title: String get() = caption?.ifBlank { null } ?: "Photo Note"
+    override val noteType: ScheduleNoteType get() = ScheduleNoteType.PHOTO
     val tag: TagColor? get() = tagColor?.let { TagColor.fromHex(it) }
 
     fun getAllSmartTags(): List<String> {

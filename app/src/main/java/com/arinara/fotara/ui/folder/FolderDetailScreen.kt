@@ -165,6 +165,7 @@ import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
 import com.arinara.fotara.ui.components.CaptureReviewSliderModal
+import com.arinara.fotara.ui.components.CardScheduleBadge
 import com.arinara.fotara.ui.components.ScheduleBadge
 import com.arinara.fotara.ui.components.ScheduleNoteDialog
 import com.arinara.fotara.ui.photo.PhotoViewerDialog
@@ -289,6 +290,7 @@ fun FolderDetailScreen(
     var itemToSchedule by remember { mutableStateOf<Triple<ScheduleNoteType, Long, String>?>(null) }
     var itemScheduledAt by remember { mutableStateOf<Long?>(null) }
     var itemAlertType by remember { mutableStateOf(ScheduleAlertType.NOTIFICATION) }
+    var itemScheduleTitle by remember { mutableStateOf<String?>(null) }
 
     val bottomSheetState = rememberModalBottomSheetState()
     val gridState = rememberLazyGridState()
@@ -1225,6 +1227,7 @@ fun FolderDetailScreen(
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         itemToSchedule = Triple(ScheduleNoteType.CANVAS_NOTE, canvasNote.id, canvasNote.title)
                                         itemScheduledAt = canvasNote.scheduledAt
+                                        itemScheduleTitle = canvasNote.scheduleTitle
                                         itemAlertType = try {
                                             ScheduleAlertType.valueOf(canvasNote.alertType ?: "NOTIFICATION")
                                         } catch (_: Exception) {
@@ -1509,6 +1512,7 @@ fun FolderDetailScreen(
                 onSchedule = {
                     itemToSchedule = Triple(ScheduleNoteType.PHOTO, photo.id, photo.caption ?: "Photo Note")
                     itemScheduledAt = photo.scheduledAt
+                    itemScheduleTitle = photo.scheduleTitle
                     itemAlertType = try {
                         ScheduleAlertType.valueOf(photo.alertType ?: "NOTIFICATION")
                     } catch (_: Exception) {
@@ -2336,6 +2340,7 @@ fun FolderDetailScreen(
                             groupActionTarget = null
                             itemToSchedule = Triple(ScheduleNoteType.PHOTO_GROUP, toSchedule.id, toSchedule.name)
                             itemScheduledAt = toSchedule.scheduledAt
+                            itemScheduleTitle = toSchedule.scheduleTitle
                             itemAlertType = try {
                                 ScheduleAlertType.valueOf(toSchedule.alertType ?: "NOTIFICATION")
                             } catch (_: Exception) {
@@ -2739,6 +2744,7 @@ fun FolderDetailScreen(
                     onClick = {
                         itemToSchedule = Triple(ScheduleNoteType.DOCUMENT, doc.id, doc.name)
                         itemScheduledAt = doc.scheduledAt
+                        itemScheduleTitle = doc.scheduleTitle
                         itemAlertType = try {
                             ScheduleAlertType.valueOf(doc.alertType ?: "NOTIFICATION")
                         } catch (_: Exception) {
@@ -3123,6 +3129,7 @@ fun FolderDetailScreen(
                 textNoteActionTarget = null
                 itemToSchedule = Triple(ScheduleNoteType.TEXT_NOTE, textNote.id, textNote.title)
                 itemScheduledAt = textNote.scheduledAt
+                itemScheduleTitle = textNote.scheduleTitle
                 itemAlertType = try {
                     ScheduleAlertType.valueOf(textNote.alertType ?: "NOTIFICATION")
                 } catch (_: Exception) {
@@ -3251,15 +3258,17 @@ fun FolderDetailScreen(
             noteTitle = title,
             initialScheduledAt = itemScheduledAt,
             initialAlertType = itemAlertType,
+            initialScheduleTitle = itemScheduleTitle,
             onDismiss = { itemToSchedule = null },
-            onSaveSchedule = { scheduledAt, alertType ->
+            onSaveSchedule = { scheduledAt, alertType, scheduleTitle ->
                 scheduleManager.scheduleNote(
                     noteType = noteType,
                     noteId = noteId,
                     folderId = currentFolderId,
                     title = title,
                     triggerAtMillis = scheduledAt,
-                    alertType = alertType
+                    alertType = alertType,
+                    scheduleTitle = scheduleTitle
                 )
                 viewModel.refresh()
                 itemToSchedule = null
@@ -3455,7 +3464,7 @@ private fun DetailDocumentCard(
                         Spacer(modifier = Modifier.weight(1f))
 
                         if (doc.scheduledAt != null) {
-                            ScheduleBadge(
+                            CardScheduleBadge(
                                 scheduledAt = doc.scheduledAt,
                                 alertType = doc.alertType
                             )
@@ -3603,7 +3612,7 @@ internal fun DetailPhotoCard(
                         Spacer(modifier = Modifier.weight(1f))
 
                         if (photo.scheduledAt != null) {
-                            ScheduleBadge(
+                            CardScheduleBadge(
                                 scheduledAt = photo.scheduledAt,
                                 alertType = photo.alertType
                             )
@@ -3794,7 +3803,7 @@ private fun DetailGroupCard(
                         Spacer(modifier = Modifier.weight(1f))
 
                         if (group.scheduledAt != null) {
-                            ScheduleBadge(
+                            CardScheduleBadge(
                                 scheduledAt = group.scheduledAt,
                                 alertType = group.alertType
                             )

@@ -72,6 +72,7 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 linked_deadline INTEGER,
                 scheduled_at INTEGER,
                 alert_type TEXT,
+                schedule_title TEXT,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
                 FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
             )
@@ -106,6 +107,7 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 linked_deadline INTEGER,
                 scheduled_at INTEGER,
                 alert_type TEXT,
+                schedule_title TEXT,
                 file_size_bytes INTEGER NOT NULL DEFAULT 0,
                 note TEXT,
                 group_id INTEGER,
@@ -135,6 +137,7 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 linked_deadline INTEGER,
                 scheduled_at INTEGER,
                 alert_type TEXT,
+                schedule_title TEXT,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
@@ -171,6 +174,7 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 linked_deadline INTEGER,
                 scheduled_at INTEGER,
                 alert_type TEXT,
+                schedule_title TEXT,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
@@ -195,6 +199,7 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 linked_deadline INTEGER,
                 scheduled_at INTEGER,
                 alert_type TEXT,
+                schedule_title TEXT,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
@@ -212,6 +217,13 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_added_at ON document_notes(added_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_added_at ON text_notes(added_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_added_at ON canvas_notes(added_at)")
+
+        // High-performance B-tree indexes on scheduled_at columns for alarm scheduling, widgets & reminders
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_scheduled_at ON photos(scheduled_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_scheduled_at ON photo_groups(scheduled_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_scheduled_at ON document_notes(scheduled_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_scheduled_at ON text_notes(scheduled_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_scheduled_at ON canvas_notes(scheduled_at)")
     }
 
     private fun createFtsTable(db: SQLiteDatabase) {
@@ -440,6 +452,25 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v12 failed: ${e.message}")
             }
         }
+        if (oldVersion < 13) {
+            try {
+                // 1. Add schedule_title column to all 5 note tables
+                db.execSQL("ALTER TABLE photos ADD COLUMN schedule_title TEXT")
+                db.execSQL("ALTER TABLE photo_groups ADD COLUMN schedule_title TEXT")
+                db.execSQL("ALTER TABLE document_notes ADD COLUMN schedule_title TEXT")
+                db.execSQL("ALTER TABLE text_notes ADD COLUMN schedule_title TEXT")
+                db.execSQL("ALTER TABLE canvas_notes ADD COLUMN schedule_title TEXT")
+
+                // 2. High-performance B-tree indexes on scheduled_at
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_scheduled_at ON photos(scheduled_at)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_scheduled_at ON photo_groups(scheduled_at)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_scheduled_at ON document_notes(scheduled_at)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_scheduled_at ON text_notes(scheduled_at)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_scheduled_at ON canvas_notes(scheduled_at)")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v13 failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -475,7 +506,7 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 12
+        const val DATABASE_VERSION = 13
     }
 
     /**
@@ -630,6 +661,167 @@ class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
 
         return results.sortedByDescending { it.addedAt }
     }
+
+    /**
+     * Shared query across all non-trashed note types with upcoming scheduled alerts.
+     * Utilizes B-tree indexes on scheduled_at columns.
+     * Feeds AlarmManager reboot re-arming, the Due Tomorrow widget, and the Today widget.
+     */
+    fun getUpcomingSchedules(nowMs: Long = System.currentTimeMillis()): List<NoteScheduleSummary> {
+        val results = mutableListOf<NoteScheduleSummary>()
+        val db = getSafeReadableDatabase()
+        val args = arrayOf(nowMs.toString())
+
+        // 1. Photos
+        try {
+            db.rawQuery(
+                """
+                SELECT id, caption, folder_id, subfolder_id, scheduled_at, alert_type, schedule_title, tag_color, file_path
+                FROM photos
+                WHERE is_trashed = 0 AND scheduled_at IS NOT NULL AND scheduled_at > ?
+                ORDER BY scheduled_at ASC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteScheduleSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.PHOTO,
+                            title = if (cursor.isNull(1) || cursor.getString(1).isBlank()) "Photo Note" else cursor.getString(1),
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            scheduledAt = cursor.getLong(4),
+                            alertType = cursor.getString(5) ?: "NOTIFICATION",
+                            scheduleTitle = cursor.getString(6),
+                            tagColor = cursor.getString(7),
+                            fileUriOrThumbnail = cursor.getString(8)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 2. Photo Groups
+        try {
+            db.rawQuery(
+                """
+                SELECT id, name, folder_id, subfolder_id, scheduled_at, alert_type, schedule_title, tag_color
+                FROM photo_groups
+                WHERE is_trashed = 0 AND scheduled_at IS NOT NULL AND scheduled_at > ?
+                ORDER BY scheduled_at ASC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteScheduleSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.GROUP,
+                            title = cursor.getString(1),
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            scheduledAt = cursor.getLong(4),
+                            alertType = cursor.getString(5) ?: "NOTIFICATION",
+                            scheduleTitle = cursor.getString(6),
+                            tagColor = cursor.getString(7)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 3. Document Notes
+        try {
+            db.rawQuery(
+                """
+                SELECT id, name, folder_id, subfolder_id, scheduled_at, alert_type, schedule_title, tag_color, origin_file_uri
+                FROM document_notes
+                WHERE is_trashed = 0 AND scheduled_at IS NOT NULL AND scheduled_at > ?
+                ORDER BY scheduled_at ASC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteScheduleSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.DOCUMENT,
+                            title = cursor.getString(1),
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            scheduledAt = cursor.getLong(4),
+                            alertType = cursor.getString(5) ?: "NOTIFICATION",
+                            scheduleTitle = cursor.getString(6),
+                            tagColor = cursor.getString(7),
+                            fileUriOrThumbnail = cursor.getString(8)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 4. Text Notes
+        try {
+            db.rawQuery(
+                """
+                SELECT id, title, folder_id, subfolder_id, scheduled_at, alert_type, schedule_title, tag_color
+                FROM text_notes
+                WHERE is_trashed = 0 AND scheduled_at IS NOT NULL AND scheduled_at > ?
+                ORDER BY scheduled_at ASC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteScheduleSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.TEXT,
+                            title = cursor.getString(1),
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            scheduledAt = cursor.getLong(4),
+                            alertType = cursor.getString(5) ?: "NOTIFICATION",
+                            scheduleTitle = cursor.getString(6),
+                            tagColor = cursor.getString(7)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 5. Canvas Notes
+        try {
+            db.rawQuery(
+                """
+                SELECT id, title, folder_id, subfolder_id, scheduled_at, alert_type, schedule_title, tag_color, thumbnail_path
+                FROM canvas_notes
+                WHERE is_trashed = 0 AND scheduled_at IS NOT NULL AND scheduled_at > ?
+                ORDER BY scheduled_at ASC
+                """.trimIndent(),
+                args
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    results.add(
+                        NoteScheduleSummary(
+                            id = cursor.getLong(0),
+                            type = NoteType.CANVAS,
+                            title = cursor.getString(1),
+                            folderId = cursor.getLong(2),
+                            subfolderId = if (cursor.isNull(3)) null else cursor.getLong(3),
+                            scheduledAt = cursor.getLong(4),
+                            alertType = cursor.getString(5) ?: "NOTIFICATION",
+                            scheduleTitle = cursor.getString(6),
+                            tagColor = cursor.getString(7),
+                            fileUriOrThumbnail = cursor.getString(8)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        return results.sortedBy { it.scheduledAt }
+    }
 }
 
 enum class NoteType {
@@ -650,4 +842,20 @@ data class NoteAddedSummary(
     val tagColor: String? = null,
     val fileUriOrThumbnail: String? = null
 )
+
+data class NoteScheduleSummary(
+    val id: Long,
+    val type: NoteType,
+    val title: String,
+    val folderId: Long,
+    val subfolderId: Long?,
+    val scheduledAt: Long,
+    val alertType: String,
+    val scheduleTitle: String?,
+    val tagColor: String? = null,
+    val fileUriOrThumbnail: String? = null
+) {
+    val displayScheduleTitle: String
+        get() = scheduleTitle?.ifBlank { null } ?: title
+}
 

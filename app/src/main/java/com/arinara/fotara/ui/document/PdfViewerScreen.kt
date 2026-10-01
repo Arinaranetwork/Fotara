@@ -49,8 +49,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.platform.LocalContext
+import com.arinara.fotara.ui.components.NoteDetailScheduleChip
+import com.arinara.fotara.ui.components.ScheduleNoteDialog
+import com.arinara.fotara.util.NoteScheduleManager
+import com.arinara.fotara.util.ScheduleNoteType
+import com.arinara.fotara.util.ScheduleAlertType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -91,6 +100,7 @@ private val TabCream = Color(0xFFEAE3D2)
 private val AccentGold = Color(0xFFF77F00)
 private val CardBg = Color(0xFF141936)
 private val DangerRed = Color(0xFFD62828)
+private val BorderColor = Color(0xFF28325E)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,6 +115,11 @@ fun PdfViewerScreen(
     var showSplitConfirmDialog by remember { mutableStateOf(false) }
     var pdfRenderer by remember { mutableStateOf<PdfPageRenderer?>(null) }
     var openErrorMessage by remember { mutableStateOf<String?>(null) }
+    var currentScheduledAt by remember { mutableStateOf(documentNote.scheduledAt) }
+    var currentAlertType by remember { mutableStateOf(documentNote.alertType) }
+    var currentScheduleTitle by remember { mutableStateOf(documentNote.scheduleTitle) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     val file = remember(documentNote.originFileUri) { File(documentNote.originFileUri) }
 
@@ -153,6 +168,15 @@ fun PdfViewerScreen(
                         color = TabCream.copy(alpha = 0.7f),
                         fontSize = 12.sp
                     )
+                    if (currentScheduledAt != null) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        NoteDetailScheduleChip(
+                            scheduledAt = currentScheduledAt,
+                            alertType = currentAlertType,
+                            scheduleTitle = currentScheduleTitle,
+                            onClick = { showScheduleDialog = true }
+                        )
+                    }
                 }
             },
             navigationIcon = {
@@ -185,6 +209,34 @@ fun PdfViewerScreen(
                         contentDescription = "Delete Document",
                         tint = DangerRed
                     )
+                }
+
+                // Overflow menu for Schedule...
+                Box {
+                    var showOverflowMenu by remember { mutableStateOf(false) }
+                    IconButton(onClick = { showOverflowMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More Options",
+                            tint = TabCream
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showOverflowMenu,
+                        onDismissRequest = { showOverflowMenu = false },
+                        modifier = Modifier
+                            .background(CardBg)
+                            .border(1.dp, BorderColor, RoundedCornerShape(8.dp))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Schedule...", color = TabCream) },
+                            leadingIcon = { Icon(Icons.Default.Alarm, null, tint = AccentGold) },
+                            onClick = {
+                                showOverflowMenu = false
+                                showScheduleDialog = true
+                            }
+                        )
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
@@ -298,6 +350,43 @@ fun PdfViewerScreen(
             },
             containerColor = CardBg,
             shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    if (showScheduleDialog) {
+        val scheduleManager = remember { NoteScheduleManager(context) }
+        ScheduleNoteDialog(
+            noteTitle = documentNote.name,
+            initialScheduledAt = currentScheduledAt,
+            initialAlertType = try {
+                ScheduleAlertType.valueOf(currentAlertType ?: "NOTIFICATION")
+            } catch (_: Exception) {
+                ScheduleAlertType.NOTIFICATION
+            },
+            initialScheduleTitle = currentScheduleTitle,
+            onDismiss = { showScheduleDialog = false },
+            onSaveSchedule = { scheduledAt, alertType, scheduleTitle ->
+                scheduleManager.scheduleNote(
+                    noteType = ScheduleNoteType.DOCUMENT,
+                    noteId = documentNote.id,
+                    folderId = documentNote.folderId,
+                    title = documentNote.name,
+                    triggerAtMillis = scheduledAt,
+                    alertType = alertType,
+                    scheduleTitle = scheduleTitle
+                )
+                currentScheduledAt = scheduledAt
+                currentAlertType = alertType.name
+                currentScheduleTitle = scheduleTitle
+                showScheduleDialog = false
+            },
+            onClearSchedule = {
+                scheduleManager.cancelSchedule(ScheduleNoteType.DOCUMENT, documentNote.id)
+                currentScheduledAt = null
+                currentAlertType = null
+                currentScheduleTitle = null
+                showScheduleDialog = false
+            }
         )
     }
 }

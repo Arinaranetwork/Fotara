@@ -121,6 +121,29 @@ class EditorState(
     var linkDialogLabel by mutableStateOf("")
     var linkDialogUrl by mutableStateOf("https://")
 
+    // Schedule Dialog
+    var showScheduleDialog by mutableStateOf(false)
+    var scheduledAt by mutableStateOf<Long?>(null)
+        private set
+    var alertType by mutableStateOf<String?>(null)
+        private set
+    var scheduleTitle by mutableStateOf<String?>(null)
+        private set
+
+    fun openScheduleDialog() {
+        showScheduleDialog = true
+    }
+
+    fun closeScheduleDialog() {
+        showScheduleDialog = false
+    }
+
+    fun updateScheduleInfo(newScheduledAt: Long?, newAlertType: String?, newScheduleTitle: String?) {
+        scheduledAt = newScheduledAt
+        alertType = newAlertType
+        scheduleTitle = newScheduleTitle
+    }
+
     private var autosaveJob: Job? = null
     private var lastSnapshotMs = 0L
 
@@ -136,6 +159,9 @@ class EditorState(
                 if (note != null && !hasUserEdited) {
                     title = note.title
                     bodyValue = TextFieldValue(note.bodyMarkdown, selection = TextRange(note.bodyMarkdown.length))
+                    scheduledAt = note.scheduledAt
+                    alertType = note.alertType
+                    scheduleTitle = note.scheduleTitle
                     updateDerivedStates(bodyValue)
                     isLoaded = true
                 }

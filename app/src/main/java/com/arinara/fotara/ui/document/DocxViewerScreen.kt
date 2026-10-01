@@ -33,14 +33,18 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +52,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import com.arinara.fotara.ui.components.NoteDetailScheduleChip
+import com.arinara.fotara.ui.components.ScheduleNoteDialog
+import com.arinara.fotara.util.NoteScheduleManager
+import com.arinara.fotara.util.ScheduleNoteType
+import com.arinara.fotara.util.ScheduleAlertType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -90,6 +99,10 @@ fun DocxViewerScreen(
     var elements by remember { mutableStateOf<List<DocxElement>?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var currentScheduledAt by remember { mutableStateOf(documentNote.scheduledAt) }
+    var currentAlertType by remember { mutableStateOf(documentNote.alertType) }
+    var currentScheduleTitle by remember { mutableStateOf(documentNote.scheduleTitle) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
 
     val file = remember(documentNote.originFileUri) { File(documentNote.originFileUri) }
 
@@ -142,6 +155,15 @@ fun DocxViewerScreen(
                         color = TabCream.copy(alpha = 0.7f),
                         fontSize = 12.sp
                     )
+                    if (currentScheduledAt != null) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        NoteDetailScheduleChip(
+                            scheduledAt = currentScheduledAt,
+                            alertType = currentAlertType,
+                            scheduleTitle = currentScheduleTitle,
+                            onClick = { showScheduleDialog = true }
+                        )
+                    }
                 }
             },
             navigationIcon = {
@@ -167,6 +189,34 @@ fun DocxViewerScreen(
                         contentDescription = "Delete Document",
                         tint = DangerRed
                     )
+                }
+
+                // Overflow menu for Schedule...
+                Box {
+                    var showOverflowMenu by remember { mutableStateOf(false) }
+                    IconButton(onClick = { showOverflowMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More Options",
+                            tint = TabCream
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showOverflowMenu,
+                        onDismissRequest = { showOverflowMenu = false },
+                        modifier = Modifier
+                            .background(ScreenNavy)
+                            .border(1.dp, Color(0xFF28325E), RoundedCornerShape(8.dp))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Schedule...", color = TabCream) },
+                            leadingIcon = { Icon(Icons.Default.Alarm, null, tint = AccentGold) },
+                            onClick = {
+                                showOverflowMenu = false
+                                showScheduleDialog = true
+                            }
+                        )
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
@@ -402,5 +452,42 @@ fun DocxViewerScreen(
                 }
             }
         }
+    }
+
+    if (showScheduleDialog) {
+        val scheduleManager = remember { NoteScheduleManager(context) }
+        ScheduleNoteDialog(
+            noteTitle = documentNote.name,
+            initialScheduledAt = currentScheduledAt,
+            initialAlertType = try {
+                ScheduleAlertType.valueOf(currentAlertType ?: "NOTIFICATION")
+            } catch (_: Exception) {
+                ScheduleAlertType.NOTIFICATION
+            },
+            initialScheduleTitle = currentScheduleTitle,
+            onDismiss = { showScheduleDialog = false },
+            onSaveSchedule = { scheduledAt, alertType, scheduleTitle ->
+                scheduleManager.scheduleNote(
+                    noteType = ScheduleNoteType.DOCUMENT,
+                    noteId = documentNote.id,
+                    folderId = documentNote.folderId,
+                    title = documentNote.name,
+                    triggerAtMillis = scheduledAt,
+                    alertType = alertType,
+                    scheduleTitle = scheduleTitle
+                )
+                currentScheduledAt = scheduledAt
+                currentAlertType = alertType.name
+                currentScheduleTitle = scheduleTitle
+                showScheduleDialog = false
+            },
+            onClearSchedule = {
+                scheduleManager.cancelSchedule(ScheduleNoteType.DOCUMENT, documentNote.id)
+                currentScheduledAt = null
+                currentAlertType = null
+                currentScheduleTitle = null
+                showScheduleDialog = false
+            }
+        )
     }
 }

@@ -360,6 +360,94 @@ class DueTomorrowGlanceWidget : GlanceAppWidget() {
                     )
                 }
             }
+
+            // 3. Document notes added or scheduled today
+            val docCursor = db.rawQuery(
+                """
+                SELECT d.id, d.title, f.name, d.added_at, d.scheduled_at, d.linked_deadline
+                FROM document_notes d
+                INNER JOIN folders f ON d.folder_id = f.id
+                WHERE d.is_trashed = 0 AND f.is_trashed = 0
+                  AND ((d.added_at >= ? AND d.added_at < ?)
+                    OR (d.scheduled_at IS NOT NULL AND d.scheduled_at >= ? AND d.scheduled_at < ?)
+                    OR (d.linked_deadline IS NOT NULL AND d.linked_deadline >= ? AND d.linked_deadline < ?))
+                ORDER BY d.added_at DESC
+                LIMIT 10
+                """.trimIndent(),
+                arrayOf(
+                    startOfDay.toString(), endOfDay.toString(),
+                    startOfDay.toString(), endOfDay.toString(),
+                    startOfDay.toString(), endOfDay.toString()
+                )
+            )
+            docCursor.use { dc ->
+                while (dc.moveToNext()) {
+                    val id = dc.getLong(0)
+                    val title = if (dc.isNull(1) || dc.getString(1).isBlank()) "Document Note" else dc.getString(1)
+                    val folderName = dc.getString(2)
+                    val addedAt = dc.getLong(3)
+                    val scheduledAt = if (dc.isNull(4)) null else dc.getLong(4)
+                    val deadline = if (dc.isNull(5)) null else dc.getLong(5)
+
+                    if (addedAt in startOfDay..<endOfDay) addedCount++
+                    val activeSchedule = scheduledAt ?: deadline
+                    if (activeSchedule != null && activeSchedule in startOfDay..<endOfDay) scheduledCount++
+
+                    items.add(
+                        WidgetTodayItem(
+                            id = id,
+                            title = title,
+                            folderName = folderName,
+                            timestamp = activeSchedule ?: addedAt,
+                            isScheduled = activeSchedule != null
+                        )
+                    )
+                }
+            }
+
+            // 4. Photo groups added or scheduled today
+            val groupCursor = db.rawQuery(
+                """
+                SELECT g.id, g.name, f.name, g.added_at, g.scheduled_at, g.linked_deadline
+                FROM photo_groups g
+                INNER JOIN folders f ON g.folder_id = f.id
+                WHERE g.is_trashed = 0 AND f.is_trashed = 0
+                  AND ((g.added_at >= ? AND g.added_at < ?)
+                    OR (g.scheduled_at IS NOT NULL AND g.scheduled_at >= ? AND g.scheduled_at < ?)
+                    OR (g.linked_deadline IS NOT NULL AND g.linked_deadline >= ? AND g.linked_deadline < ?))
+                ORDER BY g.added_at DESC
+                LIMIT 10
+                """.trimIndent(),
+                arrayOf(
+                    startOfDay.toString(), endOfDay.toString(),
+                    startOfDay.toString(), endOfDay.toString(),
+                    startOfDay.toString(), endOfDay.toString()
+                )
+            )
+            groupCursor.use { gc ->
+                while (gc.moveToNext()) {
+                    val id = gc.getLong(0)
+                    val name = if (gc.isNull(1) || gc.getString(1).isBlank()) "Photo Group" else gc.getString(1)
+                    val folderName = gc.getString(2)
+                    val addedAt = gc.getLong(3)
+                    val scheduledAt = if (gc.isNull(4)) null else gc.getLong(4)
+                    val deadline = if (gc.isNull(5)) null else gc.getLong(5)
+
+                    if (addedAt in startOfDay..<endOfDay) addedCount++
+                    val activeSchedule = scheduledAt ?: deadline
+                    if (activeSchedule != null && activeSchedule in startOfDay..<endOfDay) scheduledCount++
+
+                    items.add(
+                        WidgetTodayItem(
+                            id = id,
+                            title = name,
+                            folderName = folderName,
+                            timestamp = activeSchedule ?: addedAt,
+                            isScheduled = activeSchedule != null
+                        )
+                    )
+                }
+            }
         } catch (_: Exception) {}
 
         return WidgetTodayData(

@@ -237,6 +237,9 @@ class SqliteCanvasNoteRepository(
                     put("deleted_at", now)
                 }
                 db.update("canvas_notes", values, "id = ?", arrayOf(id.toString()))
+                try {
+                    com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).cancelAlarmOnly(com.arinara.fotara.util.ScheduleNoteType.CANVAS_NOTE, id)
+                } catch (_: Exception) {}
             }
             db.setTransactionSuccessful()
         } finally {
@@ -252,6 +255,12 @@ class SqliteCanvasNoteRepository(
         }
         val db = dbHelper.getSafeWritableDatabase()
         db.update("canvas_notes", values, "id = ?", arrayOf(id.toString()))
+        val note = getCanvasNoteById(id)
+        if (note != null) {
+            try {
+                com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).rearmAlarmIfFuture(note)
+            } catch (_: Exception) {}
+        }
         refreshSync()
     }
 

@@ -732,6 +732,12 @@ class SqlitePhotoRepository(
             // Universal rule 2.11: Move to trash immediately removes group membership
             db.execSQL("UPDATE photos SET is_trashed = 1, deleted_at = $now, group_id = NULL WHERE id IN ($inClause)")
 
+            for (id in ids) {
+                try {
+                    com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).cancelAlarmOnly(com.arinara.fotara.util.ScheduleNoteType.PHOTO, id)
+                } catch (_: Exception) {}
+            }
+
             // Check affected groups for auto-dissolve if <= 1 member remains
             for (gId in affectedGroupIds) {
                 val memberCursor = db.rawQuery(
@@ -847,6 +853,12 @@ class SqlitePhotoRepository(
             }
         }
         db.update("photos", values, "id = ?", arrayOf(id.toString()))
+        val restoredPhoto = getPhotoByIdOnce(id)
+        if (restoredPhoto != null) {
+            try {
+                com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).rearmAlarmIfFuture(restoredPhoto)
+            } catch (_: Exception) {}
+        }
         refreshSync()
         folderRepository.refresh()
     }
@@ -859,6 +871,12 @@ class SqlitePhotoRepository(
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
+        }
+        val group = getGroupById(id)
+        if (group != null) {
+            try {
+                com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).rearmAlarmIfFuture(group)
+            } catch (_: Exception) {}
         }
         refreshSync()
         folderRepository.refresh()

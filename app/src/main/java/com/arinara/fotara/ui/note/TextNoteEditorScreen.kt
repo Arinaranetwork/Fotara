@@ -77,8 +77,17 @@ import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.ui.components.RichMarkdownColumn
 import com.arinara.fotara.ui.note.editor.EditorActions
 import com.arinara.fotara.ui.note.editor.EditorToolbar
-import com.arinara.fotara.ui.note.editor.MarkdownVisualTransformation
-import com.arinara.fotara.ui.note.editor.rememberEditorState
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.platform.LocalContext
+import com.arinara.fotara.ui.components.NoteDetailScheduleChip
+import com.arinara.fotara.ui.components.ScheduleNoteDialog
+import com.arinara.fotara.util.NoteScheduleManager
+import com.arinara.fotara.util.ScheduleNoteType
+import com.arinara.fotara.util.ScheduleAlertType
 import kotlinx.coroutines.launch
 
 private val ScreenNavy = Color(0xFF03071E)
@@ -216,6 +225,34 @@ fun TextNoteEditorScreen(
                         contentDescription = "Share Note",
                         tint = if (state.title.isNotBlank() || state.bodyValue.text.isNotBlank()) TabCream else TextMuted
                     )
+                }
+
+                // Overflow menu for note actions (Schedule, etc.)
+                Box {
+                    var showOverflowMenu by remember { mutableStateOf(false) }
+                    IconButton(onClick = { showOverflowMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More Options",
+                            tint = TabCream
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showOverflowMenu,
+                        onDismissRequest = { showOverflowMenu = false },
+                        modifier = Modifier
+                            .background(CardBg)
+                            .border(1.dp, ToolbarBorder, RoundedCornerShape(8.dp))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Schedule...", color = TabCream) },
+                            leadingIcon = { Icon(Icons.Default.Alarm, null, tint = AccentGold) },
+                            onClick = {
+                                showOverflowMenu = false
+                                state.openScheduleDialog()
+                            }
+                        )
+                    }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
@@ -368,6 +405,15 @@ fun TextNoteEditorScreen(
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
                 )
+                if (state.scheduledAt != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    NoteDetailScheduleChip(
+                        scheduledAt = state.scheduledAt,
+                        alertType = state.alertType,
+                        scheduleTitle = state.scheduleTitle,
+                        onClick = { state.openScheduleDialog() }
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 RichMarkdownColumn(
                     markdown = state.bodyValue.text.ifBlank { "*This note is empty. Switch to edit mode to start typing.*" },
@@ -413,6 +459,16 @@ fun TextNoteEditorScreen(
                         }
                     }
                 )
+
+                if (state.scheduledAt != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    NoteDetailScheduleChip(
+                        scheduledAt = state.scheduledAt,
+                        alertType = state.alertType,
+                        scheduleTitle = state.scheduleTitle,
+                        onClick = { state.openScheduleDialog() }
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -556,6 +612,50 @@ fun TextNoteEditorScreen(
             },
             containerColor = CardBg,
             shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    // Universal Schedule Dialog for Text Note
+    if (state.showScheduleDialog) {
+        val scheduleContext = LocalContext.current
+        val scheduleManager = remember { NoteScheduleManager(scheduleContext) }
+        ScheduleNoteDialog(
+            noteTitle = state.title.ifBlank { "Untitled Note" },
+            initialScheduledAt = state.scheduledAt,
+            initialAlertType = try {
+                ScheduleAlertType.valueOf(state.alertType ?: "NOTIFICATION")
+            } catch (_: Exception) {
+                ScheduleAlertType.NOTIFICATION
+            },
+            initialScheduleTitle = state.scheduleTitle,
+            onDismiss = { state.closeScheduleDialog() },
+            onSaveSchedule = { scheduledAt, alertType, scheduleTitle ->
+                coroutineScope.launch {
+                    state.saveImmediately()
+                    val currentNoteId = state.noteId
+                    if (currentNoteId != null && currentNoteId > 0) {
+                        scheduleManager.scheduleNote(
+                            noteType = ScheduleNoteType.TEXT_NOTE,
+                            noteId = currentNoteId,
+                            folderId = state.folderId,
+                            title = state.title.ifBlank { "Untitled Note" },
+                            triggerAtMillis = scheduledAt,
+                            alertType = alertType,
+                            scheduleTitle = scheduleTitle
+                        )
+                        state.updateScheduleInfo(scheduledAt, alertType.name, scheduleTitle)
+                    }
+                }
+                state.closeScheduleDialog()
+            },
+            onClearSchedule = {
+                val currentNoteId = state.noteId
+                if (currentNoteId != null && currentNoteId > 0) {
+                    scheduleManager.cancelSchedule(ScheduleNoteType.TEXT_NOTE, currentNoteId)
+                    state.updateScheduleInfo(null, null, null)
+                }
+                state.closeScheduleDialog()
+            }
         )
     }
 }

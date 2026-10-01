@@ -189,7 +189,7 @@ fun DetailTextNoteCard(
                     Spacer(modifier = Modifier.weight(1f))
 
                     if (note.scheduledAt != null) {
-                        com.arinara.fotara.ui.components.ScheduleBadge(
+                        com.arinara.fotara.ui.components.CardScheduleBadge(
                             scheduledAt = note.scheduledAt,
                             alertType = note.alertType
                         )

@@ -230,6 +230,11 @@ class SqliteTextNoteRepository(
         }
         val placeholders = ids.joinToString(",") { "?" }
         db.update("text_notes", values, "id IN ($placeholders)", ids.map { it.toString() }.toTypedArray())
+        for (id in ids) {
+            try {
+                com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).cancelAlarmOnly(com.arinara.fotara.util.ScheduleNoteType.TEXT_NOTE, id)
+            } catch (_: Exception) {}
+        }
         refreshSync()
     }
 
@@ -240,6 +245,12 @@ class SqliteTextNoteRepository(
             putNull("deleted_at")
         }
         db.update("text_notes", values, "id = ?", arrayOf(id.toString()))
+        val note = getTextNoteByIdOnce(id)
+        if (note != null) {
+            try {
+                com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).rearmAlarmIfFuture(note)
+            } catch (_: Exception) {}
+        }
         refreshSync()
     }
 

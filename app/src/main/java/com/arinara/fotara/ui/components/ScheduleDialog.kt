@@ -6,6 +6,11 @@
 
 package com.arinara.fotara.ui.components
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +32,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,6 +42,8 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -65,7 +74,9 @@ import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.util.NoteScheduleManager
 import com.arinara.fotara.util.ScheduleAlertType
+import com.arinara.fotara.util.ScheduleMath
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -88,24 +99,7 @@ fun ScheduleBadge(
     val badgeBg = if (isOverdue) TagCrimson.copy(alpha = 0.15f) else DockSlatePill.copy(alpha = 0.7f)
     val badgeBorder = if (isOverdue) TagCrimson.copy(alpha = 0.6f) else MidnightCardOutline
 
-    val sdf = remember(scheduledAt) {
-        val calSchedule = Calendar.getInstance().apply { timeInMillis = scheduledAt }
-        val calNow = Calendar.getInstance()
-        val isToday = calSchedule.get(Calendar.YEAR) == calNow.get(Calendar.YEAR) &&
-                calSchedule.get(Calendar.DAY_OF_YEAR) == calNow.get(Calendar.DAY_OF_YEAR)
-
-        calNow.add(Calendar.DAY_OF_YEAR, 1)
-        val isTomorrow = calSchedule.get(Calendar.YEAR) == calNow.get(Calendar.YEAR) &&
-                calSchedule.get(Calendar.DAY_OF_YEAR) == calNow.get(Calendar.DAY_OF_YEAR)
-
-        val timePart = SimpleDateFormat("h:mm a", Locale.US).format(Date(scheduledAt))
-
-        when {
-            isToday -> "Today, $timePart"
-            isTomorrow -> "Tomorrow, $timePart"
-            else -> SimpleDateFormat("MMM d, h:mm a", Locale.US).format(Date(scheduledAt))
-        }
-    }
+    val text = ScheduleMath.formatScheduleBadge(scheduledAt, now)
 
     Surface(
         color = badgeBg,
@@ -127,7 +121,7 @@ fun ScheduleBadge(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = if (isOverdue) "Overdue: $sdf" else sdf,
+                text = if (isOverdue) "Overdue: $text" else text,
                 style = TextStyle(
                     color = badgeColor,
                     fontSize = 11.sp,
@@ -138,16 +132,24 @@ fun ScheduleBadge(
     }
 }
 
+/**
+ * Universal schedule dialog for study notes of all types.
+ * Supports date, time, custom title, alert style, past validation, and permission flow.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleNoteDialog(
     noteTitle: String,
     initialScheduledAt: Long? = null,
     initialAlertType: ScheduleAlertType = ScheduleAlertType.NOTIFICATION,
+    initialScheduleTitle: String? = null,
     onDismiss: () -> Unit,
-    onSaveSchedule: (scheduledAt: Long, alertType: ScheduleAlertType) -> Unit,
+    onSaveSchedule: (scheduledAt: Long, alertType: ScheduleAlertType, scheduleTitle: String?) -> Unit,
     onClearSchedule: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scheduleManager = remember { NoteScheduleManager(context) }
+
     val initialCal = remember(initialScheduledAt) {
         Calendar.getInstance().apply {
             if (initialScheduledAt != null && initialScheduledAt > System.currentTimeMillis()) {
@@ -163,14 +165,113 @@ fun ScheduleNoteDialog(
 
     var selectedCal by remember { mutableStateOf(initialCal) }
     var selectedAlertType by remember { mutableStateOf(initialAlertType) }
+    var scheduleName by remember { mutableStateOf(initialScheduleTitle ?: "") }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
+
+    val now = System.currentTimeMillis()
+    val isPast = selectedCal.timeInMillis <= now
 
     val dateStr = remember(selectedCal.timeInMillis) {
         SimpleDateFormat("EEE, MMM d, yyyy", Locale.US).format(selectedCal.time)
     }
     val timeStr = remember(selectedCal.timeInMillis) {
         SimpleDateFormat("h:mm a", Locale.US).format(selectedCal.time)
+    }
+
+    // Permission explanation dialog
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            containerColor = MidnightSurface,
+            shape = RoundedCornerShape(20.dp),
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Alarm,
+                    contentDescription = null,
+                    tint = FolderTabCream,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Allow Timely Study Alerts",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "To ensure you never miss a study deadline, Fotara needs permission to schedule alarms and post alerts even when your device is locked or in battery saving mode.",
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !scheduleManager.canScheduleExact()) {
+                        Text(
+                            text = "• Exact Alarm Permission: Required for to-the-minute alarm precision.",
+                            color = TagAmber,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    if (!scheduleManager.canPostNotifications()) {
+                        Text(
+                            text = "• Notification Permission: Required to display study reminders on your screen.",
+                            color = TagAmber,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionDialog = false
+                        // Launch appropriate settings screen
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !scheduleManager.canScheduleExact()) {
+                            try {
+                                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                                openAppSettings(context)
+                            }
+                        } else {
+                            openAppSettings(context)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FolderTabCream,
+                        contentColor = MidnightNavy
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Open Settings", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPermissionDialog = false
+                        // Proceed anyway with available capabilities
+                        onSaveSchedule(
+                            selectedCal.timeInMillis,
+                            selectedAlertType,
+                            scheduleName.trim().ifBlank { null }
+                        )
+                        onDismiss()
+                    }
+                ) {
+                    Text("Continue Anyway", color = TextSecondary)
+                }
+            }
+        )
     }
 
     if (showDatePicker) {
@@ -299,7 +400,7 @@ fun ScheduleNoteDialog(
         title = {
             Column {
                 Text(
-                    text = "Schedule Study Note",
+                    text = "Schedule Note",
                     color = TextPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
@@ -314,146 +415,244 @@ fun ScheduleNoteDialog(
             }
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // Date picker trigger button
-                Text(
-                    text = "DATE",
-                    style = TextStyle(color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Surface(
-                    color = DockSlatePill.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, MidnightCardOutline),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showDatePicker = true }
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarToday,
-                            contentDescription = null,
-                            tint = FolderTabCream,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = dateStr,
-                            color = TextPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Time picker trigger button
-                Text(
-                    text = "TIME",
-                    style = TextStyle(color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Surface(
-                    color = DockSlatePill.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, MidnightCardOutline),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showTimePicker = true }
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccessTime,
-                            contentDescription = null,
-                            tint = FolderTabCream,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = timeStr,
-                            color = TextPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Alert Type selector
-                Text(
-                    text = "ALERT TYPE",
-                    style = TextStyle(color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val notifSelected = selectedAlertType == ScheduleAlertType.NOTIFICATION
-                    Surface(
-                        color = if (notifSelected) FolderTabCream else DockSlatePill.copy(alpha = 0.4f),
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 1. Custom Schedule Title field
+                Column {
+                    Text(
+                        text = "SCHEDULE NAME",
+                        style = TextStyle(color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = scheduleName,
+                        onValueChange = { scheduleName = it },
+                        placeholder = { Text("e.g. Quiz Preparation, Chapter 3", color = TextMuted, fontSize = 13.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = FolderTabCream,
+                            unfocusedBorderColor = MidnightCardOutline,
+                            focusedContainerColor = DockSlatePill.copy(alpha = 0.35f),
+                            unfocusedContainerColor = DockSlatePill.copy(alpha = 0.35f),
+                            cursorColor = FolderTabCream
+                        ),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (notifSelected) FolderTabCream else MidnightCardOutline),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // 2. Date picker trigger button
+                Column {
+                    Text(
+                        text = "DATE",
+                        style = TextStyle(color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        color = DockSlatePill.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MidnightCardOutline),
                         modifier = Modifier
-                            .weight(1f)
-                            .clickable { selectedAlertType = ScheduleAlertType.NOTIFICATION }
+                            .fillMaxWidth()
+                            .clickable { showDatePicker = true }
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(vertical = 10.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Notifications,
+                                imageVector = Icons.Default.CalendarToday,
                                 contentDescription = null,
-                                tint = if (notifSelected) MidnightNavy else TextSecondary,
-                                modifier = Modifier.size(14.dp)
+                                tint = FolderTabCream,
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "Reminder",
-                                color = if (notifSelected) MidnightNavy else TextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = if (notifSelected) FontWeight.Bold else FontWeight.Normal
+                                text = dateStr,
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
+                }
 
-                    val alarmSelected = selectedAlertType == ScheduleAlertType.ALARM
+                // 3. Time picker trigger button
+                Column {
+                    Text(
+                        text = "TIME",
+                        style = TextStyle(color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Surface(
-                        color = if (alarmSelected) FolderTabCream else DockSlatePill.copy(alpha = 0.4f),
+                        color = DockSlatePill.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (alarmSelected) FolderTabCream else MidnightCardOutline),
+                        border = BorderStroke(1.dp, MidnightCardOutline),
                         modifier = Modifier
-                            .weight(1f)
-                            .clickable { selectedAlertType = ScheduleAlertType.ALARM }
+                            .fillMaxWidth()
+                            .clickable { showTimePicker = true }
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(vertical = 10.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Alarm,
+                                imageVector = Icons.Default.AccessTime,
                                 contentDescription = null,
-                                tint = if (alarmSelected) MidnightNavy else TextSecondary,
-                                modifier = Modifier.size(14.dp)
+                                tint = FolderTabCream,
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "Urgent Alarm",
-                                color = if (alarmSelected) MidnightNavy else TextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = if (alarmSelected) FontWeight.Bold else FontWeight.Normal
+                                text = timeStr,
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
                             )
+                        }
+                    }
+                }
+
+                // Inline past validation warning
+                if (isPast) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(TagCrimson.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                            .border(1.dp, TagCrimson.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Warning",
+                            tint = TagCrimson,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Selected time is in the past. Choose a future time.",
+                            color = TagCrimson,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // Quick Presets
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    QuickPresetChip(
+                        label = "+1 Hour",
+                        onClick = {
+                            selectedCal = Calendar.getInstance().apply {
+                                add(Calendar.HOUR_OF_DAY, 1)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                        }
+                    )
+                    QuickPresetChip(
+                        label = "Tomorrow 9 AM",
+                        onClick = {
+                            selectedCal = Calendar.getInstance().apply {
+                                add(Calendar.DAY_OF_YEAR, 1)
+                                set(Calendar.HOUR_OF_DAY, 9)
+                                set(Calendar.MINUTE, 0)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                        }
+                    )
+                    QuickPresetChip(
+                        label = "In 2 Days",
+                        onClick = {
+                            selectedCal = Calendar.getInstance().apply {
+                                add(Calendar.DAY_OF_YEAR, 2)
+                                set(Calendar.HOUR_OF_DAY, 9)
+                                set(Calendar.MINUTE, 0)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                        }
+                    )
+                }
+
+                // 4. Alert Type selector (Notification vs Alarm)
+                Column {
+                    Text(
+                        text = "ALERT STYLE",
+                        style = TextStyle(color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val notifSelected = selectedAlertType == ScheduleAlertType.NOTIFICATION
+                        Surface(
+                            color = if (notifSelected) FolderTabCream else DockSlatePill.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, if (notifSelected) FolderTabCream else MidnightCardOutline),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { selectedAlertType = ScheduleAlertType.NOTIFICATION }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(vertical = 9.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Notifications,
+                                    contentDescription = null,
+                                    tint = if (notifSelected) MidnightNavy else TextSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Notification",
+                                    color = if (notifSelected) MidnightNavy else TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (notifSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+
+                        val alarmSelected = selectedAlertType == ScheduleAlertType.ALARM
+                        Surface(
+                            color = if (alarmSelected) FolderTabCream else DockSlatePill.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, if (alarmSelected) FolderTabCream else MidnightCardOutline),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { selectedAlertType = ScheduleAlertType.ALARM }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(vertical = 9.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Alarm,
+                                    contentDescription = null,
+                                    tint = if (alarmSelected) MidnightNavy else TextSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Alarm Ring",
+                                    color = if (alarmSelected) MidnightNavy else TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (alarmSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
                         }
                     }
                 }
@@ -462,20 +661,35 @@ fun ScheduleNoteDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    onSaveSchedule(selectedCal.timeInMillis, selectedAlertType)
-                    onDismiss()
+                    if (isPast) return@Button
+                    val needsExact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !scheduleManager.canScheduleExact()
+                    val needsNotif = !scheduleManager.canPostNotifications()
+
+                    if (needsExact || needsNotif) {
+                        showPermissionDialog = true
+                    } else {
+                        onSaveSchedule(
+                            selectedCal.timeInMillis,
+                            selectedAlertType,
+                            scheduleName.trim().ifBlank { null }
+                        )
+                        onDismiss()
+                    }
                 },
+                enabled = !isPast,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = FolderTabCream,
-                    contentColor = MidnightNavy
+                    contentColor = MidnightNavy,
+                    disabledContainerColor = DockSlatePill.copy(alpha = 0.5f),
+                    disabledContentColor = TextMuted
                 ),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Set Schedule", fontWeight = FontWeight.Bold)
+                Text("Save", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 if (initialScheduledAt != null && initialScheduledAt > 0L) {
                     TextButton(
                         onClick = {
@@ -492,4 +706,58 @@ fun ScheduleNoteDialog(
             }
         }
     )
+}
+
+/**
+ * Backwards compatibility overload for callers providing the 2-parameter lambda.
+ */
+@Composable
+fun ScheduleNoteDialog(
+    noteTitle: String,
+    initialScheduledAt: Long? = null,
+    initialAlertType: ScheduleAlertType = ScheduleAlertType.NOTIFICATION,
+    onDismiss: () -> Unit,
+    onSaveSchedule: (scheduledAt: Long, alertType: ScheduleAlertType) -> Unit,
+    onClearSchedule: () -> Unit
+) {
+    ScheduleNoteDialog(
+        noteTitle = noteTitle,
+        initialScheduledAt = initialScheduledAt,
+        initialAlertType = initialAlertType,
+        initialScheduleTitle = null,
+        onDismiss = onDismiss,
+        onSaveSchedule = { scheduledAt, alertType, _ ->
+            onSaveSchedule(scheduledAt, alertType)
+        },
+        onClearSchedule = onClearSchedule
+    )
+}
+
+@Composable
+private fun QuickPresetChip(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = DockSlatePill.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(0.8.dp, MidnightCardOutline),
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Text(
+            text = label,
+            color = TextSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+
+private fun openAppSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.fromParts("package", context.packageName, null)
+    }
+    context.startActivity(intent)
 }

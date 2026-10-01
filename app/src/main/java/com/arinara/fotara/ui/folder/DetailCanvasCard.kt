@@ -51,7 +51,7 @@ import com.arinara.fotara.theme.MidnightNavy
 import com.arinara.fotara.theme.MidnightSurface
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TextMuted
-import com.arinara.fotara.theme.TextPrimary
+import com.arinara.fotara.ui.components.CardScheduleBadge
 import com.arinara.fotara.ui.components.GlowCorner
 import com.arinara.fotara.ui.components.ScheduleBadge
 import com.arinara.fotara.ui.components.linkItCornerGlow
@@ -183,7 +183,7 @@ fun DetailCanvasCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (note.scheduledAt != null) {
-                            ScheduleBadge(
+                            CardScheduleBadge(
                                 scheduledAt = note.scheduledAt,
                                 alertType = note.alertType
                             )

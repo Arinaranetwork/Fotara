@@ -6,11 +6,13 @@
 
 package com.arinara.fotara.data.model
 
+import com.arinara.fotara.util.ScheduleNoteType
+
 data class TextNote(
-    val id: Long = 0,
-    val folderId: Long,
-    val subfolderId: Long? = null,
-    val title: String,
+    override val id: Long = 0,
+    override val folderId: Long,
+    override val subfolderId: Long? = null,
+    override val title: String,
     val bodyMarkdown: String,
     val createdAt: Long,
     val updatedAt: Long,
@@ -19,9 +21,11 @@ data class TextNote(
     val linkedDeadline: Long? = null,
     val isTrashed: Boolean = false,
     val deletedAt: Long? = null,
-    val scheduledAt: Long? = null,
-    val alertType: String? = null
-) {
+    override val scheduledAt: Long? = null,
+    override val alertType: String? = null,
+    override val scheduleTitle: String? = null
+) : SchedulableNote {
+    override val noteType: ScheduleNoteType get() = ScheduleNoteType.TEXT_NOTE
     val isBlank: Boolean
         get() = title.isBlank() && bodyMarkdown.isBlank()
 

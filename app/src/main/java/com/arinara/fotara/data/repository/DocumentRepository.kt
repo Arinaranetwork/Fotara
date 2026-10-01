@@ -533,6 +533,11 @@ class SqliteDocumentRepository(
         }
         val placeholders = ids.joinToString(",") { "?" }
         db.update("document_notes", values, "id IN ($placeholders)", ids.map { it.toString() }.toTypedArray())
+        for (id in ids) {
+            try {
+                com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).cancelAlarmOnly(com.arinara.fotara.util.ScheduleNoteType.DOCUMENT, id)
+            } catch (_: Exception) {}
+        }
         refreshSync()
     }
 
@@ -543,6 +548,12 @@ class SqliteDocumentRepository(
             putNull("deleted_at")
         }
         db.update("document_notes", values, "id = ?", arrayOf(id.toString()))
+        val doc = getDocumentNoteById(id)
+        if (doc != null) {
+            try {
+                com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).rearmAlarmIfFuture(doc)
+            } catch (_: Exception) {}
+        }
         refreshSync()
     }
 

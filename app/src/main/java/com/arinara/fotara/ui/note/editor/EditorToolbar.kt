@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DataObject
@@ -223,6 +224,11 @@ fun EditorToolbar(
                     fontWeight = FontWeight.Medium
                 )
             }
+            ToolbarActionItem(
+                icon = Icons.Default.Alarm,
+                description = "Schedule Note",
+                onClick = { state.openScheduleDialog() }
+            )
         }
     }
 }
