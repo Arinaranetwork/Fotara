@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -255,7 +256,7 @@ class SqliteCanvasNoteRepository(
         }
         val db = dbHelper.getSafeWritableDatabase()
         db.update("canvas_notes", values, "id = ?", arrayOf(id.toString()))
-        val note = getCanvasNoteById(id)
+        val note = getCanvasNoteByIdOnce(id)
         if (note != null) {
             try {
                 com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).rearmAlarmIfFuture(note)

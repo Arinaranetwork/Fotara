@@ -65,7 +65,7 @@ class ScheduleMigrationTest {
         val photo: SchedulableNote = Photo(
             id = 1L,
             folderId = 10L,
-            imageUri = "content://media/1",
+            fileUri = "content://media/1",
             createdAt = now,
             addedAt = now,
             scheduledAt = future,
@@ -96,7 +96,6 @@ class ScheduleMigrationTest {
             name = "Physics.pdf",
             docType = DocumentType.PDF,
             originFileUri = "/storage/physics.pdf",
-            fileSizeBytes = 1024L,
             pageCount = 12,
             createdAt = now,
             addedAt = now,
@@ -114,6 +113,7 @@ class ScheduleMigrationTest {
             title = "Bio Lecture",
             bodyMarkdown = "Genetics notes",
             createdAt = now,
+            updatedAt = now,
             addedAt = now,
             scheduledAt = null,
             scheduleTitle = null
@@ -144,9 +144,36 @@ class ScheduleMigrationTest {
         val future2 = now + 200000L
 
         val mockDbRows = listOf(
-            FotaraDbHelper.NoteScheduleSummary(1L, 10L, "Future 1", future1, "ALARM", "Prep 1", FotaraDbHelper.NoteType.PHOTO),
-            FotaraDbHelper.NoteScheduleSummary(2L, 10L, "Future 2", future2, "NOTIFICATION", null, FotaraDbHelper.NoteType.TEXT),
-            FotaraDbHelper.NoteScheduleSummary(3L, 10L, "Past Note", past, "NOTIFICATION", null, FotaraDbHelper.NoteType.DOCUMENT)
+            NoteScheduleSummary(
+                id = 1L,
+                type = NoteType.PHOTO,
+                title = "Future 1",
+                folderId = 10L,
+                subfolderId = null,
+                scheduledAt = future1,
+                alertType = "ALARM",
+                scheduleTitle = "Prep 1"
+            ),
+            NoteScheduleSummary(
+                id = 2L,
+                type = NoteType.TEXT,
+                title = "Future 2",
+                folderId = 10L,
+                subfolderId = null,
+                scheduledAt = future2,
+                alertType = "NOTIFICATION",
+                scheduleTitle = null
+            ),
+            NoteScheduleSummary(
+                id = 3L,
+                type = NoteType.DOCUMENT,
+                title = "Past Note",
+                folderId = 10L,
+                subfolderId = null,
+                scheduledAt = past,
+                alertType = "NOTIFICATION",
+                scheduleTitle = null
+            )
         )
 
         // Rescheduling logic strictly filters scheduledAt > now
@@ -172,6 +199,7 @@ class ScheduleMigrationTest {
             title = "History Essay",
             bodyMarkdown = "Draft",
             createdAt = now,
+            updatedAt = now,
             addedAt = now,
             scheduledAt = scheduledTime,
             alertType = "ALARM",

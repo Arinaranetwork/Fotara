@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,6 +71,7 @@ data class SharePlacementUiState(
     val placeButtonLabel: String get() = ShareSessionEngine.formatPlaceButtonLabel(placeableCount)
     val shouldShowSidePanel: Boolean get() = ShareSessionEngine.shouldShowSidePanel(stagedItems.size)
     val totalRemaining: Int get() = stagedItems.size
+    val selectedCount: Int get() = stagedItems.count { it.isSelected }
 }
 
 class SharePlacementViewModel(
@@ -542,7 +544,7 @@ class SharePlacementViewModel(
     fun createFolder(name: String, colorHex: String) {
         viewModelScope.launch {
             val newId = folderRepository.createFolder(name = name.trim(), colorLabel = colorHex, isPinned = false)
-            val newFolder = folderRepository.getFolderById(newId)
+            val newFolder = folderRepository.getFolderById(newId).firstOrNull()
             if (newFolder != null) {
                 applyFolderSelection(newFolder)
             }

@@ -77,6 +77,8 @@ import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.ui.components.RichMarkdownColumn
 import com.arinara.fotara.ui.note.editor.EditorActions
 import com.arinara.fotara.ui.note.editor.EditorToolbar
+import com.arinara.fotara.ui.note.editor.rememberEditorState
+import com.arinara.fotara.ui.note.editor.MarkdownVisualTransformation
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.MoreVert
@@ -499,23 +501,22 @@ fun TextNoteEditorScreen(
                             val handled = EditorActions.handleEnterKey(oldBody)
                             if (handled != null) {
                                 state.onBodyChange(handled)
-                                return@BasicTextField
+                            } else {
+                                state.onBodyChange(newBody)
                             }
-                        }
-
-                        // Intercept Backspace key for list marker exit
-                        if (newBody.text.length == oldBody.text.length - 1 &&
+                        } else if (newBody.text.length == oldBody.text.length - 1 &&
                             oldBody.selection.min == oldBody.selection.max &&
                             oldBody.selection.min > 0
                         ) {
                             val handled = EditorActions.handleBackspaceKey(oldBody)
                             if (handled != null) {
                                 state.onBodyChange(handled)
-                                return@BasicTextField
+                            } else {
+                                state.onBodyChange(newBody)
                             }
+                        } else {
+                            state.onBodyChange(newBody)
                         }
-
-                        state.onBodyChange(newBody)
                     },
                     visualTransformation = visualTransformation,
                     textStyle = TextStyle(
@@ -631,7 +632,7 @@ fun TextNoteEditorScreen(
             onDismiss = { state.closeScheduleDialog() },
             onSaveSchedule = { scheduledAt, alertType, scheduleTitle ->
                 coroutineScope.launch {
-                    state.saveImmediately()
+                    state.flushAutosaveNow()
                     val currentNoteId = state.noteId
                     if (currentNoteId != null && currentNoteId > 0) {
                         scheduleManager.scheduleNote(

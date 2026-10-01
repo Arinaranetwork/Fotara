@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.AccessTime
@@ -49,7 +50,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Info
@@ -467,7 +467,7 @@ fun CanvasScreen(
                                     showOverflowMenu = false
                                     viewModel.setMoveDialogVisible(true)
                                 },
-                                leadingIcon = { Icon(Icons.Default.DriveFileMove, null, tint = FolderTabCream) }
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, null, tint = FolderTabCream) }
                             )
                             HorizontalDivider(color = MidnightCardOutline)
                             DropdownMenuItem(
@@ -717,7 +717,7 @@ fun CanvasScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline)
             ) {
                 Column(
-                    horizontalAlignment = Alignment.CenterVertically,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     // Collapsible Handle
@@ -1276,7 +1276,7 @@ fun CanvasScreen(
                                     .padding(vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.DriveFileMove, null, tint = FolderTabCream, modifier = Modifier.size(20.dp))
+                                Icon(Icons.AutoMirrored.Filled.DriveFileMove, null, tint = FolderTabCream, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(folder.name, color = TextPrimary, fontSize = 14.sp)
                             }
@@ -1516,12 +1516,14 @@ fun CanvasScreen(
         if (uiState.showScheduleDialog && uiState.canvasId != null) {
             ScheduleNoteDialog(
                 noteTitle = uiState.title,
-                targetId = uiState.canvasId.toString(),
-                targetType = ScheduleNoteType.CANVAS,
-                initialTriggerTime = uiState.scheduledAt,
+                initialScheduledAt = uiState.scheduledAt,
                 initialAlertType = if (uiState.alertType == ScheduleAlertType.ALARM.name) ScheduleAlertType.ALARM else ScheduleAlertType.NOTIFICATION,
+                initialScheduleTitle = null,
                 onDismiss = { viewModel.setScheduleDialogVisible(false) },
-                onScheduleSaved = { triggerMs, alertType ->
+                onSaveSchedule = { _, _, _ ->
+                    viewModel.setScheduleDialogVisible(false)
+                },
+                onClearSchedule = {
                     viewModel.setScheduleDialogVisible(false)
                 }
             )

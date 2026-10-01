@@ -56,7 +56,7 @@ class CanvasAssetManager(private val context: Context? = null) {
         canvasId: Long
     ): CanvasAssetInfo? = withContext(Dispatchers.IO) {
         try {
-            val cr = context.contentResolver
+            val cr = context?.contentResolver ?: return@withContext null
 
             // 1. Decode bounds & EXIF orientation
             val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }

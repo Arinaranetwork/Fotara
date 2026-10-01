@@ -329,9 +329,10 @@ class DefaultCanvasRepository(
         assetManager.purgeOrphanedAssets(canvasId, activeAssetIds)
     }
 
-    override suspend fun purgeCanvas(canvasId: Long) = withContext(Dispatchers.IO) {
+    override suspend fun purgeCanvas(canvasId: Long): Unit = withContext(Dispatchers.IO) {
         canvasDao.purgeCanvasData(canvasId)
         assetManager.purgeOrphanedAssets(canvasId, emptySet())
         documentFlows.remove(canvasId)
+        Unit
     }
 }

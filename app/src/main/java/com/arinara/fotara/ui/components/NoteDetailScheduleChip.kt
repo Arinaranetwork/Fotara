@@ -56,7 +56,7 @@ fun NoteDetailScheduleChip(
     val isDueSoon = ScheduleMath.isDueToday(scheduledAt, now) || ScheduleMath.isDueTomorrow(scheduledAt, now)
     val isAlarm = alertType == "ALARM"
 
-    val timeText = ScheduleMath.formatScheduleBadge(scheduledAt, now)
+    val timeText = ScheduleMath.formatShortScheduleBadge(scheduledAt, now)
     val displayText = if (!scheduleTitle.isNullOrBlank()) {
         "$scheduleTitle ($timeText)"
     } else {

@@ -284,14 +284,15 @@ class HomeViewModel(
             }
             documentRepository?.let { repo ->
                 viewModelScope.launch {
-                    val docs = repo.searchDocuments(trimmed)
-                    val filtered = if (smartTag != null) emptyList() else docs.filter { doc ->
-                        val matchesDate = doc.addedAt in startTime..endTime
-                        val matchesColor = if (colorFilter == null) true else doc.tagColor.equals(colorFilter, ignoreCase = true)
-                        matchesDate && matchesColor
-                    }
-                    _uiState.update {
-                        it.copy(documentSearchResults = sortResults(filtered) { d -> d.addedAt })
+                    repo.searchDocuments(trimmed).collect { docs ->
+                        val filtered = if (smartTag != null) emptyList() else docs.filter { doc ->
+                            val matchesDate = doc.addedAt in startTime..endTime
+                            val matchesColor = if (colorFilter == null) true else doc.tagColor.equals(colorFilter, ignoreCase = true)
+                            matchesDate && matchesColor
+                        }
+                        _uiState.update {
+                            it.copy(documentSearchResults = sortResults(filtered) { d -> d.addedAt })
+                        }
                     }
                 }
             }

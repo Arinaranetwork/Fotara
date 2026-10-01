@@ -182,7 +182,15 @@ class PointerStateMachine(
 
         when (val current = state) {
             is PointerState.Idle -> {
-                if (activePointers.size == 1) {
+                if (event.toolType == PointerToolType.STYLUS && (activeMode == ActiveMode.DRAW || activeMode == ActiveMode.ERASE)) {
+                    state = PointerState.Drawing(
+                        pointerId = event.pointerId,
+                        toolType = event.toolType,
+                        lastX = event.x,
+                        lastY = event.y
+                    )
+                    actions.add(PointerAction.StartStroke(event.x, event.y, event.pressure))
+                } else if (activePointers.size == 1) {
                     if (activeMode == ActiveMode.SELECT) {
                         state = PointerState.Selecting(
                             pointerId = event.pointerId,
@@ -205,6 +213,18 @@ class PointerStateMachine(
                         )
                         actions.add(PointerAction.StartStroke(event.x, event.y, event.pressure))
                     }
+                } else if (activePointers.size == 2) {
+                    val pointerIds = activePointers.keys.toList()
+                    val p1 = activePointers[pointerIds[0]]!!
+                    val p2 = activePointers[pointerIds[1]]!!
+                    val dist = hypot(p1.x - p2.x, p1.y - p2.y)
+                    state = PointerState.PanZoom(
+                        pointer1Id = pointerIds[0],
+                        pointer2Id = pointerIds[1],
+                        lastCenterX = (p1.x + p2.x) / 2f,
+                        lastCenterY = (p1.y + p2.y) / 2f,
+                        lastDistance = if (dist <= 0f) 1f else dist
+                    )
                 }
             }
             is PointerState.Drawing -> {

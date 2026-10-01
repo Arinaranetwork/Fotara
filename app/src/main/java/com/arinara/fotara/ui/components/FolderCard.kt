@@ -125,7 +125,7 @@ fun FolderCard(
                 isLinked = folder.linkGroupId != null,
                 corner = GlowCorner.BottomLeft,
                 linkedDescription = "Linked folder ${folder.name}",
-                cornerRadiusDp = cornerRadiusDp
+                cornerRadiusDp = cornerRadiusDp.value
             )
             .combinedClickable(
                 enabled = !isEditing,

@@ -100,6 +100,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.ui.components.ZoomablePhotoViewport
 import com.arinara.fotara.ui.components.NoteDetailScheduleChip
 import com.arinara.fotara.ui.components.ScheduleNoteDialog

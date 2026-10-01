@@ -32,6 +32,7 @@ import android.app.KeyguardManager
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import com.arinara.fotara.data.model.CanvasNote
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -181,10 +182,12 @@ fun HomeScreen(
                         onNavigateToTextNote(folderId, noteId)
                     }
                 } else if (pendingCanvasSearchResult != null) {
-                    val canvas = pendingCanvasSearchResult!!
+                    val canvas = pendingCanvasSearchResult
                     pendingCanvasSearchResult = null
-                    viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
-                        onNavigateToCanvasNote(folderId, canvasId)
+                    if (canvas != null) {
+                        viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
+                            onNavigateToCanvasNote(folderId, canvasId)
+                        }
                     }
                 } else {
                     onFolderClick(target)
@@ -703,10 +706,12 @@ fun HomeScreen(
                                 }
                             }
                             pendingCanvasSearchResult != null -> {
-                                val canvas = pendingCanvasSearchResult!!
+                                val canvas = pendingCanvasSearchResult
                                 pendingCanvasSearchResult = null
-                                viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
-                                    onNavigateToCanvasNote(folderId, canvasId)
+                                if (canvas != null) {
+                                    viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
+                                        onNavigateToCanvasNote(folderId, canvasId)
+                                    }
                                 }
                             }
                             else -> {

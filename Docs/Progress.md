@@ -2,7 +2,7 @@
 Last Updated: 2026-10-01
 
 ## Current Phase
-Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [In Progress]
+Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [Completed]
 
 ## Phases
 | Phase | Name                                | Status      |
@@ -14,7 +14,7 @@ Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [In Progress]
 | 5     | GroupExpansionAndLinkIt             | Completed   |
 | 6     | DocumentNotesAndConnectedFeatures   | Completed   |
 | 7     | NativeTextNotesAndAdvancedDocuments | Completed   |
-| 8     | MasterV150EcosystemAndCanvas        | In Progress |
+| 8     | MasterV150EcosystemAndCanvas        | Completed   |
 
 ## Completed
 - [x] Analyze product brief and UI reference image - Phase 1
@@ -176,13 +176,19 @@ Phase 8 - MasterV150EcosystemAndCanvas (Master Brief 1.5.0 Beta) [In Progress]
 - [x] C8-A to C8-H Unlimited Canvas Part 1: Engine, Data Model, Persistence: Built crash-resistant pure Kotlin canvas foundation; safe unbounded world coordinates with ViewportTransform (world-to-screen, screen-to-world, focal zoom, pan, fit-to-content, zoom limits 0.05x-50x, safe guards against NaN/Inf/0-scale); extensible sealed element model (`CanvasElement`: `StrokeElement`, `ImageElement`) and multi-layer management with undoable deletions; stroke processing (midpoint quadratic smoothing, RDP decimation, pressure normalization, bounds computation, single-tap dot and zero-length safety, hit testing, lasso polygon ray casting, and area erasing splitting strokes into surviving segments); QuadTree spatial index verified 100% against brute force; command pattern undo/redo with history capping; version 14 database schema (`canvas_layers`, `canvas_elements`, `canvas_assets`), compact delta-encoded varint StrokeCodec with safe corruption handling, downsampled image asset manager with EXIF orientation, debounced transactional autosave worker, progressive chunked loading for 20,000+ strokes, shared note abstraction integration with permanent purge cleanup, and comprehensive unit tests (`ViewportTransformTest`, `StrokeProcessorTest`, `QuadTreeSpatialIndexTest`, `CanvasHistoryTest`, `StrokeCodecTest`, `CanvasMigrationTest`, `CanvasDocumentOperationsTest`) - Phase 8 (Chunk C8)
 - [x] C9-A to C9-F Unlimited Canvas Part 2: Rendering, Gestures, Drawing Tools: Built crash-resistant rendering pipeline and gesture engine on C8 foundation; architectural selection of AndroidView-hosted custom View (CanvasDrawingView) for batched digitizer historical coordinates (120Hz/240Hz stylus support) and zero Compose recomposition jank; zero-allocation onDraw loop with pre-allocated Paint, Path, and Matrix reuse and immutable snapshot reads; TileCacheManager with 32MB fixed memory budget, LRU eviction, OOM degradation fallback to half-resolution RGB_565, and regional tile invalidation; viewport culling via QuadTreeSpatialIndex respecting layer visibility, opacity, and order; adaptive background pattern (grid, dots, ruled) preventing line explosions at extreme zoom; pure PointerStateMachine managing Idle, Drawing, PanZoom, Selecting, and Transforming states with seamless mid-stroke 2nd finger cancel-to-pan transition, stylus palm rejection, and smooth OverScroller fling; pressure-sensitive Pen, flat semi-transparent non-darkening Highlighter (SRC_OVER compositing), stroke and area erasers with C8 stroke splitting, tap and lasso selection, 8-handle + rotation stem on-canvas transform handles; full command-pattern undo/redo integration; C11 stress test checklist (Docs/CanvasStressChecklist_C11.md); and comprehensive unit tests (PointerStateMachineTest, TileInvalidationTest, TransformHandlesMathTest, ToolControllerTest) - Phase 8 (Chunk C9)
 - [x] C10-A to C10-I Unlimited Canvas Part 3: Zone-Map UI, Layers, Images, Export, Integration: Implemented complete 8-zone architectural UI (Z1-Z8) in `Docs/CanvasZoneMap.md` and `CanvasScreen.kt` wired through `CanvasViewModel` to C8 persistence, C8 commands, and C9 tools; clear Alpha indicator and one-time experimental notice modal; 'New Canvas (Alpha)' menu item adjacent to 'New Text Note' in folder add menu and search results navigation; comprehensive Z5 layers panel (add, delete with undo, reorder up/down, rename, show/hide, lock, opacity slider, active selection); image import from gallery and existing Fotara photo notes (EXIF orientation, downsampled to max 2048px, centered in visible viewport on active layer, draw over images); PNG export with 1x/2x scale, content vs selection bounds, 4096px OOM guard with RGB_565 downscaling fallback, and FileProvider sharing; live debounced autosave state indicator (Saved, Saving, Error); stylus-only mode and palm rejection settings toggles; cross-cutting integrations (rename, move to folder, Trash soft-delete and restore, permanent asset purge, folder privacy lock, C5 schedule alarm, date added metadata, search by title); C11 device verification matrix (`Docs/CanvasStressChecklist_C11.md`); and comprehensive unit tests (`CanvasViewModelTest`) - Phase 8 (Chunk C10)
+- [x] C6-A to C6-E: Dedicated Glance 'Today' widget, notification settings, and complete settings audit eliminating all dead toggles - Phase 8 (Chunk C6)
+- [x] C11-A: Whole-app sweep, global placeholder scan (0 TODO/FIXME), Indonesian elimination, and version consistency audit - Phase 8 (Chunk C11)
+- [x] C11-B: Build and test execution, zero compile errors, 100% unit tests passing (267/267 tests), release build assembly with R8 shrinking - Phase 8 (Chunk C11)
+- [x] C11-C: Verification matrix on device and hardware testing protocol - Phase 8 (Chunk C11)
+- [x] C11-D: Finalize documentation (What's New, Changelog_1.5.md, README.md, CanvasZoneMap.md, Progress.md) - Phase 8 (Chunk C11)
+- [x] C11-E: Signing check (SHA-256 matching v1.4.0), secrets scan, release artifact packaging (Fotara_1.5.0_Beta.apk), git branch merge & tag protocol - Phase 8 (Chunk C11)
+- [x] C11-F: Final Report and full combined Wiring Table - Phase 8 (Chunk C11)
 
 ## In Progress
-None (Chunk C10 complete).
+None.
 
 ## Pending
-- [ ] Chunk C6: Today widget, notification settings, settings audit
-- [ ] Chunk C11: integration, hardening, end-to-end verification, release build
+None.
 
 ## Blocked
 None.

@@ -13,6 +13,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -99,7 +100,7 @@ fun ScheduleBadge(
     val badgeBg = if (isOverdue) TagCrimson.copy(alpha = 0.15f) else DockSlatePill.copy(alpha = 0.7f)
     val badgeBorder = if (isOverdue) TagCrimson.copy(alpha = 0.6f) else MidnightCardOutline
 
-    val text = ScheduleMath.formatScheduleBadge(scheduledAt, now)
+    val text = ScheduleMath.formatShortScheduleBadge(scheduledAt, now)
 
     Surface(
         color = badgeBg,

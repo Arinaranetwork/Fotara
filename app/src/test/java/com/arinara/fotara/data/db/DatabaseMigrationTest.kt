@@ -76,7 +76,7 @@ class DatabaseMigrationTest {
         val original = Photo(
             id = 1L,
             folderId = 10L,
-            imageUri = "content://media/1",
+            fileUri = "content://media/1",
             createdAt = originalAddedAt,
             addedAt = originalAddedAt
         )
@@ -103,6 +103,7 @@ class DatabaseMigrationTest {
             title = "Lecture 3",
             bodyMarkdown = "Formulas",
             createdAt = originalAddedAt,
+            updatedAt = originalAddedAt,
             addedAt = originalAddedAt,
             isTrashed = true,
             deletedAt = trashedAt
@@ -120,7 +121,7 @@ class DatabaseMigrationTest {
             Photo(
                 id = (100 + i).toLong(),
                 folderId = 1L,
-                imageUri = "file:///storage/split_page_$i.png",
+                fileUri = "file:///storage/split_page_$i.png",
                 createdAt = splitTimeMs + i,
                 addedAt = splitTimeMs + i
             )

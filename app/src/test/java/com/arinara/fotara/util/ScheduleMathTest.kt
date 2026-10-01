@@ -21,18 +21,18 @@ class ScheduleMathTest {
 
         // Future schedule
         val future = now + 60000L
-        assertFalse(ScheduleMath.isPastSchedule(future, now))
+        assertFalse(ScheduleMath.isPast(future, now))
 
         // Past schedule
         val past = now - 60000L
-        assertTrue(ScheduleMath.isPastSchedule(past, now))
+        assertTrue(ScheduleMath.isPast(past, now))
 
         // Exact match (considered elapsed / past)
-        assertTrue(ScheduleMath.isPastSchedule(now, now))
+        assertTrue(ScheduleMath.isPast(now, now))
 
         // Zero or negative schedule
-        assertTrue(ScheduleMath.isPastSchedule(0L, now))
-        assertTrue(ScheduleMath.isPastSchedule(-100L, now))
+        assertTrue(ScheduleMath.isPast(0L, now))
+        assertTrue(ScheduleMath.isPast(-100L, now))
     }
 
     @Test
@@ -99,14 +99,14 @@ class ScheduleMathTest {
         cal.set(Calendar.HOUR_OF_DAY, 15)
         cal.set(Calendar.MINUTE, 0)
         val today3pm = cal.timeInMillis
-        val formattedToday = ScheduleMath.formatScheduleBadge(today3pm, now)
+        val formattedToday = ScheduleMath.formatShortScheduleBadge(today3pm, now)
         assertTrue("Expected 'Today, 3:00 PM', got '$formattedToday'", formattedToday.startsWith("Today, 3:00"))
 
         // Set to 9:00 AM tomorrow
         cal.add(Calendar.DAY_OF_YEAR, 1)
         cal.set(Calendar.HOUR_OF_DAY, 9)
         val tomorrow9am = cal.timeInMillis
-        val formattedTomorrow = ScheduleMath.formatScheduleBadge(tomorrow9am, now)
+        val formattedTomorrow = ScheduleMath.formatShortScheduleBadge(tomorrow9am, now)
         assertTrue("Expected 'Tomorrow, 9:00 AM', got '$formattedTomorrow'", formattedTomorrow.startsWith("Tomorrow, 9:00"))
     }
 
@@ -126,21 +126,21 @@ class ScheduleMathTest {
         cal.set(Calendar.HOUR_OF_DAY, 16)
         val today4pm = cal.timeInMillis
         val shortToday = ScheduleMath.formatShortScheduleBadge(today4pm, now)
-        assertTrue("Expected 'Today 4:00 PM', got '$shortToday'", shortToday.startsWith("Today 4:00"))
+        assertTrue("Expected 'Today, 4:00 PM', got '$shortToday'", shortToday.startsWith("Today, 4:00"))
 
         cal.add(Calendar.DAY_OF_YEAR, 1)
         cal.set(Calendar.HOUR_OF_DAY, 11)
         val tmrw11am = cal.timeInMillis
         val shortTmrw = ScheduleMath.formatShortScheduleBadge(tmrw11am, now)
-        assertTrue("Expected 'Tmrw 11:00 AM', got '$shortTmrw'", shortTmrw.startsWith("Tmrw 11:00"))
+        assertTrue("Expected 'Tomorrow, 11:00 AM', got '$shortTmrw'", shortTmrw.startsWith("Tomorrow, 11:00"))
     }
 
     @Test
     fun testValidateScheduleTime_RejectsPastTimes() {
         val now = 1728000000000L
-        assertFalse(ScheduleMath.validateScheduleTime(now - 1000L, now))
-        assertFalse(ScheduleMath.validateScheduleTime(now, now))
-        assertTrue(ScheduleMath.validateScheduleTime(now + 1000L, now))
+        assertEquals(ScheduleValidationResult.PAST_TIME, ScheduleMath.validateScheduleTime(now - 1000L, now))
+        assertEquals(ScheduleValidationResult.PAST_TIME, ScheduleMath.validateScheduleTime(now, now))
+        assertEquals(ScheduleValidationResult.VALID, ScheduleMath.validateScheduleTime(now + 1000L, now))
     }
 
     @Test

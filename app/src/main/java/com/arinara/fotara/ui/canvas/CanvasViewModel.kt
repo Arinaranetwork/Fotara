@@ -140,7 +140,7 @@ class CanvasViewModel(
     val tileCacheManager = TileCacheManager(assetManager = canvasAssetManager)
     val pointerStateMachine = PointerStateMachine()
     val toolController = CanvasToolController()
-    val canvasRenderer = CanvasRenderer(tileCacheManager = tileCacheManager, assetManager = canvasAssetManager)
+    val canvasRenderer by lazy { CanvasRenderer(tileCacheManager = tileCacheManager, assetManager = canvasAssetManager) }
 
     private val _uiState = MutableStateFlow(
         CanvasUiState(
@@ -157,7 +157,7 @@ class CanvasViewModel(
         // Load folders for Move action
         folderRepository?.let { repo ->
             viewModelScope.launch {
-                repo.getAllFolders().collect { folderList ->
+                repo.getFolders().collect { folderList ->
                     _uiState.update { it.copy(folders = folderList) }
                 }
             }
@@ -508,11 +508,11 @@ class CanvasViewModel(
         val currentDoc = _uiState.value.document
         val sorted = currentDoc.layers.sortedBy { it.order }.map { it.id }
         val idx = sorted.indexOf(layerId)
-        if (idx <= 0) return
+        if (idx == -1 || idx >= sorted.size - 1) return
 
         val reordered = sorted.toMutableList()
-        reordered[idx] = sorted[idx - 1]
-        reordered[idx - 1] = sorted[idx]
+        reordered[idx] = sorted[idx + 1]
+        reordered[idx + 1] = sorted[idx]
 
         val updated = historyManager.execute(ReorderLayersCommand(sorted, reordered), currentDoc)
         _uiState.update {
@@ -530,11 +530,11 @@ class CanvasViewModel(
         val currentDoc = _uiState.value.document
         val sorted = currentDoc.layers.sortedBy { it.order }.map { it.id }
         val idx = sorted.indexOf(layerId)
-        if (idx == -1 || idx >= sorted.size - 1) return
+        if (idx <= 0) return
 
         val reordered = sorted.toMutableList()
-        reordered[idx] = sorted[idx + 1]
-        reordered[idx + 1] = sorted[idx]
+        reordered[idx] = sorted[idx - 1]
+        reordered[idx - 1] = sorted[idx]
 
         val updated = historyManager.execute(ReorderLayersCommand(sorted, reordered), currentDoc)
         _uiState.update {
@@ -705,7 +705,17 @@ class CanvasViewModel(
         if (selectedIds.isEmpty()) return
 
         val selected = state.document.elements.filter { it.id in selectedIds }
-        val modified = selected.map { it.withZIndex(it.zIndex + 1) }
+        val otherElements = state.document.elements.filter { it.id !in selectedIds }
+        val currentMaxZ = selected.maxOfOrNull { it.zIndex } ?: 0
+        val nextAbove = otherElements.filter { it.zIndex >= currentMaxZ }.minByOrNull { it.zIndex }
+
+        val delta = if (nextAbove != null) {
+            (nextAbove.zIndex + 1) - currentMaxZ
+        } else {
+            1
+        }
+
+        val modified = selected.map { it.withZIndex(it.zIndex + delta) }
 
         val updated = historyManager.execute(
             TransformElementsCommand(before = selected, after = modified, description = "Bring Forward"),
@@ -729,7 +739,18 @@ class CanvasViewModel(
         if (selectedIds.isEmpty()) return
 
         val selected = state.document.elements.filter { it.id in selectedIds }
-        val modified = selected.map { it.withZIndex((it.zIndex - 1).coerceAtLeast(0)) }
+        val otherElements = state.document.elements.filter { it.id !in selectedIds }
+        val currentMinZ = selected.minOfOrNull { it.zIndex } ?: 0
+        val nextBelow = otherElements.filter { it.zIndex <= currentMinZ }.maxByOrNull { it.zIndex }
+
+        val targetZ = if (nextBelow != null) {
+            (nextBelow.zIndex - 1).coerceAtLeast(0)
+        } else {
+            (currentMinZ - 1).coerceAtLeast(0)
+        }
+        val delta = targetZ - currentMinZ
+
+        val modified = selected.map { it.withZIndex((it.zIndex + delta).coerceAtLeast(0)) }
 
         val updated = historyManager.execute(
             TransformElementsCommand(before = selected, after = modified, description = "Send Backward"),
@@ -771,6 +792,17 @@ class CanvasViewModel(
             )
         }
         triggerDebouncedAutosave()
+    }
+
+    fun onElementsChanged(newDoc: CanvasDocument) {
+        spatialIndex.rebuild(newDoc.elements)
+        tileCacheManager.invalidateAll()
+        _uiState.update { it.copy(document = newDoc) }
+    }
+
+    fun setSelectedElementIds(ids: Set<String>) {
+        toolController.toolState = toolController.toolState.copy(selectedElementIds = ids)
+        _uiState.update { it.copy(toolState = toolController.toolState) }
     }
 
     // ==========================================

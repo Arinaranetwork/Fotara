@@ -116,7 +116,7 @@ class DateRangeCalculatorTest {
             set(2024, Calendar.FEBRUARY, 15, 12, 0, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        val leapRange = DateRangeCalculator.getThisMonthRange(leapCal.timeInMillis, utcZone, Locale.US)
+        val leapRange = DateRangeCalculator.getThisMonthRange(leapCal.timeInMillis, utcZone)
 
         val leapStartCal = Calendar.getInstance(utcZone, Locale.US).apply { timeInMillis = leapRange.startMs }
         assertEquals(1, leapStartCal.get(Calendar.DAY_OF_MONTH))
@@ -132,7 +132,7 @@ class DateRangeCalculatorTest {
             set(2025, Calendar.FEBRUARY, 10, 12, 0, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        val nonLeapRange = DateRangeCalculator.getThisMonthRange(nonLeapCal.timeInMillis, utcZone, Locale.US)
+        val nonLeapRange = DateRangeCalculator.getThisMonthRange(nonLeapCal.timeInMillis, utcZone)
         val nonLeapEndCal = Calendar.getInstance(utcZone, Locale.US).apply { timeInMillis = nonLeapRange.endMs }
         assertEquals(28, nonLeapEndCal.get(Calendar.DAY_OF_MONTH))
     }
@@ -143,7 +143,7 @@ class DateRangeCalculatorTest {
             set(2026, Calendar.JUNE, 15, 12, 0, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        val range = DateRangeCalculator.getThisYearRange(cal.timeInMillis, utcZone, Locale.US)
+        val range = DateRangeCalculator.getThisYearRange(cal.timeInMillis, utcZone)
 
         val startCal = Calendar.getInstance(utcZone, Locale.US).apply { timeInMillis = range.startMs }
         assertEquals(2026, startCal.get(Calendar.YEAR))
@@ -239,7 +239,8 @@ class DateRangeCalculatorTest {
             timeZone = utcZone,
             locale = Locale.US
         )
-        assertEquals(1000L, customRange.startMs)
-        assertEquals(5000L, customRange.endMs)
+        val expectedCustom = DateRangeCalculator.getCustomRange(1000L, 5000L, utcZone)
+        assertEquals(expectedCustom.startMs, customRange.startMs)
+        assertEquals(expectedCustom.endMs, customRange.endMs)
     }
 }

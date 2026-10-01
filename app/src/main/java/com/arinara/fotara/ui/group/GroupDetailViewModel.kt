@@ -138,6 +138,13 @@ class GroupDetailViewModel(
         }
     }
 
+    fun refresh() {
+        viewModelScope.launch {
+            photoRepository.refresh()
+            refreshRecentDestinations()
+        }
+    }
+
     fun ungroup(onComplete: () -> Unit) {
         viewModelScope.launch {
             photoRepository.ungroup(groupId)

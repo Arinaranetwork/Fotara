@@ -37,8 +37,9 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
 import com.arinara.fotara.util.PdfPasswordException
 import com.arinara.fotara.util.PdfCorruptException
-import org.xmlpull.v1.XmlPullParser
+import com.arinara.fotara.util.PdfSplitManager
 import java.io.File
+import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
 import java.util.zip.ZipInputStream
 
@@ -438,13 +439,13 @@ class SqliteDocumentRepository(
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
 
                     val saved = photoStorageManager.saveBitmapAsPhoto(bitmap)
-                    createdPhotoFiles.add(saved.photoFile)
-                    createdPhotoFiles.add(saved.thumbFile)
+                    createdPhotoFiles.add(File(saved.filePath))
+                    createdPhotoFiles.add(File(saved.thumbnailPath))
                     bitmap.recycle()
 
                     val photo = Photo(
-                        fileUri = saved.photoFile.absolutePath,
-                        thumbnailUri = saved.thumbFile.absolutePath,
+                        fileUri = saved.filePath,
+                        thumbnailUri = saved.thumbnailPath,
                         folderId = note.folderId,
                         subfolderId = note.subfolderId,
                         caption = "${note.name} P${i + 1}",

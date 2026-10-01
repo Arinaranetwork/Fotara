@@ -17,7 +17,7 @@ import com.arinara.fotara.data.model.PhotoSource
 import com.arinara.fotara.data.model.Subfolder
 import java.io.File
 
-class FotaraDbHelper(private val context: Context) : SQLiteOpenHelper(
+class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
     context,
     DATABASE_NAME,
     null,

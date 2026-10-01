@@ -291,9 +291,11 @@ class CanvasRenderer(
                 is ImageElement -> {
                     val file = assetManager?.getAssetFile(element.assetId)
                     if (file != null && file.exists()) {
-                        val bmp = imageBitmapCache.getOrPut(element.assetId) {
+                        val bmp = imageBitmapCache[element.assetId] ?: run {
                             try {
-                                BitmapFactory.decodeFile(file.absolutePath)
+                                val decoded = BitmapFactory.decodeFile(file.absolutePath)
+                                if (decoded != null) imageBitmapCache[element.assetId] = decoded
+                                decoded
                             } catch (_: Exception) {
                                 null
                             }

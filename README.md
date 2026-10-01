@@ -89,7 +89,7 @@ Traditional mobile gallery apps dump educational material alongside casual snaps
 
 | Metric | Status |
 |---|---|
-| **Current Build** | `v1.5.0 Beta` (Build Code: `13`) |
+| **Current Build** | `v1.5.0 Beta` (Build Code: `14`) |
 | **Release Channel** | Beta |
 | **Supported Devices** | Android 7.0 (API 24) through Android 16 (API 36) |
 | **Issue Tracker** | **Active & Open** — Bug reports and suggestions are welcome via [GitHub Issues](https://github.com/Arinaranetwork/Fotara/issues). |

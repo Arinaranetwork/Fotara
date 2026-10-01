@@ -217,7 +217,7 @@ class SqliteCanvasDao(private val dbHelper: FotaraDbHelper) : CanvasDao {
         }
     }
 
-    override suspend fun recordAsset(asset: CanvasAssetEntity) = withContext(Dispatchers.IO) {
+    override suspend fun recordAsset(asset: CanvasAssetEntity): Unit = withContext(Dispatchers.IO) {
         val db = dbHelper.getSafeWritableDatabase()
         val values = ContentValues().apply {
             put("asset_id", asset.assetId)
@@ -230,6 +230,7 @@ class SqliteCanvasDao(private val dbHelper: FotaraDbHelper) : CanvasDao {
             put("created_at", asset.createdAt)
         }
         db.insertWithOnConflict("canvas_assets", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        Unit
     }
 
     override suspend fun loadAssets(canvasId: Long): List<CanvasAssetEntity> = withContext(Dispatchers.IO) {

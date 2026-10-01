@@ -982,13 +982,15 @@ class FakeDocumentRepository(
     override fun getAllActiveDocumentNotes(): Flow<List<DocumentNote>> =
         notesFlow.map { list -> list.filter { !it.isTrashed } }
 
-    override suspend fun searchDocuments(query: String): List<DocumentNote> {
+    override fun searchDocuments(query: String): Flow<List<DocumentNote>> {
         val q = query.trim().lowercase()
-        return notesFlow.value.filter { note ->
-            !note.isTrashed && (
-                note.name.lowercase().contains(q) ||
-                (note.extractedText?.lowercase()?.contains(q) == true)
-            )
+        return notesFlow.map { list ->
+            list.filter { note ->
+                !note.isTrashed && (
+                    note.name.lowercase().contains(q) ||
+                    (note.extractedText?.lowercase()?.contains(q) == true)
+                )
+            }
         }
     }
 

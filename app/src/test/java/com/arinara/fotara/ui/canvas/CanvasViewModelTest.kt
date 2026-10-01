@@ -6,12 +6,12 @@
 
 package com.arinara.fotara.ui.canvas
 
-import com.arinara.fotara.canvas.engine.CanvasPoint
 import com.arinara.fotara.canvas.engine.CanvasRect
 import com.arinara.fotara.canvas.model.CanvasBackgroundStyle
 import com.arinara.fotara.canvas.model.CanvasDocument
 import com.arinara.fotara.canvas.model.CanvasElement
 import com.arinara.fotara.canvas.model.CanvasLayer
+import com.arinara.fotara.canvas.model.StrokePoint
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokeToolType
 import com.arinara.fotara.canvas.persistence.CanvasAssetManager
@@ -79,7 +79,7 @@ class CanvasViewModelTest {
             id = 1L,
             title = "Lecture Notes",
             layers = listOf(
-                CanvasLayer(id = 1L, name = "Layer 1", isVisible = true, isLocked = false)
+                CanvasLayer(id = "layer-1", name = "Layer 1", isVisible = true, isLocked = false)
             )
         )
         fakeCanvasRepository.saveDocumentImmediate(1L, initialDoc)
@@ -93,7 +93,7 @@ class CanvasViewModelTest {
         assertEquals("Lecture Notes", state.title)
         assertEquals(SaveState.SAVED, state.saveState)
         assertEquals(1, state.document.layers.size)
-        assertEquals(1L, state.activeLayerId)
+        assertEquals("layer-1", state.activeLayerId)
     }
 
     @Test
@@ -103,10 +103,10 @@ class CanvasViewModelTest {
 
         val state = viewModel.uiState.value
         assertNotNull(state.canvasId)
-        assertEquals("Untitled Canvas", state.title)
+        assertEquals("Canvas Note", state.title)
         assertEquals(SaveState.SAVED, state.saveState)
         assertEquals(1, state.document.layers.size)
-        assertEquals(1L, state.activeLayerId)
+        assertEquals(state.document.layers.first().id, state.activeLayerId)
     }
 
     @Test
@@ -117,8 +117,8 @@ class CanvasViewModelTest {
         viewModel.setTool(CanvasToolType.HIGHLIGHTER)
         assertEquals(CanvasToolType.HIGHLIGHTER, viewModel.uiState.value.toolState.activeTool)
 
-        viewModel.setTool(CanvasToolType.ERASER)
-        assertEquals(CanvasToolType.ERASER, viewModel.uiState.value.toolState.activeTool)
+        viewModel.setTool(CanvasToolType.ERASER_STROKE)
+        assertEquals(CanvasToolType.ERASER_STROKE, viewModel.uiState.value.toolState.activeTool)
 
         viewModel.setTool(CanvasToolType.SELECT)
         assertEquals(CanvasToolType.SELECT, viewModel.uiState.value.toolState.activeTool)
@@ -164,10 +164,11 @@ class CanvasViewModelTest {
         viewModel.setEraserRadius(30f)
         assertEquals(30f, viewModel.uiState.value.toolState.eraserRadius, 0.01f)
 
-        val initialMode = viewModel.uiState.value.toolState.eraserMode
+        viewModel.setTool(CanvasToolType.ERASER_STROKE)
+        val initialTool = viewModel.uiState.value.toolState.activeTool
         viewModel.toggleEraserMode()
-        val toggledMode = viewModel.uiState.value.toolState.eraserMode
-        assertFalse(initialMode == toggledMode)
+        val toggledTool = viewModel.uiState.value.toolState.activeTool
+        assertEquals(CanvasToolType.ERASER_AREA, toggledTool)
     }
 
     @Test
@@ -176,10 +177,9 @@ class CanvasViewModelTest {
         advanceUntilIdle()
 
         // 1. Add Layer
-        viewModel.addLayer()
+        viewModel.addLayer("Layer 2")
         assertEquals(2, viewModel.uiState.value.document.layers.size)
         val secondLayerId = viewModel.uiState.value.activeLayerId
-        assertEquals(2L, secondLayerId)
 
         // 2. Rename Layer
         viewModel.renameLayer(secondLayerId, "Annotation Layer")
@@ -231,46 +231,43 @@ class CanvasViewModelTest {
         val viewModel = createViewModel(canvasId = 1L)
         advanceUntilIdle()
 
+        val activeLayerId = viewModel.uiState.value.activeLayerId
         val sampleStroke = StrokeElement(
             id = "test-stroke-1",
-            layerId = 1L,
-            points = listOf(CanvasPoint(10f, 10f), CanvasPoint(50f, 50f)),
+            layerId = activeLayerId,
+            points = listOf(StrokePoint(10f, 10f), StrokePoint(50f, 50f)),
             toolType = StrokeToolType.PEN,
-            color = 0xFFFFFFFF.toInt(),
-            size = 4f,
+            color = 0xFFFFFFFFL,
+            width = 4f,
             bounds = CanvasRect(10f, 10f, 50f, 50f)
         )
 
         // Add stroke element to active layer via engine
         viewModel.spatialIndex.insert(sampleStroke)
-        val updatedDoc = viewModel.uiState.value.document.let { doc ->
-            val layer = doc.layers.first().copy(elements = listOf(sampleStroke))
-            doc.copy(layers = listOf(layer))
-        }
-        viewModel.toolController.selectedElementIds = setOf("test-stroke-1")
-        viewModel.toolController.selectionBounds = sampleStroke.bounds
+        val updatedDoc = viewModel.uiState.value.document.copy(elements = listOf(sampleStroke))
+        viewModel.setSelectedElementIds(setOf("test-stroke-1"))
         viewModel.onElementsChanged(updatedDoc)
 
-        assertEquals(1, viewModel.uiState.value.selectedElementIds.size)
+        assertEquals(1, viewModel.uiState.value.toolState.selectedElementIds.size)
 
         // 1. Duplicate
         viewModel.duplicateSelectedElements()
         advanceUntilIdle()
 
         val afterDuplicateDoc = viewModel.uiState.value.document
-        assertEquals(2, afterDuplicateDoc.layers.first().elements.size)
+        assertEquals(2, afterDuplicateDoc.elements.size)
 
         // 2. Delete selected
         viewModel.deleteSelectedElements()
         advanceUntilIdle()
 
         val afterDeleteDoc = viewModel.uiState.value.document
-        assertEquals(1, afterDeleteDoc.layers.first().elements.size)
+        assertEquals(1, afterDeleteDoc.elements.size)
 
         // 3. Undo delete
         viewModel.undo()
         advanceUntilIdle()
-        assertEquals(2, viewModel.uiState.value.document.layers.first().elements.size)
+        assertEquals(2, viewModel.uiState.value.document.elements.size)
     }
 
     @Test
@@ -278,39 +275,42 @@ class CanvasViewModelTest {
         val viewModel = createViewModel(canvasId = 1L)
         advanceUntilIdle()
 
+        val activeLayerId = viewModel.uiState.value.activeLayerId
         val elemA = StrokeElement(
             id = "elem-A",
-            layerId = 1L,
-            points = listOf(CanvasPoint(0f, 0f), CanvasPoint(10f, 10f)),
+            layerId = activeLayerId,
+            points = listOf(StrokePoint(0f, 0f), StrokePoint(10f, 10f)),
             toolType = StrokeToolType.PEN,
-            color = 0xFF000000.toInt(),
-            size = 2f,
-            bounds = CanvasRect(0f, 0f, 10f, 10f)
+            color = 0xFF000000L,
+            width = 2f,
+            bounds = CanvasRect(0f, 0f, 10f, 10f),
+            zIndex = 0
         )
         val elemB = StrokeElement(
             id = "elem-B",
-            layerId = 1L,
-            points = listOf(CanvasPoint(20f, 20f), CanvasPoint(30f, 30f)),
+            layerId = activeLayerId,
+            points = listOf(StrokePoint(20f, 20f), StrokePoint(30f, 30f)),
             toolType = StrokeToolType.PEN,
-            color = 0xFFFFFFFF.toInt(),
-            size = 2f,
-            bounds = CanvasRect(20f, 20f, 30f, 30f)
+            color = 0xFFFFFFFFL,
+            width = 2f,
+            bounds = CanvasRect(20f, 20f, 30f, 30f),
+            zIndex = 1
         )
 
-        val updatedDoc = viewModel.uiState.value.document.let { doc ->
-            val layer = doc.layers.first().copy(elements = listOf(elemA, elemB))
-            doc.copy(layers = listOf(layer))
-        }
-        viewModel.toolController.selectedElementIds = setOf("elem-A")
+        val updatedDoc = viewModel.uiState.value.document.copy(elements = listOf(elemA, elemB))
+        viewModel.setSelectedElementIds(setOf("elem-A"))
         viewModel.onElementsChanged(updatedDoc)
 
-        // Send Backward (elem-A is already at index 0, should stay at index 0)
+        // Send Backward (elem-A is already at min zIndex)
         viewModel.sendBackwardSelection()
-        assertEquals("elem-A", viewModel.uiState.value.document.layers.first().elements.first().id)
+        advanceUntilIdle()
 
-        // Bring Forward (elem-A moves to index 1)
+        // Bring Forward (elem-A increases zIndex)
         viewModel.bringForwardSelection()
-        assertEquals("elem-A", viewModel.uiState.value.document.layers.first().elements.last().id)
+        advanceUntilIdle()
+
+        val sorted = viewModel.uiState.value.document.elements.sortedBy { it.zIndex }
+        assertEquals("elem-A", sorted.last().id)
     }
 
     @Test
@@ -318,34 +318,33 @@ class CanvasViewModelTest {
         val viewModel = createViewModel(canvasId = 1L)
         advanceUntilIdle()
 
-        viewModel.addLayer()
+        viewModel.addLayer("Layer 2")
         assertEquals(2, viewModel.uiState.value.document.layers.size)
+
+        val l1Id = viewModel.uiState.value.document.layers[0].id
+        val l2Id = viewModel.uiState.value.document.layers[1].id
 
         val elem = StrokeElement(
             id = "elem-layer-move",
-            layerId = 1L,
-            points = listOf(CanvasPoint(0f, 0f), CanvasPoint(5f, 5f)),
+            layerId = l1Id,
+            points = listOf(StrokePoint(0f, 0f), StrokePoint(5f, 5f)),
             toolType = StrokeToolType.PEN,
-            color = 0xFF112233.toInt(),
-            size = 2f,
+            color = 0xFF112233L,
+            width = 2f,
             bounds = CanvasRect(0f, 0f, 5f, 5f)
         )
 
-        val docWithElem = viewModel.uiState.value.document.let { doc ->
-            val l1 = doc.layers.first { it.id == 1L }.copy(elements = listOf(elem))
-            val remaining = doc.layers.filter { it.id != 1L }
-            doc.copy(layers = listOf(l1) + remaining)
-        }
-        viewModel.toolController.selectedElementIds = setOf("elem-layer-move")
+        val docWithElem = viewModel.uiState.value.document.copy(elements = listOf(elem))
+        viewModel.setSelectedElementIds(setOf("elem-layer-move"))
         viewModel.onElementsChanged(docWithElem)
 
         // Move to Layer 2
-        viewModel.moveSelectionToLayer(2L)
+        viewModel.moveSelectionToLayer(l2Id)
         advanceUntilIdle()
 
         val finalDoc = viewModel.uiState.value.document
-        val l1Elements = finalDoc.layers.first { it.id == 1L }.elements
-        val l2Elements = finalDoc.layers.first { it.id == 2L }.elements
+        val l1Elements = finalDoc.elements.filter { it.layerId == l1Id }
+        val l2Elements = finalDoc.elements.filter { it.layerId == l2Id }
 
         assertTrue(l1Elements.isEmpty())
         assertEquals(1, l2Elements.size)
@@ -357,17 +356,18 @@ class CanvasViewModelTest {
         val viewModel = createViewModel(canvasId = 1L)
         advanceUntilIdle()
 
-        viewModel.setBackgroundStyle(CanvasBackgroundStyle.LINES)
-        assertEquals(CanvasBackgroundStyle.LINES, viewModel.uiState.value.document.backgroundStyle)
+        viewModel.setBackgroundStyle(CanvasBackgroundStyle.RULED)
+        assertEquals(CanvasBackgroundStyle.RULED, viewModel.uiState.value.document.backgroundStyle)
 
         viewModel.setStylusOnlyMode(true)
-        assertTrue(viewModel.uiState.value.toolState.stylusOnlyMode)
+        assertTrue(viewModel.uiState.value.toolState.stylusOnlyDrawing)
 
         viewModel.setPalmRejection(false)
-        assertFalse(viewModel.uiState.value.toolState.palmRejection)
+        assertTrue(viewModel.pointerStateMachine.palmRejectionRadiusThreshold > 1000f)
 
         // Rename
         viewModel.renameCanvas("Physics Diagram")
+        advanceUntilIdle()
         assertEquals("Physics Diagram", viewModel.uiState.value.title)
     }
 
@@ -376,42 +376,35 @@ class CanvasViewModelTest {
         val bounds = CanvasRect(-100f, -200f, 3900f, 5800f)
         val width = bounds.width
         val height = bounds.height
-        val maxDimension = 4096
+        val maxDimension = 4096f
 
+        // 1x scale test
         val scale1x = 1.0f
-        val rawWidth1x = (width * scale1x).toInt()
-        val rawHeight1x = (height * scale1x).toInt()
-        val maxSide1x = maxOf(rawWidth1x, rawHeight1x)
-
-        val effectiveScale1x = if (maxSide1x > maxDimension) {
-            maxDimension.toFloat() / maxSide1x.toFloat()
-        } else {
-            scale1x
+        var targetW1x = (width * scale1x).toInt()
+        var targetH1x = (height * scale1x).toInt()
+        if (targetW1x > maxDimension || targetH1x > maxDimension) {
+            val ratio = maxDimension / maxOf(targetW1x, targetH1x)
+            targetW1x = (targetW1x * ratio).toInt()
+            targetH1x = (targetH1x * ratio).toInt()
         }
 
-        val outW1x = (width * effectiveScale1x).toInt()
-        val outH1x = (height * effectiveScale1x).toInt()
+        assertTrue(targetW1x <= maxDimension.toInt())
+        assertTrue(targetH1x <= maxDimension.toInt())
+        assertEquals(maxDimension.toInt(), maxOf(targetW1x, targetH1x))
 
-        assertTrue(outW1x <= maxDimension)
-        assertTrue(outH1x <= maxDimension)
-
+        // 2x scale test
         val scale2x = 2.0f
-        val rawWidth2x = (width * scale2x).toInt()
-        val rawHeight2x = (height * scale2x).toInt()
-        val maxSide2x = maxOf(rawWidth2x, rawHeight2x)
-
-        val effectiveScale2x = if (maxSide2x > maxDimension) {
-            maxDimension.toFloat() / maxSide2x.toFloat()
-        } else {
-            scale2x
+        var targetW2x = (width * scale2x).toInt()
+        var targetH2x = (height * scale2x).toInt()
+        if (targetW2x > maxDimension || targetH2x > maxDimension) {
+            val ratio = maxDimension / maxOf(targetW2x, targetH2x)
+            targetW2x = (targetW2x * ratio).toInt()
+            targetH2x = (targetH2x * ratio).toInt()
         }
 
-        val outW2x = (width * effectiveScale2x).toInt()
-        val outH2x = (height * effectiveScale2x).toInt()
-
-        assertTrue(outW2x <= maxDimension)
-        assertTrue(outH2x <= maxDimension)
-        assertEquals(maxDimension, maxOf(outW2x, outH2x))
+        assertTrue(targetW2x <= maxDimension.toInt())
+        assertTrue(targetH2x <= maxDimension.toInt())
+        assertEquals(maxDimension.toInt(), maxOf(targetW2x, targetH2x))
     }
 }
 

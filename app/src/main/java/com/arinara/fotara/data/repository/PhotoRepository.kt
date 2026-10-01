@@ -853,7 +853,7 @@ class SqlitePhotoRepository(
             }
         }
         db.update("photos", values, "id = ?", arrayOf(id.toString()))
-        val restoredPhoto = getPhotoByIdOnce(id)
+        val restoredPhoto = getPhotoById(id)
         if (restoredPhoto != null) {
             try {
                 com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).rearmAlarmIfFuture(restoredPhoto)

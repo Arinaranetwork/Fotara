@@ -22,6 +22,7 @@ import androidx.core.app.NotificationCompat
 import com.arinara.fotara.MainActivity
 import com.arinara.fotara.R
 import com.arinara.fotara.data.db.FotaraDbHelper
+import com.arinara.fotara.data.db.NoteType
 import com.arinara.fotara.data.model.SchedulableNote
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -229,11 +230,11 @@ class NoteScheduleManager(private val context: Context) {
 
         for (item in upcoming) {
             val noteType = when (item.type) {
-                FotaraDbHelper.NoteType.PHOTO -> ScheduleNoteType.PHOTO
-                FotaraDbHelper.NoteType.GROUP -> ScheduleNoteType.PHOTO_GROUP
-                FotaraDbHelper.NoteType.DOCUMENT -> ScheduleNoteType.DOCUMENT
-                FotaraDbHelper.NoteType.TEXT -> ScheduleNoteType.TEXT_NOTE
-                FotaraDbHelper.NoteType.CANVAS -> ScheduleNoteType.CANVAS_NOTE
+                NoteType.PHOTO -> ScheduleNoteType.PHOTO
+                NoteType.GROUP -> ScheduleNoteType.PHOTO_GROUP
+                NoteType.DOCUMENT -> ScheduleNoteType.DOCUMENT
+                NoteType.TEXT -> ScheduleNoteType.TEXT_NOTE
+                NoteType.CANVAS -> ScheduleNoteType.CANVAS_NOTE
             }
             val alertType = try {
                 ScheduleAlertType.valueOf(item.alertType)
