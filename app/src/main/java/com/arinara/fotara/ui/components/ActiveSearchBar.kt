@@ -1157,8 +1157,7 @@ fun SearchFolderResultCard(
                     style = TextStyle(
                         color = TextPrimary,
                         fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontStyle = FontStyle.Italic
+                        fontWeight = FontWeight.Bold
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

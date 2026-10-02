@@ -110,8 +110,14 @@ fun MainNavigation(
                         canvasNoteRepository = appContainer.canvasNoteRepository
                     )
                 )
+                val settingsViewModel: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.provideFactory(
+                        settingsRepository = appContainer.settingsRepository
+                    )
+                )
                 HomeScreen(
                     viewModel = homeViewModel,
+                    settingsViewModel = settingsViewModel,
                     onFolderClick = { folder ->
                         backStack.add(FolderDetailNavKey(folder.id))
                     },

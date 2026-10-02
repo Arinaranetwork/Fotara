@@ -7,97 +7,170 @@
 package com.arinara.fotara.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
-import com.arinara.fotara.theme.DockSlatePill
-import com.arinara.fotara.theme.DockSlatePillLight
+import com.arinara.fotara.R
+import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.theme.HomeAddButtonBlue
+import com.arinara.fotara.theme.HomeCardSurface
+import com.arinara.fotara.theme.HomeSearchBarBorder
+import com.arinara.fotara.theme.HomeSearchBarSurface
 
+/**
+ * Modern search bar and main '+' button row matching IMAGE A.
+ * Features a dark full-pill search field and a circular blue action button
+ * opening an upward-anchored menu with "New folder" and "Capture notes".
+ */
 @Composable
 fun FloatingDock(
     onSearchClick: () -> Unit,
     onCameraClick: () -> Unit,
+    onNewFolderClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Bug A Fix: Enforce elevation of 16.dp and navigationBars insets clearance
-    Box(
+    var showAddMenu by remember { mutableStateOf(false) }
+
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .zIndex(16f)
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 24.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        // Dark full-pill search bar (~52dp tall)
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .shadow(elevation = 16.dp, shape = CircleShape)
-                .clip(CircleShape)
-                .background(DockSlatePill)
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .weight(1f)
+                .height(52.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(HomeSearchBarSurface)
+                .border(1.dp, HomeSearchBarBorder, RoundedCornerShape(26.dp))
+                .clickable(onClick = onSearchClick)
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart
         ) {
-            // Bug B Fix: Tapping search bar strictly triggers onSearchClick (never new folder)
             Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(CircleShape)
-                    .clickable(onClick = onSearchClick),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = "Search",
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(22.dp)
+                    tint = Color(0xFF6B7280),
+                    modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = "Search notes, subjects, text...",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(start = 12.dp)
+                    text = stringResource(R.string.search_hint),
+                    color = Color(0xFF6B7280),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Light,
+                    fontFamily = ElmsSans
                 )
             }
+        }
 
-            // Quick Camera shortcut
+        // Circular '+' Button (~52-54dp, #2563EB)
+        Box {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(52.dp)
                     .clip(CircleShape)
-                    .background(DockSlatePillLight.copy(alpha = 0.35f))
-                    .clickable(onClick = onCameraClick),
+                    .background(HomeAddButtonBlue)
+                    .clickable { showAddMenu = true },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = "Capture Note",
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add options",
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+
+            // Upward-anchored popup menu
+            DropdownMenu(
+                expanded = showAddMenu,
+                onDismissRequest = { showAddMenu = false },
+                modifier = Modifier
+                    .background(HomeCardSurface)
+                    .border(1.dp, Color(0xFF1C2538), RoundedCornerShape(12.dp))
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(R.string.menu_new_folder),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.CreateNewFolder,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    onClick = {
+                        showAddMenu = false
+                        onNewFolderClick()
+                    }
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(R.string.menu_capture_notes),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.PhotoCamera,
+                            contentDescription = null,
+                            tint = Color(0xFF34D399),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    onClick = {
+                        showAddMenu = false
+                        onCameraClick()
+                    }
                 )
             }
         }

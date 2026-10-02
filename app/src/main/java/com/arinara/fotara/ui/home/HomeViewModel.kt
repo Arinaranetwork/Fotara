@@ -685,6 +685,17 @@ class HomeViewModel(
         }
     }
 
+    fun deleteFolder(folderId: Long) {
+        viewModelScope.launch {
+            try {
+                folderRepository.deleteFolders(listOf(folderId))
+                _uiState.update { it.copy(userMessage = "Folder moved to Trash") }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(userMessage = "Failed to delete folder: ${e.message}") }
+            }
+        }
+    }
+
     fun openNewFolderDialog() {
         _uiState.update { it.copy(showNewFolderDialog = true) }
     }

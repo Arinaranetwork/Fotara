@@ -14,10 +14,14 @@ Harden the Canvas Note drawing experience, improve searchability across OCR and 
 8. OCR and DOCX Search Indexing: Text extraction from DOCX documents and OCR photo text indexed into SQLite FTS4 with database migration; debounced, diacritic- and case-insensitive multi-word/prefix search; title/subject ranked before content matches; snippet generation with [OCR] / [DOCX] badges.
 9. Canvas Import from Existing Notes: Picker showing only image-based notes (photos, scans, drawings) to insert as a new snapshot layer scaled to viewport center.
 10. Drawing Mode Hard Limits: Centralized configuration file (`CanvasConfig.kt`) defining 20,000 x 20,000 logical px canvas extent, 50 max layers, 2048px image downscale limit, memory budget limits, and snackbar warnings when limits are reached.
+11. Text Note Editor Engine & Rich Interactive Rendering: Pure text-editing transformation functions for all toolbar tools (Undo/Redo, Bold, Italic, Strikethrough, Inline code, H1-H3, Quote, Bullet list, Numbered list, Checkbox, Indent/Outdent, Link, Code block, Horizontal rule), single undo/redo step, toolbar active state tracking caret context, Enter key list continuation/exit, and rich interactive rendering (real interactive checkboxes `- [ ]` <-> `- [x]`, horizontal rule dividers, hanging indent lists) with unit deletion.
+12. Canvas Note Contextual Action Panel: Standardize Canvas Note long-press to open the complete note action bottom sheet (Rename, Color Label, Deadline, Schedule Reminder, Move, Share/Export PNG, Select, Delete) instead of jumping directly to the schedule timer dialog.
+13. App-Wide Elms Sans Font Migration & Italic Elimination: Adopt Elms Sans with strictly three weights (Light 300, Medium 500, Bold 700) mapped by context, remove all UI italics project-wide (FontStyle.Italic, textStyle="italic", Paint italics), maintain non-italic monospace for code, synthetic slant for editor italic formatting, and bar-styled blockquotes without italics.
+14. Folder Screen Header Action Button Spacing: Eliminate layout overlap between the round Add (+) button and the Kebab (⋮) overflow menu button on folder screen headers, preserving 48dp minimum touch targets.
 
 ## Out Of Scope
 - Modifying or refactoring the Canvas selection tool (bounding box, duplicate, bring to front, send to back, layer menu, delete).
-- Changing color palette or design language of existing non-canvas screens.
+- Changing color palette of existing non-canvas screens.
 - Modifying unrelated database entities or cloud Supabase sync logic.
 
 ## Features
@@ -70,6 +74,32 @@ Harden the Canvas Note drawing experience, improve searchability across OCR and 
 - Pan translation is clamped to `[-10000f, 10000f]`.
 - User notifications via snackbar when layer or element limit is reached.
 
+### Feature 11: Text Note Editor Engine & Rich Interactive Rendering
+- Pure functions `(text, selection) -> (newText, newSelection)` for every tool:
+  - Inline: Bold (`**`), Italic (`*`), Strikethrough (`~~`), Inline code (`` ` ``). Toggle wrap/unwrap, cursor inside when empty.
+  - Lines: H1 (`# `), H2 (`## `), H3 (`### `), Quote (`> `), Bullet (`- `), Numbered (`1. `), Checkbox (`- [ ] `). Line-prefix toggle/replace, cursor placed after marker.
+  - Indent/Outdent: 2-space tab indent/outdent with numbered list auto-renumbering.
+  - Enter Key: auto-continue bullet/numbered/checkbox/quote; empty item exits list.
+  - Link: modal dialog inserting `[text](url)`.
+  - Code Block: fenced code block insertion.
+  - Horizontal Rule: `---` on dedicated line.
+  - Single atomic undo/redo step per action.
+  - Real interactive checkboxes (`- [ ]` <-> `- [x]`), horizontal dividers, hanging-indent bullets.
+  - Safe unit deletion with backspace without cursor jumps into hidden markers.
+
+### Feature 12: Canvas Note Contextual Action Panel Parity
+- Long-press on Canvas note opens standard action sheet: Rename, Color Label, Deadline, Schedule Reminder (opens schedule dialog), Move, Share/Export PNG, Select, Delete.
+- Exclude unsupported actions (Split to Images).
+
+### Feature 13: Elms Sans Font Migration & Complete Italic Elimination
+- Package `ElmsSans-Light.ttf` (300), `ElmsSans-Medium.ttf` (500), `ElmsSans-Bold.ttf` (700) into font resources.
+- Strict 3-weight contextual mapping: Light (secondary/captions), Medium (body/buttons/labels), Bold (titles/headers/emphasis).
+- Strip `FontStyle.Italic`, `textStyle="italic"`, and Paint italics project-wide.
+- Monospace font for code without italics; synthetic slant for editor italic formatting; border/indent styling for blockquotes without italics.
+
+### Feature 14: Folder Screen Header Action Button Spacing
+- Add explicit separation between Add (+) circular button and Kebab (⋮) menu button with 48dp minimum touch bounds.
+
 ## UI Mockup
 ```
 Canvas Top Bar (Narrow 360dp):
@@ -84,17 +114,23 @@ Home Grid Facing Glow:
 | Matematika Wajib  | | Fisika            |
 | [ / Glow]         | |                   |
 +-------------------+ +-------------------+
+
+Folder Header Action Buttons:
+[<-] [Folder Title]                   (+)  [12dp]  (⋮)
 ```
 
 ## Logic Notes
 - Autosave uses Kotlin `Mutex` and `StateFlow<SaveState>` with states `Idle`, `Saving`, `Saved`, `Error(Throwable)`.
 - Coordinate transform math: `worldPoint = (screenPoint - translation) / scale`. Viewport panning applies `deltaScreen / scale` to world translation.
 - SQLite FTS4 migration: create `notes_content_fts` virtual table, index DOCX paragraphs, and link via `note_id`.
+- Text editor pure functions: `TextEditorOps` object with pure methods for unit testability without Android runtime dependencies.
+- Font system: `ElmsSansFontFamily` configured in `Type.kt` and applied to `MaterialTheme`.
 
 ## Risks
 - Risk: Concurrent database write during backgrounding causing SQLite lock -> Mitigation: Mutex-protected single-writer queue with timeout and atomic transaction.
 - Risk: High-resolution images causing OutOfMemoryError -> Mitigation: Sub-sample decoding with `inJustDecodeBounds` bounding max dimension to 2048px.
 - Risk: FTS migration corrupting database on app update -> Mitigation: Safe SQLite transaction inside `onUpgrade` with fallback rebuild.
+- Risk: OffsetMapping misalignment during rich text rendering -> Mitigation: Strict bidirectional mapping for interactive elements.
 
 ## Dependencies
 - Phase 8 (Canvas Note Engine)
@@ -112,3 +148,8 @@ Home Grid Facing Glow:
 - [x] Search query matches text inside DOCX and OCR notes with badges and snippets.
 - [x] "From notes" picker inserts image-based notes as canvas layers.
 - [x] Canvas pan is clamped to 20,000 x 20,000 bounds and layer count is capped at 50 with snackbars.
+- [x] Item 11: Text editor toolbar operations operate as tested pure functions with correct caret placement, Enter list continuation, single-step undo/redo, real interactive checkboxes, and clean markdown storage.
+- [x] Item 12: Long-press on Canvas note opens the full contextual action panel (Rename, Color, Deadline, Schedule, Move, Share/Export, Select, Delete).
+- [x] Item 13: Elms Sans font (Light, Medium, Bold) applied app-wide with zero italics in UI.
+- [x] Item 14: Folder header Add (+) and Kebab (⋮) buttons do not overlap and maintain 48dp touch targets.
+

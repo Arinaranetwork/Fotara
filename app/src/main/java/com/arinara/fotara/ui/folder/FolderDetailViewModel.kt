@@ -533,6 +533,30 @@ class FolderDetailViewModel(
                 selectedPhotoIds = emptySet(),
                 selectedGroupIds = emptySet(),
                 selectedDocumentIds = emptySet(),
+                selectedCanvasNoteIds = emptySet(),
+                isSubfolderMultiSelectMode = false,
+                selectedSubfolderIds = emptySet()
+            )
+        }
+    }
+
+    fun toggleCanvasNoteSelection(canvasId: Long) {
+        _uiState.update { current ->
+            val set = current.selectedCanvasNoteIds.toMutableSet()
+            if (set.contains(canvasId)) set.remove(canvasId) else set.add(canvasId)
+            current.copy(selectedCanvasNoteIds = set)
+        }
+    }
+
+    fun startBatchSelectionWithCanvasNote(canvasId: Long) {
+        _uiState.update {
+            it.copy(
+                isBatchSelectMode = true,
+                selectedCanvasNoteIds = setOf(canvasId),
+                selectedPhotoIds = emptySet(),
+                selectedGroupIds = emptySet(),
+                selectedDocumentIds = emptySet(),
+                selectedTextNoteIds = emptySet(),
                 isSubfolderMultiSelectMode = false,
                 selectedSubfolderIds = emptySet()
             )
@@ -752,7 +776,8 @@ class FolderDetailViewModel(
         val groupIds = _uiState.value.selectedGroupIds.toList()
         val docIds = _uiState.value.selectedDocumentIds.toList()
         val textNoteIds = _uiState.value.selectedTextNoteIds.toList()
-        if (photoIds.isEmpty() && groupIds.isEmpty() && docIds.isEmpty() && textNoteIds.isEmpty()) return
+        val canvasNoteIds = _uiState.value.selectedCanvasNoteIds.toList()
+        if (photoIds.isEmpty() && groupIds.isEmpty() && docIds.isEmpty() && textNoteIds.isEmpty() && canvasNoteIds.isEmpty()) return
 
         val photosToTrash = _uiState.value.photos.filter { it.id in photoIds }
         val groupsToTrash = _uiState.value.groups.filter { it.id in groupIds }
@@ -775,8 +800,11 @@ class FolderDetailViewModel(
                 textNoteIds.forEach { deadlineNotificationManager?.cancelReminder(it + 2_000_000_000L) }
                 textNoteIds.forEach { textNoteRepository?.deleteTextNote(it) }
             }
+            if (canvasNoteIds.isNotEmpty()) {
+                canvasNoteRepository?.deleteCanvasNotes(canvasNoteIds)
+            }
             exitBatchSelectMode()
-            val total = photoIds.size + groupIds.size + docIds.size + textNoteIds.size
+            val total = photoIds.size + groupIds.size + docIds.size + textNoteIds.size + canvasNoteIds.size
             _uiState.update {
                 it.copy(
                     pendingUndoAction = UndoAction.Delete(photosToTrash, groupsToTrash, docsToTrash, textNotesToTrash),
@@ -791,7 +819,8 @@ class FolderDetailViewModel(
         val groupIds = _uiState.value.selectedGroupIds.toList()
         val docIds = _uiState.value.selectedDocumentIds.toList()
         val textNoteIds = _uiState.value.selectedTextNoteIds.toList()
-        if (photoIds.isEmpty() && groupIds.isEmpty() && docIds.isEmpty() && textNoteIds.isEmpty()) return
+        val canvasNoteIds = _uiState.value.selectedCanvasNoteIds.toList()
+        if (photoIds.isEmpty() && groupIds.isEmpty() && docIds.isEmpty() && textNoteIds.isEmpty() && canvasNoteIds.isEmpty()) return
 
         val currentPhotos = _uiState.value.photos.filter { it.id in photoIds }
         val currentGroups = _uiState.value.groups.filter { it.id in groupIds }
@@ -815,6 +844,9 @@ class FolderDetailViewModel(
             if (textNoteIds.isNotEmpty()) {
                 textNoteIds.forEach { textNoteRepository?.moveTextNote(it, targetFolderId, targetSubfolderId) }
             }
+            if (canvasNoteIds.isNotEmpty()) {
+                canvasNoteRepository?.moveCanvasNotes(canvasNoteIds, targetFolderId, targetSubfolderId)
+            }
             if (targetTitle != null) {
                 recordRecentDestination(
                     type = if (targetSubfolderId != null) DestinationType.SUBFOLDER else DestinationType.FOLDER,
@@ -825,7 +857,7 @@ class FolderDetailViewModel(
                 )
             }
             exitBatchSelectMode()
-            val total = photoIds.size + groupIds.size + docIds.size + textNoteIds.size
+            val total = photoIds.size + groupIds.size + docIds.size + textNoteIds.size + canvasNoteIds.size
             _uiState.update {
                 it.copy(
                     pendingUndoAction = UndoAction.Move(photoMoves, groupMoves, docMoves, textNoteMoves),
@@ -1336,6 +1368,13 @@ class FolderDetailViewModel(
         viewModelScope.launch {
             canvasNoteRepository?.moveCanvasNote(canvasId, targetFolderId, targetSubfolderId)
             _uiState.update { it.copy(userMessage = "Canvas note moved") }
+        }
+    }
+
+    fun updateCanvasNoteTagColor(canvasId: Long, colorHex: String?) {
+        viewModelScope.launch {
+            canvasNoteRepository?.updateTagColor(canvasId, colorHex)
+            _uiState.update { it.copy(userMessage = "Color label updated") }
         }
     }
 

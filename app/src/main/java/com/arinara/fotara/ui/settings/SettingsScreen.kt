@@ -7,6 +7,7 @@
 package com.arinara.fotara.ui.settings
 
 import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,14 +36,19 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FindInPage
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SdCard
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.ViewStream
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -64,8 +70,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,11 +78,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -86,25 +92,29 @@ import com.arinara.fotara.data.model.DownsampleQuality
 import com.arinara.fotara.data.model.SortOrder
 import com.arinara.fotara.data.model.StorageLocation
 import com.arinara.fotara.data.model.ThemeMode
-import com.arinara.fotara.theme.FolderBodyBlue
-import com.arinara.fotara.theme.FolderTabCream
-import com.arinara.fotara.theme.MidnightCardOutline
-import com.arinara.fotara.theme.MidnightNavy
-import com.arinara.fotara.theme.MidnightSurface
+import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.theme.HomeCardBorder
+import com.arinara.fotara.theme.HomeCardSurface
+import com.arinara.fotara.theme.HomeMainButtonBlue
+import com.arinara.fotara.theme.HomeNearBlack
+import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagCrimson
-import com.arinara.fotara.theme.TextMuted
-import com.arinara.fotara.theme.TextPrimary
-import com.arinara.fotara.theme.TextSecondary
 import kotlinx.coroutines.launch
 
+/**
+ * Fotara v1.5.2 Settings Screen redesign.
+ * Formatted as a vertical list of rounded rectangular cards (~#111726, 22dp radius, 12dp spacing, 16dp padding)
+ * with a large upright "Settings" title at the top, 42dp neutral slate icon tiles, and Elms Sans typography.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    onBackClick: () -> Unit,
+    onBackClick: (() -> Unit)? = null,
     onNavigateToTrash: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -148,313 +158,289 @@ fun SettingsScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MidnightNavy,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Settings",
-                        color = TextPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = FolderTabCream
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
-            )
-        },
+        containerColor = HomeNearBlack,
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
             contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = innerPadding.calculateTopPadding() + 8.dp,
-                bottom = innerPadding.calculateBottomPadding() + 32.dp
+                start = 18.dp,
+                end = 18.dp,
+                top = innerPadding.calculateTopPadding() + contentPadding.calculateTopPadding() + 8.dp,
+                bottom = innerPadding.calculateBottomPadding() + contentPadding.calculateBottomPadding() + 110.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            // 1. Display & Organization
+            // Header with Large "Settings" Title (same style as Fotara title, no tagline)
             item {
-                SettingsSection(
-                    title = "Display & Organization",
-                    icon = Icons.Default.GridView
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp, bottom = 10.dp)
                 ) {
-                    SettingsRow(
-                        title = "Default Sort Order",
-                        subtitle = uiState.userSettings.defaultSortOrder.displayName,
-                        onClick = { showSortOrderDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Thumbnail Grid Density",
-                        subtitle = "${uiState.userSettings.gridDensity} columns",
-                        onClick = { showGridDensityDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Theme",
-                        subtitle = uiState.userSettings.themeMode.displayName,
-                        onClick = { showThemeDialog = true }
+                    if (onBackClick != null) {
+                        IconButton(
+                            onClick = onBackClick,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFF131925))
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                    Text(
+                        text = "Settings",
+                        color = Color.White,
+                        fontSize = 38.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = (-0.5).sp
                     )
                 }
             }
 
-            // 2. OCR & Processing
+            // 1. Default Sort Order
             item {
-                SettingsSection(
-                    title = "OCR & Processing",
-                    icon = Icons.Default.TextFields
-                ) {
-                    SettingsToggleRow(
-                        title = "Automatic OCR on Capture",
-                        subtitle = "Extract handwritten & printed text immediately after capture",
-                        checked = uiState.userSettings.autoOcrEnabled,
-                        onCheckedChange = { viewModel.updateAutoOcr(it) }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "OCR Recognition Script",
-                        subtitle = uiState.userSettings.ocrLanguage,
-                        onClick = { showOcrLanguageDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Downsampling Quality Tradeoff",
-                        subtitle = uiState.userSettings.downsampleQuality.displayName,
-                        onClick = { showQualityDialog = true }
-                    )
-                }
+                SettingsCardItem(
+                    title = "Default Sort Order",
+                    subtitle = uiState.userSettings.defaultSortOrder.displayName,
+                    icon = Icons.Default.GridView,
+                    onClick = { showSortOrderDialog = true }
+                )
             }
 
-            // 3. Notifications & Reminders
+            // 2. Thumbnail Grid Density
+            item {
+                SettingsCardItem(
+                    title = "Thumbnail Grid Density",
+                    subtitle = "${uiState.userSettings.gridDensity} columns",
+                    icon = Icons.Default.GridView,
+                    onClick = { showGridDensityDialog = true }
+                )
+            }
+
+            // 3. Theme
+            item {
+                SettingsCardItem(
+                    title = "Theme",
+                    subtitle = uiState.userSettings.themeMode.displayName,
+                    icon = Icons.Default.Palette,
+                    onClick = { showThemeDialog = true }
+                )
+            }
+
+            // 4. Automatic OCR on Capture
+            item {
+                SettingsCardToggle(
+                    title = "Automatic OCR on Capture",
+                    subtitle = "Extract handwritten & printed text immediately after capture",
+                    icon = Icons.Default.TextFields,
+                    checked = uiState.userSettings.autoOcrEnabled,
+                    onCheckedChange = { viewModel.updateAutoOcr(it) }
+                )
+            }
+
+            // 5. OCR Recognition Script
+            item {
+                SettingsCardItem(
+                    title = "OCR Recognition Script",
+                    subtitle = uiState.userSettings.ocrLanguage,
+                    icon = Icons.Default.Language,
+                    onClick = { showOcrLanguageDialog = true }
+                )
+            }
+
+            // 6. Downsampling Quality Tradeoff
+            item {
+                SettingsCardItem(
+                    title = "Downsampling Quality Tradeoff",
+                    subtitle = uiState.userSettings.downsampleQuality.displayName,
+                    icon = Icons.Default.Image,
+                    onClick = { showQualityDialog = true }
+                )
+            }
+
+            // 7. System Notification Permission
             item {
                 val notificationsEnabled = remember(context) {
                     androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
                 }
-                SettingsSection(
-                    title = "Notifications & Reminders",
-                    icon = Icons.Default.Notifications
-                ) {
-                    SettingsRow(
-                        title = "System Notification Permission",
-                        subtitle = if (notificationsEnabled) "Permission granted" else "Notifications disabled in system settings",
-                        onClick = {
-                            try {
-                                val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                }
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = android.net.Uri.fromParts("package", context.packageName, null)
-                                }
-                                context.startActivity(intent)
+                SettingsCardItem(
+                    title = "System Notification Permission",
+                    subtitle = if (notificationsEnabled) "Permission granted" else "Notifications disabled in system settings",
+                    icon = Icons.Default.Notifications,
+                    onClick = {
+                        try {
+                            val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
                             }
-                        }
-                    )
-                    SettingsDivider()
-                    val leadTimeText = when (uiState.userSettings.reminderLeadTimeHours) {
-                        1 -> "1 hour before deadline"
-                        3 -> "3 hours before deadline"
-                        24 -> "24 hours before deadline"
-                        else -> "${uiState.userSettings.reminderLeadTimeHours} hours before deadline"
-                    }
-                    SettingsRow(
-                        title = "Default Reminder Lead Time",
-                        subtitle = leadTimeText,
-                        onClick = { showLeadTimeDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsToggleRow(
-                        title = "\"Due Tomorrow\" Home Ribbon",
-                        subtitle = "Display urgent deadline alerts on home dashboard",
-                        checked = uiState.userSettings.dueTomorrowRibbonEnabled,
-                        onCheckedChange = { viewModel.updateDueTomorrowRibbon(it) }
-                    )
-                    SettingsDivider()
-                    SettingsActionRow(
-                        title = "Test Notification Alert",
-                        subtitle = "Trigger an immediate test study reminder notification",
-                        icon = Icons.Default.Notifications,
-                        isLoading = false,
-                        onClick = {
-                            com.arinara.fotara.util.NoteScheduleManager(context).sendTestAlert()
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Test alert dispatched. Check notification tray.")
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = android.net.Uri.fromParts("package", context.packageName, null)
                             }
+                            context.startActivity(intent)
                         }
-                    )
-                }
-            }
-
-            // 4. Storage
-            item {
-                SettingsSection(
-                    title = "Storage",
-                    icon = Icons.Default.Storage
-                ) {
-                    SettingsRow(
-                        title = "Photo Storage Location",
-                        subtitle = uiState.userSettings.storageLocation.displayName,
-                        onClick = { showStorageLocationDialog = true }
-                    )
-                    SettingsDivider()
-
-                    // Storage Breakdown View
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Storage Usage Breakdown",
-                            color = TextPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            StoragePill(label = "Photos", size = uiState.storageBreakdown.formattedPhotos)
-                            StoragePill(label = "Thumbnails", size = uiState.storageBreakdown.formattedThumbnails)
-                            StoragePill(label = "Database", size = uiState.storageBreakdown.formattedDatabase)
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Total Fotara Data: ${uiState.storageBreakdown.formattedTotal}",
-                            color = TextSecondary,
-                            fontSize = 13.sp
-                        )
                     }
-
-                    SettingsDivider()
-
-                    // Rebuild Thumbnails Action
-                    SettingsActionRow(
-                        title = "Rebuild Thumbnails",
-                        subtitle = "Regenerate thumbnail cache from originals",
-                        icon = Icons.Default.Refresh,
-                        isLoading = uiState.isRebuildingThumbnails,
-                        onClick = { viewModel.rebuildThumbnails() }
-                    )
-
-                    SettingsDivider()
-
-                    // Trash Navigation Entry
-                    SettingsRow(
-                        title = "Trash / Recycle Bin",
-                        subtitle = "View and restore deleted folders and notes",
-                        leadingIcon = Icons.Default.Delete,
-                        leadingIconTint = TagCrimson,
-                        onClick = onNavigateToTrash
-                    )
-                }
+                )
             }
 
-            // 5. Data Backup & Import
+            // 8. Default Reminder Lead Time
             item {
-                SettingsSection(
-                    title = "Data Management",
-                    icon = Icons.Default.SdCard
-                ) {
-                    SettingsActionRow(
-                        title = "Export Backup (JSON)",
-                        subtitle = "Create offline backup of all folders, subfolders, and notes",
-                        icon = Icons.Default.Upload,
-                        isLoading = uiState.isExportingBackup,
-                        onClick = { viewModel.requestExportBackup() }
-                    )
-                    SettingsDivider()
-                    SettingsActionRow(
-                        title = "Import from Backup",
-                        subtitle = "Restore coursework folders and notes from backup JSON",
-                        icon = Icons.Default.Download,
-                        isLoading = uiState.isImportingBackup,
-                        onClick = { viewModel.requestImportBackup() }
-                    )
+                val leadTimeText = when (uiState.userSettings.reminderLeadTimeHours) {
+                    1 -> "1 hour before deadline"
+                    3 -> "3 hours before deadline"
+                    24 -> "24 hours before deadline"
+                    else -> "${uiState.userSettings.reminderLeadTimeHours} hours before deadline"
                 }
+                SettingsCardItem(
+                    title = "Default Reminder Lead Time",
+                    subtitle = leadTimeText,
+                    icon = Icons.Default.Schedule,
+                    onClick = { showLeadTimeDialog = true }
+                )
             }
 
-            // 6. Search Index
+            // 9. "Due Tomorrow" Home Ribbon
             item {
-                SettingsSection(
-                    title = "Search",
-                    icon = Icons.Default.FindInPage
-                ) {
-                    SettingsActionRow(
-                        title = "Rebuild Search Index",
-                        subtitle = "Forces full SQLite FTS4 virtual table re-indexing",
-                        icon = Icons.Default.Refresh,
-                        isLoading = uiState.isRebuildingSearchIndex,
-                        onClick = { viewModel.rebuildSearchIndex() }
-                    )
-                }
+                SettingsCardToggle(
+                    title = "\"Due Tomorrow\" Home Ribbon",
+                    subtitle = "Display urgent deadline alerts on home dashboard",
+                    icon = Icons.Default.ViewStream,
+                    checked = uiState.userSettings.dueTomorrowRibbonEnabled,
+                    onCheckedChange = { viewModel.updateDueTomorrowRibbon(it) }
+                )
             }
 
-            // 7. About
+            // 10. Test Notification Alert
             item {
-                SettingsSection(
-                    title = "About",
-                    icon = Icons.Default.Info
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Fotara",
-                            color = TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        val displayVersion = if (appVersionName.contains("Beta", ignoreCase = true)) {
-                            appVersionName
-                        } else {
-                            "$appVersionName Beta"
+                SettingsCardAction(
+                    title = "Test Notification Alert",
+                    subtitle = "Trigger an immediate test study reminder notification",
+                    icon = Icons.Default.Notifications,
+                    actionIcon = Icons.Default.PlayArrow,
+                    isLoading = false,
+                    onClick = {
+                        com.arinara.fotara.util.NoteScheduleManager(context).sendTestAlert()
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Test alert dispatched. Check notification tray.")
                         }
-                        Text(
-                            text = "Version $displayVersion (Build $appVersionCode)",
-                            color = FolderTabCream,
-                            fontSize = 14.sp
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Specialized photo organization and on-device OCR for students.",
-                            color = TextSecondary,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = "Arinara Network • 100% Offline Architecture",
-                            color = TextMuted,
-                            fontSize = 12.sp
-                        )
                     }
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Open Source Notices & Licenses",
-                        subtitle = "View third-party software attributions",
-                        leadingIcon = Icons.AutoMirrored.Filled.MenuBook,
-                        onClick = { viewModel.setLicensesDialogVisible(true) }
-                    )
+                )
+            }
+
+            // 11. Photo Storage Location
+            item {
+                SettingsCardItem(
+                    title = "Photo Storage Location",
+                    subtitle = uiState.userSettings.storageLocation.displayName,
+                    icon = Icons.Default.Storage,
+                    onClick = { showStorageLocationDialog = true }
+                )
+            }
+
+            // 12. Storage Usage Breakdown
+            item {
+                SettingsStorageBreakdownCard(
+                    formattedPhotos = uiState.storageBreakdown.formattedPhotos,
+                    formattedThumbnails = uiState.storageBreakdown.formattedThumbnails,
+                    formattedDatabase = uiState.storageBreakdown.formattedDatabase,
+                    formattedTotal = uiState.storageBreakdown.formattedTotal
+                )
+            }
+
+            // 13. Rebuild Thumbnails
+            item {
+                SettingsCardAction(
+                    title = "Rebuild Thumbnails",
+                    subtitle = "Regenerate thumbnail cache from originals",
+                    icon = Icons.Default.Refresh,
+                    actionIcon = Icons.Default.Refresh,
+                    isLoading = uiState.isRebuildingThumbnails,
+                    onClick = { viewModel.rebuildThumbnails() }
+                )
+            }
+
+            // 14. Trash / Recycle Bin
+            item {
+                SettingsCardItem(
+                    title = "Trash / Recycle Bin",
+                    subtitle = "View and restore deleted folders and notes",
+                    icon = Icons.Default.Delete,
+                    iconTint = TagCrimson,
+                    onClick = onNavigateToTrash
+                )
+            }
+
+            // 15. Export Backup (JSON)
+            item {
+                SettingsCardAction(
+                    title = "Export Backup (JSON)",
+                    subtitle = "Create offline backup of all folders, subfolders, and notes",
+                    icon = Icons.Default.Upload,
+                    actionIcon = Icons.Default.Upload,
+                    isLoading = uiState.isExportingBackup,
+                    onClick = { viewModel.requestExportBackup() }
+                )
+            }
+
+            // 16. Import from Backup
+            item {
+                SettingsCardAction(
+                    title = "Import from Backup",
+                    subtitle = "Restore coursework folders and notes from backup JSON",
+                    icon = Icons.Default.Download,
+                    actionIcon = Icons.Default.Download,
+                    isLoading = uiState.isImportingBackup,
+                    onClick = { viewModel.requestImportBackup() }
+                )
+            }
+
+            // 17. Rebuild Search Index
+            item {
+                SettingsCardAction(
+                    title = "Rebuild Search Index",
+                    subtitle = "Forces full SQLite FTS4 virtual table re-indexing",
+                    icon = Icons.Default.FindInPage,
+                    actionIcon = Icons.Default.Refresh,
+                    isLoading = uiState.isRebuildingSearchIndex,
+                    onClick = { viewModel.rebuildSearchIndex() }
+                )
+            }
+
+            // 18. About
+            item {
+                val displayVersion = if (appVersionName.contains("Beta", ignoreCase = true)) {
+                    appVersionName
+                } else {
+                    "$appVersionName Beta"
                 }
+                SettingsAboutCard(
+                    version = "Version $displayVersion (Build $appVersionCode)"
+                )
+            }
+
+            // 19. Open Source Notices & Licenses
+            item {
+                SettingsCardItem(
+                    title = "Open Source Notices & Licenses",
+                    subtitle = "View third-party software attributions",
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                    onClick = { viewModel.setLicensesDialogVisible(true) }
+                )
             }
         }
     }
 
-    // Sort Order Selection Dialog
+    // Dialogs
     if (showSortOrderDialog) {
         OptionSelectionDialog(
             title = "Default Sort Order",
@@ -468,7 +454,6 @@ fun SettingsScreen(
         )
     }
 
-    // Grid Density Selection Dialog
     if (showGridDensityDialog) {
         OptionSelectionDialog(
             title = "Thumbnail Grid Density",
@@ -482,7 +467,6 @@ fun SettingsScreen(
         )
     }
 
-    // Theme Selection Dialog
     if (showThemeDialog) {
         OptionSelectionDialog(
             title = "Theme",
@@ -496,7 +480,6 @@ fun SettingsScreen(
         )
     }
 
-    // OCR Language Dialog
     if (showOcrLanguageDialog) {
         OptionSelectionDialog(
             title = "OCR Recognition Script",
@@ -514,7 +497,6 @@ fun SettingsScreen(
         )
     }
 
-    // Downsampling Quality Dialog
     if (showQualityDialog) {
         OptionSelectionDialog(
             title = "Pre-OCR Downsampling Quality",
@@ -528,7 +510,6 @@ fun SettingsScreen(
         )
     }
 
-    // Reminder Lead Time Dialog
     if (showLeadTimeDialog) {
         OptionSelectionDialog(
             title = "Default Reminder Lead Time",
@@ -546,7 +527,6 @@ fun SettingsScreen(
         )
     }
 
-    // Storage Location Dialog
     if (showStorageLocationDialog) {
         OptionSelectionDialog(
             title = "Photo Storage Location",
@@ -565,12 +545,13 @@ fun SettingsScreen(
         val json = uiState.exportedJsonString!!
         AlertDialog(
             onDismissRequest = { viewModel.dismissExportDialog() },
-            containerColor = MidnightSurface,
+            containerColor = HomeCardSurface,
             title = {
                 Text(
                     text = "Backup Export Ready",
-                    color = TextPrimary,
+                    color = Color.White,
                     fontSize = 18.sp,
+                    fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -578,22 +559,24 @@ fun SettingsScreen(
                 Column {
                     Text(
                         text = "Your offline backup JSON is ready (${json.length} characters). You can copy it to your clipboard or share it to save a local file.",
-                        color = TextSecondary,
-                        fontSize = 14.sp
+                        color = HomeSubtitleGray,
+                        fontSize = 14.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Light
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(120.dp)
-                            .background(MidnightNavy, RoundedCornerShape(8.dp))
-                            .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
+                            .background(HomeNearBlack, RoundedCornerShape(12.dp))
+                            .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
                             .padding(8.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
                         Text(
                             text = json.take(1000) + if (json.length > 1000) "\n... (truncated for preview)" else "",
-                            color = TextMuted,
+                            color = Color(0xFF94A3B8),
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
                         )
@@ -608,11 +591,11 @@ fun SettingsScreen(
                         clipboard?.setPrimaryClip(clip)
                         viewModel.dismissExportDialog()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = FolderBodyBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue)
                 ) {
                     Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Copy JSON")
+                    Text("Copy JSON", fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
                 }
             },
             dismissButton = {
@@ -629,12 +612,12 @@ fun SettingsScreen(
                             viewModel.dismissExportDialog()
                         }
                     ) {
-                        Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp), tint = FolderTabCream)
+                        Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Share", color = FolderTabCream)
+                        Text("Share", color = Color.White, fontFamily = ElmsSans)
                     }
                     TextButton(onClick = { viewModel.dismissExportDialog() }) {
-                        Text("Close", color = TextSecondary)
+                        Text("Close", color = HomeSubtitleGray, fontFamily = ElmsSans)
                     }
                 }
             }
@@ -648,12 +631,13 @@ fun SettingsScreen(
 
         AlertDialog(
             onDismissRequest = { viewModel.dismissImportDialog() },
-            containerColor = MidnightSurface,
+            containerColor = HomeCardSurface,
             title = {
                 Text(
                     text = "Import Backup",
-                    color = TextPrimary,
+                    color = Color.White,
                     fontSize = 18.sp,
+                    fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -661,8 +645,10 @@ fun SettingsScreen(
                 Column {
                     Text(
                         text = "Paste your exported Fotara backup JSON string below. New folders, subfolders, and notes will be merged without overwriting existing records.",
-                        color = TextSecondary,
-                        fontSize = 14.sp
+                        color = HomeSubtitleGray,
+                        fontSize = 14.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Light
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
@@ -671,21 +657,21 @@ fun SettingsScreen(
                             importInputText = it
                             inputError = null
                         },
-                        placeholder = { Text("Paste JSON here...", color = TextMuted) },
+                        placeholder = { Text("Paste JSON here...", color = HomeSubtitleGray, fontFamily = ElmsSans) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(140.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = FolderTabCream,
-                            unfocusedBorderColor = MidnightCardOutline,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
+                            focusedBorderColor = HomeMainButtonBlue,
+                            unfocusedBorderColor = HomeCardBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
                         ),
                         isError = inputError != null
                     )
                     if (inputError != null) {
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = inputError!!, color = TagCrimson, fontSize = 12.sp)
+                        Text(text = inputError!!, color = TagCrimson, fontSize = 12.sp, fontFamily = ElmsSans)
                     }
                 }
             },
@@ -699,14 +685,14 @@ fun SettingsScreen(
                             viewModel.executeImportBackup(trimmed)
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = FolderBodyBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue)
                 ) {
-                    Text("Import")
+                    Text("Import", fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissImportDialog() }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text("Cancel", color = HomeSubtitleGray, fontFamily = ElmsSans)
                 }
             }
         )
@@ -716,12 +702,13 @@ fun SettingsScreen(
     if (uiState.showLicensesDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.setLicensesDialogVisible(false) },
-            containerColor = MidnightSurface,
+            containerColor = HomeCardSurface,
             title = {
                 Text(
                     text = "Open Source Notices",
-                    color = TextPrimary,
+                    color = Color.White,
                     fontSize = 18.sp,
+                    fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -756,200 +743,413 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.setLicensesDialogVisible(false) }) {
-                    Text("Close", color = FolderTabCream)
+                    Text("Close", color = Color.White, fontFamily = ElmsSans)
                 }
             }
         )
     }
 }
 
+/**
+ * Standard clickable settings card (~#111726, 22dp radius, 16dp padding).
+ * Holds a 42dp neutral slate icon tile, title (Medium), subtitle (Light, muted), and chevron/value.
+ */
 @Composable
-private fun SettingsSection(
+private fun SettingsCardItem(
     title: String,
+    subtitle: String? = null,
     icon: ImageVector,
-    content: @Composable () -> Unit
+    iconTint: Color = Color(0xFF94A3B8),
+    onClick: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(MidnightCardOutline)),
-        modifier = Modifier.fillMaxWidth()
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+        border = BorderStroke(1.dp, HomeCardBorder),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // ~42dp neutral slate icon tile (same style as folder tiles)
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1E2638)),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = FolderTabCream,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = title,
-                    color = FolderTabCream,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
+                    tint = iconTint,
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            HorizontalDivider(color = MidnightCardOutline.copy(alpha = 0.6f))
-            content()
-        }
-    }
-}
 
-@Composable
-private fun SettingsRow(
-    title: String,
-    subtitle: String,
-    leadingIcon: ImageVector? = null,
-    leadingIconTint: Color = FolderTabCream,
-    onClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-    ) {
-        if (leadingIcon != null) {
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Medium
+                )
+                if (subtitle != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        color = HomeSubtitleGray,
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Light,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             Icon(
-                imageVector = leadingIcon,
+                imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = leadingIconTint,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = TextPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                color = TextSecondary,
-                fontSize = 13.sp
+                tint = Color(0xFF64748B),
+                modifier = Modifier.size(20.dp)
             )
         }
-        Icon(
-            imageVector = Icons.Default.ChevronRight,
-            contentDescription = null,
-            tint = TextMuted,
-            modifier = Modifier.size(20.dp)
-        )
     }
 }
 
+/**
+ * Settings card with a Switch toggle.
+ */
 @Composable
-private fun SettingsToggleRow(
+private fun SettingsCardToggle(
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
+    icon: ImageVector,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+        border = BorderStroke(1.dp, HomeCardBorder),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = TextPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                color = TextSecondary,
-                fontSize = 13.sp
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1E2638)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Medium
+                )
+                if (subtitle != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        color = HomeSubtitleGray,
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Light,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = HomeMainButtonBlue,
+                    uncheckedThumbColor = Color(0xFF94A3B8),
+                    uncheckedTrackColor = Color(0xFF1E2638)
+                )
             )
         }
-        Spacer(modifier = Modifier.width(12.dp))
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = TextPrimary,
-                checkedTrackColor = FolderBodyBlue,
-                uncheckedThumbColor = TextMuted,
-                uncheckedTrackColor = MidnightNavy
-            )
-        )
     }
 }
 
+/**
+ * Settings card with an action button or loading spinner.
+ */
 @Composable
-private fun SettingsActionRow(
+private fun SettingsCardAction(
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     icon: ImageVector,
+    actionIcon: ImageVector,
     isLoading: Boolean,
     onClick: () -> Unit
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+        border = BorderStroke(1.dp, HomeCardBorder),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !isLoading, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = TextPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                color = TextSecondary,
-                fontSize = 13.sp
-            )
-        }
-        if (isLoading) {
-            CircularProgressIndicator(
-                color = FolderTabCream,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(20.dp)
-            )
-        } else {
-            IconButton(onClick = onClick) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1E2638)),
+                contentAlignment = Alignment.Center
+            ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = title,
-                    tint = FolderTabCream,
-                    modifier = Modifier.size(20.dp)
+                    contentDescription = null,
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(22.dp)
                 )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Medium
+                )
+                if (subtitle != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        color = HomeSubtitleGray,
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Light,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = HomeMainButtonBlue,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else {
+                IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = actionIcon,
+                        contentDescription = title,
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Storage breakdown card with pills and usage stats.
+ */
+@Composable
+private fun SettingsStorageBreakdownCard(
+    formattedPhotos: String,
+    formattedThumbnails: String,
+    formattedDatabase: String,
+    formattedTotal: String
+) {
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+        border = BorderStroke(1.dp, HomeCardBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1E2638)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Storage,
+                        contentDescription = null,
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column {
+                    Text(
+                        text = "Storage Usage Breakdown",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Total Fotara Data: $formattedTotal",
+                        color = HomeSubtitleGray,
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Light
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StoragePill(label = "Photos", size = formattedPhotos, modifier = Modifier.weight(1f))
+                StoragePill(label = "Thumbnails", size = formattedThumbnails, modifier = Modifier.weight(1f))
+                StoragePill(label = "Database", size = formattedDatabase, modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun StoragePill(label: String, size: String) {
+private fun StoragePill(label: String, size: String, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
-            .background(MidnightNavy, RoundedCornerShape(8.dp))
-            .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+        modifier = modifier
+            .background(Color(0xFF131925), RoundedCornerShape(10.dp))
+            .border(1.dp, HomeCardBorder, RoundedCornerShape(10.dp))
+            .padding(horizontal = 8.dp, vertical = 8.dp)
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = label, color = TextMuted, fontSize = 11.sp)
-            Text(text = size, color = TagAmber, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = label, color = HomeSubtitleGray, fontSize = 11.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Light)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = size, color = TagAmber, fontSize = 13.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/**
+ * About Fotara card with app version and legal notices.
+ */
+@Composable
+private fun SettingsAboutCard(version: String) {
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+        border = BorderStroke(1.dp, HomeCardBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF1E2638)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Fotara",
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = version,
+                    color = Color(0xFF60A5FA),
+                    fontSize = 13.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Specialized photo organization and on-device OCR for students.",
+                    color = HomeSubtitleGray,
+                    fontSize = 13.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Light,
+                    lineHeight = 17.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Arinara Network • 100% Offline Architecture",
+                    color = Color(0xFF475569),
+                    fontSize = 12.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Light
+                )
+            }
         }
     }
 }
@@ -957,17 +1157,12 @@ private fun StoragePill(label: String, size: String) {
 @Composable
 private fun LicenseItem(name: String, license: String, copyright: String) {
     Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Text(text = name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Text(text = license, color = FolderTabCream, fontSize = 12.sp)
-        Text(text = copyright, color = TextMuted, fontSize = 11.sp)
+        Text(text = name, color = Color.White, fontSize = 14.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
+        Text(text = license, color = Color(0xFF60A5FA), fontSize = 12.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Light)
+        Text(text = copyright, color = HomeSubtitleGray, fontSize = 11.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Light)
         Spacer(modifier = Modifier.height(6.dp))
-        HorizontalDivider(color = MidnightCardOutline.copy(alpha = 0.4f))
+        HorizontalDivider(color = HomeCardBorder)
     }
-}
-
-@Composable
-private fun SettingsDivider() {
-    HorizontalDivider(color = MidnightCardOutline.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
 }
 
 @Composable
@@ -980,12 +1175,13 @@ private fun <T> OptionSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MidnightSurface,
+        containerColor = HomeCardSurface,
         title = {
             Text(
                 text = title,
-                color = TextPrimary,
+                color = Color.White,
                 fontSize = 18.sp,
+                fontFamily = ElmsSans,
                 fontWeight = FontWeight.Bold
             )
         },
@@ -1003,16 +1199,17 @@ private fun <T> OptionSelectionDialog(
                             selected = option == selectedOption,
                             onClick = { onOptionSelected(option) },
                             colors = RadioButtonDefaults.colors(
-                                selectedColor = FolderBodyBlue,
-                                unselectedColor = TextMuted
+                                selectedColor = HomeMainButtonBlue,
+                                unselectedColor = Color(0xFF64748B)
                             )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = label,
-                            color = if (option == selectedOption) TextPrimary else TextSecondary,
+                            color = if (option == selectedOption) Color.White else HomeSubtitleGray,
                             fontSize = 14.sp,
-                            fontWeight = if (option == selectedOption) FontWeight.Bold else FontWeight.Normal
+                            fontFamily = ElmsSans,
+                            fontWeight = if (option == selectedOption) FontWeight.Medium else FontWeight.Light
                         )
                     }
                 }
@@ -1021,7 +1218,7 @@ private fun <T> OptionSelectionDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextSecondary)
+                Text("Cancel", color = HomeSubtitleGray, fontFamily = ElmsSans)
             }
         }
     )

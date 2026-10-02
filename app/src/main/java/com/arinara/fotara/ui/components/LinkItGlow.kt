@@ -43,52 +43,55 @@ fun computeFolderGlowOrientations(
     if (folders.isEmpty() || columns <= 0) return emptyMap()
 
     val resultMap = mutableMapOf<Long, GlowCorner>()
+    val folderIndexMap = folders.mapIndexed { index, folder -> folder.id to index }.toMap()
 
-    for ((index, folder) in folders.withIndex()) {
-        if (folder.linkGroupId == null) continue
+    for (folder in folders) {
+        val lgId = folder.linkGroupId ?: continue
+        // Find partner in same link group
+        val partner = folders.firstOrNull { it.id != folder.id && it.linkGroupId == lgId } ?: continue
 
-        val row = index / columns
-        val col = index % columns
+        val indexA = folderIndexMap[folder.id] ?: continue
+        val indexB = folderIndexMap[partner.id] ?: continue
 
-        // Check 8 directions: cardinal first (edges), then diagonal (corners)
-        // Priority 1: neighbor in SAME linkGroupId
-        // Priority 2: any linked neighbor
-        var sameGroupOrientation: GlowCorner? = null
-        var anyLinkedOrientation: GlowCorner? = null
+        val rowA = indexA / columns
+        val colA = indexA % columns
+        val rowB = indexB / columns
+        val colB = indexB % columns
 
-        val directions = listOf(
-            // Cardinal (edges)
-            Triple(-1, 0, GlowCorner.TopEdge),
-            Triple(1, 0, GlowCorner.BottomEdge),
-            Triple(0, -1, GlowCorner.LeftEdge),
-            Triple(0, 1, GlowCorner.RightEdge),
-            // Diagonal (corners)
-            Triple(-1, -1, GlowCorner.TopLeft),
-            Triple(-1, 1, GlowCorner.TopRight),
-            Triple(1, -1, GlowCorner.BottomLeft),
-            Triple(1, 1, GlowCorner.BottomRight)
-        )
+        val dRow = rowB - rowA
+        val dCol = colB - colA
 
-        for ((dRow, dCol, orientation) in directions) {
-            val nRow = row + dRow
-            val nCol = col + dCol
-
-            if (nCol in 0 until columns) {
-                val nIndex = nRow * columns + nCol
-                if (nIndex in folders.indices) {
-                    val neighbor = folders[nIndex]
-                    if (neighbor.linkGroupId != null) {
-                        if (neighbor.linkGroupId == folder.linkGroupId && sameGroupOrientation == null) {
-                            sameGroupOrientation = orientation
-                        } else if (anyLinkedOrientation == null) {
-                            anyLinkedOrientation = orientation
-                        }
-                    }
-                }
-            }
+        // Partner must be actually rendered adjacent (within 1 row and 1 col)
+        if (kotlin.math.abs(dRow) > 1 || kotlin.math.abs(dCol) > 1) {
+            continue
         }
 
-        resultMap[folder.id] = sameGroupOrientation ?: anyLinkedOrientation ?: GlowCorner.BottomLeft
+        val corner = when {
+            // 1. Same row (dRow == 0): A left -> BottomRight, B right -> BottomLeft (IMAGE A)
+            dRow == 0 -> {
+                if (colA < colB) GlowCorner.BottomRight else GlowCorner.BottomLeft
+            }
+            // 2. Across rows: A is right column, B is left column in next row (Lanjut / Wajib case)
+            dRow == 1 && colA == 1 && colB == 0 -> GlowCorner.BottomLeft
+            dRow == -1 && colA == 0 && colB == 1 -> GlowCorner.TopRight
+
+            // 3. Same column vertically adjacent
+            dCol == 0 -> {
+                if (rowA < rowB) {
+                    if (colA == 0) GlowCorner.BottomRight else GlowCorner.BottomLeft
+                } else {
+                    if (colA == 0) GlowCorner.TopRight else GlowCorner.TopLeft
+                }
+            }
+            // 4. Diagonal arrangements: closest corners facing partner
+            dRow == 1 && dCol == 1 -> GlowCorner.BottomRight
+            dRow == -1 && dCol == -1 -> GlowCorner.TopLeft
+            dRow == 1 && dCol == -1 -> GlowCorner.BottomLeft
+            dRow == -1 && dCol == 1 -> GlowCorner.TopRight
+            else -> GlowCorner.BottomLeft
+        }
+
+        resultMap[folder.id] = corner
     }
 
     return resultMap
@@ -96,8 +99,8 @@ fun computeFolderGlowOrientations(
 
 /**
  * Renders an elegant corner glow indicating LinkIt spatial grouping.
- * Combines a soft radial glow bleeding into the card corner with a thin accent stroke
- * following the card's rounded corner arc and fading out along the edges.
+ * Combines a soft radial glow bleeding into the card corner with a thin ~2dp accent stroke
+ * following the card's rounded corner arc and fading out ~55dp along the edges.
  *
  * 100% compatible from API 24 to 36 without relying on blur RenderEffect shaders.
  * Cached in drawWithCache for smooth 60/120fps scrolling at any grid density.
@@ -108,8 +111,8 @@ fun Modifier.linkItCornerGlow(
     corner: GlowCorner = GlowCorner.BottomLeft,
     linkedDescription: String = "Linked item",
     radiusRatio: Float = 0.38f,
-    cornerRadiusDp: Float = 14f,
-    strokeWidthDp: Float = 1.8f
+    cornerRadiusDp: Float = 24f,
+    strokeWidthDp: Float = 2f
 ): Modifier {
     if (!isLinked) return this
 
@@ -118,7 +121,6 @@ fun Modifier.linkItCornerGlow(
             contentDescription = linkedDescription
         }
         .drawWithCache {
-            val radius = size.minDimension * radiusRatio
             val center = when (corner) {
                 GlowCorner.TopLeft -> Offset(0f, 0f)
                 GlowCorner.TopRight -> Offset(size.width, 0f)
@@ -129,19 +131,20 @@ fun Modifier.linkItCornerGlow(
                 GlowCorner.LeftEdge -> Offset(0f, size.height / 2f)
                 GlowCorner.RightEdge -> Offset(size.width, size.height / 2f)
             }
+            val r = minOf(cornerRadiusDp.dp.toPx(), size.minDimension * 0.28f)
+            val strokePx = strokeWidthDp.dp.toPx()
+            val fadeLength = 55.dp.toPx()
+            val radius = r + fadeLength * 0.75f
+
             val glowBrush = Brush.radialGradient(
                 colors = listOf(
-                    glowColor.copy(alpha = 0.38f),
-                    glowColor.copy(alpha = 0.14f),
+                    glowColor.copy(alpha = 0.28f),
+                    glowColor.copy(alpha = 0.08f),
                     Color.Transparent
                 ),
                 center = center,
                 radius = radius
             )
-
-            val r = minOf(cornerRadiusDp.dp.toPx(), size.minDimension * 0.28f)
-            val strokePx = strokeWidthDp.dp.toPx()
-            val fadeLength = r * 1.25f
 
             onDrawWithContent {
                 drawContent()

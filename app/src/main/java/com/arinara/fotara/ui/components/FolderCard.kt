@@ -7,12 +7,11 @@
 package com.arinara.fotara.ui.components
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,20 +22,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,41 +44,48 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.data.model.Folder
-import com.arinara.fotara.theme.FolderBodyBlue
+import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.theme.FolderAccentPalette
 import com.arinara.fotara.theme.FolderTabCream
-import com.arinara.fotara.theme.FolderTextWhite
+import com.arinara.fotara.theme.HomeCardBorder
+import com.arinara.fotara.theme.HomeCardSurface
 
+/**
+ * Modern 1:1 dark folder card matching IMAGE A.
+ * Features a top-left rounded accent tile, top-right options menu,
+ * downward-flowing typography, and facing LinkIt corner stroke glows.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FolderCard(
     folder: Folder,
     onClick: () -> Unit,
+    onMenuClick: () -> Unit = {},
     onRename: (String) -> Unit = {},
     onCardLongClick: () -> Unit = {},
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
-    glowCorner: GlowCorner = GlowCorner.BottomLeft,
+    glowCorner: GlowCorner? = null,
     modifier: Modifier = Modifier
 ) {
     val cornerRadiusDp = 24.dp
-    val tagColor = folder.tagColor.composeColor
+    val accent = remember(folder.colorLabel, folder.id, folder.name) {
+        FolderAccentPalette.fromHexOrDefault(folder.colorLabel, folder.id, folder.name)
+    }
     val haptic = LocalHapticFeedback.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -100,7 +102,6 @@ fun FolderCard(
 
     if (isEditing) {
         BackHandler {
-            // Cancel without saving on back gesture
             editValue = TextFieldValue(folder.name, TextRange(folder.name.length))
             isEditing = false
         }
@@ -112,151 +113,82 @@ fun FolderCard(
     }
 
     val borderModifier = if (isSelected) {
-        Modifier.border(2.5.dp, FolderTabCream, RoundedCornerShape(cornerRadiusDp))
+        Modifier.border(2.5.dp, Color(0xFF2563EB), RoundedCornerShape(cornerRadiusDp))
     } else {
-        Modifier
+        Modifier.border(1.dp, HomeCardBorder, RoundedCornerShape(cornerRadiusDp))
     }
 
     Box(
         modifier = modifier
-            .aspectRatio(0.82f)
+            .aspectRatio(1f)
             .then(borderModifier)
             .clip(RoundedCornerShape(cornerRadiusDp))
+            .background(HomeCardSurface)
             .linkItCornerGlow(
-                isLinked = folder.linkGroupId != null,
-                corner = glowCorner,
+                isLinked = glowCorner != null,
+                glowColor = accent.glowColor,
+                corner = glowCorner ?: GlowCorner.BottomLeft,
                 linkedDescription = "Linked folder ${folder.name}",
-                cornerRadiusDp = cornerRadiusDp.value
+                cornerRadiusDp = cornerRadiusDp.value,
+                strokeWidthDp = 2f
             )
             .combinedClickable(
                 enabled = !isEditing,
                 onClick = onClick,
                 onLongClick = {
-                    if (!isSelectionMode) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onCardLongClick()
-                    }
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onCardLongClick()
                 }
             )
     ) {
-        // Custom background: Cream tab top + Royal Blue body with bezier curve transition
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val r = cornerRadiusDp.toPx()
-
-            // 1. Draw overall ivory/cream card base
-            drawRoundRect(
-                color = FolderTabCream,
-                size = size,
-                cornerRadius = CornerRadius(r, r)
-            )
-
-            // 2. Draw royal blue main body with curved top transition
-            val topH = h * 0.18f
-            val shoulderH = h * 0.28f
-            val curveStart = w * 0.72f
-
-            val bluePath = Path().apply {
-                moveTo(0f, topH)
-                lineTo(curveStart, topH)
-                // Smooth cubic bezier curve creating the folder tab shoulder
-                cubicTo(
-                    x1 = curveStart + (w - curveStart) * 0.4f,
-                    y1 = topH,
-                    x2 = curveStart + (w - curveStart) * 0.4f,
-                    y2 = shoulderH,
-                    x3 = w,
-                    y3 = shoulderH
-                )
-                // Down to bottom right corner
-                lineTo(w, h - r)
-                arcTo(
-                    rect = Rect(w - 2 * r, h - 2 * r, w, h),
-                    startAngleDegrees = 0f,
-                    sweepAngleDegrees = 90f,
-                    forceMoveTo = false
-                )
-                // Across to bottom left corner
-                lineTo(r, h)
-                arcTo(
-                    rect = Rect(0f, h - 2 * r, 2 * r, h),
-                    startAngleDegrees = 90f,
-                    sweepAngleDegrees = 90f,
-                    forceMoveTo = false
-                )
-                close()
-            }
-            drawPath(path = bluePath, color = FolderBodyBlue)
-        }
-
-        // Folder card contents
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(18.dp)
         ) {
-            // Top Bar: Selection indicator, Pin indicator, and Top-Right Color Indicator
+            // Top Row: Accent icon tile (left) and 3-dots menu button (right)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                if (isSelectionMode) {
-                    Surface(
-                        shape = CircleShape,
-                        color = if (isSelected) FolderBodyBlue else Color.White.copy(alpha = 0.85f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) FolderTabCream else Color.LightGray),
+                // ~42dp icon tile with 12dp radius filled with muted accent color
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accent.tileFill),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Folder,
+                        contentDescription = null,
+                        tint = accent.iconTint,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                // 3-dots overflow button with at least 48dp touch target
+                IconButton(
+                    onClick = onMenuClick,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Folder options",
+                        tint = Color(0xFF94A3B8),
                         modifier = Modifier.size(20.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    tint = FolderTabCream,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                }
-                if (folder.isPinned) {
-                    Icon(
-                        imageVector = Icons.Default.PushPin,
-                        contentDescription = "Pinned folder",
-                        tint = Color(0xFF6B6559),
-                        modifier = Modifier.size(14.dp)
                     )
                 }
-                Spacer(modifier = Modifier.weight(1f))
-                if (folder.isLocked) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Locked folder",
-                        tint = FolderTabCream,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                }
-                Surface(
-                    shape = CircleShape,
-                    color = tagColor,
-                    modifier = Modifier.size(10.dp)
-                ) {}
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Lower Body: Subject Name (Static vs Inline Editable on text-only long-press)
+            // Text section: Title and note count flowing downward
             if (isEditing) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
-                        .border(1.dp, FolderTabCream, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     BasicTextField(
                         value = editValue,
@@ -265,10 +197,10 @@ fun FolderCard(
                             .weight(1f)
                             .focusRequester(focusRequester),
                         textStyle = TextStyle(
-                            color = FolderTextWhite,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontStyle = FontStyle.Italic
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = ElmsSans
                         ),
                         cursorBrush = SolidColor(FolderTabCream),
                         singleLine = true,
@@ -298,7 +230,7 @@ fun FolderCard(
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Confirm Rename",
-                            tint = FolderTabCream,
+                            tint = Color(0xFF34D399),
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -306,56 +238,27 @@ fun FolderCard(
             } else {
                 Text(
                     text = folder.name,
-                    color = FolderTextWhite,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontStyle = FontStyle.Italic,
-                    letterSpacing = (-0.3).sp,
+                    color = Color.White,
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = ElmsSans,
+                    letterSpacing = (-0.2).sp,
                     maxLines = 2,
-                    modifier = Modifier.combinedClickable(
-                        onClick = onClick,
-                        onLongClick = {
-                            if (!isSelectionMode && !folder.isLocked) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                editValue = TextFieldValue(
-                                    text = folder.name,
-                                    selection = TextRange(0, folder.name.length)
-                                )
-                                isEditing = true
-                            }
-                        }
-                    )
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 26.sp
                 )
-            }
 
-            if (folder.isLocked) {
                 Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = FolderTabCream.copy(alpha = 0.85f),
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Locked",
-                        color = FolderTabCream.copy(alpha = 0.85f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            } else if (folder.photoCount > 0) {
-                Spacer(modifier = Modifier.height(4.dp))
+
+                val noteText = if (folder.photoCount == 1) "1 note" else "${folder.photoCount} notes"
                 Text(
-                    text = "${folder.photoCount} note${if (folder.photoCount > 1) "s" else ""}",
-                    color = FolderTextWhite.copy(alpha = 0.7f),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Normal
+                    text = noteText,
+                    color = Color(0xFF6B7280),
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.Light,
+                    fontFamily = ElmsSans
                 )
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }

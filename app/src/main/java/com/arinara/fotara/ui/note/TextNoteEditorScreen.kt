@@ -422,7 +422,10 @@ fun TextNoteEditorScreen(
                     primaryTextColor = TabCream,
                     accentColor = AccentGold,
                     cardBg = CardBg,
-                    cardBorder = ToolbarBorder
+                    cardBorder = ToolbarBorder,
+                    onToggleChecklistLine = { lineIndex ->
+                        state.executeAction { EditorActions.toggleChecklistAtLine(it, lineIndex) }
+                    }
                 )
                 Spacer(modifier = Modifier.height(32.dp))
             }
@@ -495,8 +498,8 @@ fun TextNoteEditorScreen(
                         val oldBody = state.bodyValue
                         // Intercept Enter key for list continuation
                         if (newBody.text.length == oldBody.text.length + 1 &&
-                            oldBody.selection.min in oldBody.text.indices &&
-                            newBody.text[oldBody.selection.min] == '\n'
+                            oldBody.selection.min in 0..oldBody.text.length &&
+                            newBody.text.getOrNull(oldBody.selection.min) == '\n'
                         ) {
                             val handled = EditorActions.handleEnterKey(oldBody)
                             if (handled != null) {
@@ -523,7 +526,7 @@ fun TextNoteEditorScreen(
                         color = TabCream,
                         fontSize = 15.5.sp,
                         lineHeight = 23.sp,
-                        fontFamily = FontFamily.Default
+                        fontFamily = com.arinara.fotara.theme.ElmsSans
                     ),
                     cursorBrush = SolidColor(AccentGold),
                     keyboardOptions = KeyboardOptions(

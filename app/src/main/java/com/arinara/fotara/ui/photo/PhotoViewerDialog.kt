@@ -637,7 +637,6 @@ fun PhotoViewerDialog(
                                 text = "No study notes added yet.",
                                 color = TextMuted,
                                 fontSize = 12.sp,
-                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)

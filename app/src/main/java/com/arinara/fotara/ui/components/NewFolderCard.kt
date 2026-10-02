@@ -113,7 +113,6 @@ fun NewFolderCard(
                 color = NewFolderText,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                fontStyle = FontStyle.Italic,
                 letterSpacing = (-0.3).sp
             )
 

@@ -174,7 +174,9 @@ import com.arinara.fotara.util.ScheduleAlertType
 import com.arinara.fotara.util.ScheduleNoteType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.TextNote
+import com.arinara.fotara.ui.canvas.CanvasNoteQuickActionSheet
 import com.arinara.fotara.ui.note.TextNoteQuickActionSheet
 import com.arinara.fotara.ui.components.TextNoteShareDialog
 import com.arinara.fotara.ui.document.DocxViewerScreen
@@ -280,6 +282,10 @@ fun FolderDetailScreen(
     var textNoteToDelete by remember { mutableStateOf<TextNote?>(null) }
     var textNoteToShare by remember { mutableStateOf<TextNote?>(null) }
     var textNoteToMove by remember { mutableStateOf<TextNote?>(null) }
+    var canvasNoteActionTarget by remember { mutableStateOf<FolderGridItem.CanvasNoteItem?>(null) }
+    var canvasNoteToRename by remember { mutableStateOf<CanvasNote?>(null) }
+    var canvasNoteToMove by remember { mutableStateOf<CanvasNote?>(null) }
+    var canvasNoteToDelete by remember { mutableStateOf<CanvasNote?>(null) }
     var documentActionTarget by remember { mutableStateOf<FolderGridItem.Document?>(null) }
     var documentToRename by remember { mutableStateOf<DocumentNote?>(null) }
     var documentToColor by remember { mutableStateOf<DocumentNote?>(null) }
@@ -529,48 +535,66 @@ fun FolderDetailScreen(
                         }
                     },
                     actions = {
-                        // Right Action 1: Add Photo Button [+]
-                        IconButton(
-                            onClick = { showAddPhotoSheet = true },
-                            modifier = Modifier
-                                .padding(end = 4.dp)
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(FolderBodyBlue)
+                        Row(
+                            modifier = Modifier.padding(end = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add Photo",
-                                tint = FolderTabCream,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // Right Action 2: Highlighted Overflow Menu [(⋮)]
-                        Box(modifier = Modifier.padding(end = 12.dp)) {
-                            IconButton(
-                                onClick = { showOverflowMenu = true },
+                            // Right Action 1: Add Note Button [+]
+                            Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
-                                    .background(DockSlatePill.copy(alpha = 0.40f))
+                                    .clickable { showAddPhotoSheet = true },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "Folder Utilities Menu",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(FolderBodyBlue),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add Note",
+                                        tint = FolderTabCream,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
 
-                            // Overflow Dropdown Menu
-                            DropdownMenu(
-                                expanded = showOverflowMenu,
-                                onDismissRequest = { showOverflowMenu = false },
+                            // Right Action 2: Highlighted Overflow Menu [(⋮)]
+                            Box(
                                 modifier = Modifier
-                                    .background(MidnightSurface)
-                                    .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .clickable { showOverflowMenu = true },
+                                contentAlignment = Alignment.Center
                             ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(DockSlatePill.copy(alpha = 0.40f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "Folder Utilities Menu",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                // Overflow Dropdown Menu
+                                DropdownMenu(
+                                    expanded = showOverflowMenu,
+                                    onDismissRequest = { showOverflowMenu = false },
+                                    modifier = Modifier
+                                        .background(MidnightSurface)
+                                        .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
+                                ) {
                                 DropdownMenuItem(
                                     text = { Text("Sort: Newest Uploads", color = TextPrimary) },
                                     leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, null, tint = FolderTabCream) },
@@ -646,7 +670,8 @@ fun FolderDetailScreen(
                                 )
                             }
                         }
-                    },
+                    }
+                },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
                 )
             }
@@ -1219,20 +1244,17 @@ fun FolderDetailScreen(
                                 DetailCanvasCard(
                                     canvasItem = gridItem,
                                     isBatchMode = uiState.isBatchSelectMode,
-                                    isSelected = false,
+                                    isSelected = uiState.selectedCanvasNoteIds.contains(canvasNote.id),
                                     onCardClick = {
-                                        onOpenCanvasNote?.invoke(canvasNote.id, canvasNote.folderId, canvasNote.subfolderId)
+                                        if (uiState.isBatchSelectMode) {
+                                            viewModel.toggleCanvasNoteSelection(canvasNote.id)
+                                        } else {
+                                            onOpenCanvasNote?.invoke(canvasNote.id, canvasNote.folderId, canvasNote.subfolderId)
+                                        }
                                     },
                                     onCardLongClick = {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        itemToSchedule = Triple(ScheduleNoteType.CANVAS_NOTE, canvasNote.id, canvasNote.title)
-                                        itemScheduledAt = canvasNote.scheduledAt
-                                        itemScheduleTitle = canvasNote.scheduleTitle
-                                        itemAlertType = try {
-                                            ScheduleAlertType.valueOf(canvasNote.alertType ?: "NOTIFICATION")
-                                        } catch (_: Exception) {
-                                            ScheduleAlertType.NOTIFICATION
-                                        }
+                                        canvasNoteActionTarget = gridItem
                                     }
                                 )
                             }
@@ -3248,6 +3270,160 @@ fun FolderDetailScreen(
                 textNoteToMove = null
             },
             onDismiss = { textNoteToMove = null }
+        )
+    }
+
+    // Canvas Note Quick Action Sheet (v1.5.2 Item 12)
+    canvasNoteActionTarget?.let { target ->
+        val canvasNote = target.canvasNote
+        CanvasNoteQuickActionSheet(
+            note = canvasNote,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            onDismiss = { canvasNoteActionTarget = null },
+            onRename = {
+                canvasNoteActionTarget = null
+                canvasNoteToRename = canvasNote
+            },
+            onMove = {
+                canvasNoteActionTarget = null
+                canvasNoteToMove = canvasNote
+            },
+            onColorSelect = { color ->
+                viewModel.updateCanvasNoteTagColor(canvasNote.id, color)
+                canvasNoteActionTarget = null
+            },
+            onSetDeadline = {
+                canvasNoteActionTarget = null
+                if (canvasNote.linkedDeadline != null) {
+                    viewModel.setCanvasNoteDeadline(canvasNote.id, null)
+                } else {
+                    val tomorrow = System.currentTimeMillis() + 24 * 60 * 60 * 1000L
+                    viewModel.setCanvasNoteDeadline(canvasNote.id, tomorrow)
+                }
+            },
+            onSchedule = {
+                canvasNoteActionTarget = null
+                itemToSchedule = Triple(ScheduleNoteType.CANVAS_NOTE, canvasNote.id, canvasNote.title)
+                itemScheduledAt = canvasNote.scheduledAt
+                itemScheduleTitle = canvasNote.scheduleTitle
+                itemAlertType = try {
+                    ScheduleAlertType.valueOf(canvasNote.alertType ?: "NOTIFICATION")
+                } catch (_: Exception) {
+                    ScheduleAlertType.NOTIFICATION
+                }
+            },
+            onSelect = {
+                viewModel.startBatchSelectionWithCanvasNote(canvasNote.id)
+                canvasNoteActionTarget = null
+            },
+            onShare = {
+                canvasNoteActionTarget = null
+                val thumbFile = canvasNote.thumbnailPath?.let { File(it) }
+                if (thumbFile != null && thumbFile.exists()) {
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        thumbFile
+                    )
+                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Canvas Note"))
+                } else {
+                    shareTargetItems = listOf(target)
+                    showUnifiedShareDialog = true
+                }
+            },
+            onDelete = {
+                canvasNoteActionTarget = null
+                canvasNoteToDelete = canvasNote
+            }
+        )
+    }
+
+    // Dialog: Rename Canvas Note
+    canvasNoteToRename?.let { note ->
+        var newTitle by remember(note) { mutableStateOf(note.title) }
+        AlertDialog(
+            onDismissRequest = { canvasNoteToRename = null },
+            containerColor = MidnightSurface,
+            shape = RoundedCornerShape(18.dp),
+            title = { Text("Rename Canvas Note", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = newTitle,
+                    onValueChange = { newTitle = it },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = FolderBodyBlue,
+                        unfocusedBorderColor = MidnightCardOutline
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.renameCanvasNote(note.id, newTitle)
+                        canvasNoteToRename = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = FolderBodyBlue)
+                ) {
+                    Text("Save", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { canvasNoteToRename = null }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    // Dialog: Delete Canvas Note Confirmation
+    canvasNoteToDelete?.let { note ->
+        AlertDialog(
+            onDismissRequest = { canvasNoteToDelete = null },
+            containerColor = MidnightSurface,
+            shape = RoundedCornerShape(18.dp),
+            title = { Text("Move Note to Trash?", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+            text = { Text("Move \"${note.title}\" to Trash? It can be restored within 30 days.", color = TextSecondary, fontSize = 14.sp) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteCanvasNote(note.id)
+                        canvasNoteToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = TagCrimson)
+                ) {
+                    Text("Move to Trash", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { canvasNoteToDelete = null }) {
+                    Text("Cancel", color = FolderTabCream)
+                }
+            }
+        )
+    }
+
+    // Dialog: Move Canvas Note
+    canvasNoteToMove?.let { note ->
+        DestinationPickerDialog(
+            title = "Move Canvas Note \"${note.title}\" to...",
+            recentDestinations = uiState.recentDestinations.filter { it.type != DestinationType.GROUP },
+            availableFolders = uiState.availableFolders,
+            currentFolderId = uiState.folder?.id,
+            currentSubfolders = uiState.subfolders,
+            onSelectDestination = { targetFolderId, targetSubId ->
+                viewModel.moveCanvasNote(note.id, targetFolderId, targetSubId)
+                canvasNoteToMove = null
+            },
+            onDismiss = { canvasNoteToMove = null }
         )
     }
 

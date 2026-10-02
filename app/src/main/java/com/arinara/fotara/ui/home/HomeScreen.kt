@@ -6,33 +6,39 @@
 
 package com.arinara.fotara.ui.home
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import com.arinara.fotara.data.model.CanvasNote
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -48,6 +54,7 @@ import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -63,6 +70,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -79,45 +88,66 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.arinara.fotara.R
+import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.online.FeedbackManager
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderBodyBlue
-import com.arinara.fotara.theme.FolderTabCream
-import com.arinara.fotara.theme.MidnightCardOutline
-import com.arinara.fotara.theme.MidnightNavy
-import com.arinara.fotara.theme.MidnightSurface
+import com.arinara.fotara.theme.HomeCardBorder
+import com.arinara.fotara.theme.HomeCardSurface
+import com.arinara.fotara.theme.HomeHeaderButtonBg
+import com.arinara.fotara.theme.HomeMainButtonBlue
+import com.arinara.fotara.theme.HomeNearBlack
+import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagCrimson
-import com.arinara.fotara.theme.TextMuted
-import com.arinara.fotara.theme.TextPrimary
-import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.ui.components.ActiveSearchBar
 import com.arinara.fotara.ui.components.BatchRenameDialog
 import com.arinara.fotara.ui.components.FeedbackDialog
 import com.arinara.fotara.ui.components.FloatingDock
 import com.arinara.fotara.ui.components.FolderCard
 import com.arinara.fotara.ui.components.FolderUnlockDialog
-import com.arinara.fotara.ui.components.GlowCorner
-import com.arinara.fotara.ui.components.NewFolderCard
+import com.arinara.fotara.ui.components.HomeBottomNavBar
+import com.arinara.fotara.ui.components.HomeNavTab
+import com.arinara.fotara.ui.components.HomeSegment
+import com.arinara.fotara.ui.components.HomeSegmentedTabBar
 import com.arinara.fotara.ui.components.NewFolderDialog
 import com.arinara.fotara.ui.components.ResetFolderPinDialog
 import com.arinara.fotara.ui.components.SetFolderLockDialog
 import com.arinara.fotara.ui.components.computeFolderGlowOrientations
+import com.arinara.fotara.ui.settings.SettingsScreen
+import com.arinara.fotara.ui.settings.SettingsViewModel
 
+/**
+ * Fotara v1.5.2 Home Screen matching IMAGE A specification:
+ * - Near-black background (#0A0D14), edge-to-edge
+ * - Upright "Fotara" title with "Your notes, organized" subtitle
+ * - Header search & overflow circular buttons
+ * - Segmented tab bar: All, Favorit, Arsip
+ * - 2-column dark folder grid with facing LinkIt corner stroke glow
+ * - Non-overlapping bottom stack: FloatingDock + HomeBottomNavBar
+ * - Integrated Settings and blank Notes tabs with seamless bottom nav
+ */
 @Suppress("DEPRECATION")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
+    settingsViewModel: SettingsViewModel? = null,
     onFolderClick: (Folder) -> Unit,
     onNavigateToPhoto: (folderId: Long, subfolderId: Long?, photoId: Long) -> Unit = { _, _, _ -> },
     onNavigateToGroup: (folderId: Long, subfolderId: Long?, groupId: Long) -> Unit = { _, _, _ -> },
@@ -136,7 +166,12 @@ fun HomeScreen(
     val context = LocalContext.current
     val keyguardManager = remember { context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager }
 
+    var selectedSegment by remember { mutableStateOf(HomeSegment.ALL) }
+    var selectedNavTab by remember { mutableStateOf(HomeNavTab.HOME) }
+
     var activeContextFolder by remember { mutableStateOf<Folder?>(null) }
+    var folderToRename by remember { mutableStateOf<Folder?>(null) }
+    var renameInputText by remember { mutableStateOf("") }
     var showHomeOverflowMenu by remember { mutableStateOf(false) }
     var showBatchRenameDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
@@ -209,281 +244,471 @@ fun HomeScreen(
         viewModel.exitMultiSelectMode()
     }
 
+    BackHandler(enabled = !uiState.isMultiSelectMode && selectedNavTab != HomeNavTab.HOME) {
+        selectedNavTab = HomeNavTab.HOME
+    }
+
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val folderColumns = when {
+        screenWidthDp >= 840 -> 5
+        screenWidthDp >= 600 -> 4
+        else -> 2
+    }
+
+    val folderGlowOrientations = remember(uiState.folders, folderColumns) {
+        computeFolderGlowOrientations(uiState.folders, folderColumns)
+    }
+
+    val isImeVisible = WindowInsets.isImeVisible
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MidnightNavy,
+        containerColor = HomeNearBlack,
         topBar = {
             if (uiState.isMultiSelectMode) {
                 TopAppBar(
                     title = {
                         Text(
                             text = "${uiState.selectedFolderIds.size} Selected",
-                            color = TextPrimary,
+                            color = Color.White,
                             fontSize = 18.sp,
+                            fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = { viewModel.exitMultiSelectMode() }) {
+                        IconButton(
+                            onClick = { viewModel.exitMultiSelectMode() },
+                            modifier = Modifier.size(48.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Exit Multi-Select",
-                                tint = FolderTabCream
+                                tint = Color.White
                             )
                         }
                     },
                     actions = {
                         if (uiState.selectedFolderIds.size in 2..4) {
-                            IconButton(onClick = { viewModel.linkSelectedFolders() }) {
+                            IconButton(
+                                onClick = { viewModel.linkSelectedFolders() },
+                                modifier = Modifier.size(48.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Link,
                                     contentDescription = "Link Folders",
-                                    tint = FolderTabCream
+                                    tint = Color.White
                                 )
                             }
                         }
                         if (uiState.selectedFolderIds.isNotEmpty()) {
-                            IconButton(onClick = { showBatchRenameDialog = true }) {
+                            IconButton(
+                                onClick = { showBatchRenameDialog = true },
+                                modifier = Modifier.size(48.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Rename Selected Folders",
-                                    tint = FolderTabCream
+                                    tint = Color.White
                                 )
                             }
                         }
-                        IconButton(onClick = { viewModel.selectAllFolders() }) {
+                        IconButton(
+                            onClick = { viewModel.selectAllFolders() },
+                            modifier = Modifier.size(48.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.SelectAll,
                                 contentDescription = "Select All",
-                                tint = FolderTabCream
+                                tint = Color.White
                             )
                         }
                         IconButton(
                             onClick = { viewModel.requestBulkDelete() },
-                            enabled = uiState.selectedFolderIds.isNotEmpty()
+                            enabled = uiState.selectedFolderIds.isNotEmpty(),
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Delete Selected Folders",
-                                tint = if (uiState.selectedFolderIds.isNotEmpty()) TagCrimson else TextMuted
+                                tint = if (uiState.selectedFolderIds.isNotEmpty()) TagCrimson else Color(0xFF64748B)
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightSurface)
-                )
-            } else {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "Fotara",
-                            color = TextPrimary,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    actions = {
-                        IconButton(onClick = { viewModel.enterMultiSelectMode(null) }) {
-                            Icon(
-                                imageVector = Icons.Default.SelectAll,
-                                contentDescription = "Select Folders",
-                                tint = FolderTabCream
-                            )
-                        }
-                        Box {
-                            IconButton(onClick = { showHomeOverflowMenu = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "Options",
-                                    tint = FolderTabCream
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showHomeOverflowMenu,
-                                onDismissRequest = { showHomeOverflowMenu = false },
-                                modifier = Modifier
-                                    .background(MidnightSurface)
-                                    .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("What's New", color = TextPrimary) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.NewReleases,
-                                            contentDescription = null,
-                                            tint = TagAmber
-                                        )
-                                    },
-                                    onClick = {
-                                        showHomeOverflowMenu = false
-                                        onOpenWhatsNew()
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Check for Updates", color = TextPrimary) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.SystemUpdate,
-                                            contentDescription = null,
-                                            tint = FolderTabCream
-                                        )
-                                    },
-                                    onClick = {
-                                        showHomeOverflowMenu = false
-                                        onOpenUpdates()
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Send Feedback", color = TextPrimary) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Feedback,
-                                            contentDescription = null,
-                                            tint = FolderTabCream
-                                        )
-                                    },
-                                    onClick = {
-                                        showHomeOverflowMenu = false
-                                        showFeedbackDialog = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Support Fotara", color = TextPrimary) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.VolunteerActivism,
-                                            contentDescription = null,
-                                            tint = TagCrimson
-                                        )
-                                    },
-                                    onClick = {
-                                        showHomeOverflowMenu = false
-                                        onOpenSupport()
-                                    }
-                                )
-                                HorizontalDivider(color = MidnightCardOutline.copy(alpha = 0.6f))
-                                DropdownMenuItem(
-                                    text = { Text("Settings", color = TextPrimary) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Settings,
-                                            contentDescription = null,
-                                            tint = FolderTabCream
-                                        )
-                                    },
-                                    onClick = {
-                                        showHomeOverflowMenu = false
-                                        onOpenSettings()
-                                    }
-                                )
-                                HorizontalDivider(color = MidnightCardOutline.copy(alpha = 0.6f))
-                                DropdownMenuItem(
-                                    text = { Text("Trash", color = TextPrimary) },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = null,
-                                            tint = FolderTabCream
-                                        )
-                                    },
-                                    onClick = {
-                                        showHomeOverflowMenu = false
-                                        onOpenTrash()
-                                    }
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
-                )
-            }
-        },
-        bottomBar = {
-            if (!uiState.isMultiSelectMode) {
-                FloatingDock(
-                    onSearchClick = { viewModel.activateSearch() },
-                    onCameraClick = {
-                        val target = uiState.folders.firstOrNull { !it.isLocked } ?: uiState.folders.firstOrNull()
-                        if (target != null) {
-                            onFolderClick(target)
-                        } else {
-                            viewModel.openNewFolderDialog()
-                        }
-                    }
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = HomeCardSurface)
                 )
             }
         },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
-        val configuration = LocalConfiguration.current
-        val screenWidthDp = configuration.screenWidthDp
-        val folderColumns = when {
-            screenWidthDp >= 840 -> 5
-            screenWidthDp >= 600 -> 4
-            else -> 2
-        }
-
-        val folderGlowOrientations = remember(uiState.folders, folderColumns) {
-            computeFolderGlowOrientations(uiState.folders, folderColumns)
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MidnightNavy)
+                .background(HomeNearBlack)
                 .padding(innerPadding)
         ) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(folderColumns),
-                contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 20.dp, bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Header section: Brand & Active deadline summary (hidden during multi-select for clarity)
-                if (!uiState.isMultiSelectMode) {
-                    item(span = { GridItemSpan(folderColumns) }) {
-                        HomeHeader(
-                            dueCount = uiState.photosDueTomorrow.size,
-                            addedTodayCount = uiState.photosAddedToday.size
+            // Tab Contents
+            when (selectedNavTab) {
+                HomeNavTab.SETTINGS -> {
+                    if (settingsViewModel != null) {
+                        SettingsScreen(
+                            viewModel = settingsViewModel,
+                            onBackClick = { selectedNavTab = HomeNavTab.HOME },
+                            onNavigateToTrash = onOpenTrash,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 80.dp)
                         )
+                    } else {
+                        // Fallback if settingsViewModel was not passed
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(HomeNearBlack)
+                                .padding(18.dp)
+                        ) {
+                            Text(
+                                text = "Settings",
+                                color = Color.White,
+                                fontSize = 38.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
 
-                // 2-Column Folder cards matching UI mockup with inline long-press rename & card context menu
-                items(uiState.folders, key = { it.id }) { folder ->
-                    FolderCard(
-                        folder = folder,
-                        isSelectionMode = uiState.isMultiSelectMode,
-                        isSelected = uiState.selectedFolderIds.contains(folder.id),
-                        glowCorner = folderGlowOrientations[folder.id] ?: GlowCorner.BottomLeft,
-                        onClick = {
-                            if (uiState.isMultiSelectMode) {
-                                viewModel.toggleFolderSelection(folder.id)
-                            } else if (folder.isLocked) {
-                                folderToUnlock = folder
-                            } else {
-                                onFolderClick(folder)
-                            }
-                        },
-                        onRename = { newName ->
-                            viewModel.renameFolder(folder.id, newName)
-                        },
-                        onCardLongClick = {
-                            activeContextFolder = folder
-                        }
+                HomeNavTab.NOTES -> {
+                    // Blank page as specified in requirements
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(HomeNearBlack)
                     )
                 }
 
-                // "+New" Folder Card (hidden during multi-select mode)
-                if (!uiState.isMultiSelectMode) {
-                    item {
-                        NewFolderCard(
-                            onClick = { viewModel.openNewFolderDialog() }
-                        )
+                HomeNavTab.HOME -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                    ) {
+                        // Header section: Brand & Top-right circular buttons (hidden during multi-select)
+                        if (!uiState.isMultiSelectMode) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Title & Tagline
+                                Column {
+                                    Text(
+                                        text = "Fotara",
+                                        color = Color.White,
+                                        fontSize = 38.sp,
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Medium,
+                                        letterSpacing = (-0.5).sp
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = stringResource(R.string.home_tagline),
+                                        color = HomeSubtitleGray,
+                                        fontSize = 15.sp,
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Light
+                                    )
+                                }
+
+                                // Dual 40dp round buttons with 48dp minimum touch targets
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // 1: Magnifier search trigger
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clickable { viewModel.activateSearch() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(HomeHeaderButtonBg),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Search,
+                                                contentDescription = "Search",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+
+                                    // 2: Vertical dots menu trigger
+                                    Box(
+                                        modifier = Modifier.size(48.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(HomeHeaderButtonBg)
+                                                .clickable { showHomeOverflowMenu = true },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.MoreVert,
+                                                contentDescription = "Options",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        DropdownMenu(
+                                            expanded = showHomeOverflowMenu,
+                                            onDismissRequest = { showHomeOverflowMenu = false },
+                                            modifier = Modifier
+                                                .background(HomeCardSurface)
+                                                .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Select Folders", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.SelectAll,
+                                                        contentDescription = null,
+                                                        tint = Color(0xFF60A5FA)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showHomeOverflowMenu = false
+                                                    viewModel.enterMultiSelectMode(null)
+                                                }
+                                            )
+                                            HorizontalDivider(color = HomeCardBorder)
+                                            DropdownMenuItem(
+                                                text = { Text("What's New", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.NewReleases,
+                                                        contentDescription = null,
+                                                        tint = TagAmber
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showHomeOverflowMenu = false
+                                                    onOpenWhatsNew()
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Check for Updates", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.SystemUpdate,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showHomeOverflowMenu = false
+                                                    onOpenUpdates()
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Send Feedback", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Feedback,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showHomeOverflowMenu = false
+                                                    showFeedbackDialog = true
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Support Fotara", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.VolunteerActivism,
+                                                        contentDescription = null,
+                                                        tint = TagCrimson
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showHomeOverflowMenu = false
+                                                    onOpenSupport()
+                                                }
+                                            )
+                                            HorizontalDivider(color = HomeCardBorder)
+                                            DropdownMenuItem(
+                                                text = { Text("Settings", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Settings,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showHomeOverflowMenu = false
+                                                    selectedNavTab = HomeNavTab.SETTINGS
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = null,
+                                                        tint = TagCrimson
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showHomeOverflowMenu = false
+                                                    onOpenTrash()
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 48dp Segmented Tab Bar: All, Favorit, Arsip
+                            HomeSegmentedTabBar(
+                                selectedSegment = selectedSegment,
+                                onSegmentSelected = { selectedSegment = it }
+                            )
+
+                            // Due Tomorrow Deadline Summary (if active)
+                            if (uiState.photosDueTomorrow.isNotEmpty()) {
+                                HomeHeader(
+                                    dueCount = uiState.photosDueTomorrow.size,
+                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+
+                        // Content Area
+                        when (selectedSegment) {
+                            HomeSegment.ALL -> {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(folderColumns),
+                                    contentPadding = PaddingValues(
+                                        start = 18.dp,
+                                        end = 18.dp,
+                                        top = 13.dp,
+                                        bottom = 190.dp
+                                    ),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(uiState.folders, key = { it.id }) { folder ->
+                                        FolderCard(
+                                            folder = folder,
+                                            isSelectionMode = uiState.isMultiSelectMode,
+                                            isSelected = uiState.selectedFolderIds.contains(folder.id),
+                                            glowCorner = folderGlowOrientations[folder.id],
+                                            onClick = {
+                                                if (uiState.isMultiSelectMode) {
+                                                    viewModel.toggleFolderSelection(folder.id)
+                                                } else if (folder.isLocked) {
+                                                    folderToUnlock = folder
+                                                } else {
+                                                    onFolderClick(folder)
+                                                }
+                                            },
+                                            onMenuClick = {
+                                                activeContextFolder = folder
+                                            },
+                                            onRename = { newName ->
+                                                viewModel.renameFolder(folder.id, newName)
+                                            },
+                                            onCardLongClick = {
+                                                if (uiState.isMultiSelectMode) {
+                                                    viewModel.toggleFolderSelection(folder.id)
+                                                } else {
+                                                    activeContextFolder = folder
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            HomeSegment.FAVORIT, HomeSegment.ARSIP -> {
+                                // Explicit specification: leave content area blank
+                                Box(modifier = Modifier.fillMaxSize())
+                            }
+                        }
                     }
                 }
             }
 
+            // Bottom Stack: Floating Dock & Bottom Navigation Bar
+            // Always above content, protected with gradient scrim to avoid collisions
+            if (!uiState.isMultiSelectMode) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    HomeNearBlack.copy(alpha = 0.85f),
+                                    HomeNearBlack,
+                                    HomeNearBlack
+                                )
+                            )
+                        )
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .imePadding()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Search bar + '+' action button row (only visible on HOME tab)
+                        if (selectedNavTab == HomeNavTab.HOME) {
+                            FloatingDock(
+                                onSearchClick = { viewModel.activateSearch() },
+                                onCameraClick = {
+                                    val target = uiState.folders.firstOrNull { !it.isLocked } ?: uiState.folders.firstOrNull()
+                                    if (target != null) {
+                                        onFolderClick(target)
+                                    } else {
+                                        viewModel.openNewFolderDialog()
+                                    }
+                                },
+                                onNewFolderClick = { viewModel.openNewFolderDialog() }
+                            )
+                        }
+
+                        // Floating bottom navigation bar (hidden while keyboard is open)
+                        if (!isImeVisible) {
+                            HomeBottomNavBar(
+                                selectedTab = selectedNavTab,
+                                onTabSelected = { selectedNavTab = it }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // New Folder Dialog
             if (uiState.showNewFolderDialog) {
                 NewFolderDialog(
                     onDismiss = { viewModel.closeNewFolderDialog() },
@@ -493,17 +718,68 @@ fun HomeScreen(
                 )
             }
 
-            // Card-Level Context Menu (Pin/Unpin, Multi-Select entry)
+            // Single Folder Rename Dialog
+            if (folderToRename != null) {
+                val f = folderToRename!!
+                AlertDialog(
+                    onDismissRequest = { folderToRename = null },
+                    containerColor = HomeCardSurface,
+                    shape = RoundedCornerShape(20.dp),
+                    title = {
+                        Text(
+                            text = "Rename Folder",
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    },
+                    text = {
+                        OutlinedTextField(
+                            value = renameInputText,
+                            onValueChange = { renameInputText = it },
+                            label = { Text("Folder Name", color = HomeSubtitleGray, fontFamily = ElmsSans) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = HomeMainButtonBlue,
+                                unfocusedBorderColor = HomeCardBorder,
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                viewModel.renameFolder(f.id, renameInputText)
+                                folderToRename = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue)
+                        ) {
+                            Text("Save", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { folderToRename = null }) {
+                            Text("Cancel", color = HomeSubtitleGray, fontFamily = ElmsSans)
+                        }
+                    }
+                )
+            }
+
+            // Card-Level Context Menu (Pin/Unpin, Rename, Lock, Link It / Unlink, Select, Delete)
             if (activeContextFolder != null) {
                 val folder = activeContextFolder!!
                 AlertDialog(
                     onDismissRequest = { activeContextFolder = null },
-                    containerColor = MidnightSurface,
-                    shape = RoundedCornerShape(16.dp),
+                    containerColor = HomeCardSurface,
+                    shape = RoundedCornerShape(20.dp),
                     title = {
                         Text(
                             text = folder.name,
-                            color = TextPrimary,
+                            color = Color.White,
+                            fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
@@ -525,19 +801,49 @@ fun HomeScreen(
                                     Icon(
                                         imageVector = Icons.Default.PushPin,
                                         contentDescription = null,
-                                        tint = FolderTabCream,
+                                        tint = Color(0xFF60A5FA),
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(14.dp))
                                     Text(
                                         text = if (folder.isPinned) "Unpin from Top" else "Pin to Top",
-                                        color = TextPrimary,
+                                        color = Color.White,
+                                        fontFamily = ElmsSans,
                                         fontSize = 15.sp
                                     )
                                 }
                             }
 
-                            // Action 2: Select (Enters Multi-Select Mode)
+                            // Action 2: Rename
+                            Surface(
+                                color = Color.Transparent,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        renameInputText = folder.name
+                                        folderToRename = folder
+                                        activeContextFolder = null
+                                    }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = null,
+                                        tint = Color(0xFF60A5FA),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Text(
+                                        text = "Rename Folder",
+                                        color = Color.White,
+                                        fontFamily = ElmsSans,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                            }
+
+                            // Action 3: Select (Enters Multi-Select Mode)
                             Surface(
                                 color = Color.Transparent,
                                 modifier = Modifier
@@ -559,13 +865,14 @@ fun HomeScreen(
                                     Spacer(modifier = Modifier.width(14.dp))
                                     Text(
                                         text = "Select",
-                                        color = TextPrimary,
+                                        color = Color.White,
+                                        fontFamily = ElmsSans,
                                         fontSize = 15.sp
                                     )
                                 }
                             }
 
-                            // Action 3: Lock / Unlock Folder
+                            // Action 4: Lock / Unlock Folder
                             Surface(
                                 color = Color.Transparent,
                                 modifier = Modifier
@@ -586,20 +893,21 @@ fun HomeScreen(
                                     Icon(
                                         imageVector = if (folder.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
                                         contentDescription = null,
-                                        tint = if (folder.isLocked) TagAmber else FolderTabCream,
+                                        tint = if (folder.isLocked) TagAmber else Color(0xFF60A5FA),
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(14.dp))
                                     Text(
                                         text = if (folder.isLocked) "Remove Folder Lock" else "Lock Folder (PIN)",
-                                        color = TextPrimary,
+                                        color = Color.White,
+                                        fontFamily = ElmsSans,
                                         fontSize = 15.sp
                                     )
                                 }
                             }
 
                             if (folder.isLocked) {
-                                // Action 4: Change PIN
+                                // Action 5: Change PIN
                                 Surface(
                                     color = Color.Transparent,
                                     modifier = Modifier
@@ -616,19 +924,21 @@ fun HomeScreen(
                                         Icon(
                                             imageVector = Icons.Default.Password,
                                             contentDescription = null,
-                                            tint = FolderTabCream,
+                                            tint = Color(0xFF60A5FA),
                                             modifier = Modifier.size(20.dp)
                                         )
                                         Spacer(modifier = Modifier.width(14.dp))
                                         Text(
                                             text = "Change Folder PIN",
-                                            color = TextPrimary,
+                                            color = Color.White,
+                                            fontFamily = ElmsSans,
                                             fontSize = 15.sp
                                         )
                                     }
                                 }
                             }
 
+                            // Action 6: Link It / Unlink
                             if (folder.linkGroupId != null) {
                                 Surface(
                                     color = Color.Transparent,
@@ -651,9 +961,67 @@ fun HomeScreen(
                                         Text(
                                             text = "Unlink Folder",
                                             color = TagCrimson,
+                                            fontFamily = ElmsSans,
                                             fontSize = 15.sp
                                         )
                                     }
+                                }
+                            } else {
+                                Surface(
+                                    color = Color.Transparent,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val fId = folder.id
+                                            activeContextFolder = null
+                                            viewModel.enterMultiSelectMode(fId)
+                                        }
+                                        .padding(vertical = 12.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Link,
+                                            contentDescription = null,
+                                            tint = Color(0xFF60A5FA),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(14.dp))
+                                        Text(
+                                            text = "Link to another folder",
+                                            color = Color.White,
+                                            fontFamily = ElmsSans,
+                                            fontSize = 15.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Action 7: Move to Trash / Delete
+                            Surface(
+                                color = Color.Transparent,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val fId = folder.id
+                                        activeContextFolder = null
+                                        viewModel.deleteFolder(fId)
+                                    }
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = TagCrimson,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Text(
+                                        text = "Move to Trash",
+                                        color = TagCrimson,
+                                        fontFamily = ElmsSans,
+                                        fontSize = 15.sp
+                                    )
                                 }
                             }
                         }
@@ -661,7 +1029,7 @@ fun HomeScreen(
                     confirmButton = {},
                     dismissButton = {
                         TextButton(onClick = { activeContextFolder = null }) {
-                            Text("Cancel", color = TextSecondary)
+                            Text("Cancel", color = HomeSubtitleGray, fontFamily = ElmsSans)
                         }
                     }
                 )
@@ -786,13 +1154,14 @@ fun HomeScreen(
                 val formattedMb = "%.1f MB".format(stats.totalSizeBytes / (1024f * 1024f))
                 AlertDialog(
                     onDismissRequest = { viewModel.dismissBulkDeleteDialog() },
-                    containerColor = MidnightSurface,
-                    shape = RoundedCornerShape(18.dp),
+                    containerColor = HomeCardSurface,
+                    shape = RoundedCornerShape(20.dp),
                     title = {
                         Text(
                             text = "Move ${stats.folderCount} Folder${if (stats.folderCount > 1) "s" else ""} to Trash?",
-                            color = TextPrimary,
+                            color = Color.White,
                             fontSize = 18.sp,
+                            fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold
                         )
                     },
@@ -800,21 +1169,24 @@ fun HomeScreen(
                         Column {
                             Text(
                                 text = "Total Notes & Photos: ${stats.photoCount}",
-                                color = TextPrimary,
+                                color = Color.White,
                                 fontSize = 14.sp,
+                                fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Medium
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Storage occupied: $formattedMb",
-                                color = TextSecondary,
-                                fontSize = 13.sp
+                                color = HomeSubtitleGray,
+                                fontSize = 13.sp,
+                                fontFamily = ElmsSans
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = "Items moved to Trash can be restored within 30 days before being automatically purged. Associated deadline reminders will be cancelled.",
-                                color = TextSecondary,
+                                color = HomeSubtitleGray,
                                 fontSize = 12.sp,
+                                fontFamily = ElmsSans,
                                 lineHeight = 16.sp
                             )
                         }
@@ -824,20 +1196,20 @@ fun HomeScreen(
                             onClick = { viewModel.confirmBulkDelete() },
                             colors = ButtonDefaults.buttonColors(containerColor = TagCrimson)
                         ) {
-                            Text("Move to Trash", color = Color.White)
+                            Text("Move to Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { viewModel.dismissBulkDeleteDialog() }) {
-                            Text("Cancel", color = FolderTabCream)
+                            Text("Cancel", color = HomeSubtitleGray, fontFamily = ElmsSans)
                         }
                     }
                 )
             }
 
-            // Keyboard-Docked Search Bar Overlay (Revision 2 Specification)
+            // Keyboard-Docked Search Bar Overlay
             if (uiState.isSearchActive) {
-                com.arinara.fotara.ui.components.ActiveSearchBar(
+                ActiveSearchBar(
                     query = uiState.searchQuery,
                     onQueryChange = { viewModel.onSearchQueryChanged(it) },
                     onDismiss = { viewModel.deactivateSearch() },
@@ -967,14 +1339,13 @@ fun HomeScreen(
 @Composable
 private fun HomeHeader(
     dueCount: Int,
-    addedTodayCount: Int,
     modifier: Modifier = Modifier
 ) {
     if (dueCount > 0) {
         Column(modifier = modifier.fillMaxWidth()) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = TagAmber.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, TagAmber.copy(alpha = 0.35f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -993,11 +1364,11 @@ private fun HomeHeader(
                         text = "$dueCount note${if (dueCount > 1) "s" else ""} due tomorrow",
                         color = TagAmber,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 }

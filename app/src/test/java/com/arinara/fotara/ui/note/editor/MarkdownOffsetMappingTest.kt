@@ -14,7 +14,7 @@ class MarkdownOffsetMappingTest {
 
     @Test
     fun testEmptyText() {
-        val mapping = MarkdownOffsetMapping(0, 0, emptyList())
+        val mapping = MarkdownOffsetMapping(0, 0, emptyList<IntRange>())
         assertEquals(0, mapping.originalToTransformed(0))
         assertEquals(0, mapping.transformedToOriginal(0))
     }
@@ -22,7 +22,7 @@ class MarkdownOffsetMappingTest {
     @Test
     fun testNoHiddenRanges_Identity() {
         val text = "Hello world"
-        val mapping = MarkdownOffsetMapping(text.length, text.length, emptyList())
+        val mapping = MarkdownOffsetMapping(text.length, text.length, emptyList<IntRange>())
         for (i in 0..text.length) {
             assertEquals(i, mapping.originalToTransformed(i))
             assertEquals(i, mapping.transformedToOriginal(i))

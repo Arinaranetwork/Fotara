@@ -9,120 +9,59 @@ package com.arinara.fotara.ui.note.editor
 import androidx.compose.ui.text.input.OffsetMapping
 
 /**
- * Pure class implementing a robust, bidirectional, monotonically non-decreasing
- * [OffsetMapping] between raw Markdown text (with syntax markers) and rendered text
- * (where selected markers are hidden).
+ * Represents a mapped region between original markdown text and transformed display text.
+ */
+data class TextMappingChunk(
+    val oStart: Int,
+    val oEnd: Int,
+    val tStart: Int,
+    val tEnd: Int
+)
+
+/**
+ * Robust, bidirectional, monotonically non-decreasing [OffsetMapping] supporting:
+ * 1. 1:1 identity passages (e.g. active editing lines)
+ * 2. Hidden syntax markers (tLen = 0)
+ * 3. Replaced syntax sprites (e.g. "- [ ] " -> "☐ ")
  *
- * Guaranteed invariants:
- * 1. Monotonic: o1 <= o2 => t(o1) <= t(o2)
- * 2. Monotonic: t1 <= t2 => o(t1) <= o(t2)
- * 3. Strict bounds: 0 <= t <= transformedLength, 0 <= o <= originalLength
- * 4. Safe against empty inputs, surrogate pairs, and multi-byte characters.
+ * Guarantees monotonic ordering and strict bounds checking to prevent caret jumping or crashes.
  */
 class MarkdownOffsetMapping(
     val originalLength: Int,
     val transformedLength: Int,
-    hiddenRanges: List<IntRange>
+    val chunks: List<TextMappingChunk>
 ) : OffsetMapping {
 
-    data class VisibleSegment(
-        val oStart: Int,
-        val oEnd: Int,
-        val tStart: Int,
-        val tEnd: Int
+    constructor(
+        originalLength: Int,
+        transformedLength: Int,
+        hiddenRanges: List<IntRange>,
+        legacy: Boolean = true
+    ) : this(
+        originalLength = originalLength,
+        transformedLength = transformedLength,
+        chunks = buildChunksFromHidden(originalLength, hiddenRanges)
     )
-
-    private val visibleSegments: List<VisibleSegment>
-
-    init {
-        // Merge and normalize hidden ranges
-        val sortedHidden = hiddenRanges
-            .filter { it.first < it.last + 1 && it.first < originalLength && it.last >= 0 }
-            .map { it.first.coerceIn(0, originalLength) until (it.last + 1).coerceIn(0, originalLength) }
-            .filter { !it.isEmpty() }
-            .sortedBy { it.first }
-
-        val mergedHidden = mutableListOf<IntRange>()
-        for (range in sortedHidden) {
-            if (mergedHidden.isEmpty()) {
-                mergedHidden.add(range)
-            } else {
-                val last = mergedHidden.last()
-                if (range.first <= last.last + 1) {
-                    mergedHidden[mergedHidden.lastIndex] = last.first..maxOf(last.last, range.last)
-                } else {
-                    mergedHidden.add(range)
-                }
-            }
-        }
-
-        // Build visible segments
-        val segments = mutableListOf<VisibleSegment>()
-        var currentO = 0
-        var currentT = 0
-
-        for (hidden in mergedHidden) {
-            val hiddenStart = hidden.first
-            val hiddenEnd = hidden.last + 1
-
-            if (hiddenStart > currentO) {
-                val len = hiddenStart - currentO
-                segments.add(
-                    VisibleSegment(
-                        oStart = currentO,
-                        oEnd = hiddenStart,
-                        tStart = currentT,
-                        tEnd = currentT + len
-                    )
-                )
-                currentT += len
-            }
-            currentO = hiddenEnd
-        }
-
-        if (currentO < originalLength) {
-            val len = originalLength - currentO
-            segments.add(
-                VisibleSegment(
-                    oStart = currentO,
-                    oEnd = originalLength,
-                    tStart = currentT,
-                    tEnd = currentT + len
-                )
-            )
-            currentT += len
-        }
-
-        visibleSegments = segments
-    }
 
     override fun originalToTransformed(offset: Int): Int {
         val clamped = offset.coerceIn(0, originalLength)
-        if (visibleSegments.isEmpty()) return 0
+        if (chunks.isEmpty()) return 0
 
-        // If offset is before or at the first visible segment
-        val first = visibleSegments.first()
-        if (clamped <= first.oStart) {
-            return first.tStart
-        }
+        val first = chunks.first()
+        if (clamped <= first.oStart) return first.tStart
 
-        // If offset is after or at the last visible segment
-        val last = visibleSegments.last()
-        if (clamped >= last.oEnd) {
-            return last.tEnd.coerceIn(0, transformedLength)
-        }
+        val last = chunks.last()
+        if (clamped >= last.oEnd) return last.tEnd.coerceIn(0, transformedLength)
 
-        // Find which segment or gap the offset belongs to
-        for (i in visibleSegments.indices) {
-            val seg = visibleSegments[i]
-            if (clamped in seg.oStart..seg.oEnd) {
-                return (seg.tStart + (clamped - seg.oStart)).coerceIn(0, transformedLength)
-            }
-            if (i < visibleSegments.size - 1) {
-                val nextSeg = visibleSegments[i + 1]
-                if (clamped in seg.oEnd until nextSeg.oStart) {
-                    // Inside hidden gap: map to end of previous segment (which equals start of next)
-                    return seg.tEnd.coerceIn(0, transformedLength)
+        for (chunk in chunks) {
+            if (clamped in chunk.oStart..chunk.oEnd) {
+                val oLen = chunk.oEnd - chunk.oStart
+                val tLen = chunk.tEnd - chunk.tStart
+                return if (oLen <= 0) {
+                    chunk.tStart.coerceIn(0, transformedLength)
+                } else {
+                    val progress = (clamped - chunk.oStart).toLong() * tLen / oLen
+                    (chunk.tStart + progress).toInt().coerceIn(chunk.tStart, chunk.tEnd).coerceIn(0, transformedLength)
                 }
             }
         }
@@ -132,24 +71,76 @@ class MarkdownOffsetMapping(
 
     override fun transformedToOriginal(offset: Int): Int {
         val clamped = offset.coerceIn(0, transformedLength)
-        if (visibleSegments.isEmpty()) return 0
+        if (chunks.isEmpty()) return 0
 
-        val first = visibleSegments.first()
-        if (clamped <= first.tStart) {
-            return first.oStart
+        // Prefer visible chunk (tLen > 0) containing clamped offset
+        val visibleChunk = chunks.firstOrNull { it.tEnd > it.tStart && clamped in it.tStart..it.tEnd }
+        if (visibleChunk != null) {
+            val oLen = visibleChunk.oEnd - visibleChunk.oStart
+            val tLen = visibleChunk.tEnd - visibleChunk.tStart
+            val progress = (clamped - visibleChunk.tStart).toLong() * oLen / tLen
+            return (visibleChunk.oStart + progress).toInt().coerceIn(visibleChunk.oStart, visibleChunk.oEnd).coerceIn(0, originalLength)
         }
 
-        val last = visibleSegments.last()
-        if (clamped >= last.tEnd) {
-            return last.oEnd.coerceIn(0, originalLength)
-        }
-
-        for (seg in visibleSegments) {
-            if (clamped in seg.tStart..seg.tEnd) {
-                return (seg.oStart + (clamped - seg.tStart)).coerceIn(0, originalLength)
+        // Fallback for chunks with tLen == 0 (e.g. pure hidden text)
+        for (chunk in chunks) {
+            if (clamped in chunk.tStart..chunk.tEnd) {
+                return chunk.oStart.coerceIn(0, originalLength)
             }
         }
 
         return originalLength
+    }
+
+    companion object {
+        fun buildChunksFromHidden(
+            originalLength: Int,
+            hiddenRanges: List<IntRange>
+        ): List<TextMappingChunk> {
+            val sortedHidden = hiddenRanges
+                .filter { it.first <= it.last && it.first < originalLength && it.last >= 0 }
+                .map { it.first.coerceIn(0, originalLength)..it.last.coerceIn(0, originalLength - 1) }
+                .sortedBy { it.first }
+
+            val merged = mutableListOf<IntRange>()
+            for (r in sortedHidden) {
+                if (merged.isEmpty()) {
+                    merged.add(r)
+                } else {
+                    val prev = merged.last()
+                    if (r.first <= prev.last + 1) {
+                        merged[merged.lastIndex] = prev.first..maxOf(prev.last, r.last)
+                    } else {
+                        merged.add(r)
+                    }
+                }
+            }
+
+            val result = mutableListOf<TextMappingChunk>()
+            var curO = 0
+            var curT = 0
+
+            for (hidden in merged) {
+                // Visible passage before hidden
+                if (hidden.first > curO) {
+                    val len = hidden.first - curO
+                    result.add(TextMappingChunk(curO, hidden.first, curT, curT + len))
+                    curT += len
+                }
+                // Hidden passage
+                val hiddenLen = hidden.last - hidden.first + 1
+                result.add(TextMappingChunk(hidden.first, hidden.first + hiddenLen, curT, curT))
+                curO = hidden.first + hiddenLen
+            }
+
+            // Remaining visible passage
+            if (curO < originalLength) {
+                val len = originalLength - curO
+                result.add(TextMappingChunk(curO, originalLength, curT, curT + len))
+                curT += len
+            }
+
+            return result
+        }
     }
 }

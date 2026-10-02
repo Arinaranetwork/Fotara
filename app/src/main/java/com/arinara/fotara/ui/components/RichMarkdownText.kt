@@ -9,6 +9,7 @@ package com.arinara.fotara.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -270,7 +271,6 @@ fun RichMarkdownBlockquote(
             text = quote,
             color = textColor,
             fontSize = 13.sp,
-            fontStyle = FontStyle.Italic,
             lineHeight = 19.sp,
             accentColor = accentColor
         )
@@ -323,7 +323,8 @@ fun RichMarkdownColumn(
     primaryTextColor: Color = Color(0xFFEAE3D2),
     accentColor: Color = Color(0xFFF77F00),
     cardBg: Color = Color(0xFF141936),
-    cardBorder: Color = Color(0xFF283256)
+    cardBorder: Color = Color(0xFF283256),
+    onToggleChecklistLine: ((Int) -> Unit)? = null
 ) {
     val lines = remember(markdown) { markdown.lines() }
 
@@ -331,7 +332,7 @@ fun RichMarkdownColumn(
         var inCodeBlock = false
         val codeBlockBuffer = StringBuilder()
 
-        for (rawLine in lines) {
+        for ((lineIndex, rawLine) in lines.withIndex()) {
             val trimmed = rawLine.trim()
 
             // Code block handling (```)
@@ -411,7 +412,11 @@ fun RichMarkdownColumn(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 3.dp),
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable(enabled = onToggleChecklistLine != null) {
+                                onToggleChecklistLine?.invoke(lineIndex)
+                            }
+                            .padding(vertical = 3.dp, horizontal = 2.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         Text(
@@ -438,7 +443,11 @@ fun RichMarkdownColumn(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 3.dp),
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable(enabled = onToggleChecklistLine != null) {
+                                onToggleChecklistLine?.invoke(lineIndex)
+                            }
+                            .padding(vertical = 3.dp, horizontal = 2.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         Text(

@@ -2,7 +2,7 @@
 Last Updated: 2026-10-02
 
 ## Current Phase
-Phase 10 - CanvasAndSearchImprovements (1.5.2 Bug Fixes & Enhancements) [Completed]
+Phase 11 - HomeScreenRedesign [Completed]
 
 ## Phases
 | Phase | Name                                | Status      |
@@ -17,8 +17,18 @@ Phase 10 - CanvasAndSearchImprovements (1.5.2 Bug Fixes & Enhancements) [Complet
 | 8     | MasterV150EcosystemAndCanvas        | Completed   |
 | 9     | PdfViewerEnhancementsAndFixes       | Completed   |
 | 10    | CanvasAndSearchImprovements         | Completed   |
+| 11    | HomeScreenRedesign                  | Completed   |
 
 ## Completed
+- [x] Phase 11 Task 1: Color palette definition & legacy folder color assignment (Blue, Brown, Purple, Green, Red, Slate) - Phase 11
+- [x] Phase 11 Task 2: Facing LinkIt corner stroke glow with folder-specific bright accent colors - Phase 11
+- [x] Phase 11 Task 3: Redesign FolderCard to dark rounded rectangle with top-left accent icon tile and top-right menu - Phase 11
+- [x] Phase 11 Task 4: Segmented tab bar (All, Favorit, Arsip) with active blue pill - Phase 11
+- [x] Phase 11 Task 5: Redesign Header with Fotara title, subtitle tagline, and dual circular buttons - Phase 11
+- [x] Phase 11 Task 6: Search bar pill + circular '+' button with popup menu - Phase 11
+- [x] Phase 11 Task 7: Floating bottom navigation bar (Home, Notes, Settings) and top-level tab switching - Phase 11
+- [x] Phase 11 Task 8: Settings screen redesign as vertical list of rounded rectangle cards - Phase 11
+- [x] Phase 11 Task 9: IME keyboard insets & bottom stack non-overlapping layout validation - Phase 11
 - [x] Analyze product brief and UI reference image - Phase 1
 - [x] Install and verify Android CLI and SDK environment (API 36, Temurin JDK 17) - Phase 1
 - [x] Initialize Arinara governance docs (Rules.md, Codex.md, Phase1 spec, Changelog) - Phase 1
@@ -210,8 +220,21 @@ Phase 10 - CanvasAndSearchImprovements (1.5.2 Bug Fixes & Enhancements) [Complet
 - [x] Item 10: Canvas Hard Limits (centralized CanvasConfig.kt, 20k x 20k extent, max 50 layers, max 2048px image, snackbars) - Phase 10
 - [x] Version bump to 1.5.2 (versionName, versionCode 16), Changelog entry in Changelog_1.5.md - Phase 10
 
+- [x] Item 11: Text Note Editor Toolbar & Caret Precision (pure transformation engine, caret offset fix, Enter list continuation and blank-line exit, single-stroke backspace prefix deletion, live preview styling with 1:1 active line caret stability, interactive checkbox toggling) - Phase 10
+- [x] Item 12: Canvas Note Long-Press Action Sheet Parity (contextual action sheet with Rename, Color Label, Deadline, Schedule Reminder, Move to Folder, Share as Image PNG, Batch Selection, and Delete to Trash) - Phase 10
+- [x] Item 13: Elms Sans Typography Migration & Italic Elimination (app-wide typography migration with strict 3-weight mapping: Light 300, Medium 500, Bold 700; complete removal of UI italics across all screens, headers, cards, dialogs, and search bars) - Phase 10
+- [x] Item 14: Folder Screen Header Button Spacing (clean 10dp separation and 48dp minimum touch targets for Add [+] and Kebab [⋮] buttons) - Phase 10
+
 ## In Progress
-None.
+- [ ] Phase 11 Task 1: Color palette definition & legacy folder color assignment (Blue, Brown, Purple, Green, Red, Slate) - Phase 11
+- [ ] Phase 11 Task 2: Facing LinkIt corner stroke glow with folder-specific bright accent colors - Phase 11
+- [ ] Phase 11 Task 3: Redesign FolderCard to dark rounded rectangle with top-left accent icon tile and top-right menu - Phase 11
+- [ ] Phase 11 Task 4: Segmented tab bar (All, Favorit, Arsip) with active blue pill - Phase 11
+- [ ] Phase 11 Task 5: Redesign Header with Fotara title, subtitle tagline, and dual circular buttons - Phase 11
+- [ ] Phase 11 Task 6: Search bar pill + circular '+' button with popup menu - Phase 11
+- [ ] Phase 11 Task 7: Floating bottom navigation bar (Home, Notes, Settings) and top-level tab switching - Phase 11
+- [ ] Phase 11 Task 8: Settings screen redesign as vertical list of rounded rectangle cards - Phase 11
+- [ ] Phase 11 Task 9: IME keyboard insets & bottom stack non-overlapping layout validation - Phase 11
 
 ## Pending
 None.

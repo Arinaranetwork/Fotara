@@ -1,5 +1,5 @@
 # Rules - Fotara
-Last Updated: 2026-09-23
+Last Updated: 2026-10-02
 
 ## Engineering
 ### R-001 - Strict Layered Architecture
@@ -13,7 +13,7 @@ All photo storage, metadata indexing, on-device OCR, and keyword search must fun
 
 ## Design
 ### R-004 - Folder Card Design System Realization
-Folder cards must strictly reproduce the brand aesthetic established in the visual reference (`UI/photo_6167897522295214567_y.jpg`): deep dark navy screen background (`#03071E`), rounded rectangle cards with asymmetrical cream/ivory top tabs (`#EAE3D2`), vibrant royal blue body (`#0B1BE0`), high-contrast bold italic title typography, and top-right color label indicators. Reason: Preserves distinctive brand identity and visual hierarchy. Example violation: Rendering generic rectangular Material cards or using standard gray backgrounds.
+Folder cards must strictly reproduce the brand aesthetic established in the visual reference (IMAGE A): near-black dark navy screen background (`#0A0D14`), dark rounded rectangle cards (`#111726`, ~24dp radius, ~1:1 aspect ratio), top-left rounded accent icon tile (~42dp, 12dp radius) with folder outline icon in a lighter tint, top-right overflow action menu, left-aligned title (Medium, ~22sp) and note count (Light, ~15sp) flowing downward, and corner-stroke glows indicating linked folder relationships. Reason: Preserves distinctive brand identity, legibility, and visual hierarchy. Example violation: Rendering legacy cream-tab blue cards or using italic titles.
 
 ### R-005 - Zero Placeholder Shipped Work
 All shipped screens and components must provide complete empty, loading, error, and populated states. No dummy mock data, TODOs, or fake stubs in production source code (`app/src/main/`). Reason: Ensures production-grade readiness at every milestone. Example violation: Leaving `// TODO: implement OCR` or hardcoding sample folder lists in production viewmodels.

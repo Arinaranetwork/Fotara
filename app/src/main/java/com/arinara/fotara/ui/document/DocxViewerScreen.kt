@@ -440,8 +440,7 @@ fun DocxViewerScreen(
                                             Text(
                                                 text = "[${elem.description} — view via Open with]",
                                                 color = Color(0xFFB0B9D0),
-                                                fontSize = 12.sp,
-                                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                                fontSize = 12.sp
                                             )
                                         }
                                     }

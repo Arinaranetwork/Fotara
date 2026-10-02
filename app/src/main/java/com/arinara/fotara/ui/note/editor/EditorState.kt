@@ -244,20 +244,18 @@ class EditorState(
 
     private fun updateDerivedStates(value: TextFieldValue) {
         // 1. Parser and Active States
-        val doc = MarkdownParser.parse(value.text)
-        val active = doc.activeTypesAt(value.selection.start, value.selection.end)
-
-        isBold = MarkdownSpanType.BOLD in active || MarkdownSpanType.BOLD_ITALIC in active
-        isItalic = MarkdownSpanType.ITALIC in active || MarkdownSpanType.BOLD_ITALIC in active
-        isStrikethrough = MarkdownSpanType.STRIKETHROUGH in active
-        isInlineCode = MarkdownSpanType.INLINE_CODE in active
-        isH1 = MarkdownSpanType.HEADING_1 in active
-        isH2 = MarkdownSpanType.HEADING_2 in active
-        isH3 = MarkdownSpanType.HEADING_3 in active
-        isQuote = MarkdownSpanType.BLOCKQUOTE in active
-        isBulletList = MarkdownSpanType.BULLET_LIST in active
-        isNumberedList = MarkdownSpanType.NUMBERED_LIST in active
-        isChecklist = MarkdownSpanType.CHECKLIST_UNCHECKED in active || MarkdownSpanType.CHECKLIST_CHECKED in active
+        val syntax = TextEditorOps.getActiveToolbarStates(value.text, value.selection.start, value.selection.end)
+        isBold = syntax.isBold
+        isItalic = syntax.isItalic
+        isStrikethrough = syntax.isStrikethrough
+        isInlineCode = syntax.isInlineCode
+        isH1 = syntax.isH1
+        isH2 = syntax.isH2
+        isH3 = syntax.isH3
+        isQuote = syntax.isQuote
+        isBulletList = syntax.isBulletList
+        isNumberedList = syntax.isNumberedList
+        isChecklist = syntax.isChecklist
 
         // 2. Counts
         val trimmed = value.text.trim()
