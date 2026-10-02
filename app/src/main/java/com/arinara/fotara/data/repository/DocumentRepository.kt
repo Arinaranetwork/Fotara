@@ -26,6 +26,10 @@ import com.arinara.fotara.ocr.OcrEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import android.database.sqlite.SQLiteDatabase
+import java.text.Normalizer
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -96,6 +100,154 @@ class SqliteDocumentRepository(
     init {
         scope.launch {
             refreshSync()
+            backfillDocumentFts()
+        }
+    }
+
+    private fun normalizeForSearch(input: String): String {
+        val nfd = Normalizer.normalize(input, Normalizer.Form.NFD)
+        return nfd.replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "").lowercase()
+    }
+
+    private fun indexDocumentFts(
+        db: SQLiteDatabase,
+        docId: Long,
+        folderId: Long,
+        subfolderId: Long?,
+        name: String,
+        docType: String,
+        contentText: String?
+    ) {
+        try {
+            var folderName = ""
+            var subfolderName = ""
+            val fCursor = db.rawQuery("SELECT name FROM folders WHERE id = ?", arrayOf(folderId.toString()))
+            fCursor.use { if (it.moveToFirst()) folderName = it.getString(0) ?: "" }
+            if (subfolderId != null) {
+                val sfCursor = db.rawQuery("SELECT name FROM subfolders WHERE id = ?", arrayOf(subfolderId.toString()))
+                sfCursor.use { if (it.moveToFirst()) subfolderName = it.getString(0) ?: "" }
+            }
+
+            db.delete("document_notes_fts", "document_id = ?", arrayOf(docId.toString()))
+
+            val values = ContentValues().apply {
+                put("document_id", docId)
+                put("folder_name", folderName)
+                put("subfolder_name", subfolderName)
+                put("name", name)
+                put("doc_type", docType)
+                put("content_text", contentText ?: "")
+            }
+            db.insert("document_notes_fts", null, values)
+        } catch (e: Exception) {
+            Log.w("SqliteDocRepo", "Failed to index document in FTS: ${e.message}")
+        }
+    }
+
+    private fun removeDocumentFts(db: SQLiteDatabase, docId: Long) {
+        try {
+            db.delete("document_notes_fts", "document_id = ?", arrayOf(docId.toString()))
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun backfillDocumentFts() = withContext(Dispatchers.IO) {
+        try {
+            val db = dbHelper.getSafeWritableDatabase()
+            val cursor = db.rawQuery(
+                """
+                SELECT d.id, d.folder_id, d.subfolder_id, d.name, d.doc_type, d.origin_file_uri, d.extracted_text,
+                       f.name, COALESCE(s.name, '')
+                FROM document_notes d
+                JOIN folders f ON d.folder_id = f.id
+                LEFT JOIN subfolders s ON d.subfolder_id = s.id
+                WHERE d.is_trashed = 0 AND f.is_trashed = 0
+                """.trimIndent(),
+                null
+            )
+
+            val toIndex = mutableListOf<DocIndexItem>()
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    toIndex.add(
+                        DocIndexItem(
+                            id = c.getLong(0),
+                            folderId = c.getLong(1),
+                            subfolderId = if (c.isNull(2)) null else c.getLong(2),
+                            name = c.getString(3),
+                            docType = c.getString(4),
+                            originFileUri = c.getString(5),
+                            extractedText = if (c.isNull(6)) null else c.getString(6),
+                            folderName = c.getString(7) ?: "",
+                            subfolderName = c.getString(8) ?: ""
+                        )
+                    )
+                }
+            }
+
+            for (item in toIndex) {
+                currentCoroutineContext().ensureActive()
+                var text = item.extractedText
+
+                if (item.docType == DocumentType.DOCX.name && text.isNullOrBlank()) {
+                    try {
+                        val file = File(item.originFileUri)
+                        if (file.exists()) {
+                            val extracted = file.inputStream().use { extractDocxText(it) }
+                            if (extracted.isNotBlank()) {
+                                text = extracted
+                                val cv = ContentValues().apply { put("extracted_text", extracted) }
+                                db.update("document_notes", cv, "id = ?", arrayOf(item.id.toString()))
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w("SqliteDocRepo", "DOCX backfill extraction error for doc ${item.id}: ${e.message}")
+                    }
+                } else if (item.docType == DocumentType.PDF.name && text.isNullOrBlank()) {
+                    val pageTextSb = StringBuilder()
+                    val pCursor = db.rawQuery(
+                        "SELECT ocr_text FROM document_pages WHERE document_note_id = ? ORDER BY page_index ASC",
+                        arrayOf(item.id.toString())
+                    )
+                    pCursor.use { pc ->
+                        while (pc.moveToNext()) {
+                            val pt = pc.getString(0)
+                            if (!pt.isNullOrBlank()) {
+                                if (pageTextSb.isNotEmpty()) pageTextSb.append("\n")
+                                pageTextSb.append(pt)
+                            }
+                        }
+                    }
+                    if (pageTextSb.isNotBlank()) {
+                        text = pageTextSb.toString()
+                        val cv = ContentValues().apply { put("extracted_text", text) }
+                        db.update("document_notes", cv, "id = ?", arrayOf(item.id.toString()))
+                    }
+                }
+
+                val ftsCheck = db.rawQuery(
+                    "SELECT rowid FROM document_notes_fts WHERE document_id = ? LIMIT 1",
+                    arrayOf(item.id.toString())
+                )
+                val exists = ftsCheck.use { it.moveToFirst() }
+                if (!exists) {
+                    val values = ContentValues().apply {
+                        put("document_id", item.id)
+                        put("folder_name", item.folderName)
+                        put("subfolder_name", item.subfolderName)
+                        put("name", item.name)
+                        put("doc_type", item.docType)
+                        put("content_text", text ?: "")
+                    }
+                    db.insert("document_notes_fts", null, values)
+                } else if (!text.isNullOrBlank()) {
+                    val values = ContentValues().apply {
+                        put("content_text", text)
+                    }
+                    db.update("document_notes_fts", values, "document_id = ?", arrayOf(item.id.toString()))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("SqliteDocRepo", "Backfill document FTS error: ${e.message}")
         }
     }
 
@@ -185,16 +337,58 @@ class SqliteDocumentRepository(
     override fun getAllActiveDocumentNotes(): Flow<List<DocumentNote>> = documentNotesFlow.asStateFlow()
 
     override fun searchDocuments(query: String): Flow<List<DocumentNote>> =
-        documentNotesFlow.map { docs ->
-            val trimmed = query.trim().lowercase()
-            if (trimmed.isBlank()) emptyList()
-            else {
-                docs.filter { doc ->
-                    doc.name.lowercase().contains(trimmed) ||
-                    (doc.extractedText?.lowercase()?.contains(trimmed) == true)
+        documentNotesFlow.map { allDocs ->
+            val trimmed = query.trim()
+            if (trimmed.isBlank()) return@map emptyList()
+
+            val matchedIds = mutableSetOf<Long>()
+            var ftsSuccess = false
+
+            try {
+                val db = dbHelper.getSafeReadableDatabase()
+                val clean = trimmed.replace("\"", "").replace("'", "")
+                val tokens = clean.split("\\s+".toRegex()).filter { it.isNotBlank() }
+                if (tokens.isNotEmpty()) {
+                    val ftsQuery = tokens.joinToString(" ") { "$it*" }
+                    val cursor = db.rawQuery(
+                        "SELECT document_id FROM document_notes_fts WHERE document_notes_fts MATCH ? LIMIT 50",
+                        arrayOf(ftsQuery)
+                    )
+                    cursor.use { c ->
+                        while (c.moveToNext()) {
+                            matchedIds.add(c.getLong(0))
+                        }
+                    }
+                    ftsSuccess = true
+                }
+            } catch (e: Exception) {
+                Log.w("SqliteDocRepo", "FTS search failed: ${e.message}")
+                ftsSuccess = false
+            }
+
+            val filtered = if (ftsSuccess && matchedIds.isNotEmpty()) {
+                allDocs.filter { matchedIds.contains(it.id) }
+            } else {
+                val normalizedQuery = normalizeForSearch(trimmed)
+                allDocs.filter { doc ->
+                    normalizeForSearch(doc.name).contains(normalizedQuery) ||
+                    (doc.extractedText?.let { normalizeForSearch(it).contains(normalizedQuery) } == true)
                 }
             }
-        }
+
+            val normalizedQuery = normalizeForSearch(trimmed)
+            filtered.sortedWith(
+                compareBy<DocumentNote> { doc ->
+                    val normName = normalizeForSearch(doc.name)
+                    when {
+                        normName == normalizedQuery -> 0
+                        normName.startsWith(normalizedQuery) -> 1
+                        normName.contains(normalizedQuery) -> 2
+                        else -> 3
+                    }
+                }.thenByDescending { it.addedAt }
+            )
+        }.flowOn(Dispatchers.IO)
 
     override fun getDocumentNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<DocumentNote>> =
         documentNotesFlow.map { list ->
@@ -231,6 +425,7 @@ class SqliteDocumentRepository(
             put("is_trashed", 0)
         }
         val docId = db.insert("document_notes", null, values)
+        indexDocumentFts(db, docId, folderId, subfolderId, name.trim(), DocumentType.PDF.name, null)
 
         // Native PdfRenderer processing with password & corruption detection
         val pfd = try {
@@ -330,6 +525,31 @@ class SqliteDocumentRepository(
                     Log.w("SqliteDocRepo", "Background OCR error for page $idx: ${e.message}")
                 }
             }
+            try {
+                val upDb = dbHelper.getSafeWritableDatabase()
+                val fullOcrText = StringBuilder()
+                val pCursor = upDb.rawQuery(
+                    "SELECT ocr_text FROM document_pages WHERE document_note_id = ? ORDER BY page_index ASC",
+                    arrayOf(docId.toString())
+                )
+                pCursor.use { c ->
+                    while (c.moveToNext()) {
+                        val t = c.getString(0)
+                        if (!t.isNullOrBlank()) {
+                            if (fullOcrText.isNotEmpty()) fullOcrText.append("\n")
+                            fullOcrText.append(t)
+                        }
+                    }
+                }
+                val totalText = fullOcrText.toString()
+                if (totalText.isNotBlank()) {
+                    val upCv = ContentValues().apply { put("extracted_text", totalText) }
+                    upDb.update("document_notes", upCv, "id = ?", arrayOf(docId.toString()))
+                    indexDocumentFts(upDb, docId, folderId, subfolderId, name.trim(), DocumentType.PDF.name, totalText)
+                }
+            } catch (e: Exception) {
+                Log.w("SqliteDocRepo", "Failed to update PDF OCR in document_notes: ${e.message}")
+            }
             refreshSync()
         }
 
@@ -366,6 +586,7 @@ class SqliteDocumentRepository(
             put("is_trashed", 0)
         }
         val docId = db.insert("document_notes", null, values)
+        indexDocumentFts(db, docId, folderId, subfolderId, name.trim(), DocumentType.DOCX.name, extractedText)
 
         refreshSync()
         docId
@@ -380,11 +601,46 @@ class SqliteDocumentRepository(
                 val parser = Xml.newPullParser()
                 parser.setInput(zip, "UTF-8")
                 var eventType = parser.eventType
+                var cellCountInRow = 0
                 while (eventType != XmlPullParser.END_DOCUMENT) {
-                    if (eventType == XmlPullParser.START_TAG && parser.name == "t") {
-                        sb.append(parser.nextText()).append(" ")
-                    } else if (eventType == XmlPullParser.START_TAG && parser.name == "p") {
-                        sb.append("\n")
+                    val tagName = parser.name?.substringAfter(":") ?: ""
+                    when (eventType) {
+                        XmlPullParser.START_TAG -> {
+                            when (tagName) {
+                                "p" -> {
+                                    if (sb.isNotEmpty() && !sb.endsWith("\n") && !sb.endsWith(" | ")) {
+                                        sb.append("\n")
+                                    }
+                                }
+                                "tr" -> {
+                                    if (sb.isNotEmpty() && !sb.endsWith("\n")) {
+                                        sb.append("\n")
+                                    }
+                                    cellCountInRow = 0
+                                }
+                                "tc" -> {
+                                    if (cellCountInRow > 0) {
+                                        sb.append(" | ")
+                                    }
+                                    cellCountInRow++
+                                }
+                                "t" -> {
+                                    try {
+                                        val text = parser.nextText()
+                                        if (text.isNotEmpty()) {
+                                            sb.append(text)
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                                "tab" -> sb.append(" ")
+                                "br" -> sb.append("\n")
+                            }
+                        }
+                        XmlPullParser.END_TAG -> {
+                            if (tagName == "p" && !sb.endsWith("\n")) {
+                                sb.append("\n")
+                            }
+                        }
                     }
                     eventType = parser.next()
                 }
@@ -486,6 +742,7 @@ class SqliteDocumentRepository(
             }
 
             val db = dbHelper.getSafeWritableDatabase()
+            removeDocumentFts(db, documentNoteId)
             db.delete("document_pages", "document_note_id = ?", arrayOf(documentNoteId.toString()))
             db.delete("document_notes", "id = ?", arrayOf(documentNoteId.toString()))
 
@@ -517,6 +774,10 @@ class SqliteDocumentRepository(
             put("origin_file_uri", newPath)
         }
         db.update("document_notes", values, "id = ?", arrayOf(id.toString()))
+        try {
+            val ftsVal = ContentValues().apply { put("name", cleanName) }
+            db.update("document_notes_fts", ftsVal, "document_id = ?", arrayOf(id.toString()))
+        } catch (_: Exception) {}
         refreshSync()
     }
 
@@ -568,6 +829,7 @@ class SqliteDocumentRepository(
         } catch (_: Exception) {}
 
         val db = dbHelper.getSafeWritableDatabase()
+        removeDocumentFts(db, id)
         db.delete("document_pages", "document_note_id = ?", arrayOf(id.toString()))
         db.delete("document_notes", "id = ?", arrayOf(id.toString()))
         refreshSync()
@@ -590,6 +852,12 @@ class SqliteDocumentRepository(
         }
         val placeholders = ids.joinToString(",") { "?" }
         db.update("document_notes", values, "id IN ($placeholders)", ids.map { it.toString() }.toTypedArray())
+        for (id in ids) {
+            val doc = getDocumentNoteById(id)
+            if (doc != null) {
+                indexDocumentFts(db, id, targetFolderId, targetSubfolderId, doc.name, doc.docType.name, doc.extractedText)
+            }
+        }
         refreshSync()
     }
 
@@ -619,3 +887,15 @@ class SqliteDocumentRepository(
         }
     }
 }
+
+private data class DocIndexItem(
+    val id: Long,
+    val folderId: Long,
+    val subfolderId: Long?,
+    val name: String,
+    val docType: String,
+    val originFileUri: String,
+    val extractedText: String?,
+    val folderName: String,
+    val subfolderName: String
+)

@@ -165,25 +165,53 @@ class CanvasDrawingView(
                 }
                 is PointerAction.PanZoomDelta -> {
                     val panned = ViewportTransform.pan(viewport, action.deltaScreenX, action.deltaScreenY)
-                    viewport = ViewportTransform.zoomAboutFocalPoint(
-                        viewport = panned,
-                        focalScreenX = action.focalScreenX,
-                        focalScreenY = action.focalScreenY,
-                        zoomDelta = action.zoomFactor
-                    )
+                    val zoomed = if (kotlin.math.abs(action.zoomFactor - 1.0f) < 0.001f) {
+                        panned
+                    } else {
+                        ViewportTransform.zoomAboutFocalPoint(
+                            viewport = panned,
+                            focalScreenX = action.focalScreenX,
+                            focalScreenY = action.focalScreenY,
+                            zoomDelta = action.zoomFactor
+                        )
+                    }
+                    viewport = ViewportTransform.clampToExtent(zoomed, width.toFloat(), height.toFloat())
                     onViewportChanged?.invoke(viewport)
                     needsInvalidate = true
                 }
                 is PointerAction.Fling -> {
+                    val w = if (width > 0) width.toFloat() else 1080f
+                    val h = if (height > 0) height.toFloat() else 1920f
+                    val minX = (w / 2f - com.arinara.fotara.canvas.engine.CanvasConfig.WORLD_MAX_X * viewport.scale).toInt()
+                    val maxX = (w / 2f - com.arinara.fotara.canvas.engine.CanvasConfig.WORLD_MIN_X * viewport.scale).toInt()
+                    val minY = (h / 2f - com.arinara.fotara.canvas.engine.CanvasConfig.WORLD_MAX_Y * viewport.scale).toInt()
+                    val maxY = (h / 2f - com.arinara.fotara.canvas.engine.CanvasConfig.WORLD_MIN_Y * viewport.scale).toInt()
+
                     scroller.fling(
                         viewport.translateX.toInt(),
                         viewport.translateY.toInt(),
                         action.velocityX.toInt(),
                         action.velocityY.toInt(),
-                        -100000, 100000,
-                        -100000, 100000
+                        minOf(minX, maxX), maxOf(minX, maxX),
+                        minOf(minY, maxY), maxOf(minY, maxY)
                     )
                     postInvalidateOnAnimation()
+                }
+                is PointerAction.EraseAt -> {
+                    val (updatedDoc, dirtyBounds) = toolController.eraseAt(
+                        screenX = action.screenX,
+                        screenY = action.screenY,
+                        viewport = viewport,
+                        document = documentSnapshot,
+                        historyManager = historyManager
+                    )
+                    if (dirtyBounds != null) {
+                        documentSnapshot = updatedDoc
+                        spatialIndex.rebuild(updatedDoc.elements)
+                        tileCacheManager.invalidateRegion(dirtyBounds)
+                        onDocumentChanged?.invoke(updatedDoc, dirtyBounds)
+                        needsInvalidate = true
+                    }
                 }
                 is PointerAction.TapSelect -> {
                     val selectedIds = toolController.selectTap(action.screenX, action.screenY, viewport, documentSnapshot)
@@ -230,10 +258,11 @@ class CanvasDrawingView(
 
     override fun computeScroll() {
         if (scroller.computeScrollOffset()) {
-            viewport = viewport.copy(
+            val updated = viewport.copy(
                 translateX = scroller.currX.toFloat(),
                 translateY = scroller.currY.toFloat()
             )
+            viewport = ViewportTransform.clampToExtent(updated, width.toFloat(), height.toFloat())
             onViewportChanged?.invoke(viewport)
             postInvalidateOnAnimation()
         }
@@ -242,7 +271,9 @@ class CanvasDrawingView(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        val inProgressPoints = if (toolController.isDrawing()) toolController.currentPoints else null
+        val isEraser = toolController.toolState.activeTool == CanvasToolType.ERASER_STROKE ||
+                toolController.toolState.activeTool == CanvasToolType.ERASER_AREA
+        val inProgressPoints = if (!isEraser && toolController.isDrawing()) toolController.currentPoints else null
         val inProgressTool = when (toolController.toolState.activeTool) {
             CanvasToolType.HIGHLIGHTER -> StrokeToolType.HIGHLIGHTER
             else -> StrokeToolType.PEN

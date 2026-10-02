@@ -79,6 +79,7 @@ fun FolderCard(
     onCardLongClick: () -> Unit = {},
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
+    glowCorner: GlowCorner = GlowCorner.BottomLeft,
     modifier: Modifier = Modifier
 ) {
     val cornerRadiusDp = 24.dp
@@ -123,7 +124,7 @@ fun FolderCard(
             .clip(RoundedCornerShape(cornerRadiusDp))
             .linkItCornerGlow(
                 isLinked = folder.linkGroupId != null,
-                corner = GlowCorner.BottomLeft,
+                corner = glowCorner,
                 linkedDescription = "Linked folder ${folder.name}",
                 cornerRadiusDp = cornerRadiusDp.value
             )

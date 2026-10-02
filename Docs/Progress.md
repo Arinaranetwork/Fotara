@@ -1,8 +1,8 @@
 # Progress - Fotara
-Last Updated: 2026-10-01
+Last Updated: 2026-10-02
 
 ## Current Phase
-Phase 9 - PdfViewerEnhancementsAndFixes (Master Brief 1.5.1 Beta) [Completed]
+Phase 10 - CanvasAndSearchImprovements (1.5.2 Bug Fixes & Enhancements) [Completed]
 
 ## Phases
 | Phase | Name                                | Status      |
@@ -16,6 +16,7 @@ Phase 9 - PdfViewerEnhancementsAndFixes (Master Brief 1.5.1 Beta) [Completed]
 | 7     | NativeTextNotesAndAdvancedDocuments | Completed   |
 | 8     | MasterV150EcosystemAndCanvas        | Completed   |
 | 9     | PdfViewerEnhancementsAndFixes       | Completed   |
+| 10    | CanvasAndSearchImprovements         | Completed   |
 
 ## Completed
 - [x] Analyze product brief and UI reference image - Phase 1
@@ -196,6 +197,18 @@ Phase 9 - PdfViewerEnhancementsAndFixes (Master Brief 1.5.1 Beta) [Completed]
 - [x] P3-C Release build & signing: Assemble release APK, verify signing certificate, packaging, and checksum - Phase 9 (Chunk P3)
 - [x] P3-D GitHub publishing protocol: Tag Fotara_1.5.1_Beta, merge to main, and publish GitHub release - Phase 9 (Chunk P3)
 - [x] P3-E Final report: Wiring table, slim pages root cause, list zoom strategy, hidden sections report - Phase 9 (Chunk P3)
+
+- [x] Item 1: Canvas Autosave Engine (flush on pause/stop/back, single-writer Mutex queue, atomic write, tap-to-retry) - Phase 10
+- [x] Item 2: Canvas Panning Math & Culling (1:1 tracking, eliminate double delta/reversals, bounds clamp) - Phase 10
+- [x] Item 3: Fix Add With Image (downsample <=2048px, EXIF orientation, private storage, user error message) - Phase 10
+- [x] Item 4: Canvas Top Bar Responsive Overlap Fix (adaptive layout, ellipsized title, compact status, overflow) - Phase 10
+- [x] Item 5: Zoom Pill Placement (position above collapsible tool panel with insets clearance) - Phase 10
+- [x] Item 6: Broom Tool as Stroke Eraser (active layer stroke eraser, distinct state, undoable, autosaved) - Phase 10
+- [x] Item 7: Folder Card Orange Glow (facing edges/corners between adjacent glowing cards on home grid) - Phase 10
+- [x] Item 8: Search OCR and DOCX Content (extract DOCX text, SQLite FTS indexing with migration, debounced search, snippets with [OCR]/[DOCX] labels) - Phase 10
+- [x] Item 9: Add from Existing Notes (picker for image-based notes only, insert as layer snapshot) - Phase 10
+- [x] Item 10: Canvas Hard Limits (centralized CanvasConfig.kt, 20k x 20k extent, max 50 layers, max 2048px image, snackbars) - Phase 10
+- [x] Version bump to 1.5.2 (versionName, versionCode 16), Changelog entry in Changelog_1.5.md - Phase 10
 
 ## In Progress
 None.

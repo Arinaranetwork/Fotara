@@ -99,6 +99,7 @@ sealed class PointerAction {
     data class AppendPoints(val points: List<PointerPoint>) : PointerAction()
     object FinishStroke : PointerAction()
     object CancelStroke : PointerAction()
+    data class EraseAt(val screenX: Float, val screenY: Float) : PointerAction()
 
     data class PanZoomDelta(
         val deltaScreenX: Float,
@@ -182,14 +183,24 @@ class PointerStateMachine(
 
         when (val current = state) {
             is PointerState.Idle -> {
-                if (event.toolType == PointerToolType.STYLUS && (activeMode == ActiveMode.DRAW || activeMode == ActiveMode.ERASE)) {
-                    state = PointerState.Drawing(
-                        pointerId = event.pointerId,
-                        toolType = event.toolType,
-                        lastX = event.x,
-                        lastY = event.y
-                    )
-                    actions.add(PointerAction.StartStroke(event.x, event.y, event.pressure))
+                if (event.toolType == PointerToolType.STYLUS) {
+                    if (activeMode == ActiveMode.ERASE) {
+                        state = PointerState.Drawing(
+                            pointerId = event.pointerId,
+                            toolType = event.toolType,
+                            lastX = event.x,
+                            lastY = event.y
+                        )
+                        actions.add(PointerAction.EraseAt(event.x, event.y))
+                    } else if (activeMode == ActiveMode.DRAW) {
+                        state = PointerState.Drawing(
+                            pointerId = event.pointerId,
+                            toolType = event.toolType,
+                            lastX = event.x,
+                            lastY = event.y
+                        )
+                        actions.add(PointerAction.StartStroke(event.x, event.y, event.pressure))
+                    }
                 } else if (activePointers.size == 1) {
                     if (activeMode == ActiveMode.SELECT) {
                         state = PointerState.Selecting(
@@ -198,10 +209,24 @@ class PointerStateMachine(
                             startY = event.y,
                             currentPoints = listOf(Pair(event.x, event.y))
                         )
-                    } else if (activeMode == ActiveMode.DRAW || activeMode == ActiveMode.ERASE) {
-                        // Check if finger drawing is disabled by stylusOnlyDrawing setting
+                    } else if (activeMode == ActiveMode.ERASE) {
+                        state = PointerState.Drawing(
+                            pointerId = event.pointerId,
+                            toolType = event.toolType,
+                            lastX = event.x,
+                            lastY = event.y
+                        )
+                        actions.add(PointerAction.EraseAt(event.x, event.y))
+                    } else if (activeMode == ActiveMode.DRAW) {
                         if (stylusOnlyDrawing && event.toolType == PointerToolType.FINGER) {
-                            // Finger does not draw, but remains ready for 2-finger pan/zoom
+                            // Finger pans 1:1 when stylus-only drawing is active
+                            state = PointerState.PanZoom(
+                                pointer1Id = event.pointerId,
+                                pointer2Id = -1,
+                                lastCenterX = event.x,
+                                lastCenterY = event.y,
+                                lastDistance = 1f
+                            )
                             return emptyList()
                         }
 
@@ -229,7 +254,7 @@ class PointerStateMachine(
             }
             is PointerState.Drawing -> {
                 // Second finger lands mid-stroke!
-                // Per requirement: cancel in-progress stroke without committing and switch to PanZoom
+                // Cancel in-progress stroke without committing and switch to PanZoom
                 actions.add(PointerAction.CancelStroke)
 
                 val pointerIds = activePointers.keys.toList()
@@ -273,49 +298,84 @@ class PointerStateMachine(
         when (val current = state) {
             is PointerState.Drawing -> {
                 if (event.pointerId == current.pointerId) {
-                    val points = mutableListOf<PointerPoint>()
-                    // Append high-frequency historical points if available
-                    for (hp in event.historicalPoints) {
-                        points.add(hp)
-                    }
-                    points.add(PointerPoint(event.x, event.y, event.pressure))
-                    actions.add(PointerAction.AppendPoints(points))
+                    if (activeMode == ActiveMode.ERASE) {
+                        for (hp in event.historicalPoints) {
+                            actions.add(PointerAction.EraseAt(hp.x, hp.y))
+                        }
+                        actions.add(PointerAction.EraseAt(event.x, event.y))
+                        state = current.copy(lastX = event.x, lastY = event.y)
+                    } else {
+                        val points = mutableListOf<PointerPoint>()
+                        // Append high-frequency historical points if available
+                        for (hp in event.historicalPoints) {
+                            points.add(hp)
+                        }
+                        points.add(PointerPoint(event.x, event.y, event.pressure))
+                        actions.add(PointerAction.AppendPoints(points))
 
-                    state = current.copy(lastX = event.x, lastY = event.y)
+                        state = current.copy(lastX = event.x, lastY = event.y)
+                    }
                 }
             }
             is PointerState.PanZoom -> {
-                val p1 = activePointers[current.pointer1Id]
-                val p2 = activePointers[current.pointer2Id]
+                if (current.pointer2Id == -1) {
+                    // 1-finger pan
+                    val p1 = activePointers[current.pointer1Id]
+                    if (p1 != null) {
+                        val deltaX = p1.x - current.lastCenterX
+                        val deltaY = p1.y - current.lastCenterY
+                        lastDeltaX = deltaX
+                        lastDeltaY = deltaY
+                        lastMoveTimeMs = System.currentTimeMillis()
 
-                if (p1 != null && p2 != null) {
-                    val currentCenterX = (p1.x + p2.x) / 2f
-                    val currentCenterY = (p1.y + p2.y) / 2f
-                    val currentDist = hypot(p1.x - p2.x, p1.y - p2.y).coerceAtLeast(1f)
-
-                    val deltaX = currentCenterX - current.lastCenterX
-                    val deltaY = currentCenterY - current.lastCenterY
-                    val zoomFactor = currentDist / current.lastDistance
-
-                    lastDeltaX = deltaX
-                    lastDeltaY = deltaY
-                    lastMoveTimeMs = System.currentTimeMillis()
-
-                    actions.add(
-                        PointerAction.PanZoomDelta(
-                            deltaScreenX = deltaX,
-                            deltaScreenY = deltaY,
-                            zoomFactor = zoomFactor,
-                            focalScreenX = currentCenterX,
-                            focalScreenY = currentCenterY
+                        actions.add(
+                            PointerAction.PanZoomDelta(
+                                deltaScreenX = deltaX,
+                                deltaScreenY = deltaY,
+                                zoomFactor = 1.0f,
+                                focalScreenX = p1.x,
+                                focalScreenY = p1.y
+                            )
                         )
-                    )
 
-                    state = current.copy(
-                        lastCenterX = currentCenterX,
-                        lastCenterY = currentCenterY,
-                        lastDistance = currentDist
-                    )
+                        state = current.copy(
+                            lastCenterX = p1.x,
+                            lastCenterY = p1.y
+                        )
+                    }
+                } else {
+                    val p1 = activePointers[current.pointer1Id]
+                    val p2 = activePointers[current.pointer2Id]
+
+                    if (p1 != null && p2 != null) {
+                        val currentCenterX = (p1.x + p2.x) / 2f
+                        val currentCenterY = (p1.y + p2.y) / 2f
+                        val currentDist = hypot(p1.x - p2.x, p1.y - p2.y).coerceAtLeast(1f)
+
+                        val deltaX = currentCenterX - current.lastCenterX
+                        val deltaY = currentCenterY - current.lastCenterY
+                        val zoomFactor = currentDist / current.lastDistance
+
+                        lastDeltaX = deltaX
+                        lastDeltaY = deltaY
+                        lastMoveTimeMs = System.currentTimeMillis()
+
+                        actions.add(
+                            PointerAction.PanZoomDelta(
+                                deltaScreenX = deltaX,
+                                deltaScreenY = deltaY,
+                                zoomFactor = zoomFactor,
+                                focalScreenX = currentCenterX,
+                                focalScreenY = currentCenterY
+                            )
+                        )
+
+                        state = current.copy(
+                            lastCenterX = currentCenterX,
+                            lastCenterY = currentCenterY,
+                            lastDistance = currentDist
+                        )
+                    }
                 }
             }
             is PointerState.Selecting -> {
@@ -366,18 +426,35 @@ class PointerStateMachine(
         when (val current = state) {
             is PointerState.Drawing -> {
                 if (event.pointerId == current.pointerId) {
-                    actions.add(PointerAction.FinishStroke)
+                    if (activeMode == ActiveMode.ERASE) {
+                        actions.add(PointerAction.EraseAt(event.x, event.y))
+                    } else {
+                        actions.add(PointerAction.FinishStroke)
+                    }
                     state = PointerState.Idle
                 }
             }
             is PointerState.PanZoom -> {
                 if (event.pointerId == current.pointer1Id || event.pointerId == current.pointer2Id) {
-                    // Check if fling velocity should be triggered
-                    val now = System.currentTimeMillis()
-                    if (now - lastMoveTimeMs < 100 && (hypot(lastDeltaX, lastDeltaY) > 8f)) {
-                        actions.add(PointerAction.Fling(lastDeltaX * 12f, lastDeltaY * 12f))
+                    val remainingId = if (event.pointerId == current.pointer1Id) current.pointer2Id else current.pointer1Id
+                    val remainingPointer = activePointers[remainingId]
+                    if (remainingId != -1 && remainingPointer != null && stylusOnlyDrawing) {
+                        // Smoothly transition remaining finger to 1-finger pan without jumping focal point
+                        state = PointerState.PanZoom(
+                            pointer1Id = remainingId,
+                            pointer2Id = -1,
+                            lastCenterX = remainingPointer.x,
+                            lastCenterY = remainingPointer.y,
+                            lastDistance = 1f
+                        )
+                    } else {
+                        // Check if fling velocity should be triggered
+                        val now = System.currentTimeMillis()
+                        if (now - lastMoveTimeMs < 100 && (hypot(lastDeltaX, lastDeltaY) > 8f)) {
+                            actions.add(PointerAction.Fling(lastDeltaX * 12f, lastDeltaY * 12f))
+                        }
+                        state = PointerState.Idle
                     }
-                    state = PointerState.Idle
                 }
             }
             is PointerState.Selecting -> {

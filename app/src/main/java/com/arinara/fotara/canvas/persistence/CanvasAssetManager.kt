@@ -50,91 +50,134 @@ class CanvasAssetManager(private val context: Context? = null) {
     /**
      * Imports an image from an external Uri, applying EXIF rotation and downsampling.
      * Guaranteed to run off the main thread.
+     * Copies the stream to a temporary file first to prevent issues with single-read content URIs.
      */
     suspend fun importImage(
         sourceUri: Uri,
         canvasId: Long
     ): CanvasAssetInfo? = withContext(Dispatchers.IO) {
+        val cr = context?.contentResolver ?: return@withContext null
+        val tempFile = try {
+            File.createTempFile("canvas_stage_", ".tmp", context.cacheDir)
+        } catch (_: Exception) {
+            File(assetDir, "canvas_stage_${UUID.randomUUID()}.tmp")
+        }
+
         try {
-            val cr = context?.contentResolver ?: return@withContext null
+            // Copy stream exactly once to local staging file
+            val copied = cr.openInputStream(sourceUri)?.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    input.copyTo(output) > 0
+                }
+            } ?: false
 
-            // 1. Decode bounds & EXIF orientation
-            val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            cr.openInputStream(sourceUri)?.use { input ->
-                BitmapFactory.decodeStream(input, null, boundsOpts)
-            } ?: return@withContext null
-
-            if (boundsOpts.outWidth <= 0 || boundsOpts.outHeight <= 0) {
+            if (!copied || !tempFile.exists() || tempFile.length() == 0L) {
+                tempFile.delete()
                 return@withContext null
             }
 
-            var rotationDegrees = 0
-            try {
-                cr.openInputStream(sourceUri)?.use { input ->
-                    val exif = ExifInterface(input)
-                    val orientation = exif.getAttributeInt(
-                        ExifInterface.TAG_ORIENTATION,
-                        ExifInterface.ORIENTATION_NORMAL
-                    )
-                    rotationDegrees = when (orientation) {
-                        ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                        ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                        ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                        else -> 0
-                    }
-                }
-            } catch (_: Exception) {}
-
-            // 2. Compute sample size to clamp to MAX_IMAGE_DIMENSION
-            var sample = 1
-            while ((boundsOpts.outWidth / sample) > MAX_IMAGE_DIMENSION ||
-                (boundsOpts.outHeight / sample) > MAX_IMAGE_DIMENSION
-            ) {
-                sample *= 2
+            importFromFileInternal(tempFile, canvasId)
+        } catch (e: Exception) {
+            android.util.Log.e("CanvasAssetManager", "Failed to import image from Uri: ${e.message}", e)
+            null
+        } finally {
+            if (tempFile.exists()) {
+                tempFile.delete()
             }
+        }
+    }
 
-            // 3. Decode scaled bitmap
-            val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sample }
-            var bitmap = cr.openInputStream(sourceUri)?.use { input ->
-                BitmapFactory.decodeStream(input, null, decodeOpts)
-            } ?: return@withContext null
-
-            // 4. Apply EXIF rotation if needed
-            if (rotationDegrees != 0) {
-                val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                val rotated = Bitmap.createBitmap(
-                    bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
-                )
-                if (rotated != bitmap) {
-                    bitmap.recycle()
-                    bitmap = rotated
-                }
-            }
-
-            // 5. Save into managed storage
-            val assetId = "asset_${UUID.randomUUID()}"
-            val targetFile = File(assetDir, "${assetId}.jpg")
-            FileOutputStream(targetFile).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
-            }
-
-            val finalWidth = bitmap.width
-            val finalHeight = bitmap.height
-            val finalSize = targetFile.length()
-            bitmap.recycle()
-
-            CanvasAssetInfo(
-                assetId = assetId,
-                canvasId = canvasId,
-                filePath = targetFile.absolutePath,
-                mimeType = "image/jpeg",
-                width = finalWidth,
-                height = finalHeight,
-                fileSizeBytes = finalSize
-            )
-        } catch (_: Exception) {
+    /**
+     * Imports an image from an existing local file (e.g. from photo notes or camera output),
+     * applying EXIF rotation and downsampling to app-private storage.
+     */
+    suspend fun importImageFile(
+        sourceFile: File,
+        canvasId: Long
+    ): CanvasAssetInfo? = withContext(Dispatchers.IO) {
+        if (!sourceFile.exists() || sourceFile.length() == 0L) return@withContext null
+        try {
+            importFromFileInternal(sourceFile, canvasId)
+        } catch (e: Exception) {
+            android.util.Log.e("CanvasAssetManager", "Failed to import image from file: ${e.message}", e)
             null
         }
+    }
+
+    private fun importFromFileInternal(
+        file: File,
+        canvasId: Long
+    ): CanvasAssetInfo? {
+        // 1. Decode bounds
+        val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, boundsOpts)
+
+        if (boundsOpts.outWidth <= 0 || boundsOpts.outHeight <= 0) {
+            return null
+        }
+
+        // 2. Read EXIF orientation
+        var rotationDegrees = 0
+        try {
+            val exif = ExifInterface(file.absolutePath)
+            val orientation = exif.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+            rotationDegrees = when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+        } catch (_: Exception) {}
+
+        // 3. Compute sample size to clamp to CanvasConfig.MAX_IMAGE_DIMENSION
+        val maxDim = com.arinara.fotara.canvas.engine.CanvasConfig.MAX_IMAGE_DIMENSION
+        var sample = 1
+        while ((boundsOpts.outWidth / sample) > maxDim ||
+            (boundsOpts.outHeight / sample) > maxDim
+        ) {
+            sample *= 2
+        }
+
+        // 4. Decode scaled bitmap
+        val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sample }
+        var bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOpts) ?: return null
+
+        // 5. Apply EXIF rotation if needed
+        if (rotationDegrees != 0) {
+            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+            val rotated = Bitmap.createBitmap(
+                bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+            )
+            if (rotated != bitmap) {
+                bitmap.recycle()
+                bitmap = rotated
+            }
+        }
+
+        // 6. Save into managed storage
+        val assetId = "asset_${UUID.randomUUID()}"
+        val targetFile = File(assetDir, "${assetId}.jpg")
+        FileOutputStream(targetFile).use { out ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+        }
+
+        val finalWidth = bitmap.width
+        val finalHeight = bitmap.height
+        val finalSize = targetFile.length()
+        bitmap.recycle()
+
+        return CanvasAssetInfo(
+            assetId = assetId,
+            canvasId = canvasId,
+            filePath = targetFile.absolutePath,
+            mimeType = "image/jpeg",
+            width = finalWidth,
+            height = finalHeight,
+            fileSizeBytes = finalSize
+        )
     }
 
     /**

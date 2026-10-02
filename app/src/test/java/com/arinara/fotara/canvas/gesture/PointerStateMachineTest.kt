@@ -124,11 +124,24 @@ class PointerStateMachineTest {
             stylusOnlyDrawing = true
         )
 
-        // 1 finger touch with stylusOnlyDrawing = true -> does not start stroke
+        // 1 finger touch with stylusOnlyDrawing = true -> does not start stroke, enters 1-finger pan
         val fingerActions = sm.processEvent(
             PointerInputEvent.Down(pointerId = 1, x = 50f, y = 50f, toolType = PointerToolType.FINGER)
         )
         assertTrue(fingerActions.isEmpty())
+        assertTrue(sm.state is PointerState.PanZoom)
+
+        // Finger move produces PanZoomDelta actions
+        val moveActions = sm.processEvent(
+            PointerInputEvent.Move(pointerId = 1, x = 60f, y = 70f, toolType = PointerToolType.FINGER)
+        )
+        assertEquals(1, moveActions.size)
+        assertTrue(moveActions.first() is PointerAction.PanZoomDelta)
+
+        // Finger release returns state machine to Idle
+        sm.processEvent(
+            PointerInputEvent.Up(pointerId = 1, x = 60f, y = 70f)
+        )
         assertTrue(sm.state is PointerState.Idle)
 
         // Stylus touch starts drawing

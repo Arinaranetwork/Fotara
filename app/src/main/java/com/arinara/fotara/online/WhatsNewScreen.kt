@@ -172,16 +172,17 @@ fun WhatsNewScreen(
         }
     }
 
-    val versionText = release?.version ?: "Fotara v1.5.1 Beta"
+    val versionText = release?.version ?: "Fotara v1.5.2 Beta"
     val defaultNotes = """
         ## What's New
-        - Photo-Style PDF Page Viewer: New Page View button in the PDF header opens a dedicated fullscreen page viewer with pinch-to-zoom up to 4.0x, free two-axis pan, double-tap zoom, zoom-gated horizontal swipe, and a collapsible Recognized OCR Text bottom sheet with instant copy.
-        - Viewport-Level List Zoom: Rebuilt PDF list viewer zoom to transform the entire document viewport with natural two-axis pan, double-tap to zoom or reset, and live amber status indicator.
-
-        ## Fixed
-        - Resolved slim and distorted PDF page rendering at 1.0x by eliminating the default aspect ratio race condition and computing exact target dimensions with unified layout math.
-        - Fixed boxed in-card zoom constraints so zooming in the PDF list no longer feels boxed into a single page.
-        - Fixed high-density bitmap allocation during pinch gestures with memory-bounded caching and automatic resource reclamation.
+        - Canvas Stability & Autosave: Debounced autosave with interactive save status indicator (Saving, Saved, Retry), synchronous flush on backgrounding/exit, and atomic state persistence.
+        - Precision 1:1 Canvas Panning: 1:1 pan tracking at any zoom distance, eliminate lag or focal-point jumps, and coordinate bounding to 20k x 20k with viewport culling.
+        - Safe Image Import: Images are staged safely through ContentResolver, downsampled to 2048px, inserted as separate layers at viewport center with full undo/redo.
+        - Insert From Existing Notes: Add snapshots from existing photo notes directly into the canvas from a visual grid picker.
+        - Layer-Aware Stroke Eraser: The broom tool now erases strokes strictly on the active layer with responsive touch tracking.
+        - Searchable OCR & DOCX Content: Full SQLite FTS4 virtual table search for DOCX and PDF documents with multi-word prefix matching, relevance ranking, and visual OCR/DOCX snippets.
+        - Responsive UI Layout: Redesigned single-line header row preventing overlaps on compact screens and floating zoom pill avoiding dock overlap.
+        - Dynamic Glowing Folder Cards: Glowing folders dynamically face their illuminated neighbors on cardinal edges and diagonal corners.
     """.trimIndent()
 
     val rawNotes = release?.releaseNotes?.ifBlank { defaultNotes } ?: defaultNotes

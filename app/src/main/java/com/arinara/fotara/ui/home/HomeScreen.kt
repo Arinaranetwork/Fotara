@@ -106,10 +106,12 @@ import com.arinara.fotara.ui.components.FeedbackDialog
 import com.arinara.fotara.ui.components.FloatingDock
 import com.arinara.fotara.ui.components.FolderCard
 import com.arinara.fotara.ui.components.FolderUnlockDialog
+import com.arinara.fotara.ui.components.GlowCorner
 import com.arinara.fotara.ui.components.NewFolderCard
 import com.arinara.fotara.ui.components.NewFolderDialog
 import com.arinara.fotara.ui.components.ResetFolderPinDialog
 import com.arinara.fotara.ui.components.SetFolderLockDialog
+import com.arinara.fotara.ui.components.computeFolderGlowOrientations
 
 @Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -420,6 +422,10 @@ fun HomeScreen(
             else -> 2
         }
 
+        val folderGlowOrientations = remember(uiState.folders, folderColumns) {
+            computeFolderGlowOrientations(uiState.folders, folderColumns)
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -449,6 +455,7 @@ fun HomeScreen(
                         folder = folder,
                         isSelectionMode = uiState.isMultiSelectMode,
                         isSelected = uiState.selectedFolderIds.contains(folder.id),
+                        glowCorner = folderGlowOrientations[folder.id] ?: GlowCorner.BottomLeft,
                         onClick = {
                             if (uiState.isMultiSelectMode) {
                                 viewModel.toggleFolderSelection(folder.id)

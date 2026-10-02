@@ -22,7 +22,76 @@ enum class GlowCorner {
     TopLeft,
     TopRight,
     BottomLeft,
-    BottomRight
+    BottomRight,
+    TopEdge,
+    BottomEdge,
+    LeftEdge,
+    RightEdge
+}
+
+/**
+ * Computes the optimal facing glow orientation for each folder in a 2D grid.
+ * If adjacent cards have an active glow (LinkIt spatial group), the glow is oriented
+ * to face the nearest neighbor:
+ * - Cardinal neighbors (up/down/left/right) -> TopEdge, BottomEdge, LeftEdge, RightEdge
+ * - Diagonal neighbors (corners) -> TopLeft, TopRight, BottomLeft, BottomRight
+ */
+fun computeFolderGlowOrientations(
+    folders: List<com.arinara.fotara.data.model.Folder>,
+    columns: Int = 2
+): Map<Long, GlowCorner> {
+    if (folders.isEmpty() || columns <= 0) return emptyMap()
+
+    val resultMap = mutableMapOf<Long, GlowCorner>()
+
+    for ((index, folder) in folders.withIndex()) {
+        if (folder.linkGroupId == null) continue
+
+        val row = index / columns
+        val col = index % columns
+
+        // Check 8 directions: cardinal first (edges), then diagonal (corners)
+        // Priority 1: neighbor in SAME linkGroupId
+        // Priority 2: any linked neighbor
+        var sameGroupOrientation: GlowCorner? = null
+        var anyLinkedOrientation: GlowCorner? = null
+
+        val directions = listOf(
+            // Cardinal (edges)
+            Triple(-1, 0, GlowCorner.TopEdge),
+            Triple(1, 0, GlowCorner.BottomEdge),
+            Triple(0, -1, GlowCorner.LeftEdge),
+            Triple(0, 1, GlowCorner.RightEdge),
+            // Diagonal (corners)
+            Triple(-1, -1, GlowCorner.TopLeft),
+            Triple(-1, 1, GlowCorner.TopRight),
+            Triple(1, -1, GlowCorner.BottomLeft),
+            Triple(1, 1, GlowCorner.BottomRight)
+        )
+
+        for ((dRow, dCol, orientation) in directions) {
+            val nRow = row + dRow
+            val nCol = col + dCol
+
+            if (nCol in 0 until columns) {
+                val nIndex = nRow * columns + nCol
+                if (nIndex in folders.indices) {
+                    val neighbor = folders[nIndex]
+                    if (neighbor.linkGroupId != null) {
+                        if (neighbor.linkGroupId == folder.linkGroupId && sameGroupOrientation == null) {
+                            sameGroupOrientation = orientation
+                        } else if (anyLinkedOrientation == null) {
+                            anyLinkedOrientation = orientation
+                        }
+                    }
+                }
+            }
+        }
+
+        resultMap[folder.id] = sameGroupOrientation ?: anyLinkedOrientation ?: GlowCorner.BottomLeft
+    }
+
+    return resultMap
 }
 
 /**
@@ -55,6 +124,10 @@ fun Modifier.linkItCornerGlow(
                 GlowCorner.TopRight -> Offset(size.width, 0f)
                 GlowCorner.BottomLeft -> Offset(0f, size.height)
                 GlowCorner.BottomRight -> Offset(size.width, size.height)
+                GlowCorner.TopEdge -> Offset(size.width / 2f, 0f)
+                GlowCorner.BottomEdge -> Offset(size.width / 2f, size.height)
+                GlowCorner.LeftEdge -> Offset(0f, size.height / 2f)
+                GlowCorner.RightEdge -> Offset(size.width, size.height / 2f)
             }
             val glowBrush = Brush.radialGradient(
                 colors = listOf(
@@ -225,6 +298,66 @@ fun Modifier.linkItCornerGlow(
                             ),
                             start = Offset(size.width - strokePx / 2f, size.height - r - fadeLength),
                             end = Offset(size.width - strokePx / 2f, size.height - r),
+                            strokeWidth = strokePx,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                    GlowCorner.TopEdge -> {
+                        val edgeStartX = size.width * 0.15f
+                        val edgeEndX = size.width * 0.85f
+                        drawLine(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(Color.Transparent, strokeColor, Color.Transparent),
+                                startX = edgeStartX,
+                                endX = edgeEndX
+                            ),
+                            start = Offset(edgeStartX, strokePx / 2f),
+                            end = Offset(edgeEndX, strokePx / 2f),
+                            strokeWidth = strokePx,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                    GlowCorner.BottomEdge -> {
+                        val edgeStartX = size.width * 0.15f
+                        val edgeEndX = size.width * 0.85f
+                        drawLine(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(Color.Transparent, strokeColor, Color.Transparent),
+                                startX = edgeStartX,
+                                endX = edgeEndX
+                            ),
+                            start = Offset(edgeStartX, size.height - strokePx / 2f),
+                            end = Offset(edgeEndX, size.height - strokePx / 2f),
+                            strokeWidth = strokePx,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                    GlowCorner.LeftEdge -> {
+                        val edgeStartY = size.height * 0.15f
+                        val edgeEndY = size.height * 0.85f
+                        drawLine(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, strokeColor, Color.Transparent),
+                                startY = edgeStartY,
+                                endY = edgeEndY
+                            ),
+                            start = Offset(strokePx / 2f, edgeStartY),
+                            end = Offset(strokePx / 2f, edgeEndY),
+                            strokeWidth = strokePx,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                    GlowCorner.RightEdge -> {
+                        val edgeStartY = size.height * 0.15f
+                        val edgeEndY = size.height * 0.85f
+                        drawLine(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, strokeColor, Color.Transparent),
+                                startY = edgeStartY,
+                                endY = edgeEndY
+                            ),
+                            start = Offset(size.width - strokePx / 2f, edgeStartY),
+                            end = Offset(size.width - strokePx / 2f, edgeEndY),
                             strokeWidth = strokePx,
                             cap = StrokeCap.Round
                         )

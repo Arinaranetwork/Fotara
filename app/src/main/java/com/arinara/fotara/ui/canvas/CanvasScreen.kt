@@ -7,14 +7,17 @@
 package com.arinara.fotara.ui.canvas
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +26,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.layout.ContentScale
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -141,6 +159,30 @@ fun CanvasScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    // Ensure changes are flushed on system Back or app pause/stop
+    BackHandler {
+        coroutineScope.launch {
+            viewModel.flushSave()
+            onBack()
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                coroutineScope.launch {
+                    viewModel.flushSave()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     var drawingViewRef by remember { mutableStateOf<CanvasDrawingView?>(null) }
     var showOverflowMenu by remember { mutableStateOf(false) }
@@ -199,227 +241,204 @@ fun CanvasScreen(
         )
 
         // ==========================================
-        // Z1: Top-Left Header (Back, Title, Save State)
+        // Z1 & Z2: Top Unified Responsive Header Row
         // ==========================================
         Row(
             modifier = Modifier
-                .align(Alignment.TopStart)
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(start = 12.dp, top = 8.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
                 .zIndex(10f),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MidnightSurface.copy(alpha = 0.85f))
+            // Left: Back button + Title/Alpha/Save capsule
+            Row(
+                modifier = Modifier.weight(1f, fill = false),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = FolderTabCream
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Surface(
-                color = MidnightSurface.copy(alpha = 0.85f),
-                shape = RoundedCornerShape(20.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
-                modifier = Modifier.clickable {
-                    renameInput = uiState.title
-                    viewModel.setRenameDialogVisible(true)
-                }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                IconButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            viewModel.flushSave()
+                            onBack()
+                        }
+                    },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(MidnightSurface.copy(alpha = 0.85f))
                 ) {
-                    Text(
-                        text = uiState.title,
-                        color = TextPrimary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = FolderTabCream
                     )
+                }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
-                    // Alpha label badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(TagAmber.copy(alpha = 0.2f))
-                            .border(0.8.dp, TagAmber.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                Surface(
+                    color = MidnightSurface.copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(20.dp),
+                    border = BorderStroke(1.dp, MidnightCardOutline),
+                    modifier = Modifier.clickable {
+                        renameInput = uiState.title
+                        viewModel.setRenameDialogVisible(true)
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Alpha",
-                            color = TagAmber,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            text = uiState.title,
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
-                    }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                    // Save state indicator
-                    when (uiState.saveState) {
-                        SaveState.SAVING -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(12.dp),
-                                    strokeWidth = 1.5.dp,
-                                    color = TagAmber
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Saving...", color = TextMuted, fontSize = 11.sp)
-                            }
+                        // Alpha label badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(TagAmber.copy(alpha = 0.2f))
+                                .border(0.8.dp, TagAmber.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = "Alpha",
+                                color = TagAmber,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                        SaveState.SAVED -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Saved",
-                                    tint = FolderTabCream.copy(alpha = 0.8f),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text("Saved", color = TextMuted, fontSize = 11.sp)
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Interactive Save state indicator
+                        when (uiState.saveState) {
+                            SaveState.SAVING -> {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(10.dp),
+                                        strokeWidth = 1.5.dp,
+                                        color = TagAmber
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("Saving", color = TextMuted, fontSize = 10.sp)
+                                }
                             }
-                        }
-                        SaveState.ERROR -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = "Save Error",
-                                    tint = TagCrimson,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text("Error", color = TagCrimson, fontSize = 11.sp)
+                            SaveState.SAVED -> {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Saved",
+                                        tint = FolderTabCream.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("Saved", color = TextMuted, fontSize = 10.sp)
+                                }
+                            }
+                            SaveState.ERROR -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable { viewModel.retrySave() }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Retry Save",
+                                        tint = TagCrimson,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("Retry", color = TagCrimson, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        // ==========================================
-        // Z2: Top-Right Operations Toolbar
-        // ==========================================
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(end = 12.dp, top = 8.dp)
-                .zIndex(10f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Right: Operations capsule (Undo, Redo, Layers, Add Image, Overflow Menu)
             Surface(
                 color = MidnightSurface.copy(alpha = 0.85f),
                 shape = RoundedCornerShape(20.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline)
+                border = BorderStroke(1.dp, MidnightCardOutline)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Undo
                     IconButton(
                         onClick = { viewModel.undo() },
                         enabled = uiState.canUndo,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Undo,
                             contentDescription = "Undo",
                             tint = if (uiState.canUndo) FolderTabCream else TextMuted.copy(alpha = 0.35f),
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 
-                    // Redo
                     IconButton(
                         onClick = { viewModel.redo() },
                         enabled = uiState.canRedo,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Redo,
                             contentDescription = "Redo",
                             tint = if (uiState.canRedo) FolderTabCream else TextMuted.copy(alpha = 0.35f),
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 
-                    // Layers (opens Z5)
                     IconButton(
                         onClick = { viewModel.setLayersPanelVisible(true) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Layers,
                             contentDescription = "Layers",
                             tint = if (uiState.showLayersPanel) TagAmber else FolderTabCream,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 
-                    // Add Image
                     IconButton(
                         onClick = { viewModel.setImageSourceDialogVisible(true) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.AddPhotoAlternate,
                             contentDescription = "Add Image",
                             tint = FolderTabCream,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 
-                    // Schedule (C5)
-                    IconButton(
-                        onClick = { viewModel.setScheduleDialogVisible(true) },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccessTime,
-                            contentDescription = "Schedule Note",
-                            tint = if (uiState.scheduledAt != null) TagAmber else FolderTabCream,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Export / Share
-                    IconButton(
-                        onClick = { viewModel.setExportDialogVisible(true) },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Export PNG",
-                            tint = FolderTabCream,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Overflow Menu
                     Box {
                         IconButton(
                             onClick = { showOverflowMenu = true },
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More Options",
                                 tint = FolderTabCream,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
 
@@ -428,6 +447,22 @@ fun CanvasScreen(
                             onDismissRequest = { showOverflowMenu = false },
                             modifier = Modifier.background(MidnightSurface)
                         ) {
+                            DropdownMenuItem(
+                                text = { Text("Schedule Note", color = TextPrimary) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    viewModel.setScheduleDialogVisible(true)
+                                },
+                                leadingIcon = { Icon(Icons.Default.AccessTime, null, tint = if (uiState.scheduledAt != null) TagAmber else FolderTabCream) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Export & Share PNG", color = TextPrimary) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    viewModel.setExportDialogVisible(true)
+                                },
+                                leadingIcon = { Icon(Icons.Default.Share, null, tint = FolderTabCream) }
+                            )
                             DropdownMenuItem(
                                 text = { Text("Background Style", color = TextPrimary) },
                                 onClick = {
@@ -487,18 +522,23 @@ fun CanvasScreen(
         // ==========================================
         // Z7: Bottom-Left Zoom & Fit-to-Content
         // ==========================================
+        val zoomBottomPadding by animateDpAsState(
+            targetValue = if (uiState.isBottomDockCollapsed) 20.dp else 92.dp,
+            label = "zoom_bottom_padding"
+        )
+
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .navigationBarsPadding()
-                .padding(start = 16.dp, bottom = 20.dp)
+                .padding(start = 16.dp, bottom = zoomBottomPadding)
                 .zIndex(10f),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 color = MidnightSurface.copy(alpha = 0.85f),
                 shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline)
+                border = BorderStroke(1.dp, MidnightCardOutline)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1341,10 +1381,91 @@ fun CanvasScreen(
                                 Text("Choose an image from your device storage", color = TextSecondary, fontSize = 12.sp)
                             }
                         }
+
+                        HorizontalDivider(color = MidnightCardOutline.copy(alpha = 0.5f))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.loadExistingNotes()
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Collections, null, tint = TagAmber, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("From Fotara Notes", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text("Choose a photo or scan from your existing notes", color = TextSecondary, fontSize = 12.sp)
+                            }
+                        }
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = { viewModel.setImageSourceDialogVisible(false) }) {
+                        Text("Cancel", color = TextMuted)
+                    }
+                },
+                containerColor = MidnightSurface
+            )
+        }
+
+        // Existing Notes Picker Dialog
+        if (uiState.showExistingNotesDialog) {
+            AlertDialog(
+                onDismissRequest = { viewModel.setExistingNotesDialogVisible(false) },
+                title = { Text("Import from Notes", color = TextPrimary) },
+                text = {
+                    Box(modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 360.dp)) {
+                        if (uiState.isLoadingExistingNotes) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = FolderTabCream, strokeWidth = 2.dp)
+                            }
+                        } else if (uiState.existingImageNotes.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("No photo notes found.", color = TextMuted, fontSize = 13.sp)
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(uiState.existingImageNotes) { photo ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, MidnightCardOutline),
+                                        color = MidnightSurface,
+                                        modifier = Modifier
+                                            .aspectRatio(1f)
+                                            .clickable {
+                                                val v = drawingViewRef
+                                                if (v != null) {
+                                                    viewModel.addFromExistingPhoto(
+                                                        photo,
+                                                        v.viewport,
+                                                        v.width.toFloat(),
+                                                        v.height.toFloat()
+                                                    )
+                                                }
+                                            }
+                                    ) {
+                                        AsyncImage(
+                                            model = photo.fileUri,
+                                            contentDescription = photo.caption ?: "Note photo",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.setExistingNotesDialogVisible(false) }) {
                         Text("Cancel", color = TextMuted)
                     }
                 },

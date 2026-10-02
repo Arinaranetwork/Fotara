@@ -14,8 +14,9 @@ import org.junit.Test
 class CanvasMigrationTest {
 
     @Test
-    fun testV14DatabaseVersionIsSet() {
-        assertEquals(14, FotaraDbHelper.DATABASE_VERSION)
+    fun testDatabaseVersionIsAtLeast14() {
+        assertTrue(FotaraDbHelper.DATABASE_VERSION >= 14)
+        assertEquals(15, FotaraDbHelper.DATABASE_VERSION)
     }
 
     @Test

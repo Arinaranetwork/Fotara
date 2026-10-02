@@ -280,6 +280,8 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_canvas_id ON canvas_elements(canvas_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_layer_id ON canvas_elements(layer_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_assets_canvas_id ON canvas_assets(canvas_id)")
+
+        createFtsTable(db)
     }
 
     private fun createFtsTable(db: SQLiteDatabase) {
@@ -293,6 +295,18 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                     caption,
                     ocr_text,
                     note
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS document_notes_fts USING fts4(
+                    document_id,
+                    folder_name,
+                    subfolder_name,
+                    name,
+                    doc_type,
+                    content_text
                 )
                 """.trimIndent()
             )
@@ -587,6 +601,24 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v14 failed: ${e.message}")
             }
         }
+        if (oldVersion < 15) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE VIRTUAL TABLE IF NOT EXISTS document_notes_fts USING fts4(
+                        document_id,
+                        folder_name,
+                        subfolder_name,
+                        name,
+                        doc_type,
+                        content_text
+                    )
+                    """.trimIndent()
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v15 failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -622,7 +654,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 14
+        const val DATABASE_VERSION = 15
     }
 
     /**

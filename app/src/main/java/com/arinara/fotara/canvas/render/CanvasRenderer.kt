@@ -157,8 +157,10 @@ class CanvasRenderer(
             canvas.drawBitmap(bmp, tileSrcRect, tileDestRect, null)
         }
 
-        // 3. Fallback direct draw for any viewport area not yet covered by cached tiles
-        drawCommittedFallbackElements(canvas, viewport, screenWidth, screenHeight, documentSnapshot, spatialIndex)
+        // 3. Fallback direct draw for viewport if cached tiles are not yet available
+        if (tiles.isEmpty()) {
+            drawCommittedFallbackElements(canvas, viewport, screenWidth, screenHeight, documentSnapshot, spatialIndex)
+        }
 
         // 4. Draw Live In-Progress Stroke (High-frequency path)
         if (inProgressPoints != null && inProgressPoints.isNotEmpty() && inProgressTool != null) {

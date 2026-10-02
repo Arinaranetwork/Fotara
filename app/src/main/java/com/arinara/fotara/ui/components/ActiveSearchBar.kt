@@ -70,6 +70,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -477,6 +480,7 @@ fun ActiveSearchBar(
                             items(documentResults, key = { "doc_${it.id}" }) { doc ->
                                 SearchDocumentResultCard(
                                     document = doc,
+                                    query = query,
                                     onClick = { onDocumentClick(doc) }
                                 )
                             }
@@ -1193,6 +1197,66 @@ fun SearchFolderResultCard(
     }
 }
 
+fun getSearchSnippet(text: String, query: String, maxLength: Int = 90): String {
+    if (text.isBlank()) return ""
+    val cleanText = text.replace("\n", " ").replace("\\s+".toRegex(), " ").trim()
+    val cleanQuery = query.trim()
+    if (cleanQuery.isBlank() || !cleanText.contains(cleanQuery, ignoreCase = true)) {
+        return if (cleanText.length <= maxLength) cleanText else "${cleanText.take(maxLength)}..."
+    }
+
+    val index = cleanText.indexOf(cleanQuery, ignoreCase = true)
+    val halfLen = (maxLength - cleanQuery.length) / 2
+    val start = (index - halfLen).coerceAtLeast(0)
+    val end = (start + maxLength).coerceAtMost(cleanText.length)
+    val actualStart = (end - maxLength).coerceAtLeast(0)
+
+    val snippet = cleanText.substring(actualStart, end).trim()
+    val prefix = if (actualStart > 0) "..." else ""
+    val suffix = if (end < cleanText.length) "..." else ""
+    return "$prefix$snippet$suffix"
+}
+
+fun buildHighlightedSearchSnippet(
+    text: String,
+    query: String,
+    highlightColor: Color = TagAmber,
+    maxLength: Int = 90
+): AnnotatedString {
+    val snippet = getSearchSnippet(text, query, maxLength)
+    val cleanQuery = query.trim()
+    if (cleanQuery.isBlank()) {
+        return AnnotatedString(snippet)
+    }
+
+    val lowerSnippet = snippet.lowercase()
+    val lowerQuery = cleanQuery.lowercase()
+    val builder = AnnotatedString.Builder()
+
+    var cur = 0
+    while (cur < snippet.length) {
+        val nextMatch = lowerSnippet.indexOf(lowerQuery, cur)
+        if (nextMatch == -1) {
+            builder.append(snippet.substring(cur))
+            break
+        }
+        if (nextMatch > cur) {
+            builder.append(snippet.substring(cur, nextMatch))
+        }
+        builder.pushStyle(
+            SpanStyle(
+                color = highlightColor,
+                fontWeight = FontWeight.Bold,
+                background = highlightColor.copy(alpha = 0.25f)
+            )
+        )
+        builder.append(snippet.substring(nextMatch, nextMatch + cleanQuery.length))
+        builder.pop()
+        cur = nextMatch + cleanQuery.length
+    }
+    return builder.toAnnotatedString()
+}
+
 @Composable
 fun SearchPhotoResultCard(
     photo: Photo,
@@ -1248,18 +1312,40 @@ fun SearchPhotoResultCard(
                     )
                 )
                 if (!photo.ocrText.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "“${photo.ocrText.take(90)}...”",
-                        style = TextStyle(
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 16.sp
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(TagAmber.copy(alpha = 0.2f))
+                                .border(0.6.dp, TagAmber.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = "OCR",
+                                color = TagAmber,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Text(
+                            text = buildHighlightedSearchSnippet(photo.ocrText, query, TagAmber, 80),
+                            style = TextStyle(
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 16.sp
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
@@ -1394,7 +1480,7 @@ fun SearchTextNoteResultCard(
                 if (note.bodyMarkdown.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "“${note.getPlainTextSnippet(90)}”",
+                        text = buildHighlightedSearchSnippet(TextNote.stripMarkdownFormatting(note.bodyMarkdown), query, TagAmber, 85),
                         style = TextStyle(
                             color = TextSecondary,
                             fontSize = 12.sp,
@@ -1429,6 +1515,7 @@ fun SearchTextNoteResultCard(
 @Composable
 fun SearchDocumentResultCard(
     document: DocumentNote,
+    query: String,
     onClick: () -> Unit
 ) {
     Card(
@@ -1479,18 +1566,43 @@ fun SearchDocumentResultCard(
                     )
                 )
                 if (!document.extractedText.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "“${document.extractedText.take(90)}...”",
-                        style = TextStyle(
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 16.sp
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val isDocx = document.docType == com.arinara.fotara.data.model.DocumentType.DOCX
+                    val badgeColor = if (isDocx) FolderBodyBlue else TagAmber
+                    val badgeLabel = if (isDocx) "DOCX" else "OCR"
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(badgeColor.copy(alpha = 0.2f))
+                                .border(0.6.dp, badgeColor.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = badgeLabel,
+                                color = badgeColor,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Text(
+                            text = buildHighlightedSearchSnippet(document.extractedText, query, badgeColor, 80),
+                            style = TextStyle(
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 16.sp
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }

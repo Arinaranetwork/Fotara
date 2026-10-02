@@ -32,3 +32,14 @@ Released: 2026-09-30   Status: Beta
 - Resolved slim and distorted PDF page rendering at 1.0x by eliminating the default aspect ratio race condition and computing exact target dimensions with unified layout math.
 - Fixed boxed in-card zoom constraints so zooming in the PDF list no longer feels boxed into a single page.
 - Fixed high-density bitmap allocation during pinch gestures with memory-bounded caching and automatic resource reclamation.
+
+### 1.5.2 - 2026-10-02
+- Canvas Debounced Autosave: Automated 500ms background saves with single-writer mutex queue, atomic writes, synchronous flush on backgrounding, and an interactive save status pill (Saving, Saved, Retry).
+- Precision 1:1 Canvas Pan & Zoom: 1:1 finger tracking across any zoom level without lag or jumpiness, coordinate clamping to 20,000 x 20,000 extents, and viewport-culled rendering without duplicate stroke passes.
+- Safe Image Attachment: Streamlined ContentResolver imports via single-pass staging, automatic downsampling (<= 2048px), EXIF orientation correction, and insertion as a new dedicated layer centered in the active viewport with undo/redo support.
+- Insert From Existing Notes: In-canvas visual image picker allowing insertion of snapshots directly from existing photo and scan notes into new canvas layers.
+- Layer-Aware Stroke Eraser: The broom tool now erases vector strokes strictly within the currently active canvas layer without affecting other layers.
+- Searchable OCR & DOCX Content: Added SQLite FTS4 virtual table indexing for Word DOCX and PDF documents with multi-word prefix search, relevance ranking (titles before content), and context-centered `[OCR]` / `[DOCX]` result snippets.
+- Responsive Canvas Navigation: Single-line adaptive top bar eliminating collisions on compact screens or large fonts, with the floating zoom pill smoothly adjusting above the dock.
+- Dynamic Facing Folder Glow: Glowing folder cards on the home screen dynamically face adjacent glowing neighbors along cardinal edges and diagonal corners.
+- Drawing Mode Guardrails: Centralized canvas safety limits preventing out-of-bounds panning, memory overruns, and layer explosion (up to 50 layers).

@@ -153,12 +153,15 @@ class CanvasToolController(
         val worldRadius = (toolState.eraserRadius / viewport.scale).coerceAtLeast(4f)
         val layerMap = document.layers.associateBy { it.id }
 
-        // Find unlocked, visible candidate strokes
+        // Find unlocked, visible candidate strokes on the active layer
+        val activeLayerId = document.getPrimaryLayerId()
         val candidateStrokes = document.elements
             .filterIsInstance<StrokeElement>()
             .filter { stroke ->
-                val layer = layerMap[stroke.layerId]
-                layer != null && layer.isVisible && !layer.isLocked
+                stroke.layerId == activeLayerId && run {
+                    val layer = layerMap[stroke.layerId]
+                    layer != null && layer.isVisible && !layer.isLocked
+                }
             }
 
         if (toolState.activeTool == CanvasToolType.ERASER_STROKE) {

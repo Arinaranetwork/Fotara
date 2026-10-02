@@ -157,6 +157,33 @@ class AddLayerCommand(
 }
 
 /**
+ * Creates a new layer and inserts initial elements into it atomically.
+ */
+class AddLayerAndElementsCommand(
+    private val layer: CanvasLayer,
+    private val elements: List<CanvasElement>,
+    override val description: String = "Add Layer with Elements"
+) : CanvasCommand {
+
+    override fun apply(document: CanvasDocument): CanvasDocument {
+        return document.copy(
+            layers = document.layers + layer,
+            elements = document.elements + elements,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+
+    override fun undo(document: CanvasDocument): CanvasDocument {
+        val elementIds = elements.map { it.id }.toSet()
+        return document.copy(
+            layers = document.layers.filter { it.id != layer.id },
+            elements = document.elements.filter { it.id !in elementIds && it.layerId != layer.id },
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+}
+
+/**
  * Deletes a layer and its member elements.
  */
 class RemoveLayerCommand(

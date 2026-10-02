@@ -588,8 +588,9 @@ class SqlitePhotoRepository(
             try {
                 val db = dbHelper.getSafeReadableDatabase()
                 val clean = trimmed.replace("\"", "").replace("'", "")
-                if (clean.isNotBlank()) {
-                    val ftsQuery = "$clean*"
+                val tokens = clean.split("\\s+".toRegex()).filter { it.isNotBlank() }
+                if (tokens.isNotEmpty()) {
+                    val ftsQuery = tokens.joinToString(" ") { "$it*" }
                     val cursor = db.rawQuery(
                         "SELECT photo_id FROM photos_fts WHERE photos_fts MATCH ? LIMIT 50",
                         arrayOf(ftsQuery)

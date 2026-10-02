@@ -116,8 +116,9 @@ object DocxParser {
         var eventType = parser.eventType
 
         while (eventType != XmlPullParser.END_DOCUMENT) {
+            val tagName = parser.name?.substringAfter(':')
             if (eventType == XmlPullParser.START_TAG) {
-                when (parser.name) {
+                when (tagName) {
                     "p" -> {
                         val pElement = parseParagraph(parser, mediaMap)
                         if (pElement != null) elements.add(pElement)
@@ -147,8 +148,9 @@ object DocxParser {
         // Parse within this <w:p> tag until matching </w:p>
         var eventType = parser.next()
         while (eventType != XmlPullParser.END_DOCUMENT) {
+            val tagName = parser.name?.substringAfter(':')
             if (eventType == XmlPullParser.START_TAG) {
-                when (parser.name) {
+                when (tagName) {
                     "pStyle" -> {
                         val styleVal = parser.getAttributeValue(null, "val") ?: ""
                         if (styleVal.startsWith("Heading1", ignoreCase = true) || styleVal.startsWith("Title", ignoreCase = true)) {
@@ -182,7 +184,7 @@ object DocxParser {
                         }
                     }
                 }
-            } else if (eventType == XmlPullParser.END_TAG && parser.name == "p") {
+            } else if (eventType == XmlPullParser.END_TAG && tagName == "p") {
                 break
             }
             eventType = parser.next()
@@ -223,8 +225,9 @@ object DocxParser {
 
         var eventType = parser.next()
         while (eventType != XmlPullParser.END_DOCUMENT) {
+            val tagName = parser.name?.substringAfter(':')
             if (eventType == XmlPullParser.START_TAG) {
-                when (parser.name) {
+                when (tagName) {
                     "b" -> isBold = true
                     "i" -> isItalic = true
                     "u" -> isUnderline = true
@@ -235,8 +238,10 @@ object DocxParser {
                         if (halfPoints != null) fontSizeSp = halfPoints / 2f
                     }
                     "t" -> {
-                        val text = parser.nextText()
-                        runTextBuilder.append(text)
+                        try {
+                            val text = parser.nextText()
+                            runTextBuilder.append(text)
+                        } catch (_: Exception) {}
                     }
                     "drawing" -> {
                         val rId = findBlipEmbed(parser)
@@ -247,7 +252,7 @@ object DocxParser {
                         }
                     }
                 }
-            } else if (eventType == XmlPullParser.END_TAG && parser.name == "r") {
+            } else if (eventType == XmlPullParser.END_TAG && tagName == "r") {
                 break
             }
             eventType = parser.next()
@@ -288,10 +293,11 @@ object DocxParser {
     private fun findBlipEmbed(parser: XmlPullParser): String? {
         var eventType = parser.eventType
         while (eventType != XmlPullParser.END_DOCUMENT) {
-            if (eventType == XmlPullParser.START_TAG && (parser.name == "blip" || parser.name.endsWith(":blip"))) {
+            val tagName = parser.name?.substringAfter(':')
+            if (eventType == XmlPullParser.START_TAG && tagName == "blip") {
                 return parser.getAttributeValue(null, "embed")
                     ?: parser.getAttributeValue("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "embed")
-            } else if (eventType == XmlPullParser.END_TAG && parser.name == "drawing") {
+            } else if (eventType == XmlPullParser.END_TAG && tagName == "drawing") {
                 break
             }
             eventType = parser.next()
@@ -306,14 +312,19 @@ object DocxParser {
 
         var eventType = parser.next()
         while (eventType != XmlPullParser.END_DOCUMENT) {
+            val tagName = parser.name?.substringAfter(':')
             if (eventType == XmlPullParser.START_TAG) {
-                when (parser.name) {
+                when (tagName) {
                     "tr" -> currentRow = mutableListOf()
                     "tc" -> currentCellBuilder.clear()
-                    "t" -> currentCellBuilder.append(parser.nextText())
+                    "t" -> {
+                        try {
+                            currentCellBuilder.append(parser.nextText())
+                        } catch (_: Exception) {}
+                    }
                 }
             } else if (eventType == XmlPullParser.END_TAG) {
-                when (parser.name) {
+                when (tagName) {
                     "tc" -> currentRow.add(currentCellBuilder.toString().trim())
                     "tr" -> if (currentRow.isNotEmpty()) rows.add(currentRow.toList())
                     "tbl" -> break

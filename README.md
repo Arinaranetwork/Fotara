@@ -12,7 +12,7 @@
 ### Intelligent Local-First Coursework & Study Note Organization for Android
 
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%2B)-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
-[![Version](https://img.shields.io/badge/Release-v1.5.1%20Beta-00B4D8?style=flat-square)](https://github.com/Arinaranetwork/Fotara/releases)
+[![Version](https://img.shields.io/badge/Release-v1.5.2%20Beta-00B4D8?style=flat-square)](https://github.com/Arinaranetwork/Fotara/releases)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Distribution](https://img.shields.io/badge/License-Proprietary%20%26%20Educational-2A9D8F?style=flat-square)](#distribution--license)
@@ -22,7 +22,7 @@
   <b>Fotara</b> is a high-performance, private, on-device study organization ecosystem built for students, researchers, and lifelong learners. Effortlessly structure, search, schedule, and review whiteboard captures, textbook excerpts, handwritten equations, rich text notes, multi-page PDFs, Word documents, and infinite drawing canvases with zero cloud lock-in.
 </p>
 
-[Download Latest APK (v1.5.1 Beta)](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.1_Beta) • [Features](#key-features) • [Installation](#installation) • [Architecture](#architecture--tech-stack) • [Issues & Feedback](https://github.com/Arinaranetwork/Fotara/issues)
+[Download Latest APK (v1.5.2 Beta)](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.2_Beta) • [Features](#key-features) • [Installation](#installation) • [Architecture](#architecture--tech-stack) • [Issues & Feedback](https://github.com/Arinaranetwork/Fotara/issues)
 
 </div>
 

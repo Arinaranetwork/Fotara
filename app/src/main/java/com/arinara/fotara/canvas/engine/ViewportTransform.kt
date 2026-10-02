@@ -242,4 +242,33 @@ object ViewportTransform {
             translateY = sanitizeFloat(targetTy, 0f)
         )
     }
+
+    /**
+     * Clamps the viewport translation so that the visible screen center does not
+     * pan beyond the 20,000 x 20,000 logical canvas extent.
+     */
+    fun clampToExtent(
+        viewport: ViewportState,
+        screenWidth: Float,
+        screenHeight: Float
+    ): ViewportState {
+        val safeW = sanitizeFloat(screenWidth, 1080f)
+        val safeH = sanitizeFloat(screenHeight, 1920f)
+        val scale = sanitizeScale(viewport.scale)
+
+        val currentWorldCenterX = (safeW / 2f - viewport.translateX) / scale
+        val currentWorldCenterY = (safeH / 2f - viewport.translateY) / scale
+
+        val clampedWorldCenterX = currentWorldCenterX.coerceIn(CanvasConfig.WORLD_MIN_X, CanvasConfig.WORLD_MAX_X)
+        val clampedWorldCenterY = currentWorldCenterY.coerceIn(CanvasConfig.WORLD_MIN_Y, CanvasConfig.WORLD_MAX_Y)
+
+        val newTx = safeW / 2f - (clampedWorldCenterX * scale)
+        val newTy = safeH / 2f - (clampedWorldCenterY * scale)
+
+        return viewport.copy(
+            scale = scale,
+            translateX = sanitizeFloat(newTx, 0f),
+            translateY = sanitizeFloat(newTy, 0f)
+        )
+    }
 }

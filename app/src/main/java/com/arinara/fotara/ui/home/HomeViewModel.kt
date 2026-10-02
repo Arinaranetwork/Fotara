@@ -33,6 +33,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -48,6 +50,8 @@ class HomeViewModel(
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    private var searchDebounceJob: Job? = null
 
     init {
         loadData()
@@ -160,11 +164,17 @@ class HomeViewModel(
 
     fun onSearchQueryChanged(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
-        executeSearch(query, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter, _uiState.value.selectedSmartTag)
+        searchDebounceJob?.cancel()
+        searchDebounceJob = viewModelScope.launch {
+            delay(250)
+            executeSearch(query, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter, _uiState.value.selectedSmartTag)
+        }
     }
 
     fun submitSearch(query: String) {
         val trimmed = query.trim()
+        searchDebounceJob?.cancel()
+        executeSearch(query, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter, _uiState.value.selectedSmartTag)
         if (trimmed.isNotBlank()) {
             viewModelScope.launch {
                 settingsRepository?.addRecentSearch(trimmed)
@@ -208,11 +218,36 @@ class HomeViewModel(
         val startTime = computedRange.startMs
         val endTime = computedRange.endMs
 
-        fun <T> sortResults(items: List<T>, timeSelector: (T) -> Long): List<T> {
-            return if (sortOrder == SearchSortOrder.OLDEST_ADDED) {
-                items.sortedBy(timeSelector)
+        fun <T> sortResults(
+            items: List<T>,
+            titleSelector: ((T) -> String)? = null,
+            timeSelector: (T) -> Long
+        ): List<T> {
+            val q = trimmed.lowercase()
+            val comparator = if (q.isNotBlank() && titleSelector != null) {
+                compareBy<T> { item ->
+                    val title = titleSelector(item).lowercase()
+                    when {
+                        title == q -> 0
+                        title.startsWith(q) -> 1
+                        title.contains(q) -> 2
+                        else -> 3
+                    }
+                }
             } else {
-                items.sortedByDescending(timeSelector)
+                null
+            }
+
+            val timeComparator = if (sortOrder == SearchSortOrder.OLDEST_ADDED) {
+                compareBy<T> { timeSelector(it) }
+            } else {
+                compareByDescending<T> { timeSelector(it) }
+            }
+
+            return if (comparator != null) {
+                items.sortedWith(comparator.thenComparing(timeComparator))
+            } else {
+                items.sortedWith(timeComparator)
             }
         }
 
@@ -228,7 +263,7 @@ class HomeViewModel(
                 val matchesColor = if (colorFilter == null) true else folder.colorLabel.equals(colorFilter, ignoreCase = true)
                 matchesQuery && matchesDate && matchesColor
             }
-            sortResults(list) { it.createdAt }
+            sortResults(list, { it.name }, { it.createdAt })
         } else {
             emptyList()
         }
@@ -250,7 +285,7 @@ class HomeViewModel(
                     }
                     _uiState.update {
                         it.copy(
-                            searchResults = sortResults(filtered) { p -> p.addedAt },
+                            searchResults = sortResults(filtered, { it.caption ?: "" }, { p -> p.addedAt }),
                             isSearchLoading = false
                         )
                     }
@@ -264,7 +299,7 @@ class HomeViewModel(
                         matchesDate && matchesColor
                     }
                     _uiState.update {
-                        it.copy(groupSearchResults = sortResults(filtered) { g -> g.addedAt })
+                        it.copy(groupSearchResults = sortResults(filtered, { it.name }, { g -> g.addedAt }))
                     }
                 }
             }
@@ -277,7 +312,7 @@ class HomeViewModel(
                             matchesDate && matchesColor
                         }
                         _uiState.update {
-                            it.copy(textNoteSearchResults = sortResults(filtered) { n -> n.addedAt })
+                            it.copy(textNoteSearchResults = sortResults(filtered, { it.title }, { n -> n.addedAt }))
                         }
                     }
                 }
@@ -291,7 +326,7 @@ class HomeViewModel(
                             matchesDate && matchesColor
                         }
                         _uiState.update {
-                            it.copy(documentSearchResults = sortResults(filtered) { d -> d.addedAt })
+                            it.copy(documentSearchResults = sortResults(filtered, { it.name }, { d -> d.addedAt }))
                         }
                     }
                 }
@@ -305,7 +340,7 @@ class HomeViewModel(
                             matchesDate && matchesColor
                         }
                         _uiState.update {
-                            it.copy(canvasNoteSearchResults = sortResults(filtered) { c -> c.addedAt })
+                            it.copy(canvasNoteSearchResults = sortResults(filtered, { it.title }, { c -> c.addedAt }))
                         }
                     }
                 }

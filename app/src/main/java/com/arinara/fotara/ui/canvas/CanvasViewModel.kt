@@ -19,7 +19,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.arinara.fotara.canvas.engine.AddElementsCommand
+import com.arinara.fotara.canvas.engine.AddLayerAndElementsCommand
 import com.arinara.fotara.canvas.engine.AddLayerCommand
+import com.arinara.fotara.canvas.engine.CanvasConfig
 import com.arinara.fotara.canvas.engine.CanvasHistoryManager
 import com.arinara.fotara.canvas.engine.CanvasRect
 import com.arinara.fotara.canvas.engine.ChangeLayerPropsCommand
@@ -42,6 +44,7 @@ import com.arinara.fotara.canvas.model.CanvasLayer
 import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokeToolType
+import com.arinara.fotara.canvas.persistence.CanvasAssetInfo
 import com.arinara.fotara.canvas.persistence.CanvasAssetManager
 import com.arinara.fotara.canvas.persistence.CanvasRepository
 import com.arinara.fotara.canvas.render.CanvasRenderer
@@ -50,11 +53,13 @@ import com.arinara.fotara.canvas.tool.CanvasToolController
 import com.arinara.fotara.canvas.tool.CanvasToolState
 import com.arinara.fotara.canvas.tool.CanvasToolType
 import com.arinara.fotara.data.model.Folder
+import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.repository.CanvasNoteRepository
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.util.NoteScheduleManager
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -63,6 +68,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -112,6 +119,8 @@ data class CanvasUiState(
     val showDeleteConfirmDialog: Boolean = false,
     val showImageSourceDialog: Boolean = false,
     val showExistingNotesDialog: Boolean = false,
+    val existingImageNotes: List<Photo> = emptyList(),
+    val isLoadingExistingNotes: Boolean = false,
     val showExperimentalNotice: Boolean = false,
     val isExporting: Boolean = false,
     val exportProgress: Float = 0f,
@@ -152,6 +161,10 @@ class CanvasViewModel(
     val uiState: StateFlow<CanvasUiState> = _uiState.asStateFlow()
 
     private var autosaveJob: Job? = null
+    private val saveMutex = Mutex()
+    @Volatile
+    private var isDirty: Boolean = false
+    private var retryAttempt: Int = 0
 
     init {
         // Load folders for Move action
@@ -253,23 +266,71 @@ class CanvasViewModel(
         _uiState.update { it.copy(zoomPercentage = pct) }
     }
 
-    private fun triggerDebouncedAutosave() {
+    fun triggerDebouncedAutosave() {
+        isDirty = true
+        _uiState.update { it.copy(saveState = SaveState.SAVING) }
         autosaveJob?.cancel()
         autosaveJob = viewModelScope.launch(Dispatchers.IO) {
             delay(500) // 500ms debounce window
-            val currentId = _uiState.value.canvasId ?: return@launch
+            performSave()
+        }
+    }
+
+    private suspend fun performSave(): Boolean = withContext(NonCancellable + Dispatchers.IO) {
+        val currentId = _uiState.value.canvasId ?: return@withContext false
+        saveMutex.withLock {
+            if (!isDirty && _uiState.value.saveState == SaveState.SAVED) {
+                return@withContext true
+            }
             val currentDoc = _uiState.value.document
+            _uiState.update { it.copy(saveState = SaveState.SAVING) }
             try {
                 canvasRepository.saveDocumentImmediate(currentId, currentDoc)
+                isDirty = false
+                retryAttempt = 0
                 _uiState.update { it.copy(saveState = SaveState.SAVED) }
+                true
             } catch (e: Exception) {
+                android.util.Log.e("CanvasAutosave", "Autosave failed: ${e.message}", e)
                 _uiState.update {
                     it.copy(
                         saveState = SaveState.ERROR,
-                        userMessage = "Autosave failed. Your changes remain safely in memory."
+                        userMessage = "Autosave failed: ${e.localizedMessage ?: "Storage error"}. Tap status to retry."
                     )
                 }
+                if (retryAttempt < 3) {
+                    retryAttempt++
+                    val backoffMs = 1000L * (1 shl retryAttempt)
+                    autosaveJob = viewModelScope.launch(Dispatchers.IO) {
+                        delay(backoffMs)
+                        performSave()
+                    }
+                }
+                false
             }
+        }
+    }
+
+    /**
+     * Immediately flushes any pending or dirty changes to persistent storage without debounce delay.
+     * Guaranteed to run to completion even if calling scope is cancelled.
+     */
+    suspend fun flushSave(): Boolean = withContext(NonCancellable + Dispatchers.IO) {
+        autosaveJob?.cancel()
+        if (!isDirty && _uiState.value.saveState == SaveState.SAVED) {
+            return@withContext true
+        }
+        performSave()
+    }
+
+    /**
+     * User-initiated tap-to-retry on save failure indicator.
+     */
+    fun retrySave() {
+        autosaveJob?.cancel()
+        retryAttempt = 0
+        viewModelScope.launch(Dispatchers.IO) {
+            performSave()
         }
     }
 
@@ -459,6 +520,10 @@ class CanvasViewModel(
     // ==========================================
     fun addLayer(layerName: String) {
         val currentDoc = _uiState.value.document
+        if (currentDoc.layers.size >= CanvasConfig.MAX_LAYERS) {
+            _uiState.update { it.copy(userMessage = "Maximum layer limit reached (${CanvasConfig.MAX_LAYERS} layers).") }
+            return
+        }
         val nextOrder = (currentDoc.layers.maxOfOrNull { it.order } ?: 0) + 1
         val newLayer = CanvasLayer(
             id = "layer_${UUID.randomUUID()}",
@@ -815,6 +880,16 @@ class CanvasViewModel(
         screenHeight: Float
     ) {
         val canvasId = _uiState.value.canvasId ?: return
+        val currentDoc = _uiState.value.document
+        if (currentDoc.layers.size >= CanvasConfig.MAX_LAYERS) {
+            _uiState.update { it.copy(userMessage = "Maximum layer limit reached (${CanvasConfig.MAX_LAYERS} layers).") }
+            return
+        }
+        if (currentDoc.elements.size >= CanvasConfig.MAX_TOTAL_ELEMENTS) {
+            _uiState.update { it.copy(userMessage = "Maximum element limit reached (${CanvasConfig.MAX_TOTAL_ELEMENTS} elements).") }
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             val assetInfo = canvasAssetManager.importImage(uri, canvasId)
             if (assetInfo == null) {
@@ -824,56 +899,144 @@ class CanvasViewModel(
                 return@launch
             }
 
-            // Place image centered on current visible viewport
-            val (centerX, centerY) = ViewportTransform.screenToWorld(
-                screenWidth / 2f,
-                screenHeight / 2f,
-                viewport
-            )
+            insertAssetAsNewLayer(assetInfo, viewport, screenWidth, screenHeight, "Image")
+        }
+    }
 
-            val displayWidth = minOf(assetInfo.width.toFloat(), 600f)
-            val displayHeight = (assetInfo.height.toFloat() / assetInfo.width.toFloat()) * displayWidth
-
-            val imageElement = ImageElement(
-                id = UUID.randomUUID().toString(),
-                layerId = _uiState.value.activeLayerId,
-                assetId = assetInfo.assetId,
-                x = centerX - displayWidth / 2f,
-                y = centerY - displayHeight / 2f,
-                width = displayWidth,
-                height = displayHeight,
-                bounds = CanvasRect(
-                    left = centerX - displayWidth / 2f,
-                    top = centerY - displayHeight / 2f,
-                    right = centerX + displayWidth / 2f,
-                    bottom = centerY + displayHeight / 2f
-                ),
-                zIndex = (_uiState.value.document.elements.maxOfOrNull { it.zIndex } ?: 0) + 1
-            )
-
-            val updated = historyManager.execute(
-                AddElementsCommand(listOf(imageElement), description = "Add Image"),
-                _uiState.value.document
-            )
-
-            spatialIndex.rebuild(updated.elements)
-            tileCacheManager.invalidateAll()
-
-            toolController.toolState = toolController.toolState.copy(
-                activeTool = CanvasToolType.SELECT,
-                selectedElementIds = setOf(imageElement.id)
-            )
-
+    fun loadExistingNotes() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isLoadingExistingNotes = true, showImageSourceDialog = false, showExistingNotesDialog = true) }
+            val photos = try {
+                photoRepository?.getAllActivePhotos() ?: emptyList()
+            } catch (e: Exception) {
+                android.util.Log.e("CanvasViewModel", "Failed to load existing photo notes: ${e.message}", e)
+                emptyList()
+            }
             _uiState.update {
                 it.copy(
-                    document = updated,
-                    toolState = toolController.toolState,
-                    canUndo = historyManager.canUndo,
-                    canRedo = historyManager.canRedo
+                    existingImageNotes = photos,
+                    isLoadingExistingNotes = false
                 )
             }
-            triggerDebouncedAutosave()
         }
+    }
+
+    fun addFromExistingPhoto(
+        photo: Photo,
+        viewport: ViewportState,
+        screenWidth: Float,
+        screenHeight: Float
+    ) {
+        val canvasId = _uiState.value.canvasId ?: return
+        val currentDoc = _uiState.value.document
+        if (currentDoc.layers.size >= CanvasConfig.MAX_LAYERS) {
+            _uiState.update {
+                it.copy(
+                    userMessage = "Maximum layer limit reached (${CanvasConfig.MAX_LAYERS} layers).",
+                    showExistingNotesDialog = false
+                )
+            }
+            return
+        }
+        if (currentDoc.elements.size >= CanvasConfig.MAX_TOTAL_ELEMENTS) {
+            _uiState.update {
+                it.copy(
+                    userMessage = "Maximum element limit reached (${CanvasConfig.MAX_TOTAL_ELEMENTS} elements).",
+                    showExistingNotesDialog = false
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(showExistingNotesDialog = false) }
+
+            val file = File(photo.fileUri)
+            val assetInfo = if (file.exists()) {
+                canvasAssetManager.importImageFile(file, canvasId)
+            } else {
+                val uri = Uri.parse(photo.fileUri)
+                canvasAssetManager.importImage(uri, canvasId)
+            }
+
+            if (assetInfo == null) {
+                _uiState.update {
+                    it.copy(userMessage = "Failed to load image from note.")
+                }
+                return@launch
+            }
+
+            val layerLabel = photo.title.ifBlank { "Note Photo" }
+            insertAssetAsNewLayer(assetInfo, viewport, screenWidth, screenHeight, layerLabel)
+        }
+    }
+
+    private fun insertAssetAsNewLayer(
+        assetInfo: CanvasAssetInfo,
+        viewport: ViewportState,
+        screenWidth: Float,
+        screenHeight: Float,
+        layerPrefix: String
+    ) {
+        val currentDoc = _uiState.value.document
+        val nextOrder = (currentDoc.layers.maxOfOrNull { it.order } ?: 0) + 1
+        val newLayerId = "layer_${UUID.randomUUID()}"
+        val newLayer = CanvasLayer(
+            id = newLayerId,
+            name = "$layerPrefix ${nextOrder + 1}",
+            order = nextOrder
+        )
+
+        // Center image in current visible viewport
+        val (centerX, centerY) = ViewportTransform.screenToWorld(
+            screenWidth / 2f,
+            screenHeight / 2f,
+            viewport
+        )
+
+        val displayWidth = minOf(assetInfo.width.toFloat(), 600f)
+        val displayHeight = (assetInfo.height.toFloat() / assetInfo.width.toFloat()) * displayWidth
+
+        val imageElement = ImageElement(
+            id = UUID.randomUUID().toString(),
+            layerId = newLayerId,
+            assetId = assetInfo.assetId,
+            x = centerX - displayWidth / 2f,
+            y = centerY - displayHeight / 2f,
+            width = displayWidth,
+            height = displayHeight,
+            bounds = CanvasRect(
+                left = centerX - displayWidth / 2f,
+                top = centerY - displayHeight / 2f,
+                right = centerX + displayWidth / 2f,
+                bottom = centerY + displayHeight / 2f
+            ),
+            zIndex = (currentDoc.elements.maxOfOrNull { it.zIndex } ?: 0) + 1
+        )
+
+        val updated = historyManager.execute(
+            AddLayerAndElementsCommand(newLayer, listOf(imageElement), description = "Add Image Layer"),
+            currentDoc
+        )
+
+        spatialIndex.rebuild(updated.elements)
+        tileCacheManager.invalidateAll()
+
+        toolController.toolState = toolController.toolState.copy(
+            activeTool = CanvasToolType.SELECT,
+            selectedElementIds = setOf(imageElement.id)
+        )
+
+        _uiState.update {
+            it.copy(
+                document = updated,
+                activeLayerId = newLayerId,
+                toolState = toolController.toolState,
+                canUndo = historyManager.canUndo,
+                canRedo = historyManager.canRedo
+            )
+        }
+        triggerDebouncedAutosave()
     }
 
     // ==========================================
