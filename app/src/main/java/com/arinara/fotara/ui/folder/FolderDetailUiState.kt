@@ -141,6 +141,9 @@ data class FolderDetailUiState(
     val showAddSubfolderDialog: Boolean = false,
     val highlightedPhotoId: Long? = null,
     val highlightedGroupId: Long? = null,
+    val highlightedDocumentId: Long? = null,
+    val highlightedTextNoteId: Long? = null,
+    val highlightedCanvasId: Long? = null,
     val userMessage: String? = null,
     val pendingUndoAction: UndoAction? = null
 ) {

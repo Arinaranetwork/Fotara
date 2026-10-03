@@ -18,7 +18,10 @@ data class FolderDetailNavKey(
     val initialSubfolderId: Long? = null,
     val targetPhotoId: Long? = null,
     val openViewerDirectly: Boolean = false,
-    val targetGroupId: Long? = null
+    val targetGroupId: Long? = null,
+    val targetDocumentId: Long? = null,
+    val targetTextNoteId: Long? = null,
+    val targetCanvasId: Long? = null
 ) : NavKey
 
 @Serializable

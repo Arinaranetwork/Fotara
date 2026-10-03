@@ -100,6 +100,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arinara.fotara.R
 import com.arinara.fotara.data.model.CanvasNote
+import com.arinara.fotara.data.model.DocumentNote
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
@@ -151,8 +152,9 @@ fun HomeScreen(
     onFolderClick: (Folder) -> Unit,
     onNavigateToPhoto: (folderId: Long, subfolderId: Long?, photoId: Long) -> Unit = { _, _, _ -> },
     onNavigateToGroup: (folderId: Long, subfolderId: Long?, groupId: Long) -> Unit = { _, _, _ -> },
-    onNavigateToTextNote: (folderId: Long, noteId: Long) -> Unit = { _, _ -> },
-    onNavigateToCanvasNote: (folderId: Long, canvasId: Long) -> Unit = { _, _ -> },
+    onNavigateToDocument: (folderId: Long, subfolderId: Long?, docId: Long) -> Unit = { _, _, _ -> },
+    onNavigateToTextNote: (folderId: Long, subfolderId: Long?, noteId: Long) -> Unit = { _, _, _ -> },
+    onNavigateToCanvasNote: (folderId: Long, subfolderId: Long?, canvasId: Long) -> Unit = { _, _, _ -> },
     onOpenTrash: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenUpdates: () -> Unit = {},
@@ -183,6 +185,7 @@ fun HomeScreen(
     var isResettingPin by remember { mutableStateOf(false) }
     var pendingPhotoSearchResult by remember { mutableStateOf<Photo?>(null) }
     var pendingGroupSearchResult by remember { mutableStateOf<PhotoGroup?>(null) }
+    var pendingDocumentSearchResult by remember { mutableStateOf<DocumentNote?>(null) }
     var pendingTextNoteSearchResult by remember { mutableStateOf<TextNote?>(null) }
     var pendingCanvasSearchResult by remember { mutableStateOf<CanvasNote?>(null) }
 
@@ -212,18 +215,26 @@ fun HomeScreen(
                     viewModel.onGroupSearchResultClicked(group) { folderId, subfolderId, groupId ->
                         onNavigateToGroup(folderId, subfolderId, groupId)
                     }
+                } else if (pendingDocumentSearchResult != null) {
+                    val doc = pendingDocumentSearchResult
+                    pendingDocumentSearchResult = null
+                    if (doc != null) {
+                        viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId ->
+                            onNavigateToDocument(folderId, subfolderId, docId)
+                        }
+                    }
                 } else if (pendingTextNoteSearchResult != null) {
                     val note = pendingTextNoteSearchResult!!
                     pendingTextNoteSearchResult = null
-                    viewModel.onTextNoteSearchResultClicked(note) { folderId, noteId ->
-                        onNavigateToTextNote(folderId, noteId)
+                    viewModel.onTextNoteSearchResultClicked(note) { folderId, subfolderId, noteId ->
+                        onNavigateToTextNote(folderId, subfolderId, noteId)
                     }
                 } else if (pendingCanvasSearchResult != null) {
                     val canvas = pendingCanvasSearchResult
                     pendingCanvasSearchResult = null
                     if (canvas != null) {
-                        viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
-                            onNavigateToCanvasNote(folderId, canvasId)
+                        viewModel.onCanvasSearchResultClicked(canvas) { folderId, subfolderId, canvasId ->
+                            onNavigateToCanvasNote(folderId, subfolderId, canvasId)
                         }
                     }
                 } else {
@@ -265,6 +276,7 @@ fun HomeScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = HomeNearBlack,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             if (uiState.isMultiSelectMode) {
                 TopAppBar(
@@ -346,7 +358,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(HomeNearBlack)
-                .padding(innerPadding)
+                .padding(top = if (uiState.isMultiSelectMode) innerPadding.calculateTopPadding() else 0.dp)
         ) {
             // Tab Contents
             when (selectedNavTab) {
@@ -607,7 +619,7 @@ fun HomeScreen(
                                         start = 18.dp,
                                         end = 18.dp,
                                         top = 13.dp,
-                                        bottom = 190.dp
+                                        bottom = 110.dp
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                                     verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -667,7 +679,6 @@ fun HomeScreen(
                                 colors = listOf(
                                     Color.Transparent,
                                     HomeNearBlack.copy(alpha = 0.85f),
-                                    HomeNearBlack,
                                     HomeNearBlack
                                 )
                             )
@@ -678,8 +689,8 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                            .padding(bottom = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // Search bar + '+' action button row (only visible on HOME tab)
                         if (selectedNavTab == HomeNavTab.HOME) {
@@ -1073,19 +1084,28 @@ fun HomeScreen(
                                     onNavigateToPhoto(folderId, subfolderId, photoId)
                                 }
                             }
+                            pendingDocumentSearchResult != null -> {
+                                val doc = pendingDocumentSearchResult
+                                pendingDocumentSearchResult = null
+                                if (doc != null) {
+                                    viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId ->
+                                        onNavigateToDocument(folderId, subfolderId, docId)
+                                    }
+                                }
+                            }
                             pendingTextNoteSearchResult != null -> {
                                 val note = pendingTextNoteSearchResult!!
                                 pendingTextNoteSearchResult = null
-                                viewModel.onTextNoteSearchResultClicked(note) { folderId, noteId ->
-                                    onNavigateToTextNote(folderId, noteId)
+                                viewModel.onTextNoteSearchResultClicked(note) { folderId, subfolderId, noteId ->
+                                    onNavigateToTextNote(folderId, subfolderId, noteId)
                                 }
                             }
                             pendingCanvasSearchResult != null -> {
                                 val canvas = pendingCanvasSearchResult
                                 pendingCanvasSearchResult = null
                                 if (canvas != null) {
-                                    viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
-                                        onNavigateToCanvasNote(folderId, canvasId)
+                                    viewModel.onCanvasSearchResultClicked(canvas) { folderId, subfolderId, canvasId ->
+                                        onNavigateToCanvasNote(folderId, subfolderId, canvasId)
                                     }
                                 }
                             }
@@ -1283,20 +1303,19 @@ fun HomeScreen(
                             pendingTextNoteSearchResult = note
                             folderToUnlock = targetFolder
                         } else {
-                            viewModel.onTextNoteSearchResultClicked(note) { folderId, noteId ->
-                                onNavigateToTextNote(folderId, noteId)
+                            viewModel.onTextNoteSearchResultClicked(note) { folderId, subfolderId, noteId ->
+                                onNavigateToTextNote(folderId, subfolderId, noteId)
                             }
                         }
                     },
                     onDocumentClick = { doc ->
                         val targetFolder = uiState.folders.firstOrNull { it.id == doc.folderId }
-                        if (targetFolder != null) {
-                            if (targetFolder.isLocked) {
-                                folderToUnlock = targetFolder
-                            } else {
-                                viewModel.submitSearch(uiState.searchQuery)
-                                viewModel.deactivateSearch()
-                                onFolderClick(targetFolder)
+                        if (targetFolder != null && targetFolder.isLocked) {
+                            pendingDocumentSearchResult = doc
+                            folderToUnlock = targetFolder
+                        } else {
+                            viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId ->
+                                onNavigateToDocument(folderId, subfolderId, docId)
                             }
                         }
                     },
@@ -1306,8 +1325,8 @@ fun HomeScreen(
                             pendingCanvasSearchResult = canvas
                             folderToUnlock = targetFolder
                         } else {
-                            viewModel.onCanvasSearchResultClicked(canvas) { folderId, canvasId ->
-                                onNavigateToCanvasNote(folderId, canvasId)
+                            viewModel.onCanvasSearchResultClicked(canvas) { folderId, subfolderId, canvasId ->
+                                onNavigateToCanvasNote(folderId, subfolderId, canvasId)
                             }
                         }
                     }

@@ -154,8 +154,16 @@ import com.arinara.fotara.data.storage.PhotoStorageManager
 import com.arinara.fotara.ocr.FolderSuggestEngine
 import com.arinara.fotara.ocr.OcrEngine
 import com.arinara.fotara.theme.DockSlatePill
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
+import com.arinara.fotara.theme.HomeCardBorder
+import com.arinara.fotara.theme.HomeCardSurface
+import com.arinara.fotara.theme.HomeHeaderButtonSurface
+import com.arinara.fotara.theme.HomeMainButtonBlue
+import com.arinara.fotara.theme.HomeNearBlack
+import com.arinara.fotara.theme.HomeSegmentSelectedPill
+import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.MidnightCardOutline
 import com.arinara.fotara.theme.MidnightNavy
 import com.arinara.fotara.theme.MidnightSurface
@@ -314,7 +322,7 @@ fun FolderDetailScreen(
         }
 
         // Search match on a photo that is a MEMBER of a group (Addendum 7 edge case):
-        // Highlight the group waypoint for ~1s, then auto-navigate to Group screen for the 3s photo highlight.
+        // Highlight the group waypoint for ~1s, then auto-navigate to Group screen for photo highlight.
         if (matchedPhoto.groupId != null && onOpenGroup != null) {
             val parentGroupId = matchedPhoto.groupId
             val groupIndex = uiState.gridItems.indexOfFirst {
@@ -325,12 +333,9 @@ fun FolderDetailScreen(
                 if (!isVisible) {
                     gridState.animateScrollToItem(groupIndex)
                 }
-                highlightAlpha.snapTo(0.30f)
-                delay(1000L) // Brief ~1s waypoint highlight
-                highlightAlpha.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
-                )
+                highlightAlpha.animateTo(0.28f, tween(200, easing = FastOutSlowInEasing))
+                delay(800L)
+                highlightAlpha.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
                 viewModel.clearHighlightedPhoto()
                 onOpenGroup(matchedPhoto.folderId, parentGroupId, targetId)
                 return@LaunchedEffect
@@ -348,12 +353,9 @@ fun FolderDetailScreen(
             if (openViewerDirectly && inspectingPhoto == null) {
                 inspectingPhoto = matchedPhoto
             }
-            highlightAlpha.snapTo(0.30f)
-            delay(3000L)
-            highlightAlpha.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
-            )
+            highlightAlpha.animateTo(0.28f, tween(250, easing = FastOutSlowInEasing))
+            delay(1500L)
+            highlightAlpha.animateTo(0f, tween(350, easing = FastOutSlowInEasing))
             viewModel.clearHighlightedPhoto()
         } else {
             snackbarHostState.showSnackbar("Photo is no longer in this folder")
@@ -373,16 +375,79 @@ fun FolderDetailScreen(
             if (!isVisible) {
                 gridState.animateScrollToItem(targetIndex)
             }
-            highlightAlpha.snapTo(0.30f)
-            delay(3000L)
-            highlightAlpha.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
-            )
+            highlightAlpha.animateTo(0.28f, tween(250, easing = FastOutSlowInEasing))
+            delay(1500L)
+            highlightAlpha.animateTo(0f, tween(350, easing = FastOutSlowInEasing))
             viewModel.clearHighlightedGroup()
         } else {
             snackbarHostState.showSnackbar("Group is no longer in this folder")
             viewModel.clearHighlightedGroup()
+        }
+    }
+
+    LaunchedEffect(uiState.highlightedDocumentId, uiState.gridItems) {
+        val targetId = uiState.highlightedDocumentId ?: return@LaunchedEffect
+        if (uiState.gridItems.isEmpty()) return@LaunchedEffect
+
+        val targetIndex = uiState.gridItems.indexOfFirst {
+            it is FolderGridItem.Document && it.documentNote.id == targetId
+        }
+        if (targetIndex != -1) {
+            val isVisible = gridState.layoutInfo.visibleItemsInfo.any { it.index == targetIndex }
+            if (!isVisible) {
+                gridState.animateScrollToItem(targetIndex)
+            }
+            highlightAlpha.animateTo(0.28f, tween(250, easing = FastOutSlowInEasing))
+            delay(1500L)
+            highlightAlpha.animateTo(0f, tween(350, easing = FastOutSlowInEasing))
+            viewModel.clearHighlightedDocument()
+        } else {
+            snackbarHostState.showSnackbar("Document is no longer in this folder")
+            viewModel.clearHighlightedDocument()
+        }
+    }
+
+    LaunchedEffect(uiState.highlightedTextNoteId, uiState.gridItems) {
+        val targetId = uiState.highlightedTextNoteId ?: return@LaunchedEffect
+        if (uiState.gridItems.isEmpty()) return@LaunchedEffect
+
+        val targetIndex = uiState.gridItems.indexOfFirst {
+            it is FolderGridItem.TextNoteItem && it.textNote.id == targetId
+        }
+        if (targetIndex != -1) {
+            val isVisible = gridState.layoutInfo.visibleItemsInfo.any { it.index == targetIndex }
+            if (!isVisible) {
+                gridState.animateScrollToItem(targetIndex)
+            }
+            highlightAlpha.animateTo(0.28f, tween(250, easing = FastOutSlowInEasing))
+            delay(1500L)
+            highlightAlpha.animateTo(0f, tween(350, easing = FastOutSlowInEasing))
+            viewModel.clearHighlightedTextNote()
+        } else {
+            snackbarHostState.showSnackbar("Note is no longer in this folder")
+            viewModel.clearHighlightedTextNote()
+        }
+    }
+
+    LaunchedEffect(uiState.highlightedCanvasId, uiState.gridItems) {
+        val targetId = uiState.highlightedCanvasId ?: return@LaunchedEffect
+        if (uiState.gridItems.isEmpty()) return@LaunchedEffect
+
+        val targetIndex = uiState.gridItems.indexOfFirst {
+            it is FolderGridItem.CanvasNoteItem && it.canvasNote.id == targetId
+        }
+        if (targetIndex != -1) {
+            val isVisible = gridState.layoutInfo.visibleItemsInfo.any { it.index == targetIndex }
+            if (!isVisible) {
+                gridState.animateScrollToItem(targetIndex)
+            }
+            highlightAlpha.animateTo(0.28f, tween(250, easing = FastOutSlowInEasing))
+            delay(1500L)
+            highlightAlpha.animateTo(0f, tween(350, easing = FastOutSlowInEasing))
+            viewModel.clearHighlightedCanvas()
+        } else {
+            snackbarHostState.showSnackbar("Canvas is no longer in this folder")
+            viewModel.clearHighlightedCanvas()
         }
     }
 
@@ -417,7 +482,7 @@ fun FolderDetailScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MidnightNavy,
+        containerColor = HomeNearBlack,
         topBar = {
             if (uiState.isSubfolderMultiSelectMode) {
                 // Contextual Action Bar for Subfolder Multi-Select
@@ -425,7 +490,8 @@ fun FolderDetailScreen(
                     title = {
                         Text(
                             text = "${uiState.selectedSubfolderIds.size} Selected",
-                            color = TextPrimary,
+                            color = Color.White,
+                            fontFamily = ElmsSans,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -435,7 +501,7 @@ fun FolderDetailScreen(
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Exit Selection",
-                                tint = FolderTabCream
+                                tint = Color.White
                             )
                         }
                     },
@@ -458,7 +524,7 @@ fun FolderDetailScreen(
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = HomeNearBlack)
                 )
             } else if (uiState.isBatchSelectMode) {
                 // Contextual Action Bar for Multi-Select (Rename, Group [2+ photos], Move, Color, Delete)
@@ -466,7 +532,8 @@ fun FolderDetailScreen(
                     title = {
                         Text(
                             text = "${uiState.totalSelectionCount} Selected",
-                            color = TextPrimary,
+                            color = Color.White,
+                            fontFamily = ElmsSans,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -476,7 +543,7 @@ fun FolderDetailScreen(
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Exit Selection",
-                                tint = FolderTabCream
+                                tint = Color.White
                             )
                         }
                     },
@@ -485,11 +552,11 @@ fun FolderDetailScreen(
                             Icon(
                                 imageVector = Icons.Default.SelectAll,
                                 contentDescription = "Select All",
-                                tint = FolderTabCream
+                                tint = Color.White
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = HomeNearBlack)
                 )
             } else {
                 TopAppBar(
@@ -508,92 +575,88 @@ fun FolderDetailScreen(
                         ) {
                             Text(
                                 text = uiState.folder?.name ?: "Folder",
-                                color = TextPrimary,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontFamily = ElmsSans,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
-                            uiState.folder?.tagColor?.let { tag ->
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Surface(
-                                    shape = CircleShape,
-                                    color = tag.composeColor,
-                                    modifier = Modifier.size(10.dp)
-                                ) {}
-                            }
+                            val tagColor = uiState.folder?.tagColor?.composeColor ?: Color(0xFF00B4D8)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(tagColor)
+                            )
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBackClick) {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 12.dp)
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(HomeHeaderButtonSurface)
+                                .clickable { onBackClick() },
+                            contentAlignment = Alignment.Center
+                        ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = FolderTabCream
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     },
                     actions = {
                         Row(
-                            modifier = Modifier.padding(end = 8.dp),
+                            modifier = Modifier.padding(end = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Right Action 1: Add Note Button [+]
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
+                                    .background(HomeMainButtonBlue)
                                     .clickable { showAddPhotoSheet = true },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(FolderBodyBlue),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Add Note",
-                                        tint = FolderTabCream,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add Note",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
 
                             // Right Action 2: Highlighted Overflow Menu [(⋮)]
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
+                                    .background(HomeHeaderButtonSurface)
                                     .clickable { showOverflowMenu = true },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(DockSlatePill.copy(alpha = 0.40f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MoreVert,
-                                        contentDescription = "Folder Utilities Menu",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "Folder Utilities Menu",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
 
                                 // Overflow Dropdown Menu
                                 DropdownMenu(
                                     expanded = showOverflowMenu,
                                     onDismissRequest = { showOverflowMenu = false },
                                     modifier = Modifier
-                                        .background(MidnightSurface)
-                                        .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
+                                        .background(HomeCardSurface)
+                                        .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
                                 ) {
                                 DropdownMenuItem(
                                     text = { Text("Sort: Newest Uploads", color = TextPrimary) },
@@ -915,26 +978,27 @@ fun FolderDetailScreen(
                 item {
                     val isSelected = uiState.selectedSubfolderId == null && !uiState.isSubfolderMultiSelectMode
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) FolderBodyBlue else MidnightSurface,
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) HomeSegmentSelectedPill else HomeCardSurface,
                         border = androidx.compose.foundation.BorderStroke(
-                            if (isSelected) 1.5.dp else 0.8.dp,
-                            if (isSelected) FolderBodyBlue else MidnightCardOutline
+                            1.dp,
+                            if (isSelected) HomeSegmentSelectedPill else HomeCardBorder
                         ),
                         modifier = Modifier
                             .padding(vertical = 4.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable(enabled = !uiState.isSubfolderMultiSelectMode) {
                                 viewModel.selectSubfolder(null)
                             }
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Text(
                                 text = "All Notes",
                                 color = if (isSelected) Color.White else if (uiState.isSubfolderMultiSelectMode) TextMuted else TextSecondary,
+                                fontFamily = ElmsSans,
                                 fontSize = 13.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
@@ -951,15 +1015,15 @@ fun FolderDetailScreen(
                     Box {
                         if (uiState.isSubfolderMultiSelectMode) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isMultiSelected) FolderBodyBlue else MidnightSurface,
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isMultiSelected) HomeSegmentSelectedPill else HomeCardSurface,
                                 border = androidx.compose.foundation.BorderStroke(
-                                    if (isMultiSelected) 1.5.dp else 0.8.dp,
-                                    if (isMultiSelected) FolderBodyBlue else MidnightCardOutline
+                                    1.dp,
+                                    if (isMultiSelected) HomeSegmentSelectedPill else HomeCardBorder
                                 ),
                                 modifier = Modifier
                                     .padding(vertical = 4.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .combinedClickable(
                                         onClick = { viewModel.toggleSubfolderSelection(sub.id) },
                                         onLongClick = {
@@ -970,7 +1034,7 @@ fun FolderDetailScreen(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                                 ) {
                                     if (isMultiSelected) {
                                         Icon(
@@ -984,6 +1048,7 @@ fun FolderDetailScreen(
                                     Text(
                                         text = sub.name,
                                         color = if (isMultiSelected) Color.White else TextSecondary,
+                                        fontFamily = ElmsSans,
                                         fontSize = 13.sp,
                                         fontWeight = if (isMultiSelected) FontWeight.Bold else FontWeight.Medium
                                     )
@@ -991,15 +1056,15 @@ fun FolderDetailScreen(
                             }
                         } else {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isFilterSelected) FolderBodyBlue else MidnightSurface,
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isFilterSelected) HomeSegmentSelectedPill else HomeCardSurface,
                                 border = androidx.compose.foundation.BorderStroke(
-                                    if (isFilterSelected) 1.5.dp else 0.8.dp,
-                                    if (isFilterSelected) FolderBodyBlue else MidnightCardOutline
+                                    1.dp,
+                                    if (isFilterSelected) HomeSegmentSelectedPill else HomeCardBorder
                                 ),
                                 modifier = Modifier
                                     .padding(vertical = 4.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .combinedClickable(
                                         onClick = { viewModel.selectSubfolder(sub.id) },
                                         onLongClick = {
@@ -1010,11 +1075,12 @@ fun FolderDetailScreen(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
                                     Text(
                                         text = sub.name,
                                         color = if (isFilterSelected) Color.White else TextSecondary,
+                                        fontFamily = ElmsSans,
                                         fontSize = 13.sp,
                                         fontWeight = if (isFilterSelected) FontWeight.Bold else FontWeight.Medium
                                     )
@@ -1027,19 +1093,19 @@ fun FolderDetailScreen(
                             expanded = showSubMenu,
                             onDismissRequest = { showSubMenu = false },
                             modifier = Modifier
-                                .background(MidnightSurface)
-                                .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
+                                .background(HomeCardSurface)
+                                .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Rename", color = TextPrimary) },
-                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = FolderTabCream) },
+                                text = { Text("Rename", color = TextPrimary, fontFamily = ElmsSans) },
+                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = Color.White) },
                                 onClick = {
                                     showSubMenu = false
                                     subfolderToRename = sub
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Delete", color = TagCrimson) },
+                                text = { Text("Delete", color = TagCrimson, fontFamily = ElmsSans) },
                                 leadingIcon = { Icon(Icons.Default.Delete, null, tint = TagCrimson) },
                                 onClick = {
                                     showSubMenu = false
@@ -1049,8 +1115,8 @@ fun FolderDetailScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Select", color = TextPrimary) },
-                                leadingIcon = { Icon(Icons.Default.Check, null, tint = FolderTabCream) },
+                                text = { Text("Select", color = TextPrimary, fontFamily = ElmsSans) },
+                                leadingIcon = { Icon(Icons.Default.Check, null, tint = Color.White) },
                                 onClick = {
                                     showSubMenu = false
                                     viewModel.startSubfolderMultiSelect(sub.id)
@@ -1064,27 +1130,28 @@ fun FolderDetailScreen(
                 if (!uiState.isSubfolderMultiSelectMode) {
                     item {
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MidnightSurface,
-                            border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
+                            shape = RoundedCornerShape(12.dp),
+                            color = HomeCardSurface,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, HomeCardBorder),
                             modifier = Modifier
                                 .clickable { viewModel.openAddSubfolderDialog() }
                                 .padding(vertical = 4.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Add,
                                     contentDescription = "Add subfolder",
-                                    tint = FolderTabCream,
+                                    tint = Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Subfolder",
-                                    color = FolderTabCream,
+                                    color = Color.White,
+                                    fontFamily = ElmsSans,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -1195,10 +1262,13 @@ fun FolderDetailScreen(
                             }
                             is FolderGridItem.Document -> {
                                 val doc = gridItem.documentNote
+                                val isTarget = uiState.highlightedDocumentId == doc.id
                                 DetailDocumentCard(
                                     documentItem = gridItem,
                                     isBatchMode = uiState.isBatchSelectMode,
                                     isSelected = uiState.selectedDocumentIds.contains(doc.id),
+                                    isHighlighted = isTarget && highlightAlpha.value > 0f,
+                                    highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
                                     onCardClick = {
                                         if (uiState.isBatchSelectMode) {
                                             viewModel.toggleDocumentSelection(doc.id)
@@ -1222,10 +1292,13 @@ fun FolderDetailScreen(
                             }
                             is FolderGridItem.TextNoteItem -> {
                                 val textNote = gridItem.textNote
+                                val isTarget = uiState.highlightedTextNoteId == textNote.id
                                 DetailTextNoteCard(
                                     noteItem = gridItem,
                                     isBatchMode = uiState.isBatchSelectMode,
                                     isSelected = uiState.selectedTextNoteIds.contains(textNote.id),
+                                    isHighlighted = isTarget && highlightAlpha.value > 0f,
+                                    highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
                                     onCardClick = {
                                         if (uiState.isBatchSelectMode) {
                                             viewModel.toggleTextNoteSelection(textNote.id)
@@ -1241,10 +1314,13 @@ fun FolderDetailScreen(
                             }
                             is FolderGridItem.CanvasNoteItem -> {
                                 val canvasNote = gridItem.canvasNote
+                                val isTarget = uiState.highlightedCanvasId == canvasNote.id
                                 DetailCanvasCard(
                                     canvasItem = gridItem,
                                     isBatchMode = uiState.isBatchSelectMode,
                                     isSelected = uiState.selectedCanvasNoteIds.contains(canvasNote.id),
+                                    isHighlighted = isTarget && highlightAlpha.value > 0f,
+                                    highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
                                     onCardClick = {
                                         if (uiState.isBatchSelectMode) {
                                             viewModel.toggleCanvasNoteSelection(canvasNote.id)
@@ -3659,12 +3735,13 @@ private fun DetailDocumentCard(
                 }
             }
 
+            // Exposure/brightness highlight overlay for search navigation
             if (isHighlighted && highlightAlpha > 0f) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFFFE082).copy(alpha = highlightAlpha))
+                        .background(Color.White.copy(alpha = highlightAlpha))
                 )
             }
         }
@@ -3807,13 +3884,13 @@ internal fun DetailPhotoCard(
                 }
             }
 
-            // 3-second non-blocking translucent warm accent overlay
+            // Exposure/brightness highlight overlay for search navigation
             if (isHighlighted && highlightAlpha > 0f) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFFFE082).copy(alpha = highlightAlpha))
+                        .background(Color.White.copy(alpha = highlightAlpha))
                 )
             }
         }
@@ -3998,13 +4075,13 @@ private fun DetailGroupCard(
                 }
             }
 
-            // 3-second non-blocking translucent warm accent overlay
+            // Exposure/brightness highlight overlay for search navigation
             if (isHighlighted && highlightAlpha > 0f) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFFFE082).copy(alpha = highlightAlpha))
+                        .background(Color.White.copy(alpha = highlightAlpha))
                 )
             }
         }

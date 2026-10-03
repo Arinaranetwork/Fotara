@@ -194,12 +194,9 @@ fun GroupDetailScreen(
             if (!isVisible) {
                 gridState.animateScrollToItem(targetIndex)
             }
-            highlightAlpha.snapTo(0.30f)
-            delay(3000L)
-            highlightAlpha.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
-            )
+            highlightAlpha.animateTo(0.28f, tween(250, easing = FastOutSlowInEasing))
+            delay(1500L)
+            highlightAlpha.animateTo(0f, tween(350, easing = FastOutSlowInEasing))
             viewModel.clearHighlightedPhoto()
         }
     }

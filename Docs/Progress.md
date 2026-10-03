@@ -1,8 +1,8 @@
 # Progress - Fotara
-Last Updated: 2026-10-02
+Last Updated: 2026-10-03
 
 ## Current Phase
-Phase 11 - HomeScreenRedesign [Completed]
+Phase 13 - FolderScreenRedesign [In Progress]
 
 ## Phases
 | Phase | Name                                | Status      |
@@ -18,6 +18,8 @@ Phase 11 - HomeScreenRedesign [Completed]
 | 9     | PdfViewerEnhancementsAndFixes       | Completed   |
 | 10    | CanvasAndSearchImprovements         | Completed   |
 | 11    | HomeScreenRedesign                  | Completed   |
+| 12    | UIUXRefinementsAndSearchNavigation  | Completed   |
+| 13    | FolderScreenRedesign                | In Progress |
 
 ## Completed
 - [x] Phase 11 Task 1: Color palette definition & legacy folder color assignment (Blue, Brown, Purple, Green, Red, Slate) - Phase 11
@@ -225,16 +227,19 @@ Phase 11 - HomeScreenRedesign [Completed]
 - [x] Item 13: Elms Sans Typography Migration & Italic Elimination (app-wide typography migration with strict 3-weight mapping: Light 300, Medium 500, Bold 700; complete removal of UI italics across all screens, headers, cards, dialogs, and search bars) - Phase 10
 - [x] Item 14: Folder Screen Header Button Spacing (clean 10dp separation and 48dp minimum touch targets for Add [+] and Kebab [⋮] buttons) - Phase 10
 
+- [x] Task 1: Redesign SettingsScreen root into 6 main section rounded cards and clean un-carded detail lists - Phase 12
+- [x] Task 2: Restore full-height viewport on HomeScreen by eliminating duplicate insets and excessive bottom padding - Phase 12
+- [x] Task 3: Fix photo viewer top toolbar layout by decoupling title/actions and widening instructional helper text - Phase 12
+- [x] Task 4: Implement search-to-folder auto-scroll and 2-second exposure/brightness highlight across all note types - Phase 12
+- [x] Task 5: Build, test verification, and regression check - Phase 12
+- [x] Assemble, test, sign, and package Fotara 1.5.3 Beta APK artifact (versionCode 17, versionName 1.5.3 Beta) with Phase 12 UI/UX refinements - Phase 12
+
 ## In Progress
-- [ ] Phase 11 Task 1: Color palette definition & legacy folder color assignment (Blue, Brown, Purple, Green, Red, Slate) - Phase 11
-- [ ] Phase 11 Task 2: Facing LinkIt corner stroke glow with folder-specific bright accent colors - Phase 11
-- [ ] Phase 11 Task 3: Redesign FolderCard to dark rounded rectangle with top-left accent icon tile and top-right menu - Phase 11
-- [ ] Phase 11 Task 4: Segmented tab bar (All, Favorit, Arsip) with active blue pill - Phase 11
-- [ ] Phase 11 Task 5: Redesign Header with Fotara title, subtitle tagline, and dual circular buttons - Phase 11
-- [ ] Phase 11 Task 6: Search bar pill + circular '+' button with popup menu - Phase 11
-- [ ] Phase 11 Task 7: Floating bottom navigation bar (Home, Notes, Settings) and top-level tab switching - Phase 11
-- [ ] Phase 11 Task 8: Settings screen redesign as vertical list of rounded rectangle cards - Phase 11
-- [ ] Phase 11 Task 9: IME keyboard insets & bottom stack non-overlapping layout validation - Phase 11
+- [ ] Task 1: Redesign Top App Bar with 40dp circular buttons, ElmsSans title, and folder color indicator - Phase 13
+- [ ] Task 2: Modernize category/filter tabs to rounded pill geometry (active blue, inactive dark surface with border) - Phase 13
+- [ ] Task 3: Redesign DetailPhotoCard and DetailGroupCard to dark rounded cards with internal photo clipping and 3-dots button - Phase 13
+- [ ] Task 4: Redesign DetailDocumentCard, DetailTextNoteCard, and DetailCanvasCard with new card design and badges - Phase 13
+- [ ] Task 5: Verify full-height viewport, system navigation insets, and run compile/test suite - Phase 13
 
 ## Pending
 None.

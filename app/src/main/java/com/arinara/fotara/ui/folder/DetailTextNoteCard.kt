@@ -235,6 +235,16 @@ fun DetailTextNoteCard(
                     }
                 }
             }
+
+            // Exposure/brightness highlight overlay for search navigation
+            if (isHighlighted && highlightAlpha > 0f) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = highlightAlpha))
+                )
+            }
         }
     }
 }

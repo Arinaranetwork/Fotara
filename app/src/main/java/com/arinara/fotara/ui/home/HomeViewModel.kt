@@ -478,9 +478,29 @@ class HomeViewModel(
         }
     }
 
+    fun onDocumentSearchResultClicked(
+        doc: DocumentNote,
+        onNavigate: (folderId: Long, subfolderId: Long?, docId: Long) -> Unit
+    ) {
+        if (_uiState.value.searchQuery.isNotBlank()) {
+            submitSearch(_uiState.value.searchQuery)
+        }
+        viewModelScope.launch {
+            val freshDoc = documentRepository?.getDocumentNoteById(doc.id)
+            val parentFolder = folderRepository.getFolderById(doc.folderId).firstOrNull()
+            if (freshDoc != null && !freshDoc.isTrashed && parentFolder != null && !parentFolder.isTrashed) {
+                deactivateSearch()
+                onNavigate(doc.folderId, freshDoc.subfolderId, doc.id)
+            } else {
+                _uiState.update { it.copy(userMessage = "Document is no longer in this folder") }
+                executeSearch(_uiState.value.searchQuery, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter)
+            }
+        }
+    }
+
     fun onTextNoteSearchResultClicked(
         note: TextNote,
-        onNavigate: (folderId: Long, noteId: Long) -> Unit
+        onNavigate: (folderId: Long, subfolderId: Long?, noteId: Long) -> Unit
     ) {
         if (_uiState.value.searchQuery.isNotBlank()) {
             submitSearch(_uiState.value.searchQuery)
@@ -490,7 +510,7 @@ class HomeViewModel(
             val parentFolder = folderRepository.getFolderById(note.folderId).firstOrNull()
             if (freshNote != null && !freshNote.isTrashed && parentFolder != null && !parentFolder.isTrashed) {
                 deactivateSearch()
-                onNavigate(note.folderId, note.id)
+                onNavigate(note.folderId, freshNote.subfolderId, note.id)
             } else {
                 _uiState.update { it.copy(userMessage = "Note is no longer in this folder") }
                 executeSearch(_uiState.value.searchQuery, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter)
@@ -500,7 +520,7 @@ class HomeViewModel(
 
     fun onCanvasSearchResultClicked(
         canvas: CanvasNote,
-        onNavigate: (folderId: Long, canvasId: Long) -> Unit
+        onNavigate: (folderId: Long, subfolderId: Long?, canvasId: Long) -> Unit
     ) {
         if (_uiState.value.searchQuery.isNotBlank()) {
             submitSearch(_uiState.value.searchQuery)
@@ -510,7 +530,7 @@ class HomeViewModel(
             val parentFolder = folderRepository.getFolderById(canvas.folderId).firstOrNull()
             if (freshCanvas != null && !freshCanvas.isTrashed && parentFolder != null && !parentFolder.isTrashed) {
                 deactivateSearch()
-                onNavigate(canvas.folderId, canvas.id)
+                onNavigate(canvas.folderId, freshCanvas.subfolderId, canvas.id)
             } else {
                 _uiState.update { it.copy(userMessage = "Canvas is no longer in this folder") }
                 executeSearch(_uiState.value.searchQuery, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter)

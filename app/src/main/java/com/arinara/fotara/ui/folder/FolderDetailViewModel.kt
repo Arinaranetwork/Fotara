@@ -55,6 +55,9 @@ class FolderDetailViewModel(
     val initialSubfolderId: Long? = null,
     val targetPhotoId: Long? = null,
     val targetGroupId: Long? = null,
+    val targetDocumentId: Long? = null,
+    val targetTextNoteId: Long? = null,
+    val targetCanvasId: Long? = null,
     private val settingsRepository: SettingsRepository? = null,
     val documentRepository: DocumentRepository? = null,
     val textNoteRepository: TextNoteRepository? = null,
@@ -65,7 +68,10 @@ class FolderDetailViewModel(
         FolderDetailUiState(
             selectedSubfolderId = initialSubfolderId,
             highlightedPhotoId = targetPhotoId,
-            highlightedGroupId = targetGroupId
+            highlightedGroupId = targetGroupId,
+            highlightedDocumentId = targetDocumentId,
+            highlightedTextNoteId = targetTextNoteId,
+            highlightedCanvasId = targetCanvasId
         )
     )
     val uiState: StateFlow<FolderDetailUiState> = _uiState.asStateFlow()
@@ -1459,6 +1465,18 @@ class FolderDetailViewModel(
         _uiState.update { it.copy(highlightedGroupId = null) }
     }
 
+    fun clearHighlightedDocument() {
+        _uiState.update { it.copy(highlightedDocumentId = null) }
+    }
+
+    fun clearHighlightedTextNote() {
+        _uiState.update { it.copy(highlightedTextNoteId = null) }
+    }
+
+    fun clearHighlightedCanvas() {
+        _uiState.update { it.copy(highlightedCanvasId = null) }
+    }
+
     fun clearUserMessage() {
         _uiState.update { it.copy(userMessage = null) }
     }
@@ -1475,6 +1493,9 @@ class FolderDetailViewModel(
             initialSubfolderId: Long? = null,
             targetPhotoId: Long? = null,
             targetGroupId: Long? = null,
+            targetDocumentId: Long? = null,
+            targetTextNoteId: Long? = null,
+            targetCanvasId: Long? = null,
             settingsRepository: SettingsRepository? = null,
             documentRepository: DocumentRepository? = null,
             textNoteRepository: TextNoteRepository? = null,
@@ -1493,6 +1514,9 @@ class FolderDetailViewModel(
                     initialSubfolderId = initialSubfolderId,
                     targetPhotoId = targetPhotoId,
                     targetGroupId = targetGroupId,
+                    targetDocumentId = targetDocumentId,
+                    targetTextNoteId = targetTextNoteId,
+                    targetCanvasId = targetCanvasId,
                     settingsRepository = settingsRepository,
                     documentRepository = documentRepository,
                     textNoteRepository = textNoteRepository,

@@ -172,17 +172,13 @@ fun WhatsNewScreen(
         }
     }
 
-    val versionText = release?.version ?: "Fotara v1.5.2 Beta"
+    val versionText = release?.version ?: "Fotara v1.5.3 Beta"
     val defaultNotes = """
         ## What's New
-        - Canvas Stability & Autosave: Debounced autosave with interactive save status indicator (Saving, Saved, Retry), synchronous flush on backgrounding/exit, and atomic state persistence.
-        - Precision 1:1 Canvas Panning: 1:1 pan tracking at any zoom distance, eliminate lag or focal-point jumps, and coordinate bounding to 20k x 20k with viewport culling.
-        - Safe Image Import: Images are staged safely through ContentResolver, downsampled to 2048px, inserted as separate layers at viewport center with full undo/redo.
-        - Insert From Existing Notes: Add snapshots from existing photo notes directly into the canvas from a visual grid picker.
-        - Layer-Aware Stroke Eraser: The broom tool now erases strokes strictly on the active layer with responsive touch tracking.
-        - Searchable OCR & DOCX Content: Full SQLite FTS4 virtual table search for DOCX and PDF documents with multi-word prefix matching, relevance ranking, and visual OCR/DOCX snippets.
-        - Responsive UI Layout: Redesigned single-line header row preventing overlaps on compact screens and floating zoom pill avoiding dock overlap.
-        - Dynamic Glowing Folder Cards: Glowing folders dynamically face their illuminated neighbors on cardinal edges and diagonal corners.
+        - Section-Oriented Settings Hierarchy: Reorganized settings into 6 main section rounded cards on root (General, Appearance, OCR & Recognition, Notifications & Deadlines, Storage & Data Management, About & Legal) with clean, un-carded detail lists inside each opened category.
+        - Full-Height Home Viewport: Restored natural vertical application area on Home screen without duplicate WindowInsets or excessive spacers, with the folder grid scrolling cleanly above the bottom floating dock and navigation bar.
+        - Responsive Photo Viewer Header: Reorganized inspector toolbar into a clean title and action row paired with a full-width horizontal status row, ensuring helper text and schedule badges never wrap vertically on narrow phone widths.
+        - Search Result Auto-Scroll & Exposure Highlight: Tapping any search result (Photos, Groups, PDF documents, Word DOCX, Text Notes, Canvas) navigates directly to the target folder and subfolder, auto-scrolls until the item is visible, and applies a subtle 2-second brightness/exposure flash before fading out cleanly.
     """.trimIndent()
 
     val rawNotes = release?.releaseNotes?.ifBlank { defaultNotes } ?: defaultNotes

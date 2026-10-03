@@ -7,6 +7,7 @@
 package com.arinara.fotara.ui.settings
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -103,9 +105,25 @@ import com.arinara.fotara.theme.TagCrimson
 import kotlinx.coroutines.launch
 
 /**
+ * Logical main sections for Settings.
+ */
+enum class SettingsSection(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector
+) {
+    GENERAL("General", "Grid density, default sort order, and storage path", Icons.Default.GridView),
+    APPEARANCE("Appearance", "Theme mode and visual display options", Icons.Default.Palette),
+    OCR("OCR & Recognition", "On-device text extraction, scripts, and quality", Icons.Default.TextFields),
+    NOTIFICATIONS("Notifications & Deadlines", "Reminders lead time, test alert, and due ribbon", Icons.Default.Notifications),
+    STORAGE("Storage & Data Management", "Storage breakdown, trash, re-indexing, and backup", Icons.Default.Storage),
+    ABOUT("About & Legal", "Version info, offline architecture, and licenses", Icons.Default.Info)
+}
+
+/**
  * Fotara v1.5.2 Settings Screen redesign.
- * Formatted as a vertical list of rounded rectangular cards (~#111726, 22dp radius, 12dp spacing, 16dp padding)
- * with a large upright "Settings" title at the top, 42dp neutral slate icon tiles, and Elms Sans typography.
+ * Formatted as 6 main section rounded rectangular cards (~#111726, 22dp radius, 12dp spacing, 16dp padding)
+ * on root, with clean un-carded list rows inside each opened detail section, keeping Elms Sans typography.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,6 +138,12 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     val context = LocalContext.current
+    var activeSection by remember { mutableStateOf<SettingsSection?>(null) }
+
+    BackHandler(enabled = activeSection != null) {
+        activeSection = null
+    }
+
     val (appVersionName, appVersionCode) = remember(context) {
         try {
             val pInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -128,16 +152,16 @@ fun SettingsScreen(
                 @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(context.packageName, 0)
             }
-            val vName = pInfo?.versionName ?: "1.5.2 Beta"
+            val vName = pInfo?.versionName ?: "1.5.3 Beta"
             val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                pInfo?.longVersionCode ?: 16L
+                pInfo?.longVersionCode ?: 17L
             } else {
                 @Suppress("DEPRECATION")
-                (pInfo?.versionCode ?: 16).toLong()
+                (pInfo?.versionCode ?: 17).toLong()
             }
             Pair(vName, vCode)
         } catch (_: Exception) {
-            Pair("1.5.2 Beta", 16L)
+            Pair("1.5.3 Beta", 17L)
         }
     }
 
@@ -171,17 +195,63 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            // Header with Large "Settings" Title (same style as Fotara title, no tagline)
-            item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp, bottom = 10.dp)
-                ) {
-                    if (onBackClick != null) {
+            if (activeSection == null) {
+                // Header with Large "Settings" Title (same style as Fotara title, no tagline)
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp, bottom = 10.dp)
+                    ) {
+                        if (onBackClick != null) {
+                            IconButton(
+                                onClick = onBackClick,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Color(0xFF131925))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
+                        Text(
+                            text = "Settings",
+                            color = Color.White,
+                            fontSize = 38.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = (-0.5).sp
+                        )
+                    }
+                }
+
+                // 6 Main Section Rounded Cards
+                items(SettingsSection.entries, key = { it.name }) { section ->
+                    SettingsCardItem(
+                        title = section.title,
+                        subtitle = section.subtitle,
+                        icon = section.icon,
+                        onClick = { activeSection = section }
+                    )
+                }
+            } else {
+                // Header of Active Section with Back Arrow to Root
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 6.dp)
+                    ) {
                         IconButton(
-                            onClick = onBackClick,
+                            onClick = { activeSection = null },
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(20.dp))
@@ -189,253 +259,244 @@ fun SettingsScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = "Back to Settings",
                                 tint = Color.White,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = activeSection!!.title,
+                            color = Color.White,
+                            fontSize = 24.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
-                    Text(
-                        text = "Settings",
-                        color = Color.White,
-                        fontSize = 38.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = (-0.5).sp
-                    )
                 }
-            }
 
-            // 1. Default Sort Order
-            item {
-                SettingsCardItem(
-                    title = "Default Sort Order",
-                    subtitle = uiState.userSettings.defaultSortOrder.displayName,
-                    icon = Icons.Default.GridView,
-                    onClick = { showSortOrderDialog = true }
-                )
-            }
-
-            // 2. Thumbnail Grid Density
-            item {
-                SettingsCardItem(
-                    title = "Thumbnail Grid Density",
-                    subtitle = "${uiState.userSettings.gridDensity} columns",
-                    icon = Icons.Default.GridView,
-                    onClick = { showGridDensityDialog = true }
-                )
-            }
-
-            // 3. Theme
-            item {
-                SettingsCardItem(
-                    title = "Theme",
-                    subtitle = uiState.userSettings.themeMode.displayName,
-                    icon = Icons.Default.Palette,
-                    onClick = { showThemeDialog = true }
-                )
-            }
-
-            // 4. Automatic OCR on Capture
-            item {
-                SettingsCardToggle(
-                    title = "Automatic OCR on Capture",
-                    subtitle = "Extract handwritten & printed text immediately after capture",
-                    icon = Icons.Default.TextFields,
-                    checked = uiState.userSettings.autoOcrEnabled,
-                    onCheckedChange = { viewModel.updateAutoOcr(it) }
-                )
-            }
-
-            // 5. OCR Recognition Script
-            item {
-                SettingsCardItem(
-                    title = "OCR Recognition Script",
-                    subtitle = uiState.userSettings.ocrLanguage,
-                    icon = Icons.Default.Language,
-                    onClick = { showOcrLanguageDialog = true }
-                )
-            }
-
-            // 6. Downsampling Quality Tradeoff
-            item {
-                SettingsCardItem(
-                    title = "Downsampling Quality Tradeoff",
-                    subtitle = uiState.userSettings.downsampleQuality.displayName,
-                    icon = Icons.Default.Image,
-                    onClick = { showQualityDialog = true }
-                )
-            }
-
-            // 7. System Notification Permission
-            item {
-                val notificationsEnabled = remember(context) {
-                    androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
-                }
-                SettingsCardItem(
-                    title = "System Notification Permission",
-                    subtitle = if (notificationsEnabled) "Permission granted" else "Notifications disabled in system settings",
-                    icon = Icons.Default.Notifications,
-                    onClick = {
-                        try {
-                            val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            }
-                            context.startActivity(intent)
-                        } catch (_: Exception) {
-                            val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = android.net.Uri.fromParts("package", context.packageName, null)
-                            }
-                            context.startActivity(intent)
+                // Clean Un-carded List Rows inside Selected Section
+                when (activeSection) {
+                    SettingsSection.GENERAL -> {
+                        item {
+                            SettingsRowItem(
+                                title = "Default Sort Order",
+                                subtitle = uiState.userSettings.defaultSortOrder.displayName,
+                                icon = Icons.Default.GridView,
+                                onClick = { showSortOrderDialog = true }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "Thumbnail Grid Density",
+                                subtitle = "${uiState.userSettings.gridDensity} columns",
+                                icon = Icons.Default.GridView,
+                                onClick = { showGridDensityDialog = true }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "Photo Storage Location",
+                                subtitle = uiState.userSettings.storageLocation.displayName,
+                                icon = Icons.Default.Storage,
+                                onClick = { showStorageLocationDialog = true }
+                            )
                         }
                     }
-                )
-            }
-
-            // 8. Default Reminder Lead Time
-            item {
-                val leadTimeText = when (uiState.userSettings.reminderLeadTimeHours) {
-                    1 -> "1 hour before deadline"
-                    3 -> "3 hours before deadline"
-                    24 -> "24 hours before deadline"
-                    else -> "${uiState.userSettings.reminderLeadTimeHours} hours before deadline"
-                }
-                SettingsCardItem(
-                    title = "Default Reminder Lead Time",
-                    subtitle = leadTimeText,
-                    icon = Icons.Default.Schedule,
-                    onClick = { showLeadTimeDialog = true }
-                )
-            }
-
-            // 9. "Due Tomorrow" Home Ribbon
-            item {
-                SettingsCardToggle(
-                    title = "\"Due Tomorrow\" Home Ribbon",
-                    subtitle = "Display urgent deadline alerts on home dashboard",
-                    icon = Icons.Default.ViewStream,
-                    checked = uiState.userSettings.dueTomorrowRibbonEnabled,
-                    onCheckedChange = { viewModel.updateDueTomorrowRibbon(it) }
-                )
-            }
-
-            // 10. Test Notification Alert
-            item {
-                SettingsCardAction(
-                    title = "Test Notification Alert",
-                    subtitle = "Trigger an immediate test study reminder notification",
-                    icon = Icons.Default.Notifications,
-                    actionIcon = Icons.Default.PlayArrow,
-                    isLoading = false,
-                    onClick = {
-                        com.arinara.fotara.util.NoteScheduleManager(context).sendTestAlert()
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Test alert dispatched. Check notification tray.")
+                    SettingsSection.APPEARANCE -> {
+                        item {
+                            SettingsRowItem(
+                                title = "Theme",
+                                subtitle = uiState.userSettings.themeMode.displayName,
+                                icon = Icons.Default.Palette,
+                                onClick = { showThemeDialog = true }
+                            )
                         }
                     }
-                )
-            }
-
-            // 11. Photo Storage Location
-            item {
-                SettingsCardItem(
-                    title = "Photo Storage Location",
-                    subtitle = uiState.userSettings.storageLocation.displayName,
-                    icon = Icons.Default.Storage,
-                    onClick = { showStorageLocationDialog = true }
-                )
-            }
-
-            // 12. Storage Usage Breakdown
-            item {
-                SettingsStorageBreakdownCard(
-                    formattedPhotos = uiState.storageBreakdown.formattedPhotos,
-                    formattedThumbnails = uiState.storageBreakdown.formattedThumbnails,
-                    formattedDatabase = uiState.storageBreakdown.formattedDatabase,
-                    formattedTotal = uiState.storageBreakdown.formattedTotal
-                )
-            }
-
-            // 13. Rebuild Thumbnails
-            item {
-                SettingsCardAction(
-                    title = "Rebuild Thumbnails",
-                    subtitle = "Regenerate thumbnail cache from originals",
-                    icon = Icons.Default.Refresh,
-                    actionIcon = Icons.Default.Refresh,
-                    isLoading = uiState.isRebuildingThumbnails,
-                    onClick = { viewModel.rebuildThumbnails() }
-                )
-            }
-
-            // 14. Trash / Recycle Bin
-            item {
-                SettingsCardItem(
-                    title = "Trash / Recycle Bin",
-                    subtitle = "View and restore deleted folders and notes",
-                    icon = Icons.Default.Delete,
-                    iconTint = TagCrimson,
-                    onClick = onNavigateToTrash
-                )
-            }
-
-            // 15. Export Backup (JSON)
-            item {
-                SettingsCardAction(
-                    title = "Export Backup (JSON)",
-                    subtitle = "Create offline backup of all folders, subfolders, and notes",
-                    icon = Icons.Default.Upload,
-                    actionIcon = Icons.Default.Upload,
-                    isLoading = uiState.isExportingBackup,
-                    onClick = { viewModel.requestExportBackup() }
-                )
-            }
-
-            // 16. Import from Backup
-            item {
-                SettingsCardAction(
-                    title = "Import from Backup",
-                    subtitle = "Restore coursework folders and notes from backup JSON",
-                    icon = Icons.Default.Download,
-                    actionIcon = Icons.Default.Download,
-                    isLoading = uiState.isImportingBackup,
-                    onClick = { viewModel.requestImportBackup() }
-                )
-            }
-
-            // 17. Rebuild Search Index
-            item {
-                SettingsCardAction(
-                    title = "Rebuild Search Index",
-                    subtitle = "Forces full SQLite FTS4 virtual table re-indexing",
-                    icon = Icons.Default.FindInPage,
-                    actionIcon = Icons.Default.Refresh,
-                    isLoading = uiState.isRebuildingSearchIndex,
-                    onClick = { viewModel.rebuildSearchIndex() }
-                )
-            }
-
-            // 18. About
-            item {
-                val displayVersion = if (appVersionName.contains("Beta", ignoreCase = true)) {
-                    appVersionName
-                } else {
-                    "$appVersionName Beta"
+                    SettingsSection.OCR -> {
+                        item {
+                            SettingsRowToggle(
+                                title = "Automatic OCR on Capture",
+                                subtitle = "Extract handwritten & printed text immediately after capture",
+                                icon = Icons.Default.TextFields,
+                                checked = uiState.userSettings.autoOcrEnabled,
+                                onCheckedChange = { viewModel.updateAutoOcr(it) }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "OCR Recognition Script",
+                                subtitle = uiState.userSettings.ocrLanguage,
+                                icon = Icons.Default.Language,
+                                onClick = { showOcrLanguageDialog = true }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "Downsampling Quality Tradeoff",
+                                subtitle = uiState.userSettings.downsampleQuality.displayName,
+                                icon = Icons.Default.Image,
+                                onClick = { showQualityDialog = true }
+                            )
+                        }
+                    }
+                    SettingsSection.NOTIFICATIONS -> {
+                        item {
+                            val notificationsEnabled = remember(context) {
+                                androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+                            }
+                            SettingsRowItem(
+                                title = "System Notification Permission",
+                                subtitle = if (notificationsEnabled) "Permission granted" else "Notifications disabled in system settings",
+                                icon = Icons.Default.Notifications,
+                                onClick = {
+                                    try {
+                                        val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {
+                                        val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = android.net.Uri.fromParts("package", context.packageName, null)
+                                        }
+                                        context.startActivity(intent)
+                                    }
+                                }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            val leadTimeText = when (uiState.userSettings.reminderLeadTimeHours) {
+                                1 -> "1 hour before deadline"
+                                3 -> "3 hours before deadline"
+                                24 -> "24 hours before deadline"
+                                else -> "${uiState.userSettings.reminderLeadTimeHours} hours before deadline"
+                            }
+                            SettingsRowItem(
+                                title = "Default Reminder Lead Time",
+                                subtitle = leadTimeText,
+                                icon = Icons.Default.Schedule,
+                                onClick = { showLeadTimeDialog = true }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowToggle(
+                                title = "\"Due Tomorrow\" Home Ribbon",
+                                subtitle = "Display urgent deadline alerts on home dashboard",
+                                icon = Icons.Default.ViewStream,
+                                checked = uiState.userSettings.dueTomorrowRibbonEnabled,
+                                onCheckedChange = { viewModel.updateDueTomorrowRibbon(it) }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowAction(
+                                title = "Test Notification Alert",
+                                subtitle = "Trigger an immediate test study reminder notification",
+                                icon = Icons.Default.Notifications,
+                                actionIcon = Icons.Default.PlayArrow,
+                                isLoading = false,
+                                onClick = {
+                                    com.arinara.fotara.util.NoteScheduleManager(context).sendTestAlert()
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Test alert dispatched. Check notification tray.")
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    SettingsSection.STORAGE -> {
+                        item {
+                            SettingsStorageBreakdownCard(
+                                formattedPhotos = uiState.storageBreakdown.formattedPhotos,
+                                formattedThumbnails = uiState.storageBreakdown.formattedThumbnails,
+                                formattedDatabase = uiState.storageBreakdown.formattedDatabase,
+                                formattedTotal = uiState.storageBreakdown.formattedTotal
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "Trash / Recycle Bin",
+                                subtitle = "View and restore deleted folders and notes",
+                                icon = Icons.Default.Delete,
+                                iconTint = TagCrimson,
+                                onClick = onNavigateToTrash
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowAction(
+                                title = "Rebuild Thumbnails",
+                                subtitle = "Regenerate thumbnail cache from originals",
+                                icon = Icons.Default.Refresh,
+                                actionIcon = Icons.Default.Refresh,
+                                isLoading = uiState.isRebuildingThumbnails,
+                                onClick = { viewModel.rebuildThumbnails() }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowAction(
+                                title = "Rebuild Search Index",
+                                subtitle = "Forces full SQLite FTS4 virtual table re-indexing",
+                                icon = Icons.Default.FindInPage,
+                                actionIcon = Icons.Default.Refresh,
+                                isLoading = uiState.isRebuildingSearchIndex,
+                                onClick = { viewModel.rebuildSearchIndex() }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowAction(
+                                title = "Export Backup (JSON)",
+                                subtitle = "Create offline backup of all folders, subfolders, and notes",
+                                icon = Icons.Default.Upload,
+                                actionIcon = Icons.Default.Upload,
+                                isLoading = uiState.isExportingBackup,
+                                onClick = { viewModel.requestExportBackup() }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowAction(
+                                title = "Import from Backup",
+                                subtitle = "Restore coursework folders and notes from backup JSON",
+                                icon = Icons.Default.Download,
+                                actionIcon = Icons.Default.Download,
+                                isLoading = uiState.isImportingBackup,
+                                onClick = { viewModel.requestImportBackup() }
+                            )
+                        }
+                    }
+                    SettingsSection.ABOUT -> {
+                        item {
+                            val displayVersion = if (appVersionName.contains("Beta", ignoreCase = true)) {
+                                appVersionName
+                            } else {
+                                "$appVersionName Beta"
+                            }
+                            SettingsAboutCard(
+                                version = "Version $displayVersion (Build $appVersionCode)"
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "Open Source Notices & Licenses",
+                                subtitle = "View third-party software attributions",
+                                icon = Icons.AutoMirrored.Filled.MenuBook,
+                                onClick = { viewModel.setLicensesDialogVisible(true) }
+                            )
+                        }
+                    }
+                    null -> {}
                 }
-                SettingsAboutCard(
-                    version = "Version $displayVersion (Build $appVersionCode)"
-                )
-            }
-
-            // 19. Open Source Notices & Licenses
-            item {
-                SettingsCardItem(
-                    title = "Open Source Notices & Licenses",
-                    subtitle = "View third-party software attributions",
-                    icon = Icons.AutoMirrored.Filled.MenuBook,
-                    onClick = { viewModel.setLicensesDialogVisible(true) }
-                )
             }
         }
     }
@@ -1221,5 +1282,209 @@ private fun <T> OptionSelectionDialog(
                 Text("Cancel", color = HomeSubtitleGray, fontFamily = ElmsSans)
             }
         }
+    )
+}
+
+/**
+ * Clean un-carded list item for settings inside an opened section.
+ */
+@Composable
+private fun SettingsRowItem(
+    title: String,
+    subtitle: String? = null,
+    icon: ImageVector? = null,
+    iconTint: Color = Color(0xFF94A3B8),
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 10.dp)
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontFamily = ElmsSans,
+                fontWeight = FontWeight.Medium
+            )
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    color = HomeSubtitleGray,
+                    fontSize = 13.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Light,
+                    lineHeight = 17.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = Color(0xFF64748B),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+/**
+ * Clean un-carded toggle row for settings inside an opened section.
+ */
+@Composable
+private fun SettingsRowToggle(
+    title: String,
+    subtitle: String? = null,
+    icon: ImageVector? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 4.dp, vertical = 10.dp)
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(0xFF94A3B8),
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontFamily = ElmsSans,
+                fontWeight = FontWeight.Medium
+            )
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    color = HomeSubtitleGray,
+                    fontSize = 13.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Light,
+                    lineHeight = 17.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = HomeMainButtonBlue,
+                uncheckedThumbColor = Color(0xFF94A3B8),
+                uncheckedTrackColor = Color(0xFF1E2638)
+            )
+        )
+    }
+}
+
+/**
+ * Clean un-carded action row for settings inside an opened section.
+ */
+@Composable
+private fun SettingsRowAction(
+    title: String,
+    subtitle: String? = null,
+    icon: ImageVector? = null,
+    actionIcon: ImageVector,
+    isLoading: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isLoading, onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 10.dp)
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(0xFF94A3B8),
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontFamily = ElmsSans,
+                fontWeight = FontWeight.Medium
+            )
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    color = HomeSubtitleGray,
+                    fontSize = 13.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Light,
+                    lineHeight = 17.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        if (isLoading) {
+            CircularProgressIndicator(
+                color = HomeMainButtonBlue,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(22.dp)
+            )
+        } else {
+            IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    imageVector = actionIcon,
+                    contentDescription = title,
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsListDivider() {
+    HorizontalDivider(
+        color = Color(0xFF161E30),
+        thickness = 0.8.dp,
+        modifier = Modifier.padding(horizontal = 4.dp)
     )
 }

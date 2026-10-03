@@ -51,6 +51,7 @@ val HomeHeaderButtonSurface = Color(0xFF131925)
 val HomeHeaderButtonBg = HomeHeaderButtonSurface
 val HomeTabBarContainer = Color(0xFF121826)
 val HomeTabBarSelectedPill = Color(0xFF1B4FC4)
+val HomeSegmentSelectedPill = HomeTabBarSelectedPill
 val HomeSearchBarSurface = Color(0xFF141B2A)
 val HomeSearchBarBorder = Color(0xFF1C2538)
 val HomeAddButtonBlue = Color(0xFF2563EB)

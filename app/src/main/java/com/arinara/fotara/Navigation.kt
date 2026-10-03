@@ -122,16 +122,19 @@ fun MainNavigation(
                         backStack.add(FolderDetailNavKey(folder.id))
                     },
                     onNavigateToPhoto = { folderId, subfolderId, photoId ->
-                        backStack.add(FolderDetailNavKey(folderId, subfolderId, photoId))
+                        backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetPhotoId = photoId))
                     },
                     onNavigateToGroup = { folderId, subfolderId, groupId ->
                         backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetGroupId = groupId))
                     },
-                    onNavigateToTextNote = { folderId, noteId ->
-                        backStack.add(TextNoteEditorNavKey(folderId = folderId, noteId = noteId))
+                    onNavigateToDocument = { folderId, subfolderId, docId ->
+                        backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetDocumentId = docId))
                     },
-                    onNavigateToCanvasNote = { folderId, canvasId ->
-                        backStack.add(CanvasNoteNavKey(canvasId = canvasId, folderId = folderId, subfolderId = null))
+                    onNavigateToTextNote = { folderId, subfolderId, noteId ->
+                        backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetTextNoteId = noteId))
+                    },
+                    onNavigateToCanvasNote = { folderId, subfolderId, canvasId ->
+                        backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetCanvasId = canvasId))
                     },
                     onOpenTrash = {
                         backStack.add(TrashNavKey)
@@ -155,7 +158,7 @@ fun MainNavigation(
 
             entry<FolderDetailNavKey> { key ->
                 val folderDetailViewModel: FolderDetailViewModel = viewModel(
-                    key = "folder_${key.folderId}_${key.initialSubfolderId}_${key.targetPhotoId}_${key.targetGroupId}",
+                    key = "folder_${key.folderId}_${key.initialSubfolderId}_${key.targetPhotoId}_${key.targetGroupId}_${key.targetDocumentId}_${key.targetTextNoteId}_${key.targetCanvasId}",
                     factory = FolderDetailViewModel.provideFactory(
                         folderId = key.folderId,
                         folderRepository = appContainer.folderRepository,
@@ -167,6 +170,9 @@ fun MainNavigation(
                         initialSubfolderId = key.initialSubfolderId,
                         targetPhotoId = key.targetPhotoId,
                         targetGroupId = key.targetGroupId,
+                        targetDocumentId = key.targetDocumentId,
+                        targetTextNoteId = key.targetTextNoteId,
+                        targetCanvasId = key.targetCanvasId,
                         settingsRepository = appContainer.settingsRepository,
                         documentRepository = appContainer.documentRepository,
                         textNoteRepository = appContainer.textNoteRepository,
