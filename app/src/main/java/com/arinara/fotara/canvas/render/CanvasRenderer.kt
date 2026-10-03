@@ -127,40 +127,9 @@ class CanvasRenderer(
         // 1. Draw Adaptive Background Pattern
         drawBackground(canvas, viewport, screenWidth, screenHeight, documentSnapshot.backgroundStyle)
 
-        // 2. Query and Draw Cached Tiles
-        val tiles = tileCacheManager.queryVisibleTiles(
-            viewport = viewport,
-            screenWidth = screenWidth,
-            screenHeight = screenHeight,
-            documentSnapshot = documentSnapshot,
-            spatialIndex = spatialIndex,
-            onTileRendered = onTileInvalidated
-        )
-
-        for (tile in tiles) {
-            val bmp = tile.bitmap ?: continue
-            val (screenLeft, screenTop) = ViewportTransform.worldToScreen(
-                tile.worldBounds.left, tile.worldBounds.top, viewport
-            )
-            val (screenRight, screenBottom) = ViewportTransform.worldToScreen(
-                tile.worldBounds.right, tile.worldBounds.bottom, viewport
-            )
-
-            tileSrcRect.set(0, 0, bmp.width, bmp.height)
-            tileDestRect.set(
-                screenLeft.toInt(),
-                screenTop.toInt(),
-                screenRight.toInt(),
-                screenBottom.toInt()
-            )
-
-            canvas.drawBitmap(bmp, tileSrcRect, tileDestRect, null)
-        }
-
-        // 3. Fallback direct draw for viewport if cached tiles are not yet available
-        if (tiles.isEmpty()) {
-            drawCommittedFallbackElements(canvas, viewport, screenWidth, screenHeight, documentSnapshot, spatialIndex)
-        }
+        // 2. Draw Committed Elements Directly via Hardware-Accelerated Vector Pipeline
+        // Eliminates offscreen tile blit latency, zoom tier pixelation, missing tile cutouts, and black boxes
+        drawCommittedElements(canvas, viewport, screenWidth, screenHeight, documentSnapshot, spatialIndex)
 
         // 4. Draw Live In-Progress Stroke (High-frequency path)
         if (inProgressPoints != null && inProgressPoints.isNotEmpty() && inProgressTool != null) {
@@ -248,7 +217,7 @@ class CanvasRenderer(
         }
     }
 
-    private fun drawCommittedFallbackElements(
+    private fun drawCommittedElements(
         canvas: Canvas,
         viewport: ViewportState,
         screenWidth: Float,
@@ -258,16 +227,29 @@ class CanvasRenderer(
     ) {
         val (worldMinX, worldMinY) = ViewportTransform.screenToWorld(0f, 0f, viewport)
         val (worldMaxX, worldMaxY) = ViewportTransform.screenToWorld(screenWidth, screenHeight, viewport)
-        val viewportWorldBounds = CanvasRect(worldMinX, worldMinY, worldMaxX, worldMaxY)
+        val viewportWorldBounds = CanvasRect(
+            left = minOf(worldMinX, worldMaxX),
+            top = minOf(worldMinY, worldMaxY),
+            right = maxOf(worldMinX, worldMaxX),
+            bottom = maxOf(worldMinY, worldMaxY)
+        )
 
         val visibleElements = spatialIndex.query(viewportWorldBounds)
+        if (visibleElements.isEmpty()) return
+
         val layerMap = documentSnapshot.layers.associateBy { it.id }
+
+        // Sort elements by layer order, then by zIndex, ensuring deterministic back-to-front rendering
+        val sortedElements = visibleElements.sortedWith(
+            compareBy<CanvasElement> { layerMap[it.layerId]?.order ?: 0 }
+                .thenBy { it.zIndex }
+        )
 
         canvas.save()
         canvas.translate(viewport.translateX, viewport.translateY)
         canvas.scale(viewport.scale, viewport.scale)
 
-        for (element in visibleElements) {
+        for (element in sortedElements) {
             val layer = layerMap[element.layerId] ?: continue
             if (!layer.isVisible) continue
 
@@ -278,16 +260,20 @@ class CanvasRenderer(
                     paint.strokeWidth = element.width
                     paint.alpha = (255 * layer.opacity).toInt().coerceIn(0, 255)
 
-                    drawPath.rewind()
                     val pts = element.points
                     if (pts.size >= 2) {
+                        paint.style = Paint.Style.STROKE
+                        drawPath.rewind()
                         drawPath.moveTo(pts[0].x, pts[0].y)
                         for (i in 1 until pts.size) {
                             drawPath.lineTo(pts[i].x, pts[i].y)
                         }
                         canvas.drawPath(drawPath, paint)
                     } else if (pts.size == 1) {
+                        // Render single tap (dot) with solid fill and exact stroke width radius
+                        paint.style = Paint.Style.FILL
                         canvas.drawCircle(pts[0].x, pts[0].y, element.width / 2f, paint)
+                        paint.style = Paint.Style.STROKE
                     }
                 }
                 is ImageElement -> {
@@ -302,7 +288,7 @@ class CanvasRenderer(
                                 null
                             }
                         }
-                        if (bmp != null) {
+                        if (bmp != null && !bmp.isRecycled) {
                             canvas.save()
                             canvas.translate(element.x, element.y)
                             if (element.rotationDegrees != 0f) {
@@ -422,5 +408,13 @@ class CanvasRenderer(
         canvas.drawLine(midX, sTop, midX, rotHandleY, selectionBoxPaint)
         canvas.drawCircle(midX, rotHandleY, handleRadius, handleFillPaint)
         canvas.drawCircle(midX, rotHandleY, handleRadius, handleStrokePaint)
+    }
+
+    /**
+     * Releases cached image bitmaps when view is detached.
+     */
+    fun clearImageCache() {
+        imageBitmapCache.values.forEach { if (!it.isRecycled) it.recycle() }
+        imageBitmapCache.clear()
     }
 }

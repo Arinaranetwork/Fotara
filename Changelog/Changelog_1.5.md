@@ -54,3 +54,8 @@ Released: 2026-09-30   Status: Beta
 - Full-Height Home Viewport & Navigation Clearance: Eliminated artificial vertical constraints on the home dashboard, allowing folder grid content to scroll smoothly using the full screen height while staying completely unobstructed by system navigation buttons.
 - Photo Viewer Responsive Header: Reorganized inspector toolbar into a clean title and action row paired with a full-width horizontal status row, ensuring helper text and schedule badges never wrap vertically on narrow phone widths.
 - Search Result Auto-Scroll & Exposure Highlight: Tapping any search result (Photos, Groups, PDF documents, Word DOCX, Text Notes, Canvas) navigates directly to the parent folder and active subfolder, auto-scrolls until the item is visible, and applies a subtle 2-second brightness/exposure flash before fading out cleanly.
+
+### 1.5.4 - 2026-10-03
+- Direct Hardware-Accelerated Canvas Rendering: Switched canvas rendering to direct hardware-accelerated vector and image drawing, completely eliminating missing tile cutouts and dark grid boxes during pinch-to-zoom and stroke drawing.
+- Black Box & Dot Stippling Fix: Fixed solid black rectangular boxes appearing when drawing dots or rapid strokes by removing RGB_565 degradation and rendering single-point strokes with solid fill.
+- Multi-Zoom Vector Fidelity: Vector strokes and imported whiteboard/scan images now maintain crisp sub-pixel precision across extreme zoom ranges (up to 500%) with zero tile seams or blurriness.

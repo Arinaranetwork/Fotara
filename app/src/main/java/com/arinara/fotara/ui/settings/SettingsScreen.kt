@@ -152,16 +152,16 @@ fun SettingsScreen(
                 @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(context.packageName, 0)
             }
-            val vName = pInfo?.versionName ?: "1.5.3 Beta"
+            val vName = pInfo?.versionName ?: "1.5.4 Beta"
             val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                pInfo?.longVersionCode ?: 17L
+                pInfo?.longVersionCode ?: 18L
             } else {
                 @Suppress("DEPRECATION")
-                (pInfo?.versionCode ?: 17).toLong()
+                (pInfo?.versionCode ?: 18).toLong()
             }
             Pair(vName, vCode)
         } catch (_: Exception) {
-            Pair("1.5.3 Beta", 17L)
+            Pair("1.5.4 Beta", 18L)
         }
     }
 

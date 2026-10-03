@@ -329,5 +329,6 @@ class CanvasDrawingView(
         super.onDetachedFromWindow()
         scroller.abortAnimation()
         tileCacheManager.release()
+        canvasRenderer.clearImageCache()
     }
 }

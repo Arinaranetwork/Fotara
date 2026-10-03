@@ -112,4 +112,32 @@ class TileInvalidationTest {
         assertTrue(tile1.isDirty)
         assertTrue(tile2.isDirty)
     }
+
+    @Test
+    fun testSinglePointDotBounds_ProducesValidNonZeroAreaForInvalidation() {
+        val dotPoint = com.arinara.fotara.canvas.model.StrokePoint(x = 250f, y = 300f, pressure = 1.0f)
+        val strokeWidth = 8.0f
+        val bounds = com.arinara.fotara.canvas.engine.StrokeProcessor.computeBounds(listOf(dotPoint), strokeWidth)
+
+        // Expected radius = strokeWidth / 2 + 1.0 = 5.0f
+        assertEquals(245.0f, bounds.left, 0.001f)
+        assertEquals(295.0f, bounds.top, 0.001f)
+        assertEquals(255.0f, bounds.right, 0.001f)
+        assertEquals(305.0f, bounds.bottom, 0.001f)
+        assertTrue("Bounds width must be positive", bounds.width > 0f)
+        assertTrue("Bounds height must be positive", bounds.height > 0f)
+    }
+
+    @Test
+    fun testIntersectingTilesForDot_CoversContainingTile() {
+        val dotPoint = com.arinara.fotara.canvas.model.StrokePoint(x = 250f, y = 300f, pressure = 1.0f)
+        val strokeWidth = 6.0f
+        val bounds = com.arinara.fotara.canvas.engine.StrokeProcessor.computeBounds(listOf(dotPoint), strokeWidth)
+
+        val worldTileSize = 512f
+        val zoomTier = 2
+        val intersectingKeys = TileGridHelper.computeIntersectingTileKeys(bounds, worldTileSize, zoomTier)
+
+        assertTrue("Intersecting keys must contain tile (0, 0)", intersectingKeys.contains(TileKey(col = 0, row = 0, zoomTier = zoomTier)))
+    }
 }

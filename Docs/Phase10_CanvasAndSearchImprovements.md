@@ -100,6 +100,13 @@ Harden the Canvas Note drawing experience, improve searchability across OCR and 
 ### Feature 14: Folder Screen Header Action Button Spacing
 - Add explicit separation between Add (+) circular button and Kebab (⋮) menu button with 48dp minimum touch bounds.
 
+### Feature 15: Direct Hardware-Accelerated Vector Rendering & Black Tile Elimination
+- Eliminate tile-missing dark grid holes during zoom and drawing: Replace asynchronous offscreen bitmap tile blitting in `CanvasRenderer` with direct hardware-accelerated vector and image rendering.
+- Viewport culling: QuadTree spatial index queries only elements intersecting the visible viewport, sorting elements deterministically by layer order and zIndex.
+- Single-point dot precision: Render single-point dots (`pts.size == 1`) with `Paint.Style.FILL` to produce solid, crisp circular points without hollow artifacts or black rectangles.
+- Eliminate opaque black tiles: Remove `Bitmap.Config.RGB_565` fallback from `TileCacheManager.obtainBitmap` to guarantee that transparency is never corrupted into pitch-black pixels (`0x0000`).
+- Seamless image rendering: Render image elements directly from the decoded in-memory `imageBitmapCache` with hardware acceleration.
+
 ## UI Mockup
 ```
 Canvas Top Bar (Narrow 360dp):
@@ -152,4 +159,5 @@ Folder Header Action Buttons:
 - [x] Item 12: Long-press on Canvas note opens the full contextual action panel (Rename, Color, Deadline, Schedule, Move, Share/Export, Select, Delete).
 - [x] Item 13: Elms Sans font (Light, Medium, Bold) applied app-wide with zero italics in UI.
 - [x] Item 14: Folder header Add (+) and Kebab (⋮) buttons do not overlap and maintain 48dp touch targets.
+- [x] Item 15: Canvas Direct Hardware-Accelerated Rendering & Black Tile Elimination (eliminate tile-missing dark grid holes during zoom/draw, remove RGB_565 pitch-black tile degradation, direct QuadTree-culled vector and image rendering with solid-fill single point dots).
 

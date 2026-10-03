@@ -172,9 +172,12 @@ fun WhatsNewScreen(
         }
     }
 
-    val versionText = release?.version ?: "Fotara v1.5.3 Beta"
+    val versionText = release?.version ?: "Fotara v1.5.4 Beta"
     val defaultNotes = """
         ## What's New
+        - Direct Hardware-Accelerated Canvas Rendering: Switched canvas rendering to direct hardware-accelerated vector and image drawing, completely eliminating missing tile cutouts and dark grid boxes during pinch-to-zoom and stroke drawing.
+        - Black Box & Dot Stippling Fix: Fixed solid black rectangular boxes appearing when drawing dots or rapid strokes by removing RGB_565 degradation and rendering single-point strokes with solid fill.
+        - Multi-Zoom Vector Fidelity: Vector strokes and imported whiteboard/scan images now maintain crisp sub-pixel precision across extreme zoom ranges (up to 500%) with zero tile seams or blurriness.
         - Section-Oriented Settings Hierarchy: Reorganized settings into 6 main section rounded cards on root (General, Appearance, OCR & Recognition, Notifications & Deadlines, Storage & Data Management, About & Legal) with clean, un-carded detail lists inside each opened category.
         - Full-Height Home Viewport: Restored natural vertical application area on Home screen without duplicate WindowInsets or excessive spacers, with the folder grid scrolling cleanly above the bottom floating dock and navigation bar.
         - Responsive Photo Viewer Header: Reorganized inspector toolbar into a clean title and action row paired with a full-width horizontal status row, ensuring helper text and schedule badges never wrap vertically on narrow phone widths.

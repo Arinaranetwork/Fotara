@@ -302,11 +302,11 @@ class TileCacheManager(
             currentMemoryUsage += bmp.allocationByteCount
             bmp
         } catch (_: OutOfMemoryError) {
-            // OOM degradation fallback: clear all tiles and try lower-resolution RGB_565 (50% memory)
+            // OOM degradation fallback: clear all tiles and try lower-resolution ARGB_8888 (never RGB_565 which lacks alpha and causes black tiles)
             clearAllBitmaps()
             try {
                 val halfSize = tileSizePixels / 2
-                val degraded = Bitmap.createBitmap(halfSize, halfSize, Bitmap.Config.RGB_565)
+                val degraded = Bitmap.createBitmap(halfSize, halfSize, Bitmap.Config.ARGB_8888)
                 currentMemoryUsage += degraded.allocationByteCount
                 degraded
             } catch (_: OutOfMemoryError) {

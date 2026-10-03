@@ -226,6 +226,7 @@ Phase 13 - FolderScreenRedesign [In Progress]
 - [x] Item 12: Canvas Note Long-Press Action Sheet Parity (contextual action sheet with Rename, Color Label, Deadline, Schedule Reminder, Move to Folder, Share as Image PNG, Batch Selection, and Delete to Trash) - Phase 10
 - [x] Item 13: Elms Sans Typography Migration & Italic Elimination (app-wide typography migration with strict 3-weight mapping: Light 300, Medium 500, Bold 700; complete removal of UI italics across all screens, headers, cards, dialogs, and search bars) - Phase 10
 - [x] Item 14: Folder Screen Header Button Spacing (clean 10dp separation and 48dp minimum touch targets for Add [+] and Kebab [⋮] buttons) - Phase 10
+- [x] Item 15: Canvas Direct Hardware-Accelerated Vector Rendering & Black Tile Elimination (eliminate tile-missing dark grid holes during zoom/draw, remove RGB_565 pitch-black tile degradation, direct QuadTree-culled vector and image rendering with solid-fill single point dots) - Phase 10
 
 - [x] Task 1: Redesign SettingsScreen root into 6 main section rounded cards and clean un-carded detail lists - Phase 12
 - [x] Task 2: Restore full-height viewport on HomeScreen by eliminating duplicate insets and excessive bottom padding - Phase 12

@@ -186,9 +186,9 @@ class UpdateManager(private val context: Context) {
 
                 // Check version comparison dynamically against installed app version
                 val currentVersion = try {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.5.3 Beta"
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.5.4 Beta"
                 } catch (_: Exception) {
-                    "1.5.3 Beta"
+                    "1.5.4 Beta"
                 }
 
                 val previousRelease = _latestRelease.value
