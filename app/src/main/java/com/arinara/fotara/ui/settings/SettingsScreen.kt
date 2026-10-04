@@ -278,19 +278,33 @@ fun SettingsScreen(
             hasCustomAvatar = uiState.userProfile.hasCustomAvatar,
             hasCustomBanner = uiState.userProfile.hasCustomBanner,
             onChangePicture = {
+                showProfileEditSheet = false
                 avatarPickerLauncher.launch(
                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                 )
             },
-            onChooseBorder = { showBorderPicker = true },
+            onChooseBorder = {
+                showProfileEditSheet = false
+                showBorderPicker = true
+            },
             onChangeBanner = {
+                showProfileEditSheet = false
                 bannerPickerLauncher.launch(
                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                 )
             },
-            onEditNameEmail = { activeSection = SettingsSection.PROFILE },
-            onRemovePicture = { viewModel.removeProfileAvatar() },
-            onRemoveBanner = { viewModel.removeProfileBanner() },
+            onEditNameEmail = {
+                showProfileEditSheet = false
+                activeSection = SettingsSection.PROFILE
+            },
+            onRemovePicture = {
+                viewModel.removeProfileAvatar()
+                showProfileEditSheet = false
+            },
+            onRemoveBanner = {
+                viewModel.removeProfileBanner()
+                showProfileEditSheet = false
+            },
             onDismiss = { showProfileEditSheet = false }
         )
     }

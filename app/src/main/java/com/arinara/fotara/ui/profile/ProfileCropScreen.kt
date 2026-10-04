@@ -110,16 +110,13 @@ fun ProfileCropScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var previewBitmap by remember(imageUri) { mutableStateOf<Bitmap?>(null) }
-    var imageInfo by remember(imageUri) { mutableStateOf<ProfileImageUtils.ImageInfo?>(null) }
     var decodeFailed by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
 
     LaunchedEffect(imageUri) {
         withContext(Dispatchers.IO) {
-            val info = ProfileImageUtils.getImageInfo(context, imageUri)
             val bmp = ProfileImageUtils.decodeSampledBitmap(context, imageUri, 2048)
-            if (bmp != null && info != null) {
-                imageInfo = info
+            if (bmp != null) {
                 previewBitmap = bmp
             } else {
                 decodeFailed = true
@@ -222,7 +219,6 @@ fun ProfileCropScreen(
                     onClick = {
                         if (isSaving) return@IconButton
                         val bmp = previewBitmap ?: return@IconButton
-                        val info = imageInfo ?: return@IconButton
                         val currentNorm = normBoxState.value ?: run {
                             val init = CropBoxGeometry.computeInitialBox(
                                 bmp.width.toFloat(),
@@ -239,33 +235,27 @@ fun ProfileCropScreen(
 
                         isSaving = true
                         coroutineScope.launch {
-                            val displayBox = CropRectF(
-                                currentNorm.left * bmp.width.toFloat(),
-                                currentNorm.top * bmp.height.toFloat(),
-                                currentNorm.right * bmp.width.toFloat(),
-                                currentNorm.bottom * bmp.height.toFloat()
-                            )
-                            val sourceRect = CropBoxGeometry.mapDisplayToSourceRect(
-                                displayCrop = displayBox,
-                                displayWidth = bmp.width.toFloat(),
-                                displayHeight = bmp.height.toFloat(),
-                                rawSourceWidth = info.width,
-                                rawSourceHeight = info.height,
-                                rotationDegrees = info.rotationDegrees
-                            )
-
-                            val targetW = if (isAvatar) 512 else min(sourceRect.width, 1080)
-                            val targetH = if (isAvatar) 512 else null
-
                             val cropped = withContext(Dispatchers.IO) {
-                                ProfileImageUtils.cropFromSourceUri(
-                                    context = context,
-                                    uri = imageUri,
-                                    sourceRect = sourceRect,
-                                    rotationDegrees = info.rotationDegrees,
-                                    targetWidth = targetW,
-                                    targetHeight = targetH
-                                )
+                                val sub = ProfileImageUtils.cropNormalized(
+                                    source = bmp,
+                                    normLeft = currentNorm.left,
+                                    normTop = currentNorm.top,
+                                    normRight = currentNorm.right,
+                                    normBottom = currentNorm.bottom
+                                ) ?: return@withContext null
+
+                                if (isAvatar) {
+                                    Bitmap.createScaledBitmap(sub, 512, 512, true)
+                                } else {
+                                    val targetWidth = min(sub.width, 1080).coerceAtLeast(1)
+                                    val ratio = targetWidth.toFloat() / sub.width.toFloat()
+                                    val targetHeight = (sub.height * ratio).toInt().coerceAtLeast(1)
+                                    if (sub.width != targetWidth || sub.height != targetHeight) {
+                                        Bitmap.createScaledBitmap(sub, targetWidth, targetHeight, true)
+                                    } else {
+                                        sub
+                                    }
+                                }
                             }
 
                             if (cropped != null) {

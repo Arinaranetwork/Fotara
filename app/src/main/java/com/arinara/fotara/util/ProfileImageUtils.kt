@@ -31,19 +31,34 @@ object ProfileImageUtils {
     )
 
     /**
+     * Safely opens an InputStream for either content:// or file:// URIs across all API levels.
+     */
+    fun openStream(context: Context, uri: Uri): InputStream? {
+        return try {
+            if (uri.scheme == "file" && uri.path != null) {
+                java.io.FileInputStream(File(uri.path!!))
+            } else {
+                context.contentResolver.openInputStream(uri)
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
      * Reads image bounds and EXIF orientation without loading the full bitmap into memory.
      */
     fun getImageInfo(context: Context, uri: Uri): ImageInfo? {
         return try {
             val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            context.contentResolver.openInputStream(uri)?.use { stream ->
+            openStream(context, uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream, null, boundsOpts)
             } ?: return null
             if (boundsOpts.outWidth <= 0 || boundsOpts.outHeight <= 0) return null
 
             var rotationDegrees = 0
             try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
+                openStream(context, uri)?.use { stream ->
                     val exif = ExifInterface(stream)
                     val orientation = exif.getAttributeInt(
                         ExifInterface.TAG_ORIENTATION,
@@ -71,8 +86,8 @@ object ProfileImageUtils {
     fun stageUriToCache(context: Context, uri: Uri, prefix: String = "temp_crop"): File? {
         return try {
             val cacheDir = context.cacheDir
-            val tempFile = File(cacheDir, "${prefix}_${System.currentTimeMillis()}.img")
-            context.contentResolver.openInputStream(uri)?.use { input ->
+            val tempFile = File(cacheDir, "${prefix}_${System.currentTimeMillis()}.png")
+            openStream(context, uri)?.use { input ->
                 FileOutputStream(tempFile).use { output ->
                     input.copyTo(output)
                     output.flush()
@@ -90,9 +105,8 @@ object ProfileImageUtils {
     }
 
     /**
-     * Crops a sub-region directly from original source pixels via BitmapRegionDecoder (or fallback)
-     * without decoding the entire uncompressed image into memory.
-     * Applies EXIF rotation and optional final scaling.
+     * Crops a sub-region directly from source with memory-bounded downsampling
+     * and automatic EXIF orientation correction.
      */
     fun cropFromSourceUri(
         context: Context,
@@ -103,89 +117,37 @@ object ProfileImageUtils {
         targetHeight: Int? = null
     ): Bitmap? {
         return try {
-            val regionRect = android.graphics.Rect(
-                sourceRect.left.coerceAtLeast(0),
-                sourceRect.top.coerceAtLeast(0),
-                sourceRect.right,
-                sourceRect.bottom
-            )
-            if (regionRect.width() <= 0 || regionRect.height() <= 0) return null
-
-            var rawSubBitmap: Bitmap? = null
-
-            // 1. Try BitmapRegionDecoder with file path if available or openInputStream
-            try {
-                val decoder = if (uri.scheme == "file" && uri.path != null) {
-                    val filePath = File(uri.path!!).absolutePath
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        BitmapRegionDecoder.newInstance(filePath)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        BitmapRegionDecoder.newInstance(filePath, false)
-                    }
-                } else {
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            BitmapRegionDecoder.newInstance(stream)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            BitmapRegionDecoder.newInstance(stream, false)
-                        }
-                    }
-                }
-                val options = BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
-                }
-                rawSubBitmap = decoder?.decodeRegion(regionRect, options)
-                decoder?.recycle()
-            } catch (_: Throwable) {
-                rawSubBitmap = null
-            }
-
-            // 2. Fallback if region decoder is not supported for this format
-            if (rawSubBitmap == null) {
-                val fullBitmap = decodeSampledBitmap(context, uri, 4096) ?: return null
-                val scaledL = (regionRect.left * (fullBitmap.width.toFloat() / sourceRect.right.coerceAtLeast(fullBitmap.width).toFloat())).toInt().coerceIn(0, fullBitmap.width - 1)
-                val scaledT = (regionRect.top * (fullBitmap.height.toFloat() / sourceRect.bottom.coerceAtLeast(fullBitmap.height).toFloat())).toInt().coerceIn(0, fullBitmap.height - 1)
-                val scaledW = (regionRect.width() * (fullBitmap.width.toFloat() / sourceRect.right.coerceAtLeast(fullBitmap.width).toFloat())).toInt().coerceIn(1, fullBitmap.width - scaledL)
-                val scaledH = (regionRect.height() * (fullBitmap.height.toFloat() / sourceRect.bottom.coerceAtLeast(fullBitmap.height).toFloat())).toInt().coerceIn(1, fullBitmap.height - scaledT)
-                rawSubBitmap = Bitmap.createBitmap(fullBitmap, scaledL, scaledT, scaledW, scaledH)
-                if (rawSubBitmap != fullBitmap) {
-                    fullBitmap.recycle()
-                }
+            val fullBitmap = decodeSampledBitmap(context, uri, 4096) ?: return null
+            val rawW = fullBitmap.width
+            val rawH = fullBitmap.height
+            val left = sourceRect.left.coerceIn(0, rawW - 1)
+            val top = sourceRect.top.coerceIn(0, rawH - 1)
+            val width = sourceRect.width.coerceIn(1, rawW - left)
+            val height = sourceRect.height.coerceIn(1, rawH - top)
+            val rawSubBitmap = Bitmap.createBitmap(fullBitmap, left, top, width, height)
+            if (rawSubBitmap != fullBitmap && !fullBitmap.isRecycled) {
+                fullBitmap.recycle()
             }
 
             val decoded = rawSubBitmap
 
-            // 3. Apply EXIF rotation if needed
-            val rotated = if (rotationDegrees != 0) {
-                val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                val r = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
-                if (r != decoded && !decoded.isRecycled) {
+            // Scale to target size if requested
+            if (targetWidth != null && targetHeight != null) {
+                val scaled = Bitmap.createScaledBitmap(decoded, targetWidth, targetHeight, true)
+                if (scaled != decoded && !decoded.isRecycled) {
                     decoded.recycle()
                 }
-                r
+                scaled
+            } else if (targetWidth != null && decoded.width > targetWidth) {
+                val ratio = targetWidth.toFloat() / decoded.width.toFloat()
+                val newHeight = (decoded.height * ratio).toInt().coerceAtLeast(1)
+                val scaled = Bitmap.createScaledBitmap(decoded, targetWidth, newHeight, true)
+                if (scaled != decoded && !decoded.isRecycled) {
+                    decoded.recycle()
+                }
+                scaled
             } else {
                 decoded
-            }
-
-            // 4. Scale to target size if requested
-            if (targetWidth != null && targetHeight != null) {
-                val scaled = Bitmap.createScaledBitmap(rotated, targetWidth, targetHeight, true)
-                if (scaled != rotated && !rotated.isRecycled) {
-                    rotated.recycle()
-                }
-                scaled
-            } else if (targetWidth != null && rotated.width > targetWidth) {
-                val ratio = targetWidth.toFloat() / rotated.width.toFloat()
-                val newHeight = (rotated.height * ratio).toInt().coerceAtLeast(1)
-                val scaled = Bitmap.createScaledBitmap(rotated, targetWidth, newHeight, true)
-                if (scaled != rotated && !rotated.isRecycled) {
-                    rotated.recycle()
-                }
-                scaled
-            } else {
-                rotated
             }
         } catch (_: Exception) {
             null
@@ -193,7 +155,7 @@ object ProfileImageUtils {
     }
 
     /**
-     * Safely decodes a bitmap from a content URI with memory-bounded downsampling
+     * Safely decodes a bitmap from a content or file URI with memory-bounded downsampling
      * and automatic EXIF orientation correction.
      */
     fun decodeSampledBitmap(
@@ -204,7 +166,7 @@ object ProfileImageUtils {
         return try {
             // 1. Decode bounds only
             val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            context.contentResolver.openInputStream(uri)?.use { stream ->
+            openStream(context, uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream, null, boundsOpts)
             } ?: return null
 
@@ -213,7 +175,7 @@ object ProfileImageUtils {
             // 2. Read EXIF rotation
             var rotationDegrees = 0
             try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
+                openStream(context, uri)?.use { stream ->
                     val exif = ExifInterface(stream)
                     val orientation = exif.getAttributeInt(
                         ExifInterface.TAG_ORIENTATION,
@@ -241,7 +203,7 @@ object ProfileImageUtils {
                 inSampleSize = sampleSize
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
-            val rawBitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+            val rawBitmap = openStream(context, uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream, null, decodeOpts)
             } ?: return null
 

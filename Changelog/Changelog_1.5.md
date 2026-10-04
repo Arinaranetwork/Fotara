@@ -132,8 +132,16 @@ Released: 2026-09-30   Status: Beta
 - LinkIt Converging Cluster Glow: For linked groups of 3 or 4 cards arranged in a 2x2 grid cluster (including L-shaped triads), corner glows now converge toward the shared central intersection point with cardinal side glows suppressed within qualifying blocks. Pairwise cardinal edge glows are preserved for isolated pairs and line layouts across grid densities 2, 3, and 4.
 - Profile Picture and Banner Instant Display Fix: Resolved an issue where profile pictures and banners failed to display after selection. Fixed top-bar action execution, verified WebP compress boolean checks with zero-byte corruption prevention, resolved StateFlow equality suppression via modification timestamps (avatarUpdatedAt, bannerUpdatedAt), and eliminated Coil image cache collisions.
 - Dedicated Aspect-Locked Crop Editor: Replaced the crop step with a fullscreen interactive crop editor supporting 1:1 circular guide for profile pictures and exact layout-matched aspect ratio for banners. Features four accessible 44dp corner handles with opposite-corner-fixed resizing, two-finger pinch scaling around center, drag panning with boundary clamping, reset button, and high-fidelity region decoding directly from original image pixels via BitmapRegionDecoder without risk of out-of-memory errors on large photos.
+
+### 1.5.9 - 2026-10-04
 - Lossless PNG Profile Picture & Banner Support: Enforced true PNG format preservation with full 32-bit ARGB_8888 alpha transparency for custom avatars and banners, resolving encoder failures on transparent PNG images. Picker input streams are safely staged to private seekable cache storage.
 - Expanded & Formatted In-App Update Modal: Upgraded update popup modal with an expanded vertical layout (up to 440dp height) and native Rich Markdown rendering, cleanly displaying headings (H1, H2, H3), bold text, bullet lists, blockquotes, and release note formatting.
+
+### 1.5.10 - 2026-10-04
+- Bulletproof Profile Picture & Banner PNG Crop: Resolved failures when cropping and saving PNG profile pictures and banners by migrating crop extraction directly into memory from the loaded preview bitmap using normalized coordinates. Eliminates native Skia region decoder failures, closed input streams, and boundary calculation errors across all Android versions.
+- Safe Universal URI Stream Handling: Hardened image stream resolution to transparently support both `file://` and `content://` schemes across all Android API levels without `SecurityException` or stream reset issues.
+- Clean Profile Sheet Navigation: Automatically dismisses the profile action bottom sheet upon selecting an action, ensuring the user immediately returns to the updated profile screen after saving.
+
 
 
 
