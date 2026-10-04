@@ -65,6 +65,31 @@ object ProfileImageUtils {
     }
 
     /**
+     * Copies a content URI stream into a temporary private cache file.
+     * Guarantees seekable file descriptor access and immune to permission expiration.
+     */
+    fun stageUriToCache(context: Context, uri: Uri, prefix: String = "temp_crop"): File? {
+        return try {
+            val cacheDir = context.cacheDir
+            val tempFile = File(cacheDir, "${prefix}_${System.currentTimeMillis()}.img")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    input.copyTo(output)
+                    output.flush()
+                }
+            } ?: return null
+            if (tempFile.exists() && tempFile.length() > 0L) {
+                tempFile
+            } else {
+                if (tempFile.exists()) tempFile.delete()
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
      * Crops a sub-region directly from original source pixels via BitmapRegionDecoder (or fallback)
      * without decoding the entire uncompressed image into memory.
      * Applies EXIF rotation and optional final scaling.
@@ -88,21 +113,31 @@ object ProfileImageUtils {
 
             var rawSubBitmap: Bitmap? = null
 
-            // 1. Try BitmapRegionDecoder
+            // 1. Try BitmapRegionDecoder with file path if available or openInputStream
             try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val decoder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        BitmapRegionDecoder.newInstance(stream)
+                val decoder = if (uri.scheme == "file" && uri.path != null) {
+                    val filePath = File(uri.path!!).absolutePath
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        BitmapRegionDecoder.newInstance(filePath)
                     } else {
                         @Suppress("DEPRECATION")
-                        BitmapRegionDecoder.newInstance(stream, false)
+                        BitmapRegionDecoder.newInstance(filePath, false)
                     }
-                    val options = BitmapFactory.Options().apply {
-                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                } else {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            BitmapRegionDecoder.newInstance(stream)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            BitmapRegionDecoder.newInstance(stream, false)
+                        }
                     }
-                    rawSubBitmap = decoder?.decodeRegion(regionRect, options)
-                    decoder?.recycle()
                 }
+                val options = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+                rawSubBitmap = decoder?.decodeRegion(regionRect, options)
+                decoder?.recycle()
             } catch (_: Throwable) {
                 rawSubBitmap = null
             }
@@ -110,13 +145,11 @@ object ProfileImageUtils {
             // 2. Fallback if region decoder is not supported for this format
             if (rawSubBitmap == null) {
                 val fullBitmap = decodeSampledBitmap(context, uri, 4096) ?: return null
-                rawSubBitmap = Bitmap.createBitmap(
-                    fullBitmap,
-                    regionRect.left.coerceIn(0, fullBitmap.width - 1),
-                    regionRect.top.coerceIn(0, fullBitmap.height - 1),
-                    regionRect.width().coerceIn(1, fullBitmap.width - regionRect.left),
-                    regionRect.height().coerceIn(1, fullBitmap.height - regionRect.top)
-                )
+                val scaledL = (regionRect.left * (fullBitmap.width.toFloat() / sourceRect.right.coerceAtLeast(fullBitmap.width).toFloat())).toInt().coerceIn(0, fullBitmap.width - 1)
+                val scaledT = (regionRect.top * (fullBitmap.height.toFloat() / sourceRect.bottom.coerceAtLeast(fullBitmap.height).toFloat())).toInt().coerceIn(0, fullBitmap.height - 1)
+                val scaledW = (regionRect.width() * (fullBitmap.width.toFloat() / sourceRect.right.coerceAtLeast(fullBitmap.width).toFloat())).toInt().coerceIn(1, fullBitmap.width - scaledL)
+                val scaledH = (regionRect.height() * (fullBitmap.height.toFloat() / sourceRect.bottom.coerceAtLeast(fullBitmap.height).toFloat())).toInt().coerceIn(1, fullBitmap.height - scaledT)
+                rawSubBitmap = Bitmap.createBitmap(fullBitmap, scaledL, scaledT, scaledW, scaledH)
                 if (rawSubBitmap != fullBitmap) {
                     fullBitmap.recycle()
                 }
@@ -258,6 +291,75 @@ object ProfileImageUtils {
     }
 
     /**
+     * Scales and compresses a bitmap into a PNG file atomically via a temporary file.
+     * Preserves full 32-bit ARGB_8888 alpha transparency losslessly.
+     */
+    fun savePngAtomically(
+        bitmap: Bitmap,
+        targetFile: File,
+        targetWidth: Int? = null,
+        targetHeight: Int? = null
+    ): Boolean {
+        val parentDir = targetFile.parentFile ?: return false
+        if (!parentDir.exists()) parentDir.mkdirs()
+
+        // Scale if requested
+        val processedBitmap = if (targetWidth != null && targetHeight != null) {
+            Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        } else if (targetWidth != null && bitmap.width > targetWidth) {
+            val ratio = targetWidth.toFloat() / bitmap.width.toFloat()
+            val newHeight = (bitmap.height * ratio).toInt().coerceAtLeast(1)
+            Bitmap.createScaledBitmap(bitmap, targetWidth, newHeight, true)
+        } else {
+            bitmap
+        }
+
+        val tempFile = File(parentDir, "${targetFile.name}.tmp_${System.currentTimeMillis()}")
+        return try {
+            val compressSuccess = FileOutputStream(tempFile).use { out ->
+                val ok = processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                out.flush()
+                ok
+            }
+
+            if (!compressSuccess || !tempFile.exists() || tempFile.length() == 0L) {
+                if (tempFile.exists()) tempFile.delete()
+                return false
+            }
+
+            // Atomic rename / replace
+            val replaced = if (targetFile.exists()) {
+                val backupFile = File(parentDir, "${targetFile.name}.bak")
+                if (backupFile.exists()) backupFile.delete()
+                targetFile.renameTo(backupFile)
+                if (tempFile.renameTo(targetFile)) {
+                    backupFile.delete()
+                    true
+                } else {
+                    tempFile.copyTo(targetFile, overwrite = true)
+                    tempFile.delete()
+                    backupFile.delete()
+                    true
+                }
+            } else {
+                tempFile.renameTo(targetFile) || {
+                    tempFile.copyTo(targetFile, overwrite = true)
+                    tempFile.delete()
+                    true
+                }()
+            }
+            replaced && targetFile.exists() && targetFile.length() > 0L
+        } catch (_: Exception) {
+            if (tempFile.exists()) tempFile.delete()
+            false
+        } finally {
+            if (processedBitmap != bitmap && !processedBitmap.isRecycled) {
+                processedBitmap.recycle()
+            }
+        }
+    }
+
+    /**
      * Scales and compresses a bitmap into a WebP file atomically via a temporary file.
      * Prevents partial/corrupted files if interrupted.
      */
@@ -286,7 +388,11 @@ object ProfileImageUtils {
         return try {
             val compressSuccess = FileOutputStream(tempFile).use { out ->
                 val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    Bitmap.CompressFormat.WEBP_LOSSY
+                    if (processedBitmap.hasAlpha()) {
+                        Bitmap.CompressFormat.WEBP_LOSSLESS
+                    } else {
+                        Bitmap.CompressFormat.WEBP_LOSSY
+                    }
                 } else {
                     @Suppress("DEPRECATION")
                     Bitmap.CompressFormat.WEBP
@@ -324,7 +430,7 @@ object ProfileImageUtils {
                 }()
             }
             replaced && targetFile.exists() && targetFile.length() > 0L
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             if (tempFile.exists()) tempFile.delete()
             false
         } finally {

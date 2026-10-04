@@ -97,11 +97,33 @@ class DefaultSettingsRepository(
     override val profileFlow: StateFlow<UserProfile> = _profileFlow.asStateFlow()
 
     private fun loadProfile(): UserProfile {
+        val rawAvatar = prefs.getString(KEY_PROFILE_AVATAR_PATH, null)
+        val resolvedAvatar = if (rawAvatar != null && File(rawAvatar).exists()) {
+            rawAvatar
+        } else if (File(profileDir, "avatar.png").exists()) {
+            File(profileDir, "avatar.png").absolutePath
+        } else if (File(profileDir, "avatar.webp").exists()) {
+            File(profileDir, "avatar.webp").absolutePath
+        } else {
+            null
+        }
+
+        val rawBanner = prefs.getString(KEY_PROFILE_BANNER_PATH, null)
+        val resolvedBanner = if (rawBanner != null && File(rawBanner).exists()) {
+            rawBanner
+        } else if (File(profileDir, "banner.png").exists()) {
+            File(profileDir, "banner.png").absolutePath
+        } else if (File(profileDir, "banner.webp").exists()) {
+            File(profileDir, "banner.webp").absolutePath
+        } else {
+            null
+        }
+
         return UserProfile(
             name = prefs.getString(KEY_PROFILE_NAME, "") ?: "",
             email = prefs.getString(KEY_PROFILE_EMAIL, "") ?: "",
-            avatarPath = prefs.getString(KEY_PROFILE_AVATAR_PATH, null),
-            bannerPath = prefs.getString(KEY_PROFILE_BANNER_PATH, null),
+            avatarPath = resolvedAvatar,
+            bannerPath = resolvedBanner,
             borderId = prefs.getString(KEY_PROFILE_BORDER_ID, ProfileBorders.NONE_ID) ?: ProfileBorders.NONE_ID,
             avatarUpdatedAt = prefs.getLong(KEY_PROFILE_AVATAR_UPDATED_AT, 0L),
             bannerUpdatedAt = prefs.getLong(KEY_PROFILE_BANNER_UPDATED_AT, 0L)
@@ -501,15 +523,16 @@ class DefaultSettingsRepository(
     }
 
     override suspend fun saveProfileAvatar(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
-        val targetFile = File(profileDir, "avatar.webp")
-        val success = ProfileImageUtils.saveWebpAtomically(
+        val targetFile = File(profileDir, "avatar.png")
+        val legacyFile = File(profileDir, "avatar.webp")
+        val success = ProfileImageUtils.savePngAtomically(
             bitmap = bitmap,
             targetFile = targetFile,
             targetWidth = 512,
-            targetHeight = 512,
-            quality = 90
+            targetHeight = 512
         )
         if (success) {
+            if (legacyFile.exists()) legacyFile.delete()
             val path = targetFile.absolutePath
             val now = System.currentTimeMillis()
             prefs.edit()
@@ -527,10 +550,10 @@ class DefaultSettingsRepository(
     }
 
     override suspend fun removeProfileAvatar() = withContext(Dispatchers.IO) {
-        val targetFile = File(profileDir, "avatar.webp")
-        if (targetFile.exists()) {
-            targetFile.delete()
-        }
+        val targetFile = File(profileDir, "avatar.png")
+        val legacyFile = File(profileDir, "avatar.webp")
+        if (targetFile.exists()) targetFile.delete()
+        if (legacyFile.exists()) legacyFile.delete()
         val now = System.currentTimeMillis()
         prefs.edit()
             .remove(KEY_PROFILE_AVATAR_PATH)
@@ -543,14 +566,15 @@ class DefaultSettingsRepository(
     }
 
     override suspend fun saveProfileBanner(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
-        val targetFile = File(profileDir, "banner.webp")
-        val success = ProfileImageUtils.saveWebpAtomically(
+        val targetFile = File(profileDir, "banner.png")
+        val legacyFile = File(profileDir, "banner.webp")
+        val success = ProfileImageUtils.savePngAtomically(
             bitmap = bitmap,
             targetFile = targetFile,
-            targetWidth = 1080,
-            quality = 90
+            targetWidth = 1080
         )
         if (success) {
+            if (legacyFile.exists()) legacyFile.delete()
             val path = targetFile.absolutePath
             val now = System.currentTimeMillis()
             prefs.edit()
@@ -568,10 +592,10 @@ class DefaultSettingsRepository(
     }
 
     override suspend fun removeProfileBanner() = withContext(Dispatchers.IO) {
-        val targetFile = File(profileDir, "banner.webp")
-        if (targetFile.exists()) {
-            targetFile.delete()
-        }
+        val targetFile = File(profileDir, "banner.png")
+        val legacyFile = File(profileDir, "banner.webp")
+        if (targetFile.exists()) targetFile.delete()
+        if (legacyFile.exists()) legacyFile.delete()
         val now = System.currentTimeMillis()
         prefs.edit()
             .remove(KEY_PROFILE_BANNER_PATH)

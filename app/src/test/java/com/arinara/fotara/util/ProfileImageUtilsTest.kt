@@ -53,4 +53,30 @@ class ProfileImageUtilsTest {
         val result = ProfileImageUtils.saveWebpAtomically(dummyBitmap, fileNoParent)
         assertFalse("File without valid parent directory must return false", result)
     }
+
+    @Test
+    fun savePngAtomically_whenCompressFails_returnsFalseAndCleansUp() {
+        val dummyBitmap = allocateStubBitmap()
+        val targetFile = File(tempFolder.root, "avatar.png")
+
+        val result = ProfileImageUtils.savePngAtomically(
+            bitmap = dummyBitmap,
+            targetFile = targetFile
+        )
+
+        assertFalse("When compress returns false, savePngAtomically must report failure", result)
+        assertFalse("Target file must not be created when compression fails", targetFile.exists())
+
+        // Verify no leftover .tmp or .bak files
+        val files = tempFolder.root.listFiles() ?: emptyArray()
+        assertTrue("No temporary or backup files should remain", files.isEmpty())
+    }
+
+    @Test
+    fun savePngAtomically_nullParentDir_returnsFalse() {
+        val dummyBitmap = allocateStubBitmap()
+        val fileNoParent = File("avatar.png")
+        val result = ProfileImageUtils.savePngAtomically(dummyBitmap, fileNoParent)
+        assertFalse("File without valid parent directory must return false", result)
+    }
 }

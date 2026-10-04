@@ -108,7 +108,9 @@ fun ProfileScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            pendingCropUriString = uri.toString()
+            val stagedFile = ProfileImageUtils.stageUriToCache(context, uri, "avatar_crop")
+            val stagedUri = stagedFile?.let { Uri.fromFile(it) } ?: uri
+            pendingCropUriString = stagedUri.toString()
             pendingCropIsAvatar = true
         }
     }
@@ -117,7 +119,9 @@ fun ProfileScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            pendingCropUriString = uri.toString()
+            val stagedFile = ProfileImageUtils.stageUriToCache(context, uri, "banner_crop")
+            val stagedUri = stagedFile?.let { Uri.fromFile(it) } ?: uri
+            pendingCropUriString = stagedUri.toString()
             pendingCropIsAvatar = false
         }
     }
@@ -127,6 +131,11 @@ fun ProfileScreen(
         val cropUri = remember(pendingCropUriString) { Uri.parse(pendingCropUriString) }
         val screenWidthDp = LocalConfiguration.current.screenWidthDp.toFloat()
         val bannerRatio = screenWidthDp / 230f
+        val cleanupStaged = {
+            if (cropUri.scheme == "file" && cropUri.path != null) {
+                try { File(cropUri.path!!).delete() } catch (_: Exception) {}
+            }
+        }
         ProfileCropScreen(
             imageUri = cropUri,
             isAvatar = pendingCropIsAvatar,
@@ -137,9 +146,11 @@ fun ProfileScreen(
                 } else {
                     viewModel.saveProfileBanner(cropped)
                 }
+                cleanupStaged()
                 pendingCropUriString = null
             },
             onCancel = {
+                cleanupStaged()
                 pendingCropUriString = null
             }
         )

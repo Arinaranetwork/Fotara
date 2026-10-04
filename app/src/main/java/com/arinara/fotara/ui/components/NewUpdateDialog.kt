@@ -102,7 +102,7 @@ fun NewUpdateDialog(
                 shape = RoundedCornerShape(28.dp),
                 border = BorderStroke(1.dp, Color(0xFF26324A)),
                 modifier = modifier
-                    .fillMaxWidth(0.88f)
+                    .fillMaxWidth(0.92f)
                     .clip(RoundedCornerShape(28.dp))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -184,11 +184,7 @@ fun NewUpdateDialog(
                         )
                     }
 
-                    // Body: Release notes / What's new bullet points
-                    val parsedBullets = remember(release.releaseNotes) {
-                        parseReleaseBullets(release.releaseNotes)
-                    }
-
+                    // Body: Release notes rendered with Rich Markdown (headings, lists, bold text)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -197,10 +193,10 @@ fun NewUpdateDialog(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 210.dp)
+                                .heightIn(min = 260.dp, max = 440.dp)
                                 .verticalScroll(rememberScrollState())
                         ) {
-                            if (parsedBullets.isEmpty()) {
+                            if (release.releaseNotes.isNullOrBlank()) {
                                 Text(
                                     text = stringResource(R.string.update_popup_default_notes),
                                     color = Color.White.copy(alpha = 0.85f),
@@ -209,29 +205,13 @@ fun NewUpdateDialog(
                                     lineHeight = 20.sp
                                 )
                             } else {
-                                parsedBullets.forEach { bullet ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 3.dp),
-                                        verticalAlignment = Alignment.Top
-                                    ) {
-                                        Text(
-                                            text = "•",
-                                            color = Color(0xFF60A5FA),
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = bullet,
-                                            color = Color.White.copy(alpha = 0.88f),
-                                            fontSize = 13.5.sp,
-                                            fontFamily = ElmsSans,
-                                            lineHeight = 19.sp
-                                        )
-                                    }
-                                }
+                                RichMarkdownColumn(
+                                    markdown = release.releaseNotes,
+                                    primaryTextColor = Color.White.copy(alpha = 0.92f),
+                                    accentColor = Color(0xFF60A5FA),
+                                    cardBg = Color(0xFF141936),
+                                    cardBorder = Color(0xFF283256)
+                                )
                             }
                         }
 
@@ -294,26 +274,4 @@ fun NewUpdateDialog(
             }
         }
     }
-}
-
-/**
- * Extracts clean user-facing bullet items from release notes markdown or text.
- */
-private fun parseReleaseBullets(rawNotes: String?): List<String> {
-    if (rawNotes.isNullOrBlank()) return emptyList()
-    val lines = rawNotes.lines()
-    val bullets = mutableListOf<String>()
-
-    for (line in lines) {
-        val trimmed = line.trim()
-        if (trimmed.startsWith("•") || trimmed.startsWith("-") || trimmed.startsWith("*")) {
-            val content = trimmed.removePrefix("•").removePrefix("-").removePrefix("*").trim()
-            if (content.isNotBlank() && !content.startsWith("#")) {
-                bullets.add(content)
-            }
-        } else if (trimmed.isNotBlank() && !trimmed.startsWith("#") && !trimmed.startsWith("==")) {
-            bullets.add(trimmed)
-        }
-    }
-    return bullets.take(8)
 }

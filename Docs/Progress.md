@@ -2,7 +2,7 @@
 Last Updated: 2026-10-04
 
 ## Current Phase
-Phase 24 - LinkItClustersAndProfileFixes [Completed]
+Phase 25 - ProfilePngSupportAndUpdateModalPolish [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -31,8 +31,12 @@ Phase 24 - LinkItClustersAndProfileFixes [Completed]
 | 22    | VerificationAndRepair157          | Completed   |
 | 23    | SettingsAndSearchRedesign         | Completed   |
 | 24    | LinkItClustersAndProfileFixes     | Completed   |
+| 25    | ProfilePngSupportAndUpdateModalPolish | Completed   |
 
 ## Completed
+- [x] Task 1: Real PNG format preservation and alpha channel support in ProfileImageUtils and SettingsRepository - Phase 25
+- [x] Task 2: Picker URI staging to local cache file for robust multi-read and seekable BitmapRegionDecoder access - Phase 25
+- [x] Task 3: Overhaul NewUpdateDialog with expanded height and Rich Markdown rendering for headings and formatted text - Phase 25
 - [x] Task 1: LinkIt cluster glow for groups of 3 or 4 converging on center point (pure anchor function & renderer) - Phase 24
 - [x] Task 2: Profile picture and banner loading defect fix (WebP encode check, API 24-36 format, cache invalidation timestamps) - Phase 24
 - [x] Task 3: Fullscreen aspect-locked crop editor with region decoding (pan, corner resize, pinch zoom, reset) - Phase 24
