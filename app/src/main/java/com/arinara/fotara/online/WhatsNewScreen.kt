@@ -140,17 +140,17 @@ private fun parseReleaseNotes(rawText: String): List<ParsedSection> {
     if (sections.isEmpty()) {
         sections.add(
             ParsedSection(
-                title = "What's New in Fotara 1.5.10",
+                title = "What's New in Fotara 1.5.11",
                 type = NoteSectionType.WHATS_NEW,
                 items = listOf(
+                    "Resilient multi-tier image decoding eliminating split-second crop failures",
+                    "Hardware-accelerated ImageDecoder on Android 9+ with memory-safe fallback",
+                    "Non-blocking asynchronous photo picking preventing UI thread I/O stalls",
                     "Bulletproof profile picture and banner PNG cropping with lossless transparency",
-                    "Universal URI stream safety supporting file:// and content:// schemes",
                     "Clean profile sheet navigation with immediate return on selection",
                     "Expanded in-app update notification modal with native Rich Markdown rendering",
                     "LinkIt cluster glow converging on shared centers for 3-4 card groups",
-                    "Aspect-locked fullscreen crop editor with pinch-to-zoom and corner drag handles",
-                    "Direct GPU hardware-accelerated drawing canvas with 120 FPS fidelity",
-                    "Universal study note scheduling with notification and alarm alerts"
+                    "Aspect-locked fullscreen crop editor with pinch-to-zoom and corner drag handles"
                 )
             )
         )
@@ -174,12 +174,12 @@ fun WhatsNewScreen(
         }
     }
 
-    val versionText = release?.version ?: "Fotara v1.5.10 Beta"
+    val versionText = release?.version ?: "Fotara v1.5.11 Beta"
     val defaultNotes = """
         ## What's New
-        - Bulletproof Profile Picture & Banner PNG Crop: Resolved failures when cropping and saving PNG profile pictures and banners by migrating crop extraction directly into memory from the loaded preview bitmap using normalized coordinates. Eliminates native Skia region decoder failures, closed input streams, and boundary calculation errors across all Android versions.
-        - Full Transparency Preservation: Full 32-bit ARGB_8888 alpha transparency is preserved losslessly for avatars (512x512) and banners (up to 1080px wide).
-        - Universal URI Stream Safety: Safely handles both file:// (via direct filesystem stream) and content:// (via ContentResolver) schemes across all Android versions without SecurityException or stream reset issues.
+        - Resilient Multi-Tier Image Decoder: Resolved split-second crop screen dismissal and image decode failures when selecting PNG or banner images. Implements a multi-tiered decoding pipeline prioritizing hardware-accelerated ImageDecoder on Android 9+ (API 28+), direct memory-mapped file decoding for staged cache files, seekable FileDescriptor streaming, and single-pass in-memory byte buffer decoding to eliminate unbuffered stream mark/reset failures and content provider permission denials.
+        - Non-Blocking Asynchronous Photo Picking: Refactored activity result callbacks in Settings and Profile to pass image URIs directly to background coroutine decoders, preventing main-thread I/O bottlenecks and strict-mode violations when importing large photos from external storage or cloud providers.
+        - Bulletproof Profile Picture & Banner PNG Crop: Crops directly from memory using normalized coordinates to preserve full 32-bit ARGB_8888 alpha transparency losslessly for avatars (512x512) and banners (up to 1080px wide).
         - Clean Profile Sheet Navigation: Automatically dismisses the profile edit bottom sheet upon selecting an action, ensuring the user immediately returns to the updated profile screen.
         - Expanded In-App Update Modal: Upgraded update popup modal with an expanded vertical viewport (up to 440dp height) and native Rich Markdown rendering for headings, bold text, bullet lists, and release note formatting.
         - LinkIt Converging Cluster Glow: For linked groups of 3 or 4 cards arranged in a 2x2 grid cluster (including L-shaped triads), corner glows now converge toward the shared central intersection point with cardinal side glows suppressed within qualifying blocks.

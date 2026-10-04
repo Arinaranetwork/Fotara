@@ -108,9 +108,7 @@ fun ProfileScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            val stagedFile = ProfileImageUtils.stageUriToCache(context, uri, "avatar_crop")
-            val stagedUri = stagedFile?.let { Uri.fromFile(it) } ?: uri
-            pendingCropUriString = stagedUri.toString()
+            pendingCropUriString = uri.toString()
             pendingCropIsAvatar = true
         }
     }
@@ -119,9 +117,7 @@ fun ProfileScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            val stagedFile = ProfileImageUtils.stageUriToCache(context, uri, "banner_crop")
-            val stagedUri = stagedFile?.let { Uri.fromFile(it) } ?: uri
-            pendingCropUriString = stagedUri.toString()
+            pendingCropUriString = uri.toString()
             pendingCropIsAvatar = false
         }
     }
@@ -133,7 +129,10 @@ fun ProfileScreen(
         val bannerRatio = screenWidthDp / 230f
         val cleanupStaged = {
             if (cropUri.scheme == "file" && cropUri.path != null) {
-                try { File(cropUri.path!!).delete() } catch (_: Exception) {}
+                val path = cropUri.path!!
+                if (path.contains("cache")) {
+                    try { File(path).delete() } catch (_: Exception) {}
+                }
             }
         }
         ProfileCropScreen(

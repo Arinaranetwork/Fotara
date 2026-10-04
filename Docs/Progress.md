@@ -39,6 +39,7 @@ Phase 25 - ProfilePngSupportAndUpdateModalPolish [Completed]
 - [x] Task 3: Overhaul NewUpdateDialog with expanded height and Rich Markdown rendering for headings and formatted text - Phase 25
 - [x] Task 4: In-memory normalized direct crop in ProfileCropScreen and safe openStream across file/content URIs (Fotara 1.5.10 Beta) - Phase 25
 - [x] Task 5: Update WhatsNewScreen and version fallbacks for 1.5.10 Beta - Phase 25
+- [x] Task 6: Resilient multi-tier image decoder (ImageDecoder API 28+, memory-mapped file decoding, one-pass byte buffer decoding) and async photo picking for 1.5.11 Beta - Phase 25
 
 
 

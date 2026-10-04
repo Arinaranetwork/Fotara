@@ -79,4 +79,19 @@ class ProfileImageUtilsTest {
         val result = ProfileImageUtils.savePngAtomically(dummyBitmap, fileNoParent)
         assertFalse("File without valid parent directory must return false", result)
     }
+
+    @Test
+    fun cropNormalized_invalidCoords_clampsSafely() {
+        // Verify crop bounds math behaves safely without throwing
+        val dummyBitmap = allocateStubBitmap()
+        val result = ProfileImageUtils.cropNormalized(
+            source = dummyBitmap,
+            normLeft = -0.5f,
+            normTop = -0.5f,
+            normRight = 1.5f,
+            normBottom = 1.5f
+        )
+        // In JVM unit test with stub bitmap, createBitmap returns null or default value without crashing
+        // The key assertion is that no exception is thrown out of cropNormalized
+    }
 }

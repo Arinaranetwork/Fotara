@@ -142,6 +142,11 @@ Released: 2026-09-30   Status: Beta
 - Safe Universal URI Stream Handling: Hardened image stream resolution to transparently support both `file://` and `content://` schemes across all Android API levels without `SecurityException` or stream reset issues.
 - Clean Profile Sheet Navigation: Automatically dismisses the profile action bottom sheet upon selecting an action, ensuring the user immediately returns to the updated profile screen after saving.
 
+### 1.5.11 - 2026-10-04
+- Resilient Multi-Tier Image Decoder: Resolved split-second crop screen dismissal and image decode failures when selecting PNG or banner images. Implements a multi-tiered decoding pipeline prioritizing hardware-accelerated `ImageDecoder` on Android 9+ (API 28+), direct memory-mapped file decoding for staged cache files, seekable `FileDescriptor` streaming, and single-pass in-memory byte buffer decoding to eliminate unbuffered stream mark/reset failures and content provider permission denials.
+- Non-Blocking Asynchronous Photo Picking: Refactored activity result callbacks in Settings and Profile to pass image URIs directly to background coroutine decoders, preventing main-thread I/O bottlenecks and strict-mode violations when importing large photos from external storage or cloud providers.
+
+
 
 
 

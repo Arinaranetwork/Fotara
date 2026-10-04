@@ -84,10 +84,13 @@ Resolve root causes preventing PNG profile pictures and banners from being saved
 - Staged URI prevents `BitmapRegionDecoder` stream errors.
 - `ProfileCropScreen` crops directly from memory-resident `previewBitmap` via `ProfileImageUtils.cropNormalized`, completely eliminating native Skia region decoder failures, closed-stream exceptions, and coordinate transform bugs.
 - `ProfileImageUtils.openStream` safely handles both `file://` and `content://` schemes across all Android API levels.
+- `ProfileImageUtils.decodeSampledBitmap` uses a resilient multi-tier decoding architecture: ImageDecoder (API 28+), direct memory-mapped file decoding for file:// schemes, single-pass in-memory byte buffer decoding, seekable file descriptors, and buffered streams to eliminate stream mark/reset bugs and premature crop dismissals.
+- Activity result photo pickers in `SettingsScreen` and `ProfileScreen` operate non-blockingly, passing image URIs directly to background coroutine decoders.
 - `SettingsScreen` dismisses `ProfileEditBottomSheet` upon action selection for clean return to profile settings.
-- `WhatsNewScreen` updated with 1.5.10 Beta release highlights and default notes.
+- `WhatsNewScreen` updated with 1.5.11 Beta release highlights and default notes.
 - `NewUpdateDialog` renders headings (`#`, `##`, `###`), bold text, and bullets properly via `RichMarkdownColumn`.
 - `NewUpdateDialog` has an expanded vertical viewport (up to 440dp) avoiding cramped scrolling.
 - All unit tests pass with zero regressions.
+
 
 

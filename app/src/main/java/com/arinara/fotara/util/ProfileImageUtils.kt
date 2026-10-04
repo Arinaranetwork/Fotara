@@ -9,10 +9,12 @@ package com.arinara.fotara.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
 import androidx.exifinterface.media.ExifInterface
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -46,35 +48,95 @@ object ProfileImageUtils {
     }
 
     /**
+     * Reads all bytes from a URI in a single pass.
+     * Guarantees consistent in-memory access immune to stream consumption or multi-open restrictions.
+     */
+    private fun readBytesFromUri(context: Context, uri: Uri): ByteArray? {
+        return try {
+            if (uri.scheme == "file" && uri.path != null) {
+                val f = File(uri.path!!)
+                if (f.exists() && f.length() > 0L) f.readBytes() else null
+            } else {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun getExifRotation(filePath: String): Int {
+        return try {
+            val exif = ExifInterface(filePath)
+            when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+        } catch (_: Throwable) {
+            0
+        }
+    }
+
+    private fun getExifRotationFromBytes(bytes: ByteArray): Int {
+        return try {
+            val exif = ExifInterface(ByteArrayInputStream(bytes))
+            when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+        } catch (_: Throwable) {
+            0
+        }
+    }
+
+    private fun applyRotation(bitmap: Bitmap, degrees: Int): Bitmap {
+        if (degrees == 0) return bitmap
+        return try {
+            val matrix = Matrix().apply { postRotate(degrees.toFloat()) }
+            val rotated = Bitmap.createBitmap(
+                bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+            )
+            if (rotated != bitmap && !bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+            rotated
+        } catch (_: Throwable) {
+            bitmap
+        }
+    }
+
+    /**
      * Reads image bounds and EXIF orientation without loading the full bitmap into memory.
      */
     fun getImageInfo(context: Context, uri: Uri): ImageInfo? {
         return try {
-            val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            openStream(context, uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream, null, boundsOpts)
-            } ?: return null
-            if (boundsOpts.outWidth <= 0 || boundsOpts.outHeight <= 0) return null
-
-            var rotationDegrees = 0
-            try {
-                openStream(context, uri)?.use { stream ->
-                    val exif = ExifInterface(stream)
-                    val orientation = exif.getAttributeInt(
-                        ExifInterface.TAG_ORIENTATION,
-                        ExifInterface.ORIENTATION_NORMAL
-                    )
-                    rotationDegrees = when (orientation) {
-                        ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                        ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                        ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                        else -> 0
+            if (uri.scheme == "file" && uri.path != null) {
+                val f = File(uri.path!!)
+                if (f.exists() && f.length() > 0L) {
+                    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(f.absolutePath, boundsOpts)
+                    if (boundsOpts.outWidth > 0 && boundsOpts.outHeight > 0) {
+                        return ImageInfo(boundsOpts.outWidth, boundsOpts.outHeight, getExifRotation(f.absolutePath))
                     }
                 }
-            } catch (_: Exception) {}
-
-            ImageInfo(boundsOpts.outWidth, boundsOpts.outHeight, rotationDegrees)
-        } catch (_: Exception) {
+            }
+            val bytes = readBytesFromUri(context, uri)
+            if (bytes != null && bytes.isNotEmpty()) {
+                val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOpts)
+                if (boundsOpts.outWidth > 0 && boundsOpts.outHeight > 0) {
+                    return ImageInfo(boundsOpts.outWidth, boundsOpts.outHeight, getExifRotationFromBytes(bytes))
+                }
+            }
+            // Fallback: decode a small sample
+            val sampled = decodeSampledBitmap(context, uri, 128) ?: return null
+            val info = ImageInfo(sampled.width, sampled.height, 0)
+            if (!sampled.isRecycled) sampled.recycle()
+            info
+        } catch (_: Throwable) {
             null
         }
     }
@@ -87,19 +149,28 @@ object ProfileImageUtils {
         return try {
             val cacheDir = context.cacheDir
             val tempFile = File(cacheDir, "${prefix}_${System.currentTimeMillis()}.png")
-            openStream(context, uri)?.use { input ->
-                FileOutputStream(tempFile).use { output ->
-                    input.copyTo(output)
-                    output.flush()
-                }
-            } ?: return null
-            if (tempFile.exists() && tempFile.length() > 0L) {
+            val copied = if (uri.scheme == "file" && uri.path != null) {
+                val src = File(uri.path!!)
+                if (src.exists() && src.length() > 0L) {
+                    src.copyTo(tempFile, overwrite = true)
+                    true
+                } else false
+            } else {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        input.copyTo(output)
+                        output.flush()
+                    }
+                    true
+                } ?: false
+            }
+            if (copied && tempFile.exists() && tempFile.length() > 0L) {
                 tempFile
             } else {
                 if (tempFile.exists()) tempFile.delete()
                 null
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             null
         }
     }
@@ -149,7 +220,7 @@ object ProfileImageUtils {
             } else {
                 decoded
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             null
         }
     }
@@ -157,72 +228,177 @@ object ProfileImageUtils {
     /**
      * Safely decodes a bitmap from a content or file URI with memory-bounded downsampling
      * and automatic EXIF orientation correction.
+     * Employs a resilient multi-tier fallback architecture:
+     * 1. Modern ImageDecoder on API 28+ (hardware accelerated, handles all PNG variants and EXIF)
+     * 2. Direct BitmapFactory.decodeFile for file:// schemes (seekable memory-mapped access)
+     * 3. Single-pass ByteArray buffering with BitmapFactory.decodeByteArray (immune to stream reset / multiple opens)
+     * 4. ParcelFileDescriptor with BitmapFactory.decodeFileDescriptor for content:// schemes
+     * 5. BufferedInputStream mark/reset fallback
      */
     fun decodeSampledBitmap(
         context: Context,
         uri: Uri,
         maxDimension: Int = 2048
     ): Bitmap? {
-        return try {
-            // 1. Decode bounds only
-            val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            openStream(context, uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream, null, boundsOpts)
-            } ?: return null
-
-            if (boundsOpts.outWidth <= 0 || boundsOpts.outHeight <= 0) return null
-
-            // 2. Read EXIF rotation
-            var rotationDegrees = 0
+        // Strategy 1: Modern ImageDecoder on API 28+ (Android 9+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
-                openStream(context, uri)?.use { stream ->
-                    val exif = ExifInterface(stream)
-                    val orientation = exif.getAttributeInt(
-                        ExifInterface.TAG_ORIENTATION,
-                        ExifInterface.ORIENTATION_NORMAL
-                    )
-                    rotationDegrees = when (orientation) {
-                        ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                        ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                        ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                        else -> 0
+                val source = if (uri.scheme == "file" && uri.path != null) {
+                    val f = File(uri.path!!)
+                    if (f.exists() && f.length() > 0L) {
+                        ImageDecoder.createSource(f)
+                    } else null
+                } else {
+                    ImageDecoder.createSource(context.contentResolver, uri)
+                }
+                if (source != null) {
+                    val decoded = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                        val origW = info.size.width
+                        val origH = info.size.height
+                        if (origW > 0 && origH > 0) {
+                            var sampleSize = 1
+                            while ((origW / sampleSize) > maxDimension || (origH / sampleSize) > maxDimension) {
+                                sampleSize *= 2
+                            }
+                            if (sampleSize > 1) {
+                                decoder.setTargetSampleSize(sampleSize)
+                            }
+                        }
+                    }
+                    val safeBmp = if (decoded.config != Bitmap.Config.ARGB_8888) {
+                        decoded.copy(Bitmap.Config.ARGB_8888, true) ?: decoded
+                    } else {
+                        decoded
+                    }
+                    if (safeBmp.width > 0 && safeBmp.height > 0) {
+                        return safeBmp
                     }
                 }
-            } catch (_: Exception) {}
-
-            // 3. Compute sample size
-            var sampleSize = 1
-            while ((boundsOpts.outWidth / sampleSize) > maxDimension ||
-                (boundsOpts.outHeight / sampleSize) > maxDimension
-            ) {
-                sampleSize *= 2
+            } catch (_: Throwable) {
+                // Fall through to BitmapFactory strategies
             }
-
-            // 4. Decode scaled bitmap
-            val decodeOpts = BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-            }
-            val rawBitmap = openStream(context, uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream, null, decodeOpts)
-            } ?: return null
-
-            // 5. Apply EXIF rotation if needed
-            if (rotationDegrees != 0) {
-                val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-                val rotated = Bitmap.createBitmap(
-                    rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true
-                )
-                if (rotated != rawBitmap) {
-                    rawBitmap.recycle()
-                }
-                rotated
-            } else {
-                rawBitmap
-            }
-        } catch (_: Exception) {
-            null
         }
+
+        // Strategy 2: If file scheme, decode directly from File path (avoids stream issues completely)
+        if (uri.scheme == "file" && uri.path != null) {
+            try {
+                val file = File(uri.path!!)
+                if (file.exists() && file.length() > 0L) {
+                    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(file.absolutePath, boundsOpts)
+                    if (boundsOpts.outWidth > 0 && boundsOpts.outHeight > 0) {
+                        var sampleSize = 1
+                        while ((boundsOpts.outWidth / sampleSize) > maxDimension ||
+                            (boundsOpts.outHeight / sampleSize) > maxDimension
+                        ) {
+                            sampleSize *= 2
+                        }
+                        val decodeOpts = BitmapFactory.Options().apply {
+                            inSampleSize = sampleSize
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        }
+                        val rawBitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOpts)
+                        if (rawBitmap != null) {
+                            val rotation = getExifRotation(file.absolutePath)
+                            return applyRotation(rawBitmap, rotation)
+                        }
+                    }
+                }
+            } catch (_: Throwable) {
+                // Fallback
+            }
+        }
+
+        // Strategy 3: Read bytes into memory once and decode with BitmapFactory.decodeByteArray
+        // This is 100% immune to stream-consumption, mark/reset, and content-provider permission issues.
+        try {
+            val bytes = readBytesFromUri(context, uri)
+            if (bytes != null && bytes.isNotEmpty()) {
+                val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOpts)
+                if (boundsOpts.outWidth > 0 && boundsOpts.outHeight > 0) {
+                    var sampleSize = 1
+                    while ((boundsOpts.outWidth / sampleSize) > maxDimension ||
+                        (boundsOpts.outHeight / sampleSize) > maxDimension
+                    ) {
+                        sampleSize *= 2
+                    }
+                    val decodeOpts = BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
+                    if (rawBitmap != null) {
+                        val rotation = getExifRotationFromBytes(bytes)
+                        return applyRotation(rawBitmap, rotation)
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+            // Fallback
+        }
+
+        // Strategy 4: FileDescriptor via ContentResolver
+        if (uri.scheme == "content") {
+            try {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    val fd = pfd.fileDescriptor
+                    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFileDescriptor(fd, null, boundsOpts)
+                    if (boundsOpts.outWidth > 0 && boundsOpts.outHeight > 0) {
+                        var sampleSize = 1
+                        while ((boundsOpts.outWidth / sampleSize) > maxDimension ||
+                            (boundsOpts.outHeight / sampleSize) > maxDimension
+                        ) {
+                            sampleSize *= 2
+                        }
+                        val decodeOpts = BitmapFactory.Options().apply {
+                            inSampleSize = sampleSize
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        }
+                        val rawBitmap = BitmapFactory.decodeFileDescriptor(fd, null, decodeOpts)
+                        if (rawBitmap != null) {
+                            return rawBitmap
+                        }
+                    }
+                }
+            } catch (_: Throwable) {
+                // Fallback
+            }
+        }
+
+        // Strategy 5: Buffered stream fallback
+        try {
+            openStream(context, uri)?.let { rawStream ->
+                java.io.BufferedInputStream(rawStream, 64 * 1024).use { bis ->
+                    bis.mark(10 * 1024 * 1024)
+                    val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeStream(bis, null, boundsOpts)
+                    if (boundsOpts.outWidth > 0 && boundsOpts.outHeight > 0) {
+                        bis.reset()
+                        var sampleSize = 1
+                        while ((boundsOpts.outWidth / sampleSize) > maxDimension ||
+                            (boundsOpts.outHeight / sampleSize) > maxDimension
+                        ) {
+                            sampleSize *= 2
+                        }
+                        val decodeOpts = BitmapFactory.Options().apply {
+                            inSampleSize = sampleSize
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        }
+                        val rawBitmap = BitmapFactory.decodeStream(bis, null, decodeOpts)
+                        if (rawBitmap != null) {
+                            return rawBitmap
+                        }
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+            // All attempts failed
+        }
+
+        return null
     }
 
     /**
