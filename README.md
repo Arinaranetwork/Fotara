@@ -6,13 +6,13 @@ written consent from Arinara Network as sole legal owner of this codebase. -->
 
 <div align="center">
 
-<img src="https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.8_Beta/FotaraBanner_1.5_2026-09-30.jpg" alt="Fotara 1.5 Banner" width="100%" />
+<img src="https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.9_Beta/FotaraBanner_1.5_2026-09-30.jpg" alt="Fotara 1.5 Banner" width="100%" />
 
 # Fotara
 ### Intelligent Local-First Coursework & Study Note Organization for Android
 
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%2B)-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
-[![Release](https://img.shields.io/badge/Release-v1.5.8%20Beta-00B4D8?style=flat-square)](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.8_Beta)
+[![Release](https://img.shields.io/badge/Release-v1.5.9%20Beta-00B4D8?style=flat-square)](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.9_Beta)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![UI](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![License](https://img.shields.io/badge/License-Proprietary%20%26%20Educational-2A9D8F?style=flat-square)](#distribution--license)
@@ -22,7 +22,7 @@ written consent from Arinara Network as sole legal owner of this codebase. -->
   <b>Fotara</b> is a high-performance, private, on-device study organization ecosystem built for students, researchers, and lifelong learners. Effortlessly structure, search, schedule, and review whiteboard captures, textbook excerpts, handwritten equations, rich text notes, multi-page PDFs, Word documents, and infinite drawing canvases with zero cloud lock-in.
 </p>
 
-[Download Latest APK (v1.5.8 Beta)](https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.8_Beta/Fotara_1.5.8_Beta.apk) • [Features](#key-features) • [Installation](#installation) • [What's New in v1.5.8](#whats-new-in-v158-beta) • [License](#distribution--license) • [Issues & Feedback](https://github.com/Arinaranetwork/Fotara/issues)
+[Download Latest APK (v1.5.9 Beta)](https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.9_Beta/Fotara_1.5.9_Beta.apk) • [Features](#key-features) • [Installation](#installation) • [What's New in v1.5.9](#whats-new-in-v159-beta) • [License](#distribution--license) • [Issues & Feedback](https://github.com/Arinaranetwork/Fotara/issues)
 
 </div>
 
@@ -86,10 +86,11 @@ Traditional mobile gallery apps dump educational material alongside casual snaps
 
 ---
 
-## What's New in v1.5.8 Beta
+## What's New in v1.5.9 Beta
 
+- **Lossless PNG Profile Picture & Banner Support**: Custom avatars and banners now preserve full 32-bit ARGB_8888 alpha transparency losslessly using PNG compression, preventing black background degradation and encoder failures across Android devices. SAF picker streams are staged into private seekable cache storage for reliable multi-read and region decoding.
+- **Expanded & Formatted In-App Update Modal**: Overhauled the startup update notification dialog with an expanded vertical layout (up to 440dp height) and native Rich Markdown rendering, cleanly displaying headings (H1, H2, H3), bold text, bullet lists, blockquotes, and release notes formatting.
 - **LinkIt Converging Cluster Glow**: For linked groups of 3 or 4 cards arranged in a 2x2 grid cluster (including L-shaped triads), corner glows now converge toward the shared central intersection point with cardinal side glows suppressed within qualifying blocks. Pairwise cardinal edge glows are preserved for isolated pairs and straight line layouts across grid densities 2, 3, and 4.
-- **Profile Picture & Banner Instant Display Fix**: Resolved issue where profile pictures and banners failed to display after selection. Fixed top-bar action execution, verified WebP compress boolean checks with zero-byte corruption prevention, resolved StateFlow equality suppression via modification timestamps (`avatarUpdatedAt`, `bannerUpdatedAt`), and eliminated Coil image cache collisions.
 - **Aspect-Locked Fullscreen Crop Editor**: Replaced crop step with a fullscreen interactive crop editor supporting 1:1 circular guide for profile pictures and exact layout-matched aspect ratio for banners. Features four accessible 44dp corner handles with opposite-corner-fixed resizing, two-finger pinch scaling around center, drag panning with boundary clamping, reset action, and memory-safe region decoding directly from original image pixels via `BitmapRegionDecoder`.
 
 ---
@@ -98,19 +99,19 @@ Traditional mobile gallery apps dump educational material alongside casual snaps
 
 | Metric | Details |
 |---|---|
-| **Current Version** | `v1.5.8 Beta` (Version Code: `22`) |
+| **Current Version** | `v1.5.9 Beta` (Version Code: `23`) |
 | **Release Channel** | Beta |
 | **Supported Devices** | Android 7.0 (API 24) through Android 16 (API 36) |
 | **Architecture** | Offline-First, On-Device Processing |
 | **Distribution Model** | **Free for Personal and Educational Use** |
-| **APK Checksum (SHA256)** | `0364F1B1CC4E46F264665AD3503723511A5E3AE64AB80A8D74DA413B24796C40` |
+| **APK Checksum (SHA256)** | `90AC92C73C3521ABEF5286CFA741D7FECB03066FCA9127D9F1FFD250C3FCE07B` |
 
 ---
 
 ## Installation
 
-1. Go to the **[Fotara 1.5.8 Beta Release](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.8_Beta)** page.
-2. Download **`Fotara_1.5.8_Beta.apk`** (or click [Direct Download](https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.8_Beta/Fotara_1.5.8_Beta.apk)).
+1. Go to the **[Fotara 1.5.9 Beta Release](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.9_Beta)** page.
+2. Download **`Fotara_1.5.9_Beta.apk`** (or click [Direct Download](https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.9_Beta/Fotara_1.5.9_Beta.apk)).
 3. On your Android device, tap the downloaded APK file.
 4. If prompted, grant permission to *Install from Unknown Sources* for your browser or file manager.
 5. Open Fotara, complete the guided first-run onboarding, and organize your study notes!
