@@ -1,34 +1,25 @@
-# <div align="center">Fotara</div>
+<!-- --- Arinara Network (c) 2026 ---
+Exclusive property of Arinara Network.
+Unauthorized use, reproduction, distribution, or modification of this code,
+in whole or in part, for any purpose, is strictly prohibited without prior
+written consent from Arinara Network as sole legal owner of this codebase. -->
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Arinaranetwork/Fotara/main/Assets/Logos/FotaraLogo.png" alt="Fotara Logo" width="120" onerror="this.style.display='none'"/>
-  <br/>
-  <h3>The Ultimate Offline-First Study & Coursework Hub for Android</h3>
-  <p>Seamlessly organize photo notes, assignments, documents, schedules, and infinite freeform canvas drawings — with zero mandatory cloud lock-in.</p>
+  <img src="Assets/Banners/FotaraBanner_1.5_2026-09-30.jpg" alt="Fotara 1.5 Banner" width="100%" />
+
+  # Fotara
+  ### Modern On-Device Visual Coursework & Visual Note Architecture for Android
+
+  [![Platform](https://img.shields.io/badge/Platform-Android_7.0+_(API_24+)--36-3DDC84?style=flat-square&logo=android&logoColor=white)](https://android.com)
+  [![Release](https://img.shields.io/badge/Release-v1.5.11_Beta-blue?style=flat-square)](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.11_Beta)
+  [![License](https://img.shields.io/badge/License-Proprietary_%26_Educational-F77F00?style=flat-square)](LICENSE)
+  [![Status](https://img.shields.io/badge/Architecture-100%25_On--Device-2A9D8F?style=flat-square)](https://github.com/Arinaranetwork/Fotara)
+  [![Download APK](https://img.shields.io/badge/Download_APK-v1.5.11_Beta-0077B6?style=flat-square&logo=android)](https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.11_Beta/Fotara_1.5.11_Beta.apk)
+
+  <p align="center">
+    <b>Fotara</b> is a high-performance, privacy-first mobile study companion designed for students, educators, and researchers. Organize lecture photos, multi-page PDF textbooks, Microsoft Word DOCX handouts, rich markdown notes, and vector drawings on an unlimited canvas — with real-time on-device OCR, multi-criteria date filtering, and customizable notification and alarm reminder schedules.
+  </p>
 </div>
-
-<div align="center">
-
-[![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%E2%80%9336)-blue.svg)](#)
-[![Latest Release](https://img.shields.io/badge/Release-v1.5.10%20Beta-success.svg)](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.10_Beta)
-[![Download APK](https://img.shields.io/badge/Download-Fotara_1.5.10_Beta.apk-blue?logo=android)](https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.10_Beta/Fotara_1.5.10_Beta.apk)
-[![License](https://img.shields.io/badge/License-Proprietary%20%2F%20Educational-lightgrey.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Channel-Beta-orange.svg)](#)
-
-</div>
-
----
-
-## Overview
-
-**Fotara** is an advanced, offline-first study companion tailored for students, researchers, and self-directed learners. Designed to replace fragmented note-taking workflows, Fotara brings photos, lecture slides, textbooks, assignments, native markdown notes, and vector drawings together into a unified, privacy-respecting hub.
-
-- **Offline-First Storage**: Your notes, documents, and search indexes remain strictly on your device.
-- **Unlimited Vector Canvas**: Infinite drawing space powered by hardware acceleration with pressure-sensitive strokes, layers, image attachments, and PNG export.
-- **Universal Study Scheduling**: Attach time and deadline reminders to any note type with dual alert modes (unobtrusive notifications or persistent alarm alerts).
-- **High-Fidelity Document Viewer**: Direct in-app rendering for Microsoft Word (.docx) and virtualized PDFs with on-demand viewport rasterization, smooth pinch-to-zoom, two-axis panning, and a dedicated photo-style Page Viewer.
-- **On-Device Optical Character Recognition (OCR)**: Google ML Kit extracts text from photo notes locally and populates an SQLite FTS4 full-text search index for sub-second retrieval.
-- **Private & Safe**: Device biometrics, PIN encryption, and a 30-day soft-delete trash retention policy keep study materials secure and recoverable.
 
 ---
 
@@ -74,15 +65,16 @@
 
 ---
 
-## What's New in v1.5.10 Beta
+## What's New in v1.5.11 Beta
 
+- **Resilient Multi-Tier Image Decoder**: Resolved split-second crop screen dismissal and image decode failures when selecting PNG or banner images. Implements a multi-tiered decoding pipeline prioritizing hardware-accelerated `ImageDecoder` on Android 9+ (API 28+), direct memory-mapped file decoding for staged cache files, seekable `FileDescriptor` streaming, and single-pass in-memory byte buffer decoding to eliminate unbuffered stream mark/reset failures and content provider permission denials.
+- **Non-Blocking Asynchronous Photo Picking**: Refactored activity result callbacks in Settings and Profile to pass image URIs directly to background coroutine decoders, preventing main-thread I/O bottlenecks and strict-mode violations when importing large photos from external storage or cloud providers.
 - **Bulletproof Profile Picture & Banner PNG Crop**: Resolved failures when cropping and saving PNG profile pictures and banners by migrating crop extraction directly into memory from the loaded preview bitmap using normalized coordinates. Eliminates native Skia region decoder failures, closed input streams, and boundary calculation errors across all Android versions.
-- **Safe Universal URI Stream Handling**: Hardened image stream resolution to transparently support both `file://` and `content://` schemes across all Android API levels without `SecurityException` or stream reset issues.
-- **Clean Profile Sheet Navigation**: Automatically dismisses the profile action bottom sheet upon selecting an action, ensuring the user immediately returns to the updated profile screen after saving.
 - **Lossless PNG Profile Picture & Banner Support**: Enforced true PNG format preservation with full 32-bit ARGB_8888 alpha transparency for custom avatars and banners, resolving encoder failures on transparent PNG images.
+- **Clean Profile Sheet Navigation**: Automatically dismisses the profile action bottom sheet upon selecting an action, ensuring the user immediately returns to the updated profile screen after saving.
 - **Expanded & Formatted In-App Update Modal**: Upgraded update popup modal with an expanded vertical layout (up to 440dp height) and native Rich Markdown rendering, cleanly displaying headings (H1, H2, H3), bold text, bullet lists, blockquotes, and release note formatting.
 - **LinkIt Converging Cluster Glow**: For linked groups of 3 or 4 cards arranged in a 2x2 grid cluster (including L-shaped triads), corner glows now converge toward the shared central intersection point with cardinal side glows suppressed within qualifying blocks. Pairwise cardinal edge glows are preserved for isolated pairs and straight line layouts across grid densities 2, 3, and 4.
-- **Updated What's New Dashboard**: In-app "What's New" screen now reflects the 1.5.10 release notes and feature highlights with fallback offline support.
+- **Updated What's New Dashboard**: In-app "What's New" screen now reflects the 1.5.11 release notes and feature highlights with fallback offline support.
 - **Aspect-Locked Fullscreen Crop Editor**: Fullscreen interactive crop editor supporting 1:1 circular guide for profile pictures and exact layout-matched aspect ratio for banners with four accessible 44dp corner handles, two-finger pinch scaling, and drag panning with boundary clamping.
 
 ---
@@ -91,19 +83,19 @@
 
 | Metric | Details |
 |---|---|
-| **Current Version** | `v1.5.10 Beta` (Version Code: `24`) |
+| **Current Version** | `v1.5.11 Beta` (Version Code: `25`) |
 | **Release Channel** | Beta |
 | **Supported Devices** | Android 7.0 (API 24) through Android 16 (API 36) |
 | **Architecture** | Offline-First, On-Device Processing |
 | **Distribution Model** | **Free for Personal and Educational Use** |
-| **APK Checksum (SHA256)** | `ED98E488C665C8D3F0D1C828A180432BBFCBE7F9F63AEEEC0352A4F7E2C9D731` |
+| **APK Checksum (SHA256)** | `3D081059096EF92E634E08107D74A0E7219A9CAE170D7F8C37EFEB31556186EF` |
 
 ---
 
 ## Installation
 
-1. Go to the **[Fotara 1.5.10 Beta Release](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.10_Beta)** page.
-2. Download **`Fotara_1.5.10_Beta.apk`** (or click [Direct Download](https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.10_Beta/Fotara_1.5.10_Beta.apk)).
+1. Go to the **[Fotara 1.5.11 Beta Release](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.11_Beta)** page.
+2. Download **`Fotara_1.5.11_Beta.apk`** (or click [Direct Download](https://github.com/Arinaranetwork/Fotara/releases/download/Fotara_1.5.11_Beta/Fotara_1.5.11_Beta.apk)).
 3. On your Android device, tap the downloaded APK file.
 4. If prompted, grant permission to *Install from Unknown Sources* for your browser or file manager.
 5. Open Fotara, complete the guided first-run onboarding, and organize your study notes!
