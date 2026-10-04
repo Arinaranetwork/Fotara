@@ -44,6 +44,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.lazy.LazyColumn
+import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
+import com.arinara.fotara.data.model.Workspace
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
@@ -2067,6 +2069,7 @@ fun FolderDetailScreen(
             availableFolders = uiState.availableFolders,
             currentFolderId = uiState.folder?.id,
             currentSubfolders = uiState.subfolders,
+            workspaces = uiState.workspaces,
             onSelectDestination = { targetFolderId, targetSubId ->
                 viewModel.moveSelectedPhotos(targetFolderId, targetSubId)
                 showMovePhotosDialog = false
@@ -2083,6 +2086,7 @@ fun FolderDetailScreen(
             availableFolders = uiState.availableFolders,
             currentFolderId = uiState.folder?.id,
             currentSubfolders = uiState.subfolders,
+            workspaces = uiState.workspaces,
             onSelectDestination = { targetFolderId, targetSubId ->
                 viewModel.copyPhoto(photo.id, targetFolderId, targetSubId)
                 photoToCopy = null
@@ -2099,6 +2103,7 @@ fun FolderDetailScreen(
             availableFolders = uiState.availableFolders,
             currentFolderId = uiState.folder?.id,
             currentSubfolders = uiState.subfolders,
+            workspaces = uiState.workspaces,
             onSelectDestination = { targetFolderId, targetSubId ->
                 viewModel.moveGroup(grp.id, targetFolderId, targetSubId)
                 groupToMove = null
@@ -3430,6 +3435,7 @@ fun FolderDetailScreen(
             availableFolders = uiState.availableFolders,
             currentFolderId = uiState.folder?.id,
             currentSubfolders = uiState.subfolders,
+            workspaces = uiState.workspaces,
             onSelectDestination = { targetFolderId, targetSubId ->
                 viewModel.moveTextNote(note.id, targetFolderId, targetSubId)
                 textNoteToMove = null
@@ -3584,6 +3590,7 @@ fun FolderDetailScreen(
             availableFolders = uiState.availableFolders,
             currentFolderId = uiState.folder?.id,
             currentSubfolders = uiState.subfolders,
+            workspaces = uiState.workspaces,
             onSelectDestination = { targetFolderId, targetSubId ->
                 viewModel.moveCanvasNote(note.id, targetFolderId, targetSubId)
                 canvasNoteToMove = null
@@ -4538,6 +4545,7 @@ private fun DestinationPickerDialog(
     availableFolders: List<Folder>,
     currentFolderId: Long?,
     currentSubfolders: List<Subfolder>,
+    workspaces: List<Workspace> = emptyList(),
     onSelectDestination: (folderId: Long, subfolderId: Long?) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -4604,7 +4612,11 @@ private fun DestinationPickerDialog(
                         }
                     }
 
-                    items(availableFolders, key = { it.id }) { targetF ->
+                    workspaceGroupedFolderItems(
+                        folders = availableFolders,
+                        workspaces = workspaces,
+                        keyPrefix = "dest_picker"
+                    ) { targetF ->
                         val isCurrent = targetF.id == currentFolderId
                         Column {
                             Surface(

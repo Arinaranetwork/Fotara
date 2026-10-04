@@ -71,13 +71,6 @@ fun NewUpdateDialog(
     onSkipVersion: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cleanVersion = remember(release.version) {
-        release.version
-            .replace("Fotara", "", ignoreCase = true)
-            .trim('_', '-', ' ', 'v', 'V')
-            .split("-", "_", " ")[0]
-    }
-
     Dialog(
         onDismissRequest = onLater,
         properties = DialogProperties(
@@ -111,78 +104,14 @@ fun NewUpdateDialog(
                     )
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Top: Banner Illustration Area
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(195.dp)
-                    ) {
-                        // Banner image (remote URL with cached Coil image or bundled local fallback)
-                        val bannerModel = release.bannerUrl?.takeIf { it.isNotBlank() }
-                            ?: R.drawable.fotara_banner_1_5
-                        AsyncImage(
-                            model = bannerModel,
-                            contentDescription = "Update Banner",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                        )
-
-                        // Top-right close "X" circular button
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(12.dp)
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.45f))
-                                .clickable(onClick = onLater),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.close),
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Gradient shadow at bottom of banner for text legibility
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(65.dp)
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.85f)
-                                        )
-                                    )
-                                )
-                        )
-
-                        // Title: "New Update {version}" overlaid at bottom of banner
-                        Text(
-                            text = stringResource(R.string.update_popup_title, cleanVersion),
-                            color = Color.White,
-                            style = TextStyle(
-                                fontSize = 23.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = ElmsSans,
-                                shadow = Shadow(
-                                    color = Color.Black.copy(alpha = 0.95f),
-                                    offset = Offset(2f, 2f),
-                                    blurRadius = 8f
-                                )
-                            ),
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 12.dp)
-                        )
-                    }
+                    // Top: Built-in Update Banner
+                    UpdateBanner(
+                        version = release.version,
+                        releaseUrl = release.htmlUrl,
+                        channel = if (com.arinara.fotara.online.UpdateVersionUtils.isBeta(release.version, release.isPrerelease)) "Beta" else "Stable",
+                        onClose = onLater,
+                        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                    )
 
                     // Body: Release notes rendered with Rich Markdown (headings, lists, bold text)
                     Column(

@@ -6,16 +6,40 @@
 
 package com.arinara.fotara.online
 
+enum class UpdateChannel {
+    STABLE,
+    BETA
+}
+
 object UpdateVersionUtils {
 
     fun cleanVersionString(raw: String): String {
         return raw
             .replace("Fotara", "", ignoreCase = true)
+            .replace("Beta", "", ignoreCase = true)
             .trim('_', '-', ' ', 'v', 'V')
             .split("-", "_", " ")[0]
     }
 
-    fun isNewerVersion(remoteTag: String, currentTag: String): Boolean {
+    fun resolveChannel(rawVersion: String, isPrerelease: Boolean = false): UpdateChannel {
+        if (isPrerelease) return UpdateChannel.BETA
+        return if (rawVersion.contains("Beta", ignoreCase = true)) {
+            UpdateChannel.BETA
+        } else {
+            UpdateChannel.STABLE
+        }
+    }
+
+    fun isBeta(rawVersion: String, isPrerelease: Boolean = false): Boolean {
+        return resolveChannel(rawVersion, isPrerelease) == UpdateChannel.BETA
+    }
+
+    fun isNewerVersion(
+        remoteTag: String,
+        currentTag: String,
+        remoteIsPrerelease: Boolean = false,
+        currentIsPrerelease: Boolean = false
+    ): Boolean {
         val cleanRemote = cleanVersionString(remoteTag)
         val cleanCurrent = cleanVersionString(currentTag)
 
@@ -29,6 +53,15 @@ object UpdateVersionUtils {
             if (r > c) return true
             if (r < c) return false
         }
+
+        // If numeric version is identical, a Stable build is newer than Beta
+        val remoteBeta = isBeta(remoteTag, remoteIsPrerelease)
+        val currentBeta = isBeta(currentTag, currentIsPrerelease)
+
+        if (!remoteBeta && currentBeta) {
+            return true
+        }
+
         return false
     }
 
@@ -40,13 +73,15 @@ object UpdateVersionUtils {
     ): Boolean {
         if (release == null) return false
         if (isPopupDismissedForSession) return false
-        if (!isNewerVersion(release.version, currentVersion)) return false
+        if (!isNewerVersion(release.version, currentVersion, release.isPrerelease)) return false
 
         if (skippedVersion != null) {
-            if (cleanVersionString(release.version) == cleanVersionString(skippedVersion)) {
+            val isSkippedEqual = cleanVersionString(release.version) == cleanVersionString(skippedVersion) &&
+                    (isBeta(release.version, release.isPrerelease) == isBeta(skippedVersion))
+            if (isSkippedEqual) {
                 return false
             }
-            if (!isNewerVersion(release.version, skippedVersion)) {
+            if (!isNewerVersion(release.version, skippedVersion, release.isPrerelease)) {
                 return false
             }
         }

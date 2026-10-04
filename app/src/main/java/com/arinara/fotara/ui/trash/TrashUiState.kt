@@ -8,6 +8,7 @@ package com.arinara.fotara.ui.trash
 
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
+import com.arinara.fotara.data.model.Workspace
 
 enum class TrashTab {
     ALL,
@@ -19,11 +20,14 @@ data class TrashUiState(
     val trashedFolders: List<Folder> = emptyList(),
     val trashedPhotos: List<Photo> = emptyList(),
     val activeFolders: List<Folder> = emptyList(),
+    val workspaces: List<Workspace> = emptyList(),
     val selectedTab: TrashTab = TrashTab.ALL,
     val isLoading: Boolean = false,
     val showEmptyTrashDialog: Boolean = false,
     val orphanPhotoToRestore: Photo? = null,
     val parentFolderForOrphan: Folder? = null,
+    val folderToRestoreDestination: Folder? = null,
+    val orphanToRestoreDestination: Pair<Photo, Long>? = null,
     val photoToDeletePermanently: Photo? = null,
     val folderToDeletePermanently: Folder? = null,
     val userMessage: String? = null

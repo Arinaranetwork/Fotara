@@ -49,6 +49,7 @@ interface CanvasNoteRepository {
 
 class SqliteCanvasNoteRepository(
     private val dbHelper: FotaraDbHelper,
+    private val folderRepository: FolderRepository? = null,
     coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) : CanvasNoteRepository {
 
@@ -168,6 +169,7 @@ class SqliteCanvasNoteRepository(
         val db = dbHelper.getSafeWritableDatabase()
         val id = db.insert("canvas_notes", null, values)
         refreshSync()
+        folderRepository?.refresh()
         id
     }
 
@@ -224,6 +226,8 @@ class SqliteCanvasNoteRepository(
         val db = dbHelper.getSafeWritableDatabase()
         db.update("canvas_notes", values, "id = ?", arrayOf(id.toString()))
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun deleteCanvasNotes(ids: List<Long>) = withContext(Dispatchers.IO) {
@@ -247,6 +251,8 @@ class SqliteCanvasNoteRepository(
             db.endTransaction()
         }
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun restoreCanvasNote(id: Long) = withContext(Dispatchers.IO) {
@@ -263,6 +269,8 @@ class SqliteCanvasNoteRepository(
             } catch (_: Exception) {}
         }
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun purgeCanvasNotePermanently(id: Long) = withContext(Dispatchers.IO) {
@@ -288,6 +296,8 @@ class SqliteCanvasNoteRepository(
             db.endTransaction()
         }
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun moveCanvasNote(id: Long, targetFolderId: Long, targetSubfolderId: Long?) = withContext(Dispatchers.IO) {
@@ -299,6 +309,8 @@ class SqliteCanvasNoteRepository(
         val db = dbHelper.getSafeWritableDatabase()
         db.update("canvas_notes", values, "id = ?", arrayOf(id.toString()))
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun moveCanvasNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?) = withContext(Dispatchers.IO) {
@@ -320,6 +332,8 @@ class SqliteCanvasNoteRepository(
             db.endTransaction()
         }
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun refresh() = withContext(Dispatchers.IO) {

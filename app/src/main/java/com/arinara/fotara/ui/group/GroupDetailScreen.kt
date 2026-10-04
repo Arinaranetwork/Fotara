@@ -40,6 +40,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.arinara.fotara.ui.components.CaptureReviewSliderModal
+import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
+import com.arinara.fotara.data.model.Workspace
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
@@ -835,6 +837,7 @@ fun GroupDetailScreen(
             availableFolders = uiState.availableFolders,
             currentFolderId = uiState.folder?.id,
             currentSubfolders = uiState.subfolders,
+            workspaces = uiState.workspaces,
             onSelectDestination = { targetFolderId, targetSubId ->
                 viewModel.moveGroup(targetFolderId, targetSubId, onMoved = onBackClick)
                 showMoveGroupDialog = false
@@ -1147,6 +1150,7 @@ private fun DestinationPickerDialog(
     availableFolders: List<Folder>,
     currentFolderId: Long?,
     currentSubfolders: List<Subfolder>,
+    workspaces: List<Workspace> = emptyList(),
     onSelectDestination: (folderId: Long, subfolderId: Long?) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -1213,7 +1217,11 @@ private fun DestinationPickerDialog(
                         }
                     }
 
-                    items(availableFolders, key = { it.id }) { targetF ->
+                    workspaceGroupedFolderItems(
+                        folders = availableFolders,
+                        workspaces = workspaces,
+                        keyPrefix = "dest_picker"
+                    ) { targetF ->
                         val isCurrent = targetF.id == currentFolderId
                         Column {
                             Surface(

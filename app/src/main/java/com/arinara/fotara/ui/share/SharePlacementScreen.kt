@@ -88,7 +88,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.arinara.fotara.data.model.DestinationType
+import com.arinara.fotara.data.model.Folder
+import com.arinara.fotara.R
+import androidx.compose.ui.res.stringResource
 import com.arinara.fotara.theme.DockSlatePill
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.MidnightCardOutline
@@ -101,6 +105,7 @@ import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
 import com.arinara.fotara.ui.components.FolderUnlockDialog
 import com.arinara.fotara.ui.components.NewFolderDialog
+import com.arinara.fotara.ui.components.WorkspaceFolderGroupingHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -399,71 +404,46 @@ fun SharePlacementScreen(
                                 }
                             }
                         } else {
+                            val (groups, showHeaders) = WorkspaceFolderGroupingHelper.groupFolders(folders, uiState.workspaces)
+                            val homeName = stringResource(R.string.workspace_home)
+                            val archiveName = stringResource(R.string.workspace_archive)
+
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                items(folders) { folder ->
-                                    val isSelected = uiState.selectedFolder?.id == folder.id
-                                    val isLocked = folder.isLocked && !uiState.unlockedFolderIds.contains(folder.id)
-                                    val cardColor = try {
-                                        Color(android.graphics.Color.parseColor(folder.colorLabel))
-                                    } catch (_: Exception) {
-                                        FolderTabCream
+                                if (!showHeaders) {
+                                    items(folders, key = { it.id }) { folder ->
+                                        ShareFolderItem(
+                                            folder = folder,
+                                            uiState = uiState,
+                                            onSelectFolder = { viewModel.selectFolder(it) }
+                                        )
                                     }
-
-                                    Surface(
-                                        color = if (isSelected) FolderBodyBlue else MidnightSurface,
-                                        shape = RoundedCornerShape(12.dp),
-                                        border = androidx.compose.foundation.BorderStroke(
-                                            width = if (isSelected) 2.dp else 1.dp,
-                                            color = if (isSelected) FolderTabCream else MidnightCardOutline
-                                        ),
-                                        modifier = Modifier
-                                            .width(140.dp)
-                                            .height(96.dp)
-                                            .clickable { viewModel.selectFolder(folder) }
-                                    ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(10.dp),
-                                            verticalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                modifier = Modifier.fillMaxWidth()
+                                } else {
+                                    groups.forEach { group ->
+                                        item(key = "ws_header_${group.workspace.id}") {
+                                            val name = WorkspaceFolderGroupingHelper.getWorkspaceDisplayName(group.workspace, homeName, archiveName)
+                                            Box(
+                                                modifier = Modifier
+                                                    .height(96.dp)
+                                                    .padding(horizontal = 4.dp),
+                                                contentAlignment = Alignment.CenterStart
                                             ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(10.dp)
-                                                        .clip(CircleShape)
-                                                        .background(cardColor)
+                                                Text(
+                                                    text = name,
+                                                    color = Color(0xFF9CA3AF),
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontFamily = ElmsSans
                                                 )
-                                                if (isLocked) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Lock,
-                                                        contentDescription = "Locked",
-                                                        tint = TagAmber,
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                } else if (isSelected) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = null,
-                                                        tint = FolderTabCream,
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                }
                                             }
-                                            Text(
-                                                text = folder.name,
-                                                color = TextPrimary,
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
+                                        }
+                                        items(group.folders, key = { it.id }) { folder ->
+                                            ShareFolderItem(
+                                                folder = folder,
+                                                uiState = uiState,
+                                                onSelectFolder = { viewModel.selectFolder(it) }
                                             )
                                         }
                                     }
@@ -975,3 +955,75 @@ private fun formatFileSize(bytes: Long): String {
     val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt().coerceIn(0, units.size - 1)
     return String.format(java.util.Locale.US, "%.1f %s", bytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
 }
+
+@Composable
+private fun ShareFolderItem(
+    folder: Folder,
+    uiState: SharePlacementUiState,
+    onSelectFolder: (Folder) -> Unit
+) {
+    val isSelected = uiState.selectedFolder?.id == folder.id
+    val isLocked = folder.isLocked && !uiState.unlockedFolderIds.contains(folder.id)
+    val cardColor = try {
+        Color(android.graphics.Color.parseColor(folder.colorLabel))
+    } catch (_: Exception) {
+        FolderTabCream
+    }
+
+    Surface(
+        color = if (isSelected) FolderBodyBlue else MidnightSurface,
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = if (isSelected) FolderTabCream else MidnightCardOutline
+        ),
+        modifier = Modifier
+            .width(140.dp)
+            .height(96.dp)
+            .clickable { onSelectFolder(folder) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(cardColor)
+                )
+                if (isLocked) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Locked",
+                        tint = TagAmber,
+                        modifier = Modifier.size(14.dp)
+                    )
+                } else if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = FolderTabCream,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+            Text(
+                text = folder.name,
+                color = TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+

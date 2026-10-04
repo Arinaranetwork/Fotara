@@ -41,8 +41,9 @@ data class SubfolderDeleteResult(
 
 interface FolderRepository {
     fun getFolders(): Flow<List<Folder>>
+    fun getFoldersByWorkspace(workspaceId: Long): Flow<List<Folder>>
     fun getFolderById(id: Long): Flow<Folder?>
-    suspend fun createFolder(name: String, colorLabel: String = TagColor.SKY.hex, isPinned: Boolean = false): Long
+    suspend fun createFolder(name: String, colorLabel: String = TagColor.SKY.hex, isPinned: Boolean = false, workspaceId: Long = 1L): Long
     suspend fun updateFolder(folder: Folder)
     suspend fun renameFolder(id: Long, newName: String)
     suspend fun updateFolderColor(id: Long, colorHex: String)
@@ -57,7 +58,7 @@ interface FolderRepository {
     suspend fun deleteSubfolder(id: Long)
     suspend fun deleteSubfolders(subfolderIds: List<Long>): SubfolderDeleteResult
     fun getTrashedFolders(): Flow<List<Folder>>
-    suspend fun restoreFolder(id: Long)
+    suspend fun restoreFolder(id: Long, targetWorkspaceId: Long? = null)
     suspend fun purgeFolderPermanently(id: Long)
     suspend fun isFolderTrashed(id: Long): Boolean
     suspend fun lockFolder(id: Long, pin: String)
@@ -117,13 +118,16 @@ class SqliteFolderRepository(
             val cursor = db.rawQuery(
                 """
                 SELECT f.id, f.name, f.color_label, f.is_pinned, f.created_at,
-                       COUNT(p.id) as photo_count,
-                       COALESCE(SUM(p.file_size_bytes), 0) as total_size,
-                       f.is_locked, f.lock_pin
+                       (
+                           (SELECT COUNT(*) FROM photos p WHERE p.folder_id = f.id AND p.is_trashed = 0) +
+                           (SELECT COUNT(*) FROM text_notes tn WHERE tn.folder_id = f.id AND tn.is_trashed = 0) +
+                           (SELECT COUNT(*) FROM canvas_notes cn WHERE cn.folder_id = f.id AND cn.is_trashed = 0) +
+                           (SELECT COUNT(*) FROM document_notes dn WHERE dn.folder_id = f.id AND dn.is_trashed = 0)
+                       ) as item_count,
+                       COALESCE((SELECT SUM(p.file_size_bytes) FROM photos p WHERE p.folder_id = f.id AND p.is_trashed = 0), 0) as total_size,
+                       f.is_locked, f.lock_pin, f.workspace_id
                 FROM folders f
-                LEFT JOIN photos p ON f.id = p.folder_id AND p.is_trashed = 0
                 WHERE f.is_trashed = 0
-                GROUP BY f.id
                 ORDER BY f.is_pinned DESC, f.created_at DESC
                 """.trimIndent(),
                 null
@@ -143,7 +147,8 @@ class SqliteFolderRepository(
                             totalSizeBytes = c.getLong(6),
                             isLocked = c.getInt(7) == 1,
                             lockPin = if (c.isNull(8)) null else c.getString(8),
-                            linkGroupId = folderToLinkGroupMap[fId]
+                            linkGroupId = folderToLinkGroupMap[fId],
+                            workspaceId = if (c.columnCount > 9 && !c.isNull(9)) c.getLong(9) else 1L
                         )
                     )
                 }
@@ -175,13 +180,16 @@ class SqliteFolderRepository(
             val trashedCursor = db.rawQuery(
                 """
                 SELECT f.id, f.name, f.color_label, f.is_pinned, f.created_at,
-                       COUNT(p.id) as photo_count,
-                       COALESCE(SUM(p.file_size_bytes), 0) as total_size,
-                       f.deleted_at, f.is_locked, f.lock_pin
+                       (
+                           (SELECT COUNT(*) FROM photos p WHERE p.folder_id = f.id) +
+                           (SELECT COUNT(*) FROM text_notes tn WHERE tn.folder_id = f.id) +
+                           (SELECT COUNT(*) FROM canvas_notes cn WHERE cn.folder_id = f.id) +
+                           (SELECT COUNT(*) FROM document_notes dn WHERE dn.folder_id = f.id)
+                       ) as item_count,
+                       COALESCE((SELECT SUM(p.file_size_bytes) FROM photos p WHERE p.folder_id = f.id), 0) as total_size,
+                       f.deleted_at, f.is_locked, f.lock_pin, f.workspace_id
                 FROM folders f
-                LEFT JOIN photos p ON f.id = p.folder_id
                 WHERE f.is_trashed = 1
-                GROUP BY f.id
                 ORDER BY f.deleted_at DESC
                 """.trimIndent(),
                 null
@@ -200,7 +208,8 @@ class SqliteFolderRepository(
                             isTrashed = true,
                             deletedAt = if (c.isNull(7)) null else c.getLong(7),
                             isLocked = c.getInt(8) == 1,
-                            lockPin = if (c.isNull(9)) null else c.getString(9)
+                            lockPin = if (c.isNull(9)) null else c.getString(9),
+                            workspaceId = if (c.columnCount > 10 && !c.isNull(10)) c.getLong(10) else 1L
                         )
                     )
                 }
@@ -217,16 +226,20 @@ class SqliteFolderRepository(
 
     override fun getFolders(): Flow<List<Folder>> = foldersFlow.asStateFlow()
 
+    override fun getFoldersByWorkspace(workspaceId: Long): Flow<List<Folder>> =
+        foldersFlow.map { list -> list.filter { it.workspaceId == workspaceId } }
+
     override fun getFolderById(id: Long): Flow<Folder?> =
         foldersFlow.map { list -> list.firstOrNull { it.id == id } }
 
-    override suspend fun createFolder(name: String, colorLabel: String, isPinned: Boolean): Long = withContext(Dispatchers.IO) {
+    override suspend fun createFolder(name: String, colorLabel: String, isPinned: Boolean, workspaceId: Long): Long = withContext(Dispatchers.IO) {
         val db = dbHelper.getSafeWritableDatabase()
         val values = ContentValues().apply {
             put("name", name.trim())
             put("color_label", colorLabel)
             put("is_pinned", if (isPinned) 1 else 0)
             put("created_at", System.currentTimeMillis())
+            put("workspace_id", workspaceId)
         }
         val insertedId = db.insert("folders", null, values)
         refreshSync()
@@ -283,7 +296,16 @@ class SqliteFolderRepository(
         var totalBytes = 0L
 
         val cursor = db.rawQuery(
-            "SELECT COUNT(id), COALESCE(SUM(file_size_bytes), 0) FROM photos WHERE folder_id IN ($inClause) AND is_trashed = 0",
+            """
+            SELECT 
+                (
+                    (SELECT COUNT(id) FROM photos WHERE folder_id IN ($inClause) AND is_trashed = 0) +
+                    (SELECT COUNT(id) FROM text_notes WHERE folder_id IN ($inClause) AND is_trashed = 0) +
+                    (SELECT COUNT(id) FROM canvas_notes WHERE folder_id IN ($inClause) AND is_trashed = 0) +
+                    (SELECT COUNT(id) FROM document_notes WHERE folder_id IN ($inClause) AND is_trashed = 0)
+                ),
+                COALESCE((SELECT SUM(file_size_bytes) FROM photos WHERE folder_id IN ($inClause) AND is_trashed = 0), 0)
+            """.trimIndent(),
             null
         )
         cursor.use {
@@ -309,8 +331,11 @@ class SqliteFolderRepository(
 
         db.beginTransaction()
         try {
-            // Soft delete: move photos, subfolders, and folders to trash
+            // Soft delete: move photos, text notes, canvas notes, document notes, subfolders, and folders to trash
             db.execSQL("UPDATE photos SET is_trashed = 1, deleted_at = $now WHERE folder_id IN ($inClause)")
+            db.execSQL("UPDATE text_notes SET is_trashed = 1, deleted_at = $now WHERE folder_id IN ($inClause)")
+            db.execSQL("UPDATE canvas_notes SET is_trashed = 1, deleted_at = $now WHERE folder_id IN ($inClause)")
+            db.execSQL("UPDATE document_notes SET is_trashed = 1, deleted_at = $now WHERE folder_id IN ($inClause)")
             db.execSQL("UPDATE subfolders SET is_trashed = 1, deleted_at = $now WHERE folder_id IN ($inClause)")
             db.execSQL("UPDATE folders SET is_trashed = 1, deleted_at = $now WHERE id IN ($inClause)")
             for (fId in folderIds) {
@@ -359,7 +384,16 @@ class SqliteFolderRepository(
         var totalBytes = 0L
 
         val cursor = db.rawQuery(
-            "SELECT COUNT(id), COALESCE(SUM(file_size_bytes), 0) FROM photos WHERE subfolder_id IN ($inClause) AND is_trashed = 0",
+            """
+            SELECT 
+                (
+                    (SELECT COUNT(id) FROM photos WHERE subfolder_id IN ($inClause) AND is_trashed = 0) +
+                    (SELECT COUNT(id) FROM text_notes WHERE subfolder_id IN ($inClause) AND is_trashed = 0) +
+                    (SELECT COUNT(id) FROM canvas_notes WHERE subfolder_id IN ($inClause) AND is_trashed = 0) +
+                    (SELECT COUNT(id) FROM document_notes WHERE subfolder_id IN ($inClause) AND is_trashed = 0)
+                ),
+                COALESCE((SELECT SUM(file_size_bytes) FROM photos WHERE subfolder_id IN ($inClause) AND is_trashed = 0), 0)
+            """.trimIndent(),
             null
         )
         cursor.use {
@@ -385,8 +419,11 @@ class SqliteFolderRepository(
 
         db.beginTransaction()
         try {
-            // Soft delete: move photos and subfolders to trash
+            // Soft delete: move photos, text notes, canvas notes, document notes, and subfolders to trash
             db.execSQL("UPDATE photos SET is_trashed = 1, deleted_at = $now WHERE subfolder_id IN ($inClause)")
+            db.execSQL("UPDATE text_notes SET is_trashed = 1, deleted_at = $now WHERE subfolder_id IN ($inClause)")
+            db.execSQL("UPDATE canvas_notes SET is_trashed = 1, deleted_at = $now WHERE subfolder_id IN ($inClause)")
+            db.execSQL("UPDATE document_notes SET is_trashed = 1, deleted_at = $now WHERE subfolder_id IN ($inClause)")
             db.execSQL("UPDATE subfolders SET is_trashed = 1, deleted_at = $now WHERE id IN ($inClause)")
             db.setTransactionSuccessful()
         } finally {
@@ -404,13 +441,23 @@ class SqliteFolderRepository(
 
     override fun getTrashedFolders(): Flow<List<Folder>> = trashedFoldersFlow.asStateFlow()
 
-    override suspend fun restoreFolder(id: Long) = withContext(Dispatchers.IO) {
+    override suspend fun restoreFolder(id: Long, targetWorkspaceId: Long?) = withContext(Dispatchers.IO) {
         val db = dbHelper.getSafeWritableDatabase()
         db.beginTransaction()
         try {
-            db.execSQL("UPDATE folders SET is_trashed = 0, deleted_at = NULL WHERE id = ?", arrayOf(id.toString()))
+            if (targetWorkspaceId != null) {
+                db.execSQL(
+                    "UPDATE folders SET is_trashed = 0, deleted_at = NULL, workspace_id = ? WHERE id = ?",
+                    arrayOf(targetWorkspaceId.toString(), id.toString())
+                )
+            } else {
+                db.execSQL("UPDATE folders SET is_trashed = 0, deleted_at = NULL WHERE id = ?", arrayOf(id.toString()))
+            }
             db.execSQL("UPDATE subfolders SET is_trashed = 0, deleted_at = NULL WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("UPDATE photos SET is_trashed = 0, deleted_at = NULL WHERE folder_id = ?", arrayOf(id.toString()))
+            db.execSQL("UPDATE text_notes SET is_trashed = 0, deleted_at = NULL WHERE folder_id = ?", arrayOf(id.toString()))
+            db.execSQL("UPDATE canvas_notes SET is_trashed = 0, deleted_at = NULL WHERE folder_id = ?", arrayOf(id.toString()))
+            db.execSQL("UPDATE document_notes SET is_trashed = 0, deleted_at = NULL WHERE folder_id = ?", arrayOf(id.toString()))
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -462,6 +509,7 @@ class SqliteFolderRepository(
             db.execSQL("DELETE FROM photos WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM document_notes WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM text_notes WHERE folder_id = ?", arrayOf(id.toString()))
+            db.execSQL("DELETE FROM canvas_notes WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM subfolders WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM folders WHERE id = ?", arrayOf(id.toString()))
             removeFolderFromLinkGroupsInternal(db, id)

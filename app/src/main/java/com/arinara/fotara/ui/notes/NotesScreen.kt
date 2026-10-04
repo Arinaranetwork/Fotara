@@ -30,12 +30,30 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.arinara.fotara.ui.components.PullToRefreshLayout
 import com.arinara.fotara.ui.components.PullToRefreshHelper
 import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.runtime.LaunchedEffect
+import com.arinara.fotara.ui.components.ScreenHeader
+import com.arinara.fotara.ui.components.ScreenHeaderActionButton
+import com.arinara.fotara.ui.home.workspace.WorkspaceTabBar
+import com.arinara.fotara.ui.home.workspace.AddWorkspaceDialog
+import com.arinara.fotara.ui.home.workspace.RenameWorkspaceDialog
+import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceConfirmDialog
+import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceChoiceDialog
+import com.arinara.fotara.ui.home.workspace.DeleteWorkspacePermanentConfirmDialog
+import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceProgressDialog
+import com.arinara.fotara.ui.home.WorkspaceDeleteStep
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.outlined.NoteAdd
@@ -135,6 +153,14 @@ fun NotesScreen(
     val bottomOverlayPadding = LocalBottomOverlayPadding.current
     val fabBottomPadding = (bottomOverlayPadding + 16.dp).coerceAtLeast(82.dp)
 
+    LaunchedEffect(uiState.userMessage) {
+        val msg = uiState.userMessage
+        if (msg != null) {
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            viewModel.clearUserMessage()
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -146,73 +172,109 @@ fun NotesScreen(
                 .windowInsetsPadding(WindowInsets.statusBars)
         ) {
             // 1. Top Header
-            NotesHeader(
-                onSearchClick = { viewModel.toggleSearch() },
-                showOverflowMenu = showHeaderOverflowMenu,
-                onMoreClick = { showHeaderOverflowMenu = true },
-                onDismissOverflowMenu = { showHeaderOverflowMenu = false },
-                onOpenWhatsNew = onOpenWhatsNew,
-                onOpenUpdates = onOpenUpdates,
-                onOpenFeedback = onOpenFeedback,
-                onOpenSettings = onOpenSettings,
-                onOpenTrash = onOpenTrash
+            ScreenHeader(
+                title = stringResource(R.string.notes_title),
+                tagline = null,
+                actions = {
+                    ScreenHeaderActionButton(
+                        onClick = { viewModel.toggleFilters() },
+                        icon = Icons.Default.Search,
+                        contentDescription = stringResource(
+                            if (uiState.isFiltersVisible) R.string.cd_hide_filters else R.string.cd_show_filters
+                        ),
+                        isActive = uiState.isFiltersVisible
+                    )
+
+                    Box {
+                        ScreenHeaderActionButton(
+                            onClick = { showHeaderOverflowMenu = true },
+                            icon = Icons.Default.MoreVert,
+                            contentDescription = "More"
+                        )
+
+                        DropdownMenu(
+                            expanded = showHeaderOverflowMenu,
+                            onDismissRequest = { showHeaderOverflowMenu = false },
+                            modifier = Modifier
+                                .background(HomeCardSurface)
+                                .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("What's New", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                leadingIcon = { Icon(Icons.Default.NewReleases, contentDescription = null, tint = Color(0xFFF59E0B)) },
+                                onClick = {
+                                    showHeaderOverflowMenu = false
+                                    onOpenWhatsNew()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Check for Updates", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = Color.White) },
+                                onClick = {
+                                    showHeaderOverflowMenu = false
+                                    onOpenUpdates()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Send Feedback", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                leadingIcon = { Icon(Icons.Default.Feedback, contentDescription = null, tint = Color.White) },
+                                onClick = {
+                                    showHeaderOverflowMenu = false
+                                    onOpenFeedback()
+                                }
+                            )
+                            HorizontalDivider(color = HomeCardBorder)
+                            DropdownMenuItem(
+                                text = { Text("Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = TagCrimson) },
+                                onClick = {
+                                    showHeaderOverflowMenu = false
+                                    onOpenTrash()
+                                }
+                            )
+                        }
+                    }
+                }
             )
 
-            // Inline Search Bar when active
-            if (uiState.isSearchActive) {
-                OutlinedTextField(
-                    value = uiState.searchQuery,
-                    onValueChange = { viewModel.setSearchQuery(it) },
-                    placeholder = {
-                        Text(
-                            text = stringResource(R.string.search_notes_hint),
-                            color = HomeSubtitleGray,
-                            fontSize = 14.sp,
-                            fontFamily = ElmsSans
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = HomeSubtitleGray, modifier = Modifier.size(18.dp))
-                    },
-                    trailingIcon = {
-                        if (uiState.searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.White, modifier = Modifier.size(18.dp))
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = HomeCardSurface,
-                        unfocusedContainerColor = HomeCardSurface,
-                        focusedBorderColor = HomeMainButtonBlue,
-                        unfocusedBorderColor = HomeCardBorder,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 6.dp)
+            // Workspace Tab Bar
+            WorkspaceTabBar(
+                workspaces = uiState.workspaces,
+                selectedWorkspaceId = uiState.selectedWorkspaceId,
+                isSelectMode = false,
+                onWorkspaceSelected = { ws -> viewModel.selectWorkspace(ws.id) },
+                onAddClick = { viewModel.openAddWorkspaceDialog() },
+                onLimitReached = { viewModel.openAddWorkspaceDialog() },
+                onRenameClick = { ws -> viewModel.openRenameWorkspaceDialog(ws) },
+                onDeleteClick = { ws -> viewModel.initiateDeleteWorkspace(ws) },
+                onReorderWorkspaces = { ids -> viewModel.reorderWorkspaces(ids) }
+            )
+
+            // 2. Horizontally scrollable Pill Filter Chips (toggled on demand)
+            AnimatedVisibility(
+                visible = uiState.isFiltersVisible,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                NotesFilterChipsRow(
+                    selectedFilter = uiState.selectedFilter,
+                    onFilterSelected = { viewModel.setFilter(it) }
                 )
             }
 
-            // 2. Horizontally scrollable Pill Filter Chips
-            NotesFilterChipsRow(
-                selectedFilter = uiState.selectedFilter,
-                onFilterSelected = { viewModel.setFilter(it) }
-            )
-
             // 3. Date Grouped Notes List
             if (uiState.dateGroups.isEmpty() && !uiState.isLoading) {
-                NotesEmptyState(isFiltering = uiState.selectedFilter != NoteFilterChip.ALL || uiState.searchQuery.isNotBlank())
+                NotesEmptyState(
+                    isFiltering = uiState.selectedFilter != NoteFilterChip.ALL || uiState.searchQuery.isNotBlank(),
+                    workspaceName = uiState.selectedWorkspaceName
+                )
             } else {
                 val listState = rememberLazyListState()
-                val isOverlayOpen = itemToDelete != null || itemToRename != null || itemToMove != null || showHeaderOverflowMenu || showFabCreateMenu || pendingCreateAction != null
+                val isOverlayOpen = itemToDelete != null || itemToRename != null || itemToMove != null || showHeaderOverflowMenu || showFabCreateMenu || pendingCreateAction != null || uiState.showAddWorkspaceDialog || uiState.workspaceToRename != null || uiState.workspaceDeleteStep != WorkspaceDeleteStep.NONE
                 val canRefresh = PullToRefreshHelper.canTriggerRefresh(
                     isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0,
                     isMultiSelectActive = false,
-                    isSearchFocused = uiState.isSearchActive,
+                    isSearchFocused = false,
                     isOverlayOpen = isOverlayOpen
                 )
 
@@ -441,7 +503,11 @@ fun NotesScreen(
                         .height(240.dp)
                 ) {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(uiState.folders) { folder ->
+                        workspaceGroupedFolderItems(
+                            folders = uiState.folders,
+                            workspaces = uiState.workspaces,
+                            keyPrefix = "notes_move"
+                        ) { folder ->
                             Surface(
                                 color = if (folder.id == item.folderId) HomeMainButtonBlue.copy(alpha = 0.2f) else Color.Transparent,
                                 shape = RoundedCornerShape(10.dp),
@@ -505,7 +571,11 @@ fun NotesScreen(
                         .height(240.dp)
                 ) {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(uiState.folders) { folder ->
+                        workspaceGroupedFolderItems(
+                            folders = uiState.folders,
+                            workspaces = uiState.workspaces,
+                            keyPrefix = "notes_create"
+                        ) { folder ->
                             Surface(
                                 color = Color.Transparent,
                                 shape = RoundedCornerShape(10.dp),
@@ -544,6 +614,76 @@ fun NotesScreen(
                 }
             }
         )
+    }
+
+    if (uiState.showAddWorkspaceDialog) {
+        AddWorkspaceDialog(
+            workspaces = uiState.workspaces,
+            onDismiss = { viewModel.closeAddWorkspaceDialog() },
+            onCreate = { name -> viewModel.createWorkspace(name) }
+        )
+    }
+
+    uiState.workspaceToRename?.let { wsToRename ->
+        RenameWorkspaceDialog(
+            workspace = wsToRename,
+            workspaces = uiState.workspaces,
+            onDismiss = { viewModel.closeRenameWorkspaceDialog() },
+            onRename = { newName -> viewModel.renameWorkspace(wsToRename.id, newName) }
+        )
+    }
+
+    when (uiState.workspaceDeleteStep) {
+        WorkspaceDeleteStep.CONFIRM -> {
+            uiState.workspaceToDelete?.let { ws ->
+                DeleteWorkspaceConfirmDialog(
+                    workspace = ws,
+                    stats = uiState.workspaceDeleteStats,
+                    onDismiss = { viewModel.dismissDeleteWorkspace() },
+                    onConfirmDelete = { alsoDeleteContents ->
+                        if (alsoDeleteContents) {
+                            viewModel.proceedDeleteChoice()
+                        } else {
+                            viewModel.deleteWorkspaceMoveFoldersToHome(ws)
+                        }
+                    }
+                )
+            }
+        }
+        WorkspaceDeleteStep.CHOICE -> {
+            val ws = uiState.workspaceToDelete
+            val stats = uiState.workspaceDeleteStats
+            if (ws != null && stats != null) {
+                DeleteWorkspaceChoiceDialog(
+                    workspace = ws,
+                    stats = stats,
+                    onDismiss = { viewModel.dismissDeleteWorkspace() },
+                    onSelectTrash = { viewModel.executeDeleteWorkspaceContents(ws, permanent = false) },
+                    onSelectPermanent = { viewModel.proceedDeletePermanentConfirm() }
+                )
+            }
+        }
+        WorkspaceDeleteStep.PERMANENT_CONFIRM -> {
+            val ws = uiState.workspaceToDelete
+            val stats = uiState.workspaceDeleteStats
+            if (ws != null && stats != null) {
+                DeleteWorkspacePermanentConfirmDialog(
+                    workspace = ws,
+                    stats = stats,
+                    onDismiss = { viewModel.dismissDeleteWorkspace() },
+                    onConfirmDeleteForever = { viewModel.executeDeleteWorkspaceContents(ws, permanent = true) }
+                )
+            }
+        }
+        WorkspaceDeleteStep.PROGRESS -> {
+            val progress = uiState.workspaceDeleteProgress
+            DeleteWorkspaceProgressDialog(
+                workspaceName = uiState.workspaceToDelete?.name ?: "",
+                current = progress?.first ?: 0,
+                total = progress?.second ?: 0
+            )
+        }
+        WorkspaceDeleteStep.NONE -> { /* No delete dialog */ }
     }
 }
 
@@ -584,146 +724,7 @@ private fun handleOpenNote(
     }
 }
 
-@Composable
-private fun NotesHeader(
-    onSearchClick: () -> Unit,
-    showOverflowMenu: Boolean,
-    onMoreClick: () -> Unit,
-    onDismissOverflowMenu: () -> Unit,
-    onOpenWhatsNew: () -> Unit,
-    onOpenUpdates: () -> Unit,
-    onOpenFeedback: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onOpenTrash: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(
-                text = stringResource(R.string.notes_title),
-                color = Color.White,
-                fontSize = 36.sp,
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.5).sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = stringResource(R.string.notes_subtitle),
-                color = HomeSubtitleGray,
-                fontSize = 14.sp,
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.Light
-            )
-        }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Search circular button
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clickable(onClick = onSearchClick),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(HomeHeaderButtonBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            // More Options circular button with anchored DropdownMenu
-            Box(
-                modifier = Modifier.size(48.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(HomeHeaderButtonBg)
-                        .clickable(onClick = onMoreClick),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = showOverflowMenu,
-                    onDismissRequest = onDismissOverflowMenu,
-                    modifier = Modifier
-                        .background(HomeCardSurface)
-                        .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("What's New", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                        leadingIcon = { Icon(Icons.Default.NewReleases, contentDescription = null, tint = Color(0xFFF59E0B)) },
-                        onClick = {
-                            onDismissOverflowMenu()
-                            onOpenWhatsNew()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Check for Updates", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                        leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = Color.White) },
-                        onClick = {
-                            onDismissOverflowMenu()
-                            onOpenUpdates()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Send Feedback", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                        leadingIcon = { Icon(Icons.Default.Feedback, contentDescription = null, tint = Color.White) },
-                        onClick = {
-                            onDismissOverflowMenu()
-                            onOpenFeedback()
-                        }
-                    )
-                    HorizontalDivider(color = HomeCardBorder)
-                    DropdownMenuItem(
-                        text = { Text("Settings", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White) },
-                        onClick = {
-                            onDismissOverflowMenu()
-                            onOpenSettings()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = TagCrimson) },
-                        onClick = {
-                            onDismissOverflowMenu()
-                            onOpenTrash()
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun NotesFilterChipsRow(
@@ -1123,6 +1124,7 @@ private fun NoteThumbnailTile(
 @Composable
 private fun NotesEmptyState(
     isFiltering: Boolean,
+    workspaceName: String,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -1156,7 +1158,11 @@ private fun NotesEmptyState(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = if (isFiltering) stringResource(R.string.empty_notes_filter_subtitle) else stringResource(R.string.empty_notes_subtitle),
+            text = if (isFiltering) {
+                stringResource(R.string.empty_notes_filter_subtitle)
+            } else {
+                stringResource(R.string.workspace_notes_empty_state, workspaceName)
+            },
             color = HomeSubtitleGray,
             fontSize = 13.5.sp,
             fontFamily = ElmsSans,

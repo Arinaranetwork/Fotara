@@ -27,6 +27,28 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                kind TEXT NOT NULL,
+                name TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_workspaces_position ON workspaces(position)")
+
+        val now = System.currentTimeMillis()
+        db.execSQL(
+            "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at) VALUES (1, '$HOME_WORKSPACE_UUID', 'HOME', '', 0, $now)"
+        )
+        db.execSQL(
+            "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at) VALUES (2, '$ARCHIVE_WORKSPACE_UUID', 'ARCHIVE', '', 1, $now)"
+        )
+
+        db.execSQL(
+            """
             CREATE TABLE folders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -36,10 +58,12 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 is_locked INTEGER NOT NULL DEFAULT 0,
-                lock_pin TEXT
+                lock_pin TEXT,
+                workspace_id INTEGER NOT NULL DEFAULT 1
             )
             """.trimIndent()
         )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_folders_workspace_id ON folders(workspace_id)")
 
         db.execSQL(
             """
@@ -619,6 +643,37 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v15 failed: ${e.message}")
             }
         }
+        if (oldVersion < 16) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS workspaces (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        uuid TEXT NOT NULL UNIQUE,
+                        kind TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_workspaces_position ON workspaces(position)")
+
+                val now = System.currentTimeMillis()
+                db.execSQL(
+                    "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at) VALUES (1, '$HOME_WORKSPACE_UUID', 'HOME', '', 0, $now)"
+                )
+                db.execSQL(
+                    "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at) VALUES (2, '$ARCHIVE_WORKSPACE_UUID', 'ARCHIVE', '', 1, $now)"
+                )
+
+                db.execSQL("ALTER TABLE folders ADD COLUMN workspace_id INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_folders_workspace_id ON folders(workspace_id)")
+                db.execSQL("UPDATE folders SET workspace_id = 1 WHERE workspace_id IS NULL OR workspace_id <= 0")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v16 failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -654,7 +709,11 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 15
+        const val DATABASE_VERSION = 16
+        const val HOME_WORKSPACE_ID = 1L
+        const val ARCHIVE_WORKSPACE_ID = 2L
+        const val HOME_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000001"
+        const val ARCHIVE_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000002"
     }
 
     /**

@@ -51,6 +51,7 @@ interface TextNoteRepository {
 
 class SqliteTextNoteRepository(
     private val dbHelper: FotaraDbHelper,
+    private val folderRepository: FolderRepository? = null,
     coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) : TextNoteRepository {
 
@@ -153,6 +154,7 @@ class SqliteTextNoteRepository(
         }
         val id = db.insert("text_notes", null, values)
         refreshSync()
+        folderRepository?.refresh()
         id
     }
 
@@ -214,6 +216,8 @@ class SqliteTextNoteRepository(
         val placeholders = ids.joinToString(",") { "?" }
         db.update("text_notes", values, "id IN ($placeholders)", ids.map { it.toString() }.toTypedArray())
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun deleteTextNote(id: Long) {
@@ -236,6 +240,8 @@ class SqliteTextNoteRepository(
             } catch (_: Exception) {}
         }
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun restoreTextNote(id: Long) = withContext(Dispatchers.IO) {
@@ -252,12 +258,16 @@ class SqliteTextNoteRepository(
             } catch (_: Exception) {}
         }
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun purgeTextNotePermanently(id: Long) = withContext(Dispatchers.IO) {
         val db = dbHelper.getSafeWritableDatabase()
         db.delete("text_notes", "id = ?", arrayOf(id.toString()))
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override fun getTrashedTextNotes(): Flow<List<TextNote>> = trashedTextNotesFlow.asStateFlow()

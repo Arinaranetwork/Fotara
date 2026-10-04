@@ -35,6 +35,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import com.arinara.fotara.ui.components.ScreenHeader
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
@@ -71,7 +73,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.arinara.fotara.ui.profile.BorderPickerDialog
 import com.arinara.fotara.ui.profile.CropShape
-import com.arinara.fotara.ui.profile.ProfileAvatarView
+import com.arinara.fotara.ui.profile.ProfileAvatar
 import com.arinara.fotara.ui.profile.ProfileCropScreen
 import com.arinara.fotara.ui.profile.ProfileEditBottomSheet
 import com.arinara.fotara.ui.profile.ProfileScreen
@@ -181,16 +183,16 @@ fun SettingsScreen(
                 @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(context.packageName, 0)
             }
-            val vName = pInfo?.versionName ?: "1.5.7 Beta"
+            val vName = pInfo?.versionName ?: "1.6.0"
             val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                pInfo?.longVersionCode ?: 21L
+                pInfo?.longVersionCode ?: 26L
             } else {
                 @Suppress("DEPRECATION")
-                (pInfo?.versionCode ?: 21).toLong()
+                (pInfo?.versionCode ?: 26).toLong()
             }
             Pair(vName, vCode)
         } catch (_: Exception) {
-            Pair("1.5.7 Beta", 21L)
+            Pair("1.6.0", 26L)
         }
     }
 
@@ -421,47 +423,20 @@ fun SettingsScreen(
                             )
                     )
 
-                    // Top Row: Back Arrow + "Settings" Title
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    // Top Row: Unified "Settings" Title (Back arrow removed on root Settings tab)
+                    ScreenHeader(
+                        title = "Settings",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(WindowInsets.statusBars.asPaddingValues())
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    ) {
-                        if (onBackClick != null) {
-                            IconButton(
-                                onClick = onBackClick,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(Color(0xFF131925).copy(alpha = 0.85f))
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                        }
-                        Text(
-                            text = "Settings",
-                            color = Color.White,
-                            fontSize = 38.sp,
-                            fontFamily = ElmsSans,
-                            fontWeight = FontWeight.Medium,
-                            letterSpacing = (-0.5).sp
-                        )
-                    }
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                    )
 
                     // Centered Profile Avatar + Border + Pen Button
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                     ) {
-                        ProfileAvatarView(
+                        ProfileAvatar(
                             avatarPath = uiState.userProfile.avatarPath,
                             borderId = uiState.userProfile.borderId,
                             avatarSize = 78.dp,
@@ -770,13 +745,9 @@ fun SettingsScreen(
                     }
                     SettingsSection.ABOUT -> {
                         item {
-                            val displayVersion = if (appVersionName.contains("Beta", ignoreCase = true)) {
-                                appVersionName
-                            } else {
-                                "$appVersionName Beta"
-                            }
                             SettingsAboutCard(
-                                version = "Version $displayVersion (Build $appVersionCode)"
+                                versionName = appVersionName,
+                                versionCode = appVersionCode
                             )
                         }
                         item { SettingsListDivider() }
@@ -1453,7 +1424,7 @@ private fun StoragePill(label: String, size: String, modifier: Modifier = Modifi
  * About Fotara card with app version and legal notices.
  */
 @Composable
-private fun SettingsAboutCard(version: String) {
+private fun SettingsAboutCard(versionName: String, versionCode: Long) {
     Card(
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
@@ -1484,17 +1455,25 @@ private fun SettingsAboutCard(version: String) {
             Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Fotara $versionName",
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    val isBeta = com.arinara.fotara.online.UpdateVersionUtils.isBeta(versionName)
+                    com.arinara.fotara.ui.components.ChannelPill(
+                        channel = if (isBeta) "Beta" else "Stable"
+                    )
+                }
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Fotara",
-                    color = Color.White,
-                    fontSize = 17.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = version,
+                    text = "Build $versionCode",
                     color = Color(0xFF60A5FA),
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Medium
                 )

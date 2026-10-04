@@ -12,9 +12,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -69,12 +67,22 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -89,8 +97,11 @@ import com.arinara.fotara.ui.components.NoteDetailScheduleChip
 import com.arinara.fotara.ui.components.RichMarkdownColumn
 import com.arinara.fotara.ui.components.ScheduleNoteDialog
 import com.arinara.fotara.ui.note.editor.EditorActions
+import com.arinara.fotara.ui.note.editor.EditorChangeHandler
 import com.arinara.fotara.ui.note.editor.EditorToolbar
+import com.arinara.fotara.ui.note.editor.LineToolType
 import com.arinara.fotara.ui.note.editor.MarkdownVisualTransformation
+import com.arinara.fotara.ui.note.editor.TextEditorOps
 import com.arinara.fotara.ui.note.editor.rememberEditorState
 import com.arinara.fotara.util.NoteScheduleManager
 import com.arinara.fotara.util.ScheduleAlertType
@@ -529,77 +540,75 @@ fun TextNoteEditorScreen(
                         .fillMaxWidth()
                         .weight(1f, fill = false)
                         .pointerInput(state.bodyValue.text) {
-                            awaitEachGesture {
-                                val down = awaitFirstDown(requireUnconsumed = false)
-                                val up = waitForUpOrCancellation()
-                                if (up != null && !up.isConsumed) {
-                                    val layout = textLayoutResult
-                                    if (layout != null) {
-                                        val line = layout.getLineForVerticalPosition(up.position.y)
-                                        if (line in 0 until layout.lineCount) {
-                                            val lineStart = layout.getLineStart(line)
-                                            val clickOffset = layout.getOffsetForPosition(up.position)
-                                            if (clickOffset in lineStart..(lineStart + 2)) {
-                                                val origOffset = visualTransformation.lastOffsetMapping.transformedToOriginal(lineStart)
-                                                val toggled = state.toggleChecklistAtOffset(origOffset)
-                                                if (toggled) {
-                                                    up.consume()
-                                                }
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    val layout = textLayoutResult ?: return@detectTapGestures
+                                    val line = layout.getLineForVerticalPosition(offset.y)
+                                    if (line in 0 until layout.lineCount) {
+                                        val tLineStart = layout.getLineStart(line)
+                                        val origOffset = visualTransformation.lastOffsetMapping.transformedToOriginal(tLineStart)
+                                        val doc = state.bodyValue.text
+                                        val lineStart = if (origOffset == 0) 0 else {
+                                            val p = doc.lastIndexOf('\n', origOffset - 1)
+                                            if (p == -1) 0 else p + 1
+                                        }
+                                        val lineEnd = doc.indexOf('\n', origOffset).let { if (it == -1) doc.length else it }
+                                        val lineText = doc.substring(lineStart, lineEnd)
+                                        val parsed = TextEditorOps.parseLine(0, lineStart, lineEnd, lineText)
+
+                                        if (parsed.prefixType == LineToolType.CHECKBOX) {
+                                            val tPrefixStart = visualTransformation.lastOffsetMapping.originalToTransformed(lineStart + parsed.indent.length)
+                                            val boxLeft = layout.getHorizontalPosition(tPrefixStart, true)
+                                            val hitLeft = boxLeft - 10.dp.toPx()
+                                            val hitRight = boxLeft + 38.dp.toPx()
+                                            if (offset.x in hitLeft..hitRight) {
+                                                state.toggleChecklistAtOffset(origOffset)
+                                                return@detectTapGestures
+                                            }
+                                        } else if (lineText.trim() == "---" || lineText.trim() == "***") {
+                                            // Divider: tapping selects it (visible highlight)
+                                            val selStart = if (lineEnd >= doc.length && lineStart > 0) lineStart - 1 else lineStart
+                                            val selEnd = if (lineEnd < doc.length) lineEnd + 1 else lineEnd
+                                            state.updateSelection(TextRange(selStart, selEnd))
+                                            return@detectTapGestures
+                                        }
+                                    }
+                                },
+                                onLongPress = { offset ->
+                                    val layout = textLayoutResult ?: return@detectTapGestures
+                                    val line = layout.getLineForVerticalPosition(offset.y)
+                                    if (line in 0 until layout.lineCount) {
+                                        val tLineStart = layout.getLineStart(line)
+                                        val origOffset = visualTransformation.lastOffsetMapping.transformedToOriginal(tLineStart)
+                                        val doc = state.bodyValue.text
+                                        val lineStart = if (origOffset == 0) 0 else {
+                                            val p = doc.lastIndexOf('\n', origOffset - 1)
+                                            if (p == -1) 0 else p + 1
+                                        }
+                                        val lineEnd = doc.indexOf('\n', origOffset).let { if (it == -1) doc.length else it }
+                                        val lineText = doc.substring(lineStart, lineEnd)
+                                        val parsed = TextEditorOps.parseLine(0, lineStart, lineEnd, lineText)
+
+                                        // Long press on bullet, number, or quote marker selects the whole block line
+                                        if (parsed.prefixType in listOf(LineToolType.BULLET_LIST, LineToolType.NUMBERED_LIST, LineToolType.QUOTE)) {
+                                            val tPrefixStart = visualTransformation.lastOffsetMapping.originalToTransformed(lineStart + parsed.indent.length)
+                                            val markerLeft = layout.getHorizontalPosition(tPrefixStart, true)
+                                            if (offset.x in (markerLeft - 10.dp.toPx())..(markerLeft + 36.dp.toPx())) {
+                                                val selStart = if (lineEnd >= doc.length && lineStart > 0) lineStart - 1 else lineStart
+                                                val selEnd = if (lineEnd < doc.length) lineEnd + 1 else lineEnd
+                                                state.updateSelection(TextRange(selStart, selEnd))
                                             }
                                         }
                                     }
                                 }
-                            }
+                            )
                         }
                 ) {
                     BasicTextField(
                         value = state.bodyValue,
                         onValueChange = { newBody ->
-                            val oldBody = state.bodyValue
-                            val oldText = oldBody.text
-                            val newText = newBody.text
-                            val oldSel = oldBody.selection
-                            val newSel = newBody.selection
-
-                            val newlinesAdded = newText.count { it == '\n' } - oldText.count { it == '\n' }
-
-                            if (newlinesAdded > 1) {
-                                // Multi-line paste: keep lines intact and do not trigger Enter logic
-                                state.onBodyChange(newBody)
-                                return@BasicTextField
-                            }
-
-                            val isSingleEnter = newlinesAdded == 1 && (
-                                (newText.length == oldText.length + 1 && oldSel.min in 0..oldText.length && newText.getOrNull(oldSel.min) == '\n') ||
-                                (newSel.min > 0 && newText.getOrNull(newSel.min - 1) == '\n')
-                            )
-
-                            if (isSingleEnter) {
-                                val handled = EditorActions.handleEnterKey(oldBody)
-                                if (handled != null) {
-                                    state.onBodyChange(handled)
-                                    return@BasicTextField
-                                }
-                            }
-
-                            val isBackspace = newText.length < oldText.length && oldSel.collapsed && oldSel.min > 0
-                            if (isBackspace) {
-                                val handled = EditorActions.handleBackspaceKey(oldBody)
-                                if (handled != null) {
-                                    state.onBodyChange(handled)
-                                    return@BasicTextField
-                                }
-                            }
-
-                            if (newText.length == oldText.length + 1 && newSel.collapsed && newSel.min > 0 && newText[newSel.min - 1] == ' ') {
-                                val shortcutHandled = EditorActions.handleTypingShortcut(newBody)
-                                if (shortcutHandled != null) {
-                                    state.onBodyChange(shortcutHandled)
-                                    return@BasicTextField
-                                }
-                            }
-
-                            state.onBodyChange(newBody)
+                            val processed = EditorChangeHandler.processChange(state.bodyValue, newBody)
+                            state.onBodyChange(processed)
                         },
                         onTextLayout = { textLayoutResult = it },
                         visualTransformation = visualTransformation,
@@ -614,7 +623,82 @@ fun TextNoteEditorScreen(
                             keyboardType = KeyboardType.Text,
                             imeAction = ImeAction.Default
                         ),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .drawBehind {
+                                val layout = textLayoutResult ?: return@drawBehind
+                                val doc = state.bodyValue.text
+                                val boxSize = 18.dp.toPx()
+                                val cornerRadius = CornerRadius(4.dp.toPx())
+                                val strokeWidth = 1.8.dp.toPx()
+                                val checkStroke = 2.dp.toPx()
+
+                                var searchPos = 0
+                                while (searchPos <= doc.length) {
+                                    val nextNl = doc.indexOf('\n', searchPos).let { if (it == -1) doc.length else it }
+                                    val lineText = doc.substring(searchPos, nextNl)
+                                    val parsed = TextEditorOps.parseLine(0, searchPos, nextNl, lineText)
+
+                                    if (parsed.prefixType == LineToolType.CHECKBOX) {
+                                        val tPrefixStart = visualTransformation.lastOffsetMapping.originalToTransformed(searchPos + parsed.indent.length)
+                                        if (tPrefixStart in 0..layout.layoutInput.text.length) {
+                                            val clampedOffset = tPrefixStart.coerceIn(0, (layout.layoutInput.text.length - 1).coerceAtLeast(0))
+                                            val visualLine = layout.getLineForOffset(clampedOffset)
+                                            val lineTop = layout.getLineTop(visualLine)
+                                            val lineBottom = layout.getLineBottom(visualLine)
+                                            val boxLeft = layout.getHorizontalPosition(clampedOffset, true) + 2.dp.toPx()
+                                            val boxTop = lineTop + (lineBottom - lineTop - boxSize) / 2f
+
+                                            val isChecked = parsed.prefixString.contains(Regex("""\[[xX]\]"""))
+                                            if (isChecked) {
+                                                drawRoundRect(
+                                                    color = AccentGold,
+                                                    topLeft = Offset(boxLeft, boxTop),
+                                                    size = Size(boxSize, boxSize),
+                                                    cornerRadius = cornerRadius,
+                                                    style = Fill
+                                                )
+                                                val path = Path().apply {
+                                                    moveTo(boxLeft + boxSize * 0.22f, boxTop + boxSize * 0.52f)
+                                                    lineTo(boxLeft + boxSize * 0.42f, boxTop + boxSize * 0.72f)
+                                                    lineTo(boxLeft + boxSize * 0.78f, boxTop + boxSize * 0.28f)
+                                                }
+                                                drawPath(
+                                                    path = path,
+                                                    color = ScreenNavy,
+                                                    style = Stroke(width = checkStroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                                                )
+                                            } else {
+                                                drawRoundRect(
+                                                    color = AccentGold,
+                                                    topLeft = Offset(boxLeft, boxTop),
+                                                    size = Size(boxSize, boxSize),
+                                                    cornerRadius = cornerRadius,
+                                                    style = Stroke(width = strokeWidth)
+                                                )
+                                            }
+                                        }
+                                    } else if (parsed.prefixType == LineToolType.QUOTE) {
+                                        val tPrefixStart = visualTransformation.lastOffsetMapping.originalToTransformed(searchPos + parsed.indent.length)
+                                        if (tPrefixStart in 0..layout.layoutInput.text.length) {
+                                            val clampedOffset = tPrefixStart.coerceIn(0, (layout.layoutInput.text.length - 1).coerceAtLeast(0))
+                                            val visualLine = layout.getLineForOffset(clampedOffset)
+                                            val lineTop = layout.getLineTop(visualLine)
+                                            val lineBottom = layout.getLineBottom(visualLine)
+                                            val barLeft = layout.getHorizontalPosition(clampedOffset, true)
+                                            drawLine(
+                                                color = AccentGold,
+                                                start = Offset(barLeft + 2.dp.toPx(), lineTop + 2.dp.toPx()),
+                                                end = Offset(barLeft + 2.dp.toPx(), lineBottom - 2.dp.toPx()),
+                                                strokeWidth = 3.dp.toPx()
+                                            )
+                                        }
+                                    }
+
+                                    if (nextNl >= doc.length) break
+                                    searchPos = nextNl + 1
+                                }
+                            },
                         decorationBox = { innerTextField ->
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 if (state.bodyValue.text.isEmpty()) {

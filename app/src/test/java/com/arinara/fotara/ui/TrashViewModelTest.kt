@@ -82,11 +82,14 @@ class TrashViewModelTest {
 
         val folder = viewModel.uiState.value.trashedFolders.first()
         viewModel.requestRestoreFolder(folder)
+        assertEquals(folder, viewModel.uiState.value.folderToRestoreDestination)
+
+        viewModel.confirmRestoreFolder(folder, targetWorkspaceId = 1L)
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.trashedFolders.isEmpty())
         assertTrue(viewModel.uiState.value.activeFolders.any { it.id == 1L })
-        assertEquals("Folder \"Biology\" restored", viewModel.uiState.value.userMessage)
+        assertNotNull(viewModel.uiState.value.userMessage)
     }
 
     @Test

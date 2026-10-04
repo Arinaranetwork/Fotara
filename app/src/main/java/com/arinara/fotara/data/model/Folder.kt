@@ -19,7 +19,9 @@ data class Folder(
     val deletedAt: Long? = null,
     val isLocked: Boolean = false,
     val lockPin: String? = null,
-    val linkGroupId: Long? = null
+    val linkGroupId: Long? = null,
+    val workspaceId: Long = 1L
 ) {
     val tagColor: TagColor get() = TagColor.fromHex(colorLabel)
+    val itemCount: Int get() = photoCount
 }

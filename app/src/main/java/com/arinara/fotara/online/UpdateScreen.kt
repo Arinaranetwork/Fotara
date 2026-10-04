@@ -94,9 +94,9 @@ fun UpdateScreen(
     val currentVersion = remember(context) {
         try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.5.10 Beta"
+            pInfo.versionName ?: "1.6.0"
         } catch (_: Exception) {
-            "1.5.10 Beta"
+            "1.6.0"
         }
     }
 
@@ -295,11 +295,20 @@ fun UpdateScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Current Version: v$currentVersion Beta",
-                                color = TabCream.copy(alpha = 0.8f),
-                                fontSize = 14.sp
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "Current: $currentVersion",
+                                    color = TabCream.copy(alpha = 0.8f),
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                com.arinara.fotara.ui.components.ChannelPill(
+                                    channel = if (UpdateVersionUtils.isBeta(currentVersion)) "Beta" else "Stable"
+                                )
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "You have the latest features and security updates installed.",
@@ -375,49 +384,14 @@ fun UpdateScreen(
                     // Update Available State
                     val rel = release
 
-                    // Banner Card
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp)),
-                        colors = CardDefaults.cardColors(containerColor = CardBg),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, CardOutline)
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            val bannerModel = rel?.bannerUrl?.takeIf { it.isNotBlank() }
-                                ?: com.arinara.fotara.R.drawable.fotara_banner_1_5
-                            AsyncImage(
-                                model = bannerModel,
-                                contentDescription = "Release Banner",
-                                contentScale = ContentScale.FillWidth,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(140.dp)
-                                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                            )
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = rel?.title ?: "New Version Available",
-                                    color = TabCream,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "${rel?.version ?: ""} · Current: v$currentVersion",
-                                    color = TabCream.copy(alpha = 0.7f),
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-                    }
+                    // Banner Card: built-in UpdateBanner with gradient styling, version, release link, and channel pill
+                    com.arinara.fotara.ui.components.UpdateBanner(
+                        version = rel?.version ?: "1.6.0",
+                        releaseUrl = rel?.htmlUrl,
+                        channel = if (UpdateVersionUtils.isBeta(rel?.version ?: "", rel?.isPrerelease == true)) "Beta" else "Stable",
+                        onClose = null,
+                        shape = RoundedCornerShape(16.dp)
+                    )
 
                     Spacer(modifier = Modifier.height(20.dp))
 

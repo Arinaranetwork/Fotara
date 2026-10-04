@@ -6,9 +6,8 @@
     <string name="widget_all_caught_up">All caught up with coursework</string>
     <string name="tagline">Your notes, organized</string>
     <string name="home_tagline">Your notes, organized</string>
-    <string name="tab_all">All</string>
-    <string name="tab_favorit">Favorit</string>
-    <string name="tab_arsip">Arsip</string>
+    <string name="workspace_home">Home</string>
+    <string name="workspace_archive">Archive</string>
     <string name="nav_home">Home</string>
     <string name="nav_notes">Notes</string>
     <string name="nav_settings">Settings</string>
@@ -17,7 +16,6 @@
 
     <!-- Notes Screen -->
     <string name="notes_title">Notes</string>
-    <string name="notes_subtitle">Your activity, all in one place</string>
     <string name="filter_all">All</string>
     <string name="filter_photos">Photos</string>
     <string name="filter_documents">Documents</string>
@@ -185,4 +183,64 @@
     <string name="profile_border_picker_title">Choose Profile Border</string>
     <string name="profile_save_failed">Failed to save profile changes</string>
     <string name="profile_load_failed">Failed to load selected image</string>
+
+    <!-- Workspaces (Phase 27 - Batch 2A) -->
+    <string name="menu_add_workspace">Add workspace</string>
+    <string name="dialog_add_workspace_title">Add workspace</string>
+    <string name="dialog_rename_workspace_title">Rename workspace</string>
+    <string name="action_rename_workspace">Rename</string>
+    <string name="action_create">Create</string>
+    <string name="action_save">Save</string>
+    <string name="workspace_name_label">Workspace name</string>
+    <string name="workspace_empty_state_title">No folders in %1$s yet</string>
+    <string name="workspace_empty_state_hint">Tap + to create one</string>
+    <string name="workspace_limit_reached">You can have up to 10 workspaces.</string>
+    <string name="workspace_error_name_empty">Workspace name cannot be empty</string>
+    <string name="workspace_error_name_length">Name must be between 1 and 20 characters</string>
+    <string name="workspace_error_name_duplicate">A workspace with this name already exists</string>
+    <string name="workspace_error_reserved">Name is reserved for built-in workspaces</string>
+    <string name="cd_add_workspace">Add workspace</string>
+    <string name="cd_workspace_tab">%1$s workspace tab</string>
+    <string name="cd_workspace_options">Workspace options</string>
+
+    <!-- Workspaces Part 2 (Phase 28 - Batch 2B) -->
+    <string name="folder_menu_move_to_workspace">Move to workspace</string>
+    <string name="dialog_move_to_workspace_title_single">Move %1$s</string>
+    <string name="dialog_move_to_workspace_title_plural">Move %1$d folders</string>
+    <string name="action_move_confirm">Move</string>
+    <string name="workspace_current_badge">(Current)</string>
+    <string name="msg_moved_to_workspace_single">Moved to %1$s</string>
+    <string name="msg_moved_to_workspace_plural">Moved %1$d folders to %1$s</string>
+
+    <string name="action_delete_workspace">Delete</string>
+    <string name="delete_workspace_confirm_title">Delete %1$s?</string>
+    <string name="delete_workspace_empty_msg">This workspace is empty.</string>
+    <string name="delete_workspace_checkbox_contents">Also delete everything inside</string>
+    <string name="delete_workspace_helper_unchecked">Folders will move to Home.</string>
+    <string name="delete_workspace_helper_checked">You will choose what happens to them next.</string>
+    <string name="delete_workspace_contents_title">What should happen to the contents?</string>
+    <string name="delete_workspace_choice_trash">Move to Trash</string>
+    <string name="delete_workspace_choice_trash_sub">Recoverable for 30 days</string>
+    <string name="delete_workspace_choice_perm">Delete permanently</string>
+    <string name="delete_workspace_choice_perm_sub">Cannot be undone. Frees %1$s.</string>
+    <string name="delete_workspace_perm_title">Delete permanently?</string>
+    <string name="delete_workspace_perm_body">%1$s will be erased for good.</string>
+    <string name="delete_workspace_perm_confirm_btn">Delete forever</string>
+    <string name="deleting_workspace_progress_title">Deleting %1$s...</string>
+    <string name="deleting_workspace_folder_progress">Folder %1$d of %2$d (%3$d%%)</string>
+    <string name="msg_workspace_deleted_folders_moved_home">Workspace deleted. Folders moved to Home.</string>
+    <string name="msg_workspace_deleted_empty">Workspace deleted.</string>
+    <string name="msg_workspace_deleted_trashed">Workspace deleted. %1$d folders moved to Trash.</string>
+    <string name="msg_workspace_deleted_permanent">Workspace deleted permanently.</string>
+    <string name="msg_workspace_delete_partial_failure">Could not finish deleting. %1$d folders remain.</string>
+
+    <string name="dialog_restore_workspace_title">Restore to which workspace?</string>
+    <string name="action_restore_confirm">Restore</string>
+    <string name="msg_restored_to_workspace">Restored to %1$s</string>
+
+    <string name="search_no_results_in_workspace">No results in %1$s</string>
+    <string name="cd_show_filters">Show filters</string>
+    <string name="cd_hide_filters">Hide filters</string>
+    <string name="workspace_notes_empty_state">No notes in %1$s yet</string>
+    <string name="cd_edit_profile">Edit profile picture</string>
 </resources>

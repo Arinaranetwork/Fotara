@@ -69,7 +69,7 @@ fun EditorToolbar(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(start = 8.dp, end = 24.dp, top = 4.dp, bottom = 4.dp),
+                .padding(start = 8.dp, end = 64.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Group 1: Undo & Redo
@@ -166,11 +166,13 @@ fun EditorToolbar(
             ToolbarActionItem(
                 icon = Icons.AutoMirrored.Filled.FormatIndentIncrease,
                 description = "Indent",
+                enabled = state.canIndent,
                 onClick = { state.executeAction { EditorActions.indent(it) } }
             )
             ToolbarActionItem(
                 icon = Icons.AutoMirrored.Filled.FormatIndentDecrease,
                 description = "Outdent",
+                enabled = state.canOutdent,
                 onClick = { state.executeAction { EditorActions.outdent(it) } }
             )
 
@@ -205,6 +207,7 @@ fun EditorToolbar(
             ToolbarActionItem(
                 icon = Icons.Default.FormatClear,
                 description = "Clear Formatting",
+                enabled = state.bodyValue.text.isNotEmpty(),
                 onClick = { state.executeAction { EditorActions.clearFormatting(it) } }
             )
             ToolbarActionItem(

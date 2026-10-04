@@ -2,7 +2,7 @@
 Last Updated: 2026-10-04
 
 ## Current Phase
-Phase 25 - ProfilePngSupportAndUpdateModalPolish [Completed]
+Phase 30 - PdfOcrAndRelease160 [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -32,14 +32,29 @@ Phase 25 - ProfilePngSupportAndUpdateModalPolish [Completed]
 | 23    | SettingsAndSearchRedesign         | Completed   |
 | 24    | LinkItClustersAndProfileFixes     | Completed   |
 | 25    | ProfilePngSupportAndUpdateModalPolish | Completed   |
+| 26    | TextNoteEditorRepair              | Completed   |
+| 27    | WorkspaceFoundation               | Completed   |
+| 28    | WorkspacesPart2                   | Completed   |
+| 29    | UIUXConsistency                   | Completed   |
+| 30    | PdfOcrAndRelease160               | Completed   |
 
 ## Completed
-- [x] Task 1: Real PNG format preservation and alpha channel support in ProfileImageUtils and SettingsRepository - Phase 25
-- [x] Task 2: Picker URI staging to local cache file for robust multi-read and seekable BitmapRegionDecoder access - Phase 25
-- [x] Task 3: Overhaul NewUpdateDialog with expanded height and Rich Markdown rendering for headings and formatted text - Phase 25
-- [x] Task 4: In-memory normalized direct crop in ProfileCropScreen and safe openStream across file/content URIs (Fotara 1.5.10 Beta) - Phase 25
-- [x] Task 5: Update WhatsNewScreen and version fallbacks for 1.5.10 Beta - Phase 25
-- [x] Task 6: Resilient multi-tier image decoder (ImageDecoder API 28+, memory-mapped file decoding, one-pass byte buffer decoding) and async photo picking for 1.5.11 Beta - Phase 25
+- [x] Task 0: Verify earlier batches (Batches 2A, 2B, 3, 4B) with file evidence - Phase 30
+- [x] Task 1: PDF content OCR for search (reliable page OCR, NULL vs empty string, throttled backfill, incremental FTS, zero UI display) - Phase 30
+- [x] Task 2: Built-in update banner with channel pills (UpdateBanner, ChannelPill, UpdateVersionUtils Stable vs Beta) - Phase 30
+- [x] Task 3: What's New screen and release information (1.6.0 Stable highlights, breaking changes, shared pill) - Phase 30
+- [x] Task 4: Final release build 1.6.0 Stable (versionName 1.6.0, versionCode 26, tests, release APK, changelog) - Phase 30
+- [x] Task 0: Batch 2A and 2B verification reporting - Phase 29
+- [x] Task 1: One shared screen header (Home, Notes, Settings) with ScreenHeader and ScreenHeaderDefaults - Phase 29
+- [x] Task 2: Menu cleanup (remove Settings from Home & Notes menus), Settings back button removal, FolderCard three-dot position, note cards inside folders audit - Phase 29
+- [x] Task 3: Notes screen no tagline, filters hidden by default with on-demand toggle - Phase 29
+- [x] Task 4: Workspace tabs on Notes screen with shared state from WorkspaceRepository - Phase 29
+- [x] Task 4B: Profile borders one consistent fit (alpha measurement, ProfileBorder table, ProfileAvatar component, layout bounds, unit tests) - Phase 29
+- [x] Task 5: Final validation and documentation - Phase 29
+
+## In Progress
+
+## Pending
 
 
 

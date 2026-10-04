@@ -50,7 +50,9 @@ data class ReleaseInfo(
     val title: String,
     val releaseNotes: String,
     val downloadUrl: String?,
-    val bannerUrl: String? = null
+    val bannerUrl: String? = null,
+    val htmlUrl: String? = null,
+    val isPrerelease: Boolean = false
 )
 
 class UpdateManager(private val context: Context) {
@@ -129,9 +131,9 @@ class UpdateManager(private val context: Context) {
     fun getCurrentVersionName(): String {
         return try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.5.10 Beta"
+            pInfo.versionName ?: "1.6.0"
         } catch (_: Exception) {
-            "1.5.10 Beta"
+            "1.6.0"
         }
     }
 
@@ -188,6 +190,8 @@ class UpdateManager(private val context: Context) {
                     val tagName = json.optString("tag_name", "")
                     val title = json.optString("name", "Fotara Update")
                     val body = json.optString("body", "Bug fixes and performance improvements.")
+                    val htmlUrl = if (json.has("html_url") && !json.isNull("html_url")) json.optString("html_url") else null
+                    val isPrerelease = json.optBoolean("prerelease", false)
 
                     var downloadUrl: String? = null
                     var bannerUrl: String? = null
@@ -210,9 +214,11 @@ class UpdateManager(private val context: Context) {
                             title = title,
                             releaseNotes = body,
                             downloadUrl = downloadUrl,
-                            bannerUrl = bannerUrl
+                            bannerUrl = bannerUrl,
+                            htmlUrl = htmlUrl,
+                            isPrerelease = isPrerelease
                         )
-                        if (newestRelease == null || isNewerVersion(candidate.version, newestRelease.version)) {
+                        if (newestRelease == null || isNewerVersion(candidate.version, newestRelease.version, candidate.isPrerelease, newestRelease.isPrerelease)) {
                             newestRelease = candidate
                         }
                     }
@@ -225,15 +231,11 @@ class UpdateManager(private val context: Context) {
                 }
 
                 // Check version comparison dynamically against installed app version
-                val currentVersion = try {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.5.10 Beta"
-                } catch (_: Exception) {
-                    "1.5.10 Beta"
-                }
+                val currentVersion = getCurrentVersionName()
 
                 val previousRelease = _latestRelease.value
-                val isNewerThanApp = isNewerVersion(newestRelease.version, currentVersion)
-                val isSkippedToNewer = previousRelease != null && isNewerVersion(newestRelease.version, previousRelease.version)
+                val isNewerThanApp = isNewerVersion(newestRelease.version, currentVersion, newestRelease.isPrerelease)
+                val isSkippedToNewer = previousRelease != null && isNewerVersion(newestRelease.version, previousRelease.version, newestRelease.isPrerelease, previousRelease.isPrerelease)
 
                 if (isNewerThanApp) {
                     // If moving to a newer release than previously cached/displayed, clear old APK file
@@ -288,8 +290,13 @@ class UpdateManager(private val context: Context) {
         }
     }
 
-    fun isNewerVersion(remoteTag: String, currentTag: String): Boolean =
-        UpdateVersionUtils.isNewerVersion(remoteTag, currentTag)
+    fun isNewerVersion(
+        remoteTag: String,
+        currentTag: String,
+        remoteIsPrerelease: Boolean = false,
+        currentIsPrerelease: Boolean = false
+    ): Boolean =
+        UpdateVersionUtils.isNewerVersion(remoteTag, currentTag, remoteIsPrerelease, currentIsPrerelease)
 
     private fun openConnectionWithRedirects(initialUrl: String, maxRedirects: Int = 5): HttpURLConnection {
         var currentUrl = initialUrl

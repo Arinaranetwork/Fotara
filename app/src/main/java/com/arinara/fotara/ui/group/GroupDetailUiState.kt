@@ -12,6 +12,8 @@ import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.model.Subfolder
 
+import com.arinara.fotara.data.model.Workspace
+
 data class GroupDetailUiState(
     val group: PhotoGroup? = null,
     val folder: Folder? = null,
@@ -19,6 +21,7 @@ data class GroupDetailUiState(
     val availableFolderPhotos: List<Photo> = emptyList(),
     val subfolders: List<Subfolder> = emptyList(),
     val availableFolders: List<Folder> = emptyList(),
+    val workspaces: List<Workspace> = emptyList(),
     val recentDestinations: List<RecentDestination> = emptyList(),
     val gridDensity: Int = 3,
     val highlightedPhotoId: Long? = null,

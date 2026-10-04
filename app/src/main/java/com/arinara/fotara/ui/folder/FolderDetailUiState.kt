@@ -132,6 +132,7 @@ data class FolderDetailUiState(
     val isSubfolderMultiSelectMode: Boolean = false,
     val selectedSubfolderIds: Set<Long> = emptySet(),
     val availableFolders: List<Folder> = emptyList(),
+    val workspaces: List<com.arinara.fotara.data.model.Workspace> = emptyList(),
     val availableGroups: List<PhotoGroup> = emptyList(),
     val recentDestinations: List<RecentDestination> = emptyList(),
     val gridDensity: Int = 3,

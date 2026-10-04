@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -77,6 +78,13 @@ import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.HomeCardBorder
 import com.arinara.fotara.theme.HomeCardSurface
 
+object FolderCardDefaults {
+    val CardCornerRadius = 24.dp
+    val ThreeDotButtonSize = 44.dp
+    val ThreeDotIconSize = 20.dp
+    val VisualCenterOffset = 22.dp
+}
+
 /**
  * Modern 1:1 dark folder card matching IMAGE A.
  * Features a top-left rounded accent tile, top-right options menu,
@@ -97,6 +105,7 @@ fun FolderCard(
     onPinClick: () -> Unit = {},
     onRenameClick: () -> Unit = {},
     onSelectClick: () -> Unit = {},
+    onMoveToWorkspaceClick: () -> Unit = {},
     onLockClick: () -> Unit = {},
     onUnlinkClick: () -> Unit = {},
     onDeleteClick: () -> Unit = {},
@@ -196,181 +205,8 @@ fun FolderCard(
                     )
                 }
 
-                // 3-dots overflow button with anchored dropdown menu
-                var isMenuExpanded by remember { mutableStateOf(false) }
-
-                Box {
-                    IconButton(
-                        onClick = {
-                            onMenuClick()
-                            isMenuExpanded = true
-                        },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Folder options",
-                            tint = Color(0xFF94A3B8),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = isMenuExpanded,
-                        onDismissRequest = { isMenuExpanded = false },
-                        modifier = Modifier
-                            .background(HomeCardSurface)
-                            .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
-                    ) {
-                        // 1. Pin to Top
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = if (folder.isPinned) stringResource(R.string.folder_menu_unpin) else stringResource(R.string.folder_menu_pin),
-                                    color = Color.White,
-                                    fontFamily = ElmsSans,
-                                    fontSize = 15.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.PushPin,
-                                    contentDescription = null,
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            onClick = {
-                                isMenuExpanded = false
-                                onPinClick()
-                            }
-                        )
-
-                        // 2. Rename Folder
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.folder_menu_rename),
-                                    color = Color.White,
-                                    fontFamily = ElmsSans,
-                                    fontSize = 15.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = null,
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            onClick = {
-                                isMenuExpanded = false
-                                onRenameClick()
-                            }
-                        )
-
-                        // 3. Select
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.folder_menu_select),
-                                    color = Color.White,
-                                    fontFamily = ElmsSans,
-                                    fontSize = 15.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.CropFree,
-                                    contentDescription = null,
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            onClick = {
-                                isMenuExpanded = false
-                                onSelectClick()
-                            }
-                        )
-
-                        HorizontalDivider(color = HomeCardBorder)
-
-                        // 4. Lock Folder (PIN)
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = if (folder.isLocked) stringResource(R.string.folder_menu_unlock) else stringResource(R.string.folder_menu_lock),
-                                    color = Color.White,
-                                    fontFamily = ElmsSans,
-                                    fontSize = 15.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = if (folder.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            onClick = {
-                                isMenuExpanded = false
-                                onLockClick()
-                            }
-                        )
-
-                        // 5. Unlink Folder (only if linked)
-                        if (folder.linkGroupId != null) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = stringResource(R.string.folder_menu_unlink),
-                                        color = TagCrimson,
-                                        fontFamily = ElmsSans,
-                                        fontSize = 15.sp
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.LinkOff,
-                                        contentDescription = null,
-                                        tint = TagCrimson,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                },
-                                onClick = {
-                                    isMenuExpanded = false
-                                    onUnlinkClick()
-                                }
-                            )
-                        }
-
-                        // 6. Move to Trash
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.folder_menu_trash),
-                                    color = TagCrimson,
-                                    fontFamily = ElmsSans,
-                                    fontSize = 15.sp
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = null,
-                                    tint = TagCrimson,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            onClick = {
-                                isMenuExpanded = false
-                                onDeleteClick()
-                            }
-                        )
-                    }
-                }
+                // Space reserved for the top-right corner 3-dots button
+                Spacer(modifier = Modifier.size(FolderCardDefaults.ThreeDotButtonSize))
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -448,6 +284,208 @@ fun FolderCard(
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.Light,
                     fontFamily = ElmsSans
+                )
+            }
+        }
+
+        // 3-dots overflow button with anchored dropdown menu, moved toward top-right corner (~20dp visual center, >=44dp touch target)
+        var isMenuExpanded by remember { mutableStateOf(false) }
+
+        Box(
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            IconButton(
+                onClick = {
+                    onMenuClick()
+                    isMenuExpanded = true
+                },
+                modifier = Modifier.size(FolderCardDefaults.ThreeDotButtonSize)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "Folder options",
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(FolderCardDefaults.ThreeDotIconSize)
+                )
+            }
+
+            DropdownMenu(
+                expanded = isMenuExpanded,
+                onDismissRequest = { isMenuExpanded = false },
+                modifier = Modifier
+                    .background(HomeCardSurface)
+                    .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+            ) {
+                // 1. Pin to Top
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = if (folder.isPinned) stringResource(R.string.folder_menu_unpin) else stringResource(R.string.folder_menu_pin),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontSize = 15.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    onClick = {
+                        isMenuExpanded = false
+                        onPinClick()
+                    }
+                )
+
+                // 2. Rename Folder
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(R.string.folder_menu_rename),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontSize = 15.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    onClick = {
+                        isMenuExpanded = false
+                        onRenameClick()
+                    }
+                )
+
+                // 3. Select
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(R.string.folder_menu_select),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontSize = 15.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.CropFree,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    onClick = {
+                        isMenuExpanded = false
+                        onSelectClick()
+                    }
+                )
+
+                // 3b. Move to workspace
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(R.string.folder_menu_move_to_workspace),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontSize = 15.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    onClick = {
+                        isMenuExpanded = false
+                        onMoveToWorkspaceClick()
+                    }
+                )
+
+                HorizontalDivider(color = HomeCardBorder)
+
+                // 4. Lock Folder (PIN)
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = if (folder.isLocked) stringResource(R.string.folder_menu_unlock) else stringResource(R.string.folder_menu_lock),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontSize = 15.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (folder.isLocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    onClick = {
+                        isMenuExpanded = false
+                        onLockClick()
+                    }
+                )
+
+                // 5. Unlink Folder (only if linked)
+                if (folder.linkGroupId != null) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.folder_menu_unlink),
+                                color = TagCrimson,
+                                fontFamily = ElmsSans,
+                                fontSize = 15.sp
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.LinkOff,
+                                contentDescription = null,
+                                tint = TagCrimson,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        onClick = {
+                            isMenuExpanded = false
+                            onUnlinkClick()
+                        }
+                    )
+                }
+
+                // 6. Move to Trash
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(R.string.folder_menu_trash),
+                            color = TagCrimson,
+                            fontFamily = ElmsSans,
+                            fontSize = 15.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = TagCrimson,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    onClick = {
+                        isMenuExpanded = false
+                        onDeleteClick()
+                    }
                 )
             }
         }

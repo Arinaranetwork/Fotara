@@ -25,6 +25,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -212,7 +215,8 @@ fun RichMarkdownText(
     codeBackground: Color = Color(0xFF1E254A),
     codeColor: Color = Color(0xFFE2E8F0),
     accentColor: Color = Color(0xFFF77F00),
-    linkColor: Color = Color(0xFF64B5F6)
+    linkColor: Color = Color(0xFF64B5F6),
+    textDecoration: TextDecoration? = null
 ) {
     val annotated = remember(text, codeBackground, codeColor, accentColor, linkColor) {
         buildRichMarkdownAnnotatedString(
@@ -233,7 +237,8 @@ fun RichMarkdownText(
         fontWeight = fontWeight,
         lineHeight = lineHeight,
         maxLines = maxLines,
-        overflow = overflow
+        overflow = overflow,
+        textDecoration = textDecoration
     )
 }
 
@@ -406,64 +411,54 @@ fun RichMarkdownColumn(
                     )
                 }
 
-                // Checklist items (- [ ] or - [x])
-                trimmed.startsWith("- [ ] ") || trimmed.startsWith("* [ ] ") -> {
-                    val itemContent = trimmed.substring(6).trim()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable(enabled = onToggleChecklistLine != null) {
-                                onToggleChecklistLine?.invoke(lineIndex)
-                            }
-                            .padding(vertical = 3.dp, horizontal = 2.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Text(
-                            text = "☐",
-                            color = primaryTextColor.copy(alpha = 0.7f),
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(top = 1.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        RichMarkdownText(
-                            text = itemContent,
-                            color = primaryTextColor.copy(alpha = 0.92f),
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp,
-                            accentColor = accentColor
-                        )
-                    }
-                }
+                // Checklist items (- [ ] or - [x] with optional indentation)
+                Regex("""^(\s*[-*+]\s*)\[([ xX])\]\s*(.*)$""").containsMatchIn(rawLine) -> {
+                    val chkMatch = Regex("""^(\s*[-*+]\s*)\[([ xX])\]\s*(.*)$""").find(rawLine)!!
+                    val isChecked = chkMatch.groupValues[2].equals("x", ignoreCase = true)
+                    val itemContent = chkMatch.groupValues[3]
+                    val leadingSpaces = rawLine.takeWhile { it == ' ' }.length
+                    val indentLevel = (leadingSpaces / 2).coerceIn(0, 3)
 
-                trimmed.startsWith("- [x] ") || trimmed.startsWith("- [X] ") ||
-                trimmed.startsWith("* [x] ") || trimmed.startsWith("* [X] ") -> {
-                    val itemContent = trimmed.substring(6).trim()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(start = (indentLevel * 24).dp)
                             .clip(RoundedCornerShape(6.dp))
                             .clickable(enabled = onToggleChecklistLine != null) {
                                 onToggleChecklistLine?.invoke(lineIndex)
                             }
-                            .padding(vertical = 3.dp, horizontal = 2.dp),
+                            .padding(vertical = 4.dp, horizontal = 2.dp),
                         verticalAlignment = Alignment.Top
                     ) {
-                        Text(
-                            text = "☑",
-                            color = accentColor,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(top = 1.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .size(18.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (isChecked) accentColor else Color.Transparent)
+                                .border(
+                                    BorderStroke(1.8.dp, accentColor),
+                                    RoundedCornerShape(4.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isChecked) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Checked",
+                                    tint = Color(0xFF03071E),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
                         RichMarkdownText(
                             text = itemContent,
-                            color = primaryTextColor.copy(alpha = 0.5f),
-                            fontSize = 13.sp,
+                            color = if (isChecked) primaryTextColor.copy(alpha = 0.5f) else primaryTextColor.copy(alpha = 0.92f),
+                            fontSize = 13.5.sp,
                             lineHeight = 19.sp,
-                            accentColor = accentColor
+                            accentColor = accentColor,
+                            textDecoration = if (isChecked) TextDecoration.LineThrough else null
                         )
                     }
                 }

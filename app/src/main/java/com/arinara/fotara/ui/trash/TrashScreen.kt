@@ -70,6 +70,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
+import com.arinara.fotara.ui.home.workspace.RestoreWorkspaceDestinationDialog
+import com.arinara.fotara.ui.components.WorkspaceFolderPickerColumn
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.MidnightCardOutline
@@ -455,7 +457,10 @@ fun TrashScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        uiState.activeFolders.forEach { f ->
+                        WorkspaceFolderPickerColumn(
+                            folders = uiState.activeFolders,
+                            workspaces = uiState.workspaces
+                        ) { f ->
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (selectedFolderIdForOrphan == f.id) FolderBodyBlue else MidnightNavy,
@@ -490,7 +495,7 @@ fun TrashScreen(
                 } else {
                     Button(
                         onClick = {
-                            viewModel.confirmRestoreBoth(photo, photo.folderId)
+                            viewModel.requestRestoreBoth(photo, photo.folderId)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = FolderBodyBlue)
                     ) {
@@ -508,6 +513,29 @@ fun TrashScreen(
                         Text("Cancel", color = TextSecondary)
                     }
                 }
+            }
+        )
+    }
+
+    uiState.folderToRestoreDestination?.let { folder ->
+        RestoreWorkspaceDestinationDialog(
+            workspaces = uiState.workspaces,
+            initialWorkspaceId = folder.workspaceId,
+            onDismiss = { viewModel.dismissRestoreFolderDestinationDialog() },
+            onConfirmRestore = { targetWsId ->
+                viewModel.confirmRestoreFolder(folder, targetWsId)
+            }
+        )
+    }
+
+    uiState.orphanToRestoreDestination?.let { (photo, parentFolderId) ->
+        val initialWsId = uiState.parentFolderForOrphan?.workspaceId ?: 1L
+        RestoreWorkspaceDestinationDialog(
+            workspaces = uiState.workspaces,
+            initialWorkspaceId = initialWsId,
+            onDismiss = { viewModel.dismissOrphanRestoreDestinationDialog() },
+            onConfirmRestore = { targetWsId ->
+                viewModel.confirmRestoreBoth(photo, parentFolderId, targetWsId)
             }
         )
     }

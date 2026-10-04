@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,11 +60,13 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import com.arinara.fotara.data.model.Workspace
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -172,6 +175,9 @@ fun ActiveSearchBar(
     onTextNoteClick: (TextNote) -> Unit = {},
     onDocumentClick: (DocumentNote) -> Unit = {},
     onCanvasClick: (CanvasNote) -> Unit = {},
+    workspaces: List<Workspace> = emptyList(),
+    selectedWorkspaceScopeId: Long? = null,
+    onSelectWorkspaceScope: (Long?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -872,31 +878,64 @@ fun ActiveSearchBar(
                     .height(2.5.dp)
             )
 
-            // 5. Scope Tabs Row (Hidden when scopes.size <= 1)
-            val scopes = SearchScreenLogic.defaultScopes
-            if (SearchScreenLogic.shouldShowScopeRow(scopes)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // 5. Scope Tabs Row (Always visible segmented container with All + workspaces in saved order)
+            val sortedWorkspaces = remember(workspaces) { workspaces.sortedBy { it.position } }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val isAllSelected = selectedWorkspaceScopeId == null
+                Surface(
+                    color = if (isAllSelected) HomeMainButtonBlue else HomeSearchBarSurface,
+                    shape = RoundedCornerShape(12.dp),
+                    border = if (isAllSelected) null else BorderStroke(1.dp, HomeSearchBarBorder),
+                    modifier = Modifier.clickable { onSelectWorkspaceScope(null) }
                 ) {
-                    scopes.forEach { scopeItem ->
-                        Surface(
-                            color = HomeSearchBarSurface,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, HomeSearchBarBorder)
-                        ) {
-                            Text(
-                                text = stringResource(scopeItem.labelResId),
-                                style = TextStyle(
-                                    fontFamily = ElmsSans,
-                                    fontSize = 13.sp,
-                                    color = TextPrimary
-                                ),
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.GridView,
+                            contentDescription = null,
+                            tint = if (isAllSelected) Color.White else TextSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.search_scope_all),
+                            style = TextStyle(
+                                fontFamily = ElmsSans,
+                                fontSize = 13.sp,
+                                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isAllSelected) Color.White else TextPrimary
                             )
-                        }
+                        )
+                    }
+                }
+
+                sortedWorkspaces.forEach { ws ->
+                    val isWsSelected = selectedWorkspaceScopeId == ws.id
+                    Surface(
+                        color = if (isWsSelected) HomeMainButtonBlue else HomeSearchBarSurface,
+                        shape = RoundedCornerShape(12.dp),
+                        border = if (isWsSelected) null else BorderStroke(1.dp, HomeSearchBarBorder),
+                        modifier = Modifier.clickable { onSelectWorkspaceScope(ws.id) }
+                    ) {
+                        Text(
+                            text = ws.name,
+                            style = TextStyle(
+                                fontFamily = ElmsSans,
+                                fontSize = 13.sp,
+                                fontWeight = if (isWsSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isWsSelected) Color.White else TextPrimary
+                            ),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
                     }
                 }
             }
@@ -1089,7 +1128,10 @@ fun ActiveSearchBar(
                         modifier = Modifier.size(48.dp)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    val emptyTitle = if (query.isNotBlank()) {
+                    val emptyTitle = if (selectedWorkspaceScopeId != null) {
+                        val wsName = workspaces.firstOrNull { it.id == selectedWorkspaceScopeId }?.name ?: ""
+                        stringResource(R.string.search_no_results_in_workspace, wsName)
+                    } else if (query.isNotBlank()) {
                         stringResource(R.string.search_empty_matching_query, query)
                     } else {
                         stringResource(R.string.search_empty_matching_filters)
@@ -1405,8 +1447,9 @@ fun SearchFolderResultCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val countText = if (folder.photoCount == 1) "1 note" else "${folder.photoCount} notes"
                     Text(
-                        text = "${folder.photoCount} note photos",
+                        text = countText,
                         style = TextStyle(
                             fontFamily = ElmsSans,
                             color = TextSecondary,
@@ -1817,11 +1860,10 @@ fun SearchDocumentResultCard(
                         fontSize = 12.sp
                     )
                 )
-                if (!document.extractedText.isNullOrBlank()) {
+                if (document.docType == DocumentType.DOCX && !document.extractedText.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(6.dp))
-                    val isDocx = document.docType == DocumentType.DOCX
-                    val badgeColor = if (isDocx) FolderBodyBlue else TagAmber
-                    val badgeLabel = if (isDocx) "DOCX" else "OCR"
+                    val badgeColor = FolderBodyBlue
+                    val badgeLabel = "DOCX"
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),

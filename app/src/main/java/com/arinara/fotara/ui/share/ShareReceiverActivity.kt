@@ -29,7 +29,8 @@ class ShareReceiverActivity : ComponentActivity() {
             documentRepository = appContainer.documentRepository,
             textNoteRepository = appContainer.textNoteRepository,
             photoStorageManager = appContainer.photoStorageManager,
-            settingsRepository = appContainer.settingsRepository
+            settingsRepository = appContainer.settingsRepository,
+            workspaceRepository = appContainer.workspaceRepository
         )
     }
 

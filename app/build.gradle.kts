@@ -11,8 +11,8 @@ android {
         applicationId = "com.arinara.fotara"
         minSdk = 24
         targetSdk = 36
-        versionCode = 25
-        versionName = "1.5.11 Beta"
+        versionCode = 26
+        versionName = "1.6.0"
         resourceConfigurations += listOf("en")
     }
 
@@ -43,7 +43,7 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      buildConfig = true
       shaders = false
     }
 

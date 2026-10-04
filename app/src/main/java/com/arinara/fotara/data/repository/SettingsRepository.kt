@@ -33,6 +33,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import com.arinara.fotara.data.db.FotaraDbHelper
+import com.arinara.fotara.data.model.Workspace
+import com.arinara.fotara.data.model.WorkspaceKind
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -79,6 +82,8 @@ class DefaultSettingsRepository(
     private val folderRepository: FolderRepository,
     private val photoRepository: PhotoRepository,
     private val photoStorageManager: PhotoStorageManager,
+    private val workspaceRepository: WorkspaceRepository? = null,
+    private val documentRepositoryProvider: (() -> DocumentRepository?)? = null,
     coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) : SettingsRepository {
 
@@ -213,14 +218,31 @@ class DefaultSettingsRepository(
     }
 
     override suspend fun rebuildSearchIndex(): Int = withContext(Dispatchers.IO) {
-        photoRepository.rebuildSearchIndex()
+        val photoCount = photoRepository.rebuildSearchIndex()
+        val docCount = documentRepositoryProvider?.invoke()?.rebuildSearchIndex() ?: 0
+        photoCount + docCount
     }
 
     override suspend fun exportDataBackup(): String = withContext(Dispatchers.IO) {
         val backupJson = JSONObject()
-        backupJson.put("version", 1)
+        backupJson.put("version", 2)
         backupJson.put("app", "Fotara")
         backupJson.put("exportedAt", System.currentTimeMillis())
+
+        val workspaces = workspaceRepository?.getWorkspacesSync() ?: emptyList()
+        val workspacesArray = JSONArray()
+        val workspaceUuidMap = mutableMapOf<Long, String>()
+        for (ws in workspaces) {
+            val wObj = JSONObject().apply {
+                put("uuid", ws.uuid)
+                put("kind", ws.kind.name)
+                put("name", ws.name)
+                put("position", ws.position)
+            }
+            workspacesArray.put(wObj)
+            workspaceUuidMap[ws.id] = ws.uuid
+        }
+        backupJson.put("workspaces", workspacesArray)
 
         val foldersList = folderRepository.getFolders().first()
         val foldersArray = JSONArray()
@@ -233,6 +255,7 @@ class DefaultSettingsRepository(
                 put("colorLabel", folder.colorLabel)
                 put("isPinned", if (folder.isPinned) 1 else 0)
                 put("createdAt", folder.createdAt)
+                put("workspaceUuid", workspaceUuidMap[folder.workspaceId] ?: FotaraDbHelper.HOME_WORKSPACE_UUID)
             }
             foldersArray.put(fObj)
 
@@ -287,6 +310,49 @@ class DefaultSettingsRepository(
                 )
             }
 
+            val workspacesArray = root.optJSONArray("workspaces")
+            val currentWorkspaces = workspaceRepository?.getWorkspacesSync() ?: emptyList()
+            val homeWs = currentWorkspaces.firstOrNull { it.kind == WorkspaceKind.HOME }
+                ?: Workspace(id = 1L, uuid = FotaraDbHelper.HOME_WORKSPACE_UUID, kind = WorkspaceKind.HOME)
+            val archiveWs = currentWorkspaces.firstOrNull { it.kind == WorkspaceKind.ARCHIVE }
+                ?: Workspace(id = 2L, uuid = FotaraDbHelper.ARCHIVE_WORKSPACE_UUID, kind = WorkspaceKind.ARCHIVE)
+
+            val workspaceUuidToIdMap = mutableMapOf<String, Long>()
+            workspaceUuidToIdMap[FotaraDbHelper.HOME_WORKSPACE_UUID] = homeWs.id
+            workspaceUuidToIdMap[FotaraDbHelper.ARCHIVE_WORKSPACE_UUID] = archiveWs.id
+
+            for (ws in currentWorkspaces) {
+                workspaceUuidToIdMap[ws.uuid] = ws.id
+            }
+
+            if (workspacesArray != null && workspaceRepository != null) {
+                var currentCustomCount = currentWorkspaces.count { it.kind == WorkspaceKind.CUSTOM }
+                for (i in 0 until workspacesArray.length()) {
+                    val wObj = workspacesArray.getJSONObject(i)
+                    val wUuid = wObj.getString("uuid")
+                    val wKind = wObj.optString("kind", "CUSTOM")
+                    val wName = wObj.optString("name", "")
+
+                    if (wKind == "HOME") {
+                        workspaceUuidToIdMap[wUuid] = homeWs.id
+                    } else if (wKind == "ARCHIVE") {
+                        workspaceUuidToIdMap[wUuid] = archiveWs.id
+                    } else if (!workspaceUuidToIdMap.containsKey(wUuid)) {
+                        if (currentCustomCount < WorkspaceValidator.MAX_CUSTOM_WORKSPACES) {
+                            val res = workspaceRepository.createWorkspace(wName)
+                            if (res is WorkspaceResult.Success) {
+                                workspaceUuidToIdMap[wUuid] = res.data.id
+                                currentCustomCount++
+                            } else {
+                                workspaceUuidToIdMap[wUuid] = homeWs.id
+                            }
+                        } else {
+                            workspaceUuidToIdMap[wUuid] = homeWs.id
+                        }
+                    }
+                }
+            }
+
             val foldersArray = root.optJSONArray("folders") ?: JSONArray()
             val subfoldersArray = root.optJSONArray("subfolders") ?: JSONArray()
             val photosArray = root.optJSONArray("photos") ?: JSONArray()
@@ -301,12 +367,14 @@ class DefaultSettingsRepository(
                 val oldId = fObj.getLong("id")
                 val name = fObj.getString("name")
                 val colorLabel = fObj.optString("colorLabel", "#0B1BE0")
+                val wsUuid = fObj.optString("workspaceUuid", "")
+                val targetWsId = workspaceUuidToIdMap[wsUuid] ?: homeWs.id
 
                 val matched = existingFolders.firstOrNull { it.name.equals(name, ignoreCase = true) }
                 if (matched != null) {
                     folderIdMap[oldId] = matched.id
                 } else {
-                    val newId = folderRepository.createFolder(name, colorLabel)
+                    val newId = folderRepository.createFolder(name, colorLabel, isPinned = false, workspaceId = targetWsId)
                     folderIdMap[oldId] = newId
                     foldersAdded++
                 }

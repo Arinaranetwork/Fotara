@@ -75,6 +75,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -1467,7 +1468,11 @@ fun CanvasScreen(
                 title = { Text("Move Canvas to Folder", color = TextPrimary) },
                 text = {
                     LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                        items(uiState.folders) { folder ->
+                        workspaceGroupedFolderItems(
+                            folders = uiState.folders,
+                            workspaces = uiState.workspaces,
+                            keyPrefix = "canvas_move_folder"
+                        ) { folder ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

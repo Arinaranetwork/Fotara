@@ -57,10 +57,12 @@ import com.arinara.fotara.canvas.tool.CanvasToolState
 import com.arinara.fotara.canvas.tool.CanvasToolType
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
+import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.repository.CanvasNoteRepository
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
+import com.arinara.fotara.data.repository.WorkspaceRepository
 import com.arinara.fotara.util.NoteScheduleManager
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
@@ -130,7 +132,8 @@ data class CanvasUiState(
     val scheduledAt: Long? = null,
     val alertType: String? = null,
     val userMessage: String? = null,
-    val folders: List<Folder> = emptyList()
+    val folders: List<Folder> = emptyList(),
+    val workspaces: List<Workspace> = emptyList()
 )
 
 class CanvasViewModel(
@@ -143,7 +146,8 @@ class CanvasViewModel(
     private val photoRepository: PhotoRepository? = null,
     private val folderRepository: FolderRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
-    private val scheduleManager: NoteScheduleManager? = null
+    private val scheduleManager: NoteScheduleManager? = null,
+    private val workspaceRepository: WorkspaceRepository? = null
 ) : ViewModel() {
 
     // Core C8 & C9 Engine Components
@@ -175,6 +179,14 @@ class CanvasViewModel(
             viewModelScope.launch {
                 repo.getFolders().collect { folderList ->
                     _uiState.update { it.copy(folders = folderList) }
+                }
+            }
+        }
+
+        workspaceRepository?.let { repo ->
+            viewModelScope.launch {
+                repo.observeWorkspaces().collect { wsList ->
+                    _uiState.update { it.copy(workspaces = wsList) }
                 }
             }
         }
@@ -1183,7 +1195,8 @@ class CanvasViewModelFactory(
     private val photoRepository: PhotoRepository? = null,
     private val folderRepository: FolderRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
-    private val scheduleManager: NoteScheduleManager? = null
+    private val scheduleManager: NoteScheduleManager? = null,
+    private val workspaceRepository: WorkspaceRepository? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -1197,7 +1210,8 @@ class CanvasViewModelFactory(
             photoRepository = photoRepository,
             folderRepository = folderRepository,
             settingsRepository = settingsRepository,
-            scheduleManager = scheduleManager
+            scheduleManager = scheduleManager,
+            workspaceRepository = workspaceRepository
         ) as T
     }
 }

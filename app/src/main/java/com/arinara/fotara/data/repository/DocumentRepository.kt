@@ -46,6 +46,9 @@ import java.io.File
 import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
 import java.util.zip.ZipInputStream
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.delay
+import android.content.SharedPreferences
 
 interface DocumentRepository {
     fun getAllActiveDocumentNotes(): Flow<List<DocumentNote>>
@@ -82,6 +85,8 @@ interface DocumentRepository {
     suspend fun updateDocumentDeadline(id: Long, deadlineMs: Long?)
     fun getTrashedDocumentNotes(): Flow<List<DocumentNote>>
     suspend fun refresh()
+    suspend fun backfillPdfOcr(onProgress: ((current: Int, total: Int) -> Unit)? = null): Int
+    suspend fun rebuildSearchIndex(): Int
 }
 
 class SqliteDocumentRepository(
@@ -90,6 +95,7 @@ class SqliteDocumentRepository(
     private val photoRepository: PhotoRepository,
     private val photoStorageManager: PhotoStorageManager,
     private val ocrEngine: OcrEngine,
+    private val folderRepository: FolderRepository? = null,
     coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) : DocumentRepository {
 
@@ -98,10 +104,42 @@ class SqliteDocumentRepository(
     private val documentPagesFlow = MutableStateFlow<Map<Long, List<DocumentPage>>>(emptyMap())
     private val trashedDocumentNotesFlow = MutableStateFlow<List<DocumentNote>>(emptyList())
 
+    private val ocrFailureCounts = ConcurrentHashMap<String, Int>()
+    private val MAX_OCR_RETRIES = 3
+
+    private fun isAutoOcrEnabled(): Boolean {
+        return try {
+            val prefs = context.getSharedPreferences("fotara_settings", Context.MODE_PRIVATE)
+            prefs.getBoolean("key_auto_ocr", true)
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        if (key == "key_auto_ocr") {
+            val isEnabled = prefs.getBoolean(key, true)
+            if (isEnabled) {
+                scope.launch {
+                    backfillPdfOcr()
+                }
+            }
+        }
+    }
+
     init {
+        try {
+            val prefs = context.getSharedPreferences("fotara_settings", Context.MODE_PRIVATE)
+            prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        } catch (_: Exception) {}
+
         scope.launch {
             refreshSync()
             backfillDocumentFts()
+            delay(2000)
+            if (isAutoOcrEnabled()) {
+                backfillPdfOcr()
+            }
         }
     }
 
@@ -512,52 +550,74 @@ class SqliteDocumentRepository(
         }
 
         refreshSync()
+        scope.launch(Dispatchers.IO) { folderRepository?.refresh() }
 
         // Background OCR: runs asynchronously so import completes immediately without blocking first view
         scope.launch(Dispatchers.IO) {
+            if (!isAutoOcrEnabled()) {
+                return@launch
+            }
+
             for ((idx, file) in pageFiles.withIndex()) {
+                val retryKey = "$docId:$idx"
                 try {
                     val ocrResult = ocrEngine.extractText(file.absolutePath)
-                    if (ocrResult.fullText.isNotBlank()) {
-                        val upDb = dbHelper.getSafeWritableDatabase()
-                        val cv = ContentValues().apply {
-                            put("ocr_text", ocrResult.fullText)
-                        }
-                        upDb.update("document_pages", cv, "document_note_id = ? AND page_index = ?", arrayOf(docId.toString(), idx.toString()))
+                    val textToStore = ocrResult.fullText.trim()
+                    val upDb = dbHelper.getSafeWritableDatabase()
+                    val cv = ContentValues().apply {
+                        put("ocr_text", textToStore)
                     }
+                    upDb.update("document_pages", cv, "document_note_id = ? AND page_index = ?", arrayOf(docId.toString(), idx.toString()))
+                    ocrFailureCounts.remove(retryKey)
                 } catch (e: Exception) {
+                    ocrFailureCounts[retryKey] = (ocrFailureCounts[retryKey] ?: 0) + 1
                     Log.w("SqliteDocRepo", "Background OCR error for page $idx: ${e.message}")
                 }
-            }
-            try {
-                val upDb = dbHelper.getSafeWritableDatabase()
-                val fullOcrText = StringBuilder()
-                val pCursor = upDb.rawQuery(
-                    "SELECT ocr_text FROM document_pages WHERE document_note_id = ? ORDER BY page_index ASC",
-                    arrayOf(docId.toString())
-                )
-                pCursor.use { c ->
-                    while (c.moveToNext()) {
-                        val t = c.getString(0)
-                        if (!t.isNullOrBlank()) {
-                            if (fullOcrText.isNotEmpty()) fullOcrText.append("\n")
-                            fullOcrText.append(t)
-                        }
-                    }
+
+                // Incremental FTS refresh (page 0, every 3 pages, and the final page)
+                if (idx == 0 || (idx + 1) % 3 == 0 || idx == pageFiles.size - 1) {
+                    updateDocumentExtractedTextAndFts(dbHelper.getSafeWritableDatabase(), docId, folderId, subfolderId)
+                    refreshSync()
                 }
-                val totalText = fullOcrText.toString()
-                if (totalText.isNotBlank()) {
-                    val upCv = ContentValues().apply { put("extracted_text", totalText) }
-                    upDb.update("document_notes", upCv, "id = ?", arrayOf(docId.toString()))
-                    indexDocumentFts(upDb, docId, folderId, subfolderId, name.trim(), DocumentType.PDF.name, totalText)
-                }
-            } catch (e: Exception) {
-                Log.w("SqliteDocRepo", "Failed to update PDF OCR in document_notes: ${e.message}")
             }
-            refreshSync()
         }
 
         docId
+    }
+
+    private fun updateDocumentExtractedTextAndFts(
+        db: SQLiteDatabase,
+        docId: Long,
+        folderId: Long,
+        subfolderId: Long?
+    ) {
+        try {
+            val fullOcrText = StringBuilder()
+            val pCursor = db.rawQuery(
+                "SELECT ocr_text FROM document_pages WHERE document_note_id = ? ORDER BY page_index ASC",
+                arrayOf(docId.toString())
+            )
+            pCursor.use { c ->
+                while (c.moveToNext()) {
+                    val t = c.getString(0)
+                    if (!t.isNullOrBlank()) {
+                        if (fullOcrText.isNotEmpty()) fullOcrText.append("\n")
+                        fullOcrText.append(t)
+                    }
+                }
+            }
+            val totalText = fullOcrText.toString()
+            val upCv = ContentValues().apply { put("extracted_text", totalText) }
+            db.update("document_notes", upCv, "id = ?", arrayOf(docId.toString()))
+
+            var docName = ""
+            val nameCursor = db.rawQuery("SELECT name FROM document_notes WHERE id = ?", arrayOf(docId.toString()))
+            nameCursor.use { if (it.moveToFirst()) docName = it.getString(0) ?: "" }
+
+            indexDocumentFts(db, docId, folderId, subfolderId, docName.trim(), DocumentType.PDF.name, totalText)
+        } catch (e: Exception) {
+            Log.w("SqliteDocRepo", "Failed to update PDF OCR in document_notes: ${e.message}")
+        }
     }
 
     override suspend fun importDocx(
@@ -593,6 +653,7 @@ class SqliteDocumentRepository(
         indexDocumentFts(db, docId, folderId, subfolderId, name.trim(), DocumentType.DOCX.name, extractedText)
 
         refreshSync()
+        folderRepository?.refresh()
         docId
     }
 
@@ -751,6 +812,7 @@ class SqliteDocumentRepository(
             db.delete("document_notes", "id = ?", arrayOf(documentNoteId.toString()))
 
             refreshSync()
+            folderRepository?.refresh()
             createdPhotoIds
         } catch (e: Exception) {
             // Rollback on cancellation or failure: purge created photos to leave no partial garbage
@@ -800,11 +862,14 @@ class SqliteDocumentRepository(
         val placeholders = ids.joinToString(",") { "?" }
         db.update("document_notes", values, "id IN ($placeholders)", ids.map { it.toString() }.toTypedArray())
         for (id in ids) {
+            removeDocumentFts(db, id)
             try {
                 com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).cancelAlarmOnly(com.arinara.fotara.util.ScheduleNoteType.DOCUMENT, id)
             } catch (_: Exception) {}
         }
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun restoreDocumentNote(id: Long) = withContext(Dispatchers.IO) {
@@ -816,11 +881,14 @@ class SqliteDocumentRepository(
         db.update("document_notes", values, "id = ?", arrayOf(id.toString()))
         val doc = getDocumentNoteById(id)
         if (doc != null) {
+            indexDocumentFts(db, id, doc.folderId, doc.subfolderId, doc.name, doc.docType.name, doc.extractedText)
             try {
                 com.arinara.fotara.util.NoteScheduleManager(dbHelper.context).rearmAlarmIfFuture(doc)
             } catch (_: Exception) {}
         }
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun purgeDocumentNotePermanently(id: Long) = withContext(Dispatchers.IO) {
@@ -837,6 +905,8 @@ class SqliteDocumentRepository(
         db.delete("document_pages", "document_note_id = ?", arrayOf(id.toString()))
         db.delete("document_notes", "id = ?", arrayOf(id.toString()))
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun moveDocumentNote(id: Long, targetFolderId: Long, targetSubfolderId: Long?) {
@@ -863,6 +933,8 @@ class SqliteDocumentRepository(
             }
         }
         refreshSync()
+        folderRepository?.refresh()
+        Unit
     }
 
     override suspend fun updateDocumentTagColor(id: Long, colorHex: String?) = withContext(Dispatchers.IO) {
@@ -884,6 +956,185 @@ class SqliteDocumentRepository(
     }
 
     override fun getTrashedDocumentNotes(): Flow<List<DocumentNote>> = trashedDocumentNotesFlow.asStateFlow()
+
+    override suspend fun backfillPdfOcr(onProgress: ((Int, Int) -> Unit)?): Int = withContext(Dispatchers.IO) {
+        if (!isAutoOcrEnabled()) return@withContext 0
+
+        val db = dbHelper.getSafeWritableDatabase()
+        val docCandidates = mutableListOf<Triple<Long, Long, Long?>>()
+        val query = """
+            SELECT DISTINCT d.id, d.folder_id, d.subfolder_id
+            FROM document_notes d
+            JOIN document_pages p ON d.id = p.document_note_id
+            JOIN folders f ON d.folder_id = f.id
+            WHERE d.is_trashed = 0 AND f.is_trashed = 0 AND d.doc_type = 'PDF' AND p.ocr_text IS NULL
+            ORDER BY d.id ASC
+        """.trimIndent()
+
+        try {
+            val cursor = db.rawQuery(query, null)
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    val docId = c.getLong(0)
+                    val folderId = c.getLong(1)
+                    val subfolderId = if (c.isNull(2)) null else c.getLong(2)
+                    docCandidates.add(Triple(docId, folderId, subfolderId))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("SqliteDocRepo", "Error querying PDF candidates for backfill: ${e.message}")
+            return@withContext 0
+        }
+
+        if (docCandidates.isEmpty()) return@withContext 0
+
+        var totalPagesProcessed = 0
+        val totalDocs = docCandidates.size
+
+        for ((docIdx, candidate) in docCandidates.withIndex()) {
+            currentCoroutineContext().ensureActive()
+            if (!isAutoOcrEnabled()) break
+
+            val (docId, folderId, subfolderId) = candidate
+            val pagesToProcess = mutableListOf<Pair<Int, String>>()
+
+            val pageCursor = db.rawQuery(
+                "SELECT page_index, image_uri FROM document_pages WHERE document_note_id = ? AND ocr_text IS NULL ORDER BY page_index ASC",
+                arrayOf(docId.toString())
+            )
+            pageCursor.use { pc ->
+                while (pc.moveToNext()) {
+                    pagesToProcess.add(Pair(pc.getInt(0), pc.getString(1)))
+                }
+            }
+
+            var docPagesChanged = false
+            val totalPagesInDoc = pagesToProcess.size
+
+            for ((pIdx, page) in pagesToProcess.withIndex()) {
+                currentCoroutineContext().ensureActive()
+                if (!isAutoOcrEnabled()) break
+
+                val (pageIndex, imageUri) = page
+                val retryKey = "$docId:$pageIndex"
+                val retries = ocrFailureCounts[retryKey] ?: 0
+                if (retries >= MAX_OCR_RETRIES) {
+                    continue
+                }
+
+                val imgFile = File(imageUri)
+                if (!imgFile.exists()) {
+                    val cv = ContentValues().apply { put("ocr_text", "") }
+                    db.update("document_pages", cv, "document_note_id = ? AND page_index = ?", arrayOf(docId.toString(), pageIndex.toString()))
+                    docPagesChanged = true
+                    continue
+                }
+
+                try {
+                    val ocrResult = ocrEngine.extractText(imgFile.absolutePath)
+                    val textToStore = ocrResult.fullText.trim()
+                    val cv = ContentValues().apply { put("ocr_text", textToStore) }
+                    db.update("document_pages", cv, "document_note_id = ? AND page_index = ?", arrayOf(docId.toString(), pageIndex.toString()))
+                    ocrFailureCounts.remove(retryKey)
+                    docPagesChanged = true
+                    totalPagesProcessed++
+                } catch (e: Exception) {
+                    ocrFailureCounts[retryKey] = retries + 1
+                    Log.w("SqliteDocRepo", "Backfill OCR exception on doc $docId page $pageIndex: ${e.message}")
+                }
+
+                if ((pIdx + 1) % 3 == 0 || pIdx == totalPagesInDoc - 1) {
+                    updateDocumentExtractedTextAndFts(db, docId, folderId, subfolderId)
+                }
+
+                onProgress?.invoke(docIdx + 1, totalDocs)
+                delay(150)
+            }
+
+            if (docPagesChanged) {
+                updateDocumentExtractedTextAndFts(db, docId, folderId, subfolderId)
+                refreshSync()
+            }
+
+            delay(200)
+        }
+
+        totalPagesProcessed
+    }
+
+    override suspend fun rebuildSearchIndex(): Int = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        var count = 0
+        db.beginTransaction()
+        try {
+            db.execSQL("DELETE FROM document_notes_fts")
+            val cursor = db.rawQuery(
+                """
+                SELECT d.id, d.folder_id, d.subfolder_id, d.name, d.doc_type, d.extracted_text,
+                       f.name, COALESCE(s.name, '')
+                FROM document_notes d
+                JOIN folders f ON d.folder_id = f.id
+                LEFT JOIN subfolders s ON d.subfolder_id = s.id
+                WHERE d.is_trashed = 0 AND f.is_trashed = 0
+                """.trimIndent(),
+                null
+            )
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getLong(0)
+                    val folderId = c.getLong(1)
+                    val subfolderId = if (c.isNull(2)) null else c.getLong(2)
+                    val name = c.getString(3) ?: ""
+                    val docType = c.getString(4) ?: ""
+                    var extracted = if (c.isNull(5)) "" else c.getString(5)
+                    val folderName = c.getString(6) ?: ""
+                    val subfolderName = c.getString(7) ?: ""
+
+                    if (docType == DocumentType.PDF.name && extracted.isBlank()) {
+                        val pCursor = db.rawQuery(
+                            "SELECT ocr_text FROM document_pages WHERE document_note_id = ? ORDER BY page_index ASC",
+                            arrayOf(id.toString())
+                        )
+                        val sb = StringBuilder()
+                        pCursor.use { pc ->
+                            while (pc.moveToNext()) {
+                                val t = pc.getString(0)
+                                if (!t.isNullOrBlank()) {
+                                    if (sb.isNotEmpty()) sb.append("\n")
+                                    sb.append(t)
+                                }
+                            }
+                        }
+                        extracted = sb.toString()
+                        if (extracted.isNotBlank()) {
+                            val cv = ContentValues().apply { put("extracted_text", extracted) }
+                            db.update("document_notes", cv, "id = ?", arrayOf(id.toString()))
+                        }
+                    }
+
+                    val values = ContentValues().apply {
+                        put("document_id", id)
+                        put("folder_name", folderName)
+                        put("subfolder_name", subfolderName)
+                        put("name", name)
+                        put("doc_type", docType)
+                        put("content_text", extracted)
+                    }
+                    db.insert("document_notes_fts", null, values)
+                    count++
+                }
+            }
+            db.setTransactionSuccessful()
+        } catch (e: Exception) {
+            Log.w("SqliteDocRepo", "rebuildSearchIndex error: ${e.message}")
+        } finally {
+            db.endTransaction()
+        }
+        if (isAutoOcrEnabled()) {
+            scope.launch { backfillPdfOcr() }
+        }
+        count
+    }
 
     override suspend fun refresh() {
         withContext(Dispatchers.IO) {

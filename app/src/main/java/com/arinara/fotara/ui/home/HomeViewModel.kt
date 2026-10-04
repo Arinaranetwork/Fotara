@@ -33,10 +33,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import com.arinara.fotara.data.model.Workspace
+import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.repository.WorkspaceRepository
+import com.arinara.fotara.data.repository.WorkspaceValidator
+import com.arinara.fotara.data.repository.WorkspaceResult
+import com.arinara.fotara.data.repository.WorkspaceError
+import com.arinara.fotara.data.db.FotaraDbHelper
+
+private data class WorkspacesAndFolders(
+    val workspaces: List<Workspace>,
+    val selectedWorkspaceId: Long,
+    val folders: List<Folder>,
+    val addedToday: List<Photo>,
+    val dueTomorrow: List<Photo>
+)
 
 class HomeViewModel(
     private val folderRepository: FolderRepository,
@@ -45,12 +61,17 @@ class HomeViewModel(
     private val settingsRepository: SettingsRepository? = null,
     private val textNoteRepository: TextNoteRepository? = null,
     private val documentRepository: DocumentRepository? = null,
-    private val canvasNoteRepository: CanvasNoteRepository? = null
+    private val canvasNoteRepository: CanvasNoteRepository? = null,
+    private val workspaceRepository: WorkspaceRepository? = null
 ) : ViewModel() {
 
+    private val _fallbackSelectedWorkspaceId = MutableStateFlow(1L)
+    val selectedWorkspaceIdFlow: StateFlow<Long>
+        get() = workspaceRepository?.selectedWorkspaceId ?: _fallbackSelectedWorkspaceId.asStateFlow()
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private var allFoldersCache: List<Folder> = emptyList()
     private var searchDebounceJob: Job? = null
 
     init {
@@ -58,21 +79,76 @@ class HomeViewModel(
     }
 
     private fun loadData() {
+        val workspacesFlow = workspaceRepository?.observeWorkspaces() ?: flowOf(
+            listOf(
+                Workspace(
+                    id = 1L,
+                    uuid = FotaraDbHelper.HOME_WORKSPACE_UUID,
+                    kind = WorkspaceKind.HOME,
+                    name = "",
+                    position = 0
+                ),
+                Workspace(
+                    id = 2L,
+                    uuid = FotaraDbHelper.ARCHIVE_WORKSPACE_UUID,
+                    kind = WorkspaceKind.ARCHIVE,
+                    name = "",
+                    position = 1
+                )
+            )
+        )
+
+        val workspaceSelectionFlow = combine(workspacesFlow, selectedWorkspaceIdFlow) { workspaces, selectedWsId ->
+            val homeWs = workspaces.firstOrNull { it.kind == WorkspaceKind.HOME }
+            val fallbackId = homeWs?.id ?: 1L
+            val effectiveWsId = if (workspaces.any { it.id == selectedWsId }) {
+                selectedWsId
+            } else {
+                fallbackId
+            }
+            if (effectiveWsId != selectedWsId) {
+                if (workspaceRepository != null) {
+                    workspaceRepository.selectWorkspace(effectiveWsId)
+                } else {
+                    _fallbackSelectedWorkspaceId.value = effectiveWsId
+                }
+            }
+            Pair(workspaces, effectiveWsId)
+        }
+
         viewModelScope.launch {
             combine(
+                workspaceSelectionFlow,
                 folderRepository.getFolders(),
                 folderRepository.getFolderLinkGroups(),
                 photoRepository.getPhotosAddedToday(),
                 photoRepository.getPhotosDueTomorrow()
-            ) { folders, linkGroups, addedToday, dueTomorrow ->
-                val arranged = arrangeFoldersWithLinks(folders, linkGroups)
-                Triple(arranged, addedToday, dueTomorrow)
-            }.collect { (folders, addedToday, dueTomorrow) ->
+            ) { wsSelection, folders, linkGroups, addedToday, dueTomorrow ->
+                allFoldersCache = folders
+                val (workspaces, effectiveWsId) = wsSelection
+                val workspaceFolders = folders.filter { it.workspaceId == effectiveWsId }
+                val arranged = arrangeFoldersWithLinks(workspaceFolders, linkGroups)
+
+                WorkspacesAndFolders(
+                    workspaces = workspaces,
+                    selectedWorkspaceId = effectiveWsId,
+                    folders = arranged,
+                    addedToday = addedToday,
+                    dueTomorrow = dueTomorrow
+                )
+            }.collect { data ->
                 _uiState.update { current ->
+                    val currentScope = current.searchWorkspaceScopeId
+                    val validScope = if (currentScope != null && data.workspaces.none { it.id == currentScope }) {
+                        null
+                    } else currentScope
                     current.copy(
-                        folders = folders,
-                        photosAddedToday = addedToday,
-                        photosDueTomorrow = dueTomorrow,
+                        workspaces = data.workspaces,
+                        selectedWorkspaceId = data.selectedWorkspaceId,
+                        searchWorkspaceScopeId = validScope,
+                        folders = data.folders,
+                        photosAddedToday = data.addedToday,
+                        photosDueTomorrow = data.dueTomorrow,
                         isLoading = false
                     )
                 }
@@ -96,6 +172,7 @@ class HomeViewModel(
                 kotlinx.coroutines.withTimeoutOrNull(com.arinara.fotara.ui.components.PullToRefreshHelper.REFRESH_TIMEOUT_MS) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         folderRepository.refresh()
+                        workspaceRepository?.refresh()
                         photoRepository.refresh()
                         documentRepository?.refresh()
                         textNoteRepository?.refresh()
@@ -112,7 +189,17 @@ class HomeViewModel(
 
     fun activateSearch() {
         val recents = settingsRepository?.getRecentSearches() ?: emptyList()
-        _uiState.update { it.copy(isSearchActive = true, recentSearches = recents) }
+        _uiState.update { it.copy(isSearchActive = true, recentSearches = recents, searchWorkspaceScopeId = null) }
+    }
+
+    fun setSearchWorkspaceScope(workspaceId: Long?) {
+        _uiState.update { it.copy(searchWorkspaceScopeId = workspaceId) }
+        executeSearch(
+            _uiState.value.searchQuery,
+            _uiState.value.searchDateFilter,
+            _uiState.value.searchColorFilter,
+            _uiState.value.selectedSmartTag
+        )
     }
 
     fun deactivateSearch() {
@@ -233,7 +320,11 @@ class HomeViewModel(
         sortOrder: SearchSortOrder = _uiState.value.searchSortOrder
     ) {
         val trimmed = query.trim()
-        val currentFolders = _uiState.value.folders
+        val currentFolders = allFoldersCache.ifEmpty { _uiState.value.folders }
+        val targetWorkspaceId = _uiState.value.searchWorkspaceScopeId
+        val workspaceFolderIds = if (targetWorkspaceId != null) {
+            currentFolders.filter { it.workspaceId == targetWorkspaceId }.map { it.id }.toSet()
+        } else null
         val hasFilters = dateFilter != SearchDateFilter.ALL || colorFilter != null || smartTag != null
 
         val computedRange = DateRangeCalculator.calculateRange(
@@ -283,10 +374,11 @@ class HomeViewModel(
 
         val matchedFolders = if (trimmed.isNotBlank() || (hasFilters && smartTag == null)) {
             val list = currentFolders.filter { folder ->
+                val matchesWorkspace = targetWorkspaceId == null || folder.workspaceId == targetWorkspaceId
                 val matchesQuery = if (trimmed.isBlank()) true else folder.name.contains(trimmed, ignoreCase = true)
                 val matchesDate = folder.createdAt in startTime..endTime
                 val matchesColor = if (colorFilter == null) true else folder.colorLabel.equals(colorFilter, ignoreCase = true)
-                matchesQuery && matchesDate && matchesColor
+                matchesWorkspace && matchesQuery && matchesDate && matchesColor
             }
             sortResults(list, { it.name }, { it.createdAt })
         } else {
@@ -304,9 +396,10 @@ class HomeViewModel(
             viewModelScope.launch {
                 photoRepository.searchPhotos(trimmed).collect { results ->
                     val filtered = results.filter { photo ->
+                        val matchesWorkspace = workspaceFolderIds == null || photo.folderId in workspaceFolderIds
                         val matchesDate = photo.addedAt in startTime..endTime
                         val matchesColor = if (colorFilter == null) true else photo.tagColor.equals(colorFilter, ignoreCase = true)
-                        matchesDate && matchesColor && matchesTag(photo)
+                        matchesWorkspace && matchesDate && matchesColor && matchesTag(photo)
                     }
                     _uiState.update {
                         it.copy(
@@ -319,9 +412,10 @@ class HomeViewModel(
             viewModelScope.launch {
                 photoRepository.searchGroups(trimmed).collect { groups ->
                     val filtered = if (smartTag != null) emptyList() else groups.filter { group ->
+                        val matchesWorkspace = workspaceFolderIds == null || group.folderId in workspaceFolderIds
                         val matchesDate = group.addedAt in startTime..endTime
                         val matchesColor = if (colorFilter == null) true else group.tagColor.equals(colorFilter, ignoreCase = true)
-                        matchesDate && matchesColor
+                        matchesWorkspace && matchesDate && matchesColor
                     }
                     _uiState.update {
                         it.copy(groupSearchResults = sortResults(filtered, { it.name }, { g -> g.addedAt }))
@@ -332,9 +426,10 @@ class HomeViewModel(
                 viewModelScope.launch {
                     repo.searchNotes(trimmed).collect { notes ->
                         val filtered = if (smartTag != null) emptyList() else notes.filter { note ->
+                            val matchesWorkspace = workspaceFolderIds == null || note.folderId in workspaceFolderIds
                             val matchesDate = note.addedAt in startTime..endTime
                             val matchesColor = if (colorFilter == null) true else note.tagColor.equals(colorFilter, ignoreCase = true)
-                            matchesDate && matchesColor
+                            matchesWorkspace && matchesDate && matchesColor
                         }
                         _uiState.update {
                             it.copy(textNoteSearchResults = sortResults(filtered, { it.title }, { n -> n.addedAt }))
@@ -346,9 +441,10 @@ class HomeViewModel(
                 viewModelScope.launch {
                     repo.searchDocuments(trimmed).collect { docs ->
                         val filtered = if (smartTag != null) emptyList() else docs.filter { doc ->
+                            val matchesWorkspace = workspaceFolderIds == null || doc.folderId in workspaceFolderIds
                             val matchesDate = doc.addedAt in startTime..endTime
                             val matchesColor = if (colorFilter == null) true else doc.tagColor.equals(colorFilter, ignoreCase = true)
-                            matchesDate && matchesColor
+                            matchesWorkspace && matchesDate && matchesColor
                         }
                         _uiState.update {
                             it.copy(documentSearchResults = sortResults(filtered, { it.name }, { d -> d.addedAt }))
@@ -360,9 +456,10 @@ class HomeViewModel(
                 viewModelScope.launch {
                     repo.searchCanvasNotes(trimmed).collect { canvases ->
                         val filtered = if (smartTag != null) emptyList() else canvases.filter { c ->
+                            val matchesWorkspace = workspaceFolderIds == null || c.folderId in workspaceFolderIds
                             val matchesDate = c.addedAt in startTime..endTime
                             val matchesColor = if (colorFilter == null) true else c.tagColor.equals(colorFilter, ignoreCase = true)
-                            matchesDate && matchesColor
+                            matchesWorkspace && matchesDate && matchesColor
                         }
                         _uiState.update {
                             it.copy(canvasNoteSearchResults = sortResults(filtered, { it.title }, { c -> c.addedAt }))
@@ -378,9 +475,10 @@ class HomeViewModel(
                     photoRepository.getAllActivePhotos()
                 }
                 val filtered = basePhotos.filter { photo ->
+                    val matchesWorkspace = workspaceFolderIds == null || photo.folderId in workspaceFolderIds
                     val matchesDate = photo.addedAt in startTime..endTime
                     val matchesColor = if (colorFilter == null) true else photo.tagColor.equals(colorFilter, ignoreCase = true)
-                    matchesDate && matchesColor && matchesTag(photo)
+                    matchesWorkspace && matchesDate && matchesColor && matchesTag(photo)
                 }
                 _uiState.update {
                     it.copy(
@@ -395,9 +493,10 @@ class HomeViewModel(
                 } else {
                     photoRepository.getAllActiveGroups().collect { groups ->
                         val filtered = groups.filter { group ->
+                            val matchesWorkspace = workspaceFolderIds == null || group.folderId in workspaceFolderIds
                             val matchesDate = group.addedAt in startTime..endTime
                             val matchesColor = if (colorFilter == null) true else group.tagColor.equals(colorFilter, ignoreCase = true)
-                            matchesDate && matchesColor
+                            matchesWorkspace && matchesDate && matchesColor
                         }
                         _uiState.update {
                             it.copy(groupSearchResults = sortResults(filtered) { g -> g.addedAt })
@@ -412,9 +511,10 @@ class HomeViewModel(
                     } else {
                         repo.getAllActiveTextNotes().collect { notes ->
                             val filtered = notes.filter { note ->
+                                val matchesWorkspace = workspaceFolderIds == null || note.folderId in workspaceFolderIds
                                 val matchesDate = note.addedAt in startTime..endTime
                                 val matchesColor = if (colorFilter == null) true else note.tagColor.equals(colorFilter, ignoreCase = true)
-                                matchesDate && matchesColor
+                                matchesWorkspace && matchesDate && matchesColor
                             }
                             _uiState.update {
                                 it.copy(textNoteSearchResults = sortResults(filtered) { n -> n.addedAt })
@@ -430,9 +530,10 @@ class HomeViewModel(
                     } else {
                         repo.getAllActiveDocumentNotes().collect { docs ->
                             val filtered = docs.filter { doc ->
+                                val matchesWorkspace = workspaceFolderIds == null || doc.folderId in workspaceFolderIds
                                 val matchesDate = doc.addedAt in startTime..endTime
                                 val matchesColor = if (colorFilter == null) true else doc.tagColor.equals(colorFilter, ignoreCase = true)
-                                matchesDate && matchesColor
+                                matchesWorkspace && matchesDate && matchesColor
                             }
                             _uiState.update {
                                 it.copy(documentSearchResults = sortResults(filtered) { d -> d.addedAt })
@@ -448,9 +549,10 @@ class HomeViewModel(
                     } else {
                         repo.getAllActiveCanvasNotes().collect { canvases ->
                             val filtered = canvases.filter { c ->
+                                val matchesWorkspace = workspaceFolderIds == null || c.folderId in workspaceFolderIds
                                 val matchesDate = c.addedAt in startTime..endTime
                                 val matchesColor = if (colorFilter == null) true else c.tagColor.equals(colorFilter, ignoreCase = true)
-                                matchesDate && matchesColor
+                                matchesWorkspace && matchesDate && matchesColor
                             }
                             _uiState.update {
                                 it.copy(canvasNoteSearchResults = sortResults(filtered) { c -> c.addedAt })
@@ -764,7 +866,13 @@ class HomeViewModel(
     fun createFolder(name: String, colorHex: String, isPinned: Boolean) {
         viewModelScope.launch {
             try {
-                folderRepository.createFolder(name = name, colorLabel = colorHex, isPinned = isPinned)
+                val currentWorkspaceId = selectedWorkspaceIdFlow.value
+                folderRepository.createFolder(
+                    name = name,
+                    colorLabel = colorHex,
+                    isPinned = isPinned,
+                    workspaceId = currentWorkspaceId
+                )
                 _uiState.update {
                     it.copy(
                         showNewFolderDialog = false,
@@ -871,6 +979,228 @@ class HomeViewModel(
         _uiState.update { it.copy(userMessage = null) }
     }
 
+    // --- Workspace Management (Phase 27 - Batch 2A) ---
+
+    fun selectWorkspace(workspaceId: Long) {
+        if (workspaceRepository != null) {
+            workspaceRepository.selectWorkspace(workspaceId)
+        } else {
+            _fallbackSelectedWorkspaceId.value = workspaceId
+        }
+        _uiState.update { current ->
+            current.copy(
+                selectedWorkspaceId = workspaceId,
+                selectedFolderIds = emptySet()
+            )
+        }
+    }
+
+    fun openMoveFoldersDialog(folders: List<Folder>) {
+        _uiState.update { it.copy(foldersToMoveWorkspace = folders) }
+    }
+
+    fun closeMoveFoldersDialog() {
+        _uiState.update { it.copy(foldersToMoveWorkspace = null) }
+    }
+
+    fun moveFoldersToWorkspace(folderIds: List<Long>, targetWorkspaceId: Long) {
+        viewModelScope.launch {
+            val repo = workspaceRepository ?: return@launch
+            when (val result = repo.moveFolders(folderIds, targetWorkspaceId)) {
+                is WorkspaceResult.Success -> {
+                    closeMoveFoldersDialog()
+                    exitMultiSelectMode()
+                    val target = _uiState.value.workspaces.firstOrNull { it.id == targetWorkspaceId }
+                    val targetName = when (target?.kind) {
+                        WorkspaceKind.HOME -> "Home"
+                        WorkspaceKind.ARCHIVE -> "Archive"
+                        WorkspaceKind.CUSTOM -> target.name
+                        null -> "Workspace"
+                    }
+                    val msg = if (folderIds.size == 1) {
+                        "Moved to $targetName"
+                    } else {
+                        "Moved ${folderIds.size} folders to $targetName"
+                    }
+                    _uiState.update { it.copy(userMessage = msg) }
+                }
+                is WorkspaceResult.Error -> {
+                    _uiState.update { it.copy(userMessage = "Failed to move folders") }
+                }
+            }
+        }
+    }
+
+    fun initiateDeleteWorkspace(workspace: Workspace) {
+        _uiState.update {
+            it.copy(
+                workspaceToDelete = workspace,
+                workspaceDeleteStep = WorkspaceDeleteStep.CONFIRM,
+                workspaceDeleteStats = null
+            )
+        }
+        viewModelScope.launch {
+            val repo = workspaceRepository ?: return@launch
+            val stats = repo.getWorkspaceStats(workspace.id)
+            _uiState.update { it.copy(workspaceDeleteStats = stats) }
+        }
+    }
+
+    fun dismissDeleteWorkspace() {
+        _uiState.update {
+            it.copy(
+                workspaceToDelete = null,
+                workspaceDeleteStep = WorkspaceDeleteStep.NONE,
+                workspaceDeleteStats = null,
+                workspaceDeleteProgress = null
+            )
+        }
+    }
+
+    fun proceedDeleteChoice() {
+        _uiState.update { it.copy(workspaceDeleteStep = WorkspaceDeleteStep.CHOICE) }
+    }
+
+    fun proceedDeletePermanentConfirm() {
+        _uiState.update { it.copy(workspaceDeleteStep = WorkspaceDeleteStep.PERMANENT_CONFIRM) }
+    }
+
+    fun deleteWorkspaceMoveFoldersToHome(workspace: Workspace) {
+        viewModelScope.launch {
+            val repo = workspaceRepository ?: return@launch
+            when (val result = repo.deleteWorkspaceMoveFoldersToHome(workspace.id)) {
+                is WorkspaceResult.Success -> {
+                    if (selectedWorkspaceIdFlow.value == workspace.id) {
+                        selectWorkspace(1L)
+                    }
+                    if (_uiState.value.searchWorkspaceScopeId == workspace.id) {
+                        _uiState.update { it.copy(searchWorkspaceScopeId = null) }
+                    }
+                    dismissDeleteWorkspace()
+                    _uiState.update { it.copy(userMessage = "Workspace deleted. Folders moved to Home.") }
+                }
+                is WorkspaceResult.Error -> {
+                    dismissDeleteWorkspace()
+                    _uiState.update { it.copy(userMessage = "Failed to delete workspace") }
+                }
+            }
+        }
+    }
+
+    fun executeDeleteWorkspaceContents(workspace: Workspace, permanent: Boolean) {
+        val total = _uiState.value.workspaceDeleteStats?.folderCount ?: 0
+        _uiState.update {
+            it.copy(
+                workspaceDeleteStep = WorkspaceDeleteStep.PROGRESS,
+                workspaceDeleteProgress = Pair(0, total)
+            )
+        }
+        viewModelScope.launch {
+            val repo = workspaceRepository ?: return@launch
+            when (val result = repo.deleteWorkspaceWithContents(workspace.id, permanent) { current, count ->
+                _uiState.update { it.copy(workspaceDeleteProgress = Pair(current, count)) }
+            }) {
+                is WorkspaceResult.Success -> {
+                    if (selectedWorkspaceIdFlow.value == workspace.id) {
+                        selectWorkspace(1L)
+                    }
+                    if (_uiState.value.searchWorkspaceScopeId == workspace.id) {
+                        _uiState.update { it.copy(searchWorkspaceScopeId = null) }
+                    }
+                    dismissDeleteWorkspace()
+                    val msg = if (permanent) {
+                        "Workspace deleted permanently."
+                    } else {
+                        "Workspace deleted. $total folders moved to Trash."
+                    }
+                    _uiState.update { it.copy(userMessage = msg) }
+                }
+                is WorkspaceResult.Error -> {
+                    dismissDeleteWorkspace()
+                    val err = result.error
+                    val msg = if (err is WorkspaceError.DeletionInterrupted) {
+                        "Could not finish deleting. ${err.remainingCount} folders remain."
+                    } else {
+                        "Failed to delete workspace contents"
+                    }
+                    _uiState.update { it.copy(userMessage = msg) }
+                }
+            }
+        }
+    }
+
+    fun openAddWorkspaceDialog() {
+        val customCount = _uiState.value.workspaces.count { it.kind == WorkspaceKind.CUSTOM }
+        if (customCount >= WorkspaceValidator.MAX_CUSTOM_WORKSPACES) {
+            _uiState.update { it.copy(userMessage = "You can have up to 10 workspaces.") }
+            return
+        }
+        _uiState.update { it.copy(showAddWorkspaceDialog = true) }
+    }
+
+    fun closeAddWorkspaceDialog() {
+        _uiState.update { it.copy(showAddWorkspaceDialog = false) }
+    }
+
+    fun openRenameWorkspaceDialog(workspace: Workspace) {
+        _uiState.update { it.copy(workspaceToRename = workspace) }
+    }
+
+    fun closeRenameWorkspaceDialog() {
+        _uiState.update { it.copy(workspaceToRename = null) }
+    }
+
+    fun createWorkspace(name: String, onCreated: ((Long) -> Unit)? = null) {
+        viewModelScope.launch {
+            val repo = workspaceRepository ?: return@launch
+            when (val result = repo.createWorkspace(name)) {
+                is WorkspaceResult.Success -> {
+                    selectWorkspace(result.data.id)
+                    closeAddWorkspaceDialog()
+                    onCreated?.invoke(result.data.id)
+                }
+                is WorkspaceResult.Error -> {
+                    val msg = when (result.error) {
+                        WorkspaceError.LimitReached -> "You can have up to 10 workspaces."
+                        WorkspaceError.NameEmpty -> "Workspace name cannot be empty"
+                        WorkspaceError.NameTooLong -> "Name must be between 1 and 20 characters"
+                        WorkspaceError.NameDuplicate -> "A workspace with this name already exists"
+                        WorkspaceError.NameReserved -> "Name is reserved for built-in workspaces"
+                        else -> "Failed to create workspace"
+                    }
+                    _uiState.update { it.copy(userMessage = msg) }
+                }
+            }
+        }
+    }
+
+    fun renameWorkspace(workspaceId: Long, newName: String) {
+        viewModelScope.launch {
+            val repo = workspaceRepository ?: return@launch
+            when (val result = repo.renameWorkspace(workspaceId, newName)) {
+                is WorkspaceResult.Success -> {
+                    closeRenameWorkspaceDialog()
+                }
+                is WorkspaceResult.Error -> {
+                    val msg = when (result.error) {
+                        WorkspaceError.NameEmpty -> "Workspace name cannot be empty"
+                        WorkspaceError.NameTooLong -> "Name must be between 1 and 20 characters"
+                        WorkspaceError.NameDuplicate -> "A workspace with this name already exists"
+                        WorkspaceError.NameReserved -> "Name is reserved for built-in workspaces"
+                        else -> "Failed to rename workspace"
+                    }
+                    _uiState.update { it.copy(userMessage = msg) }
+                }
+            }
+        }
+    }
+
+    fun reorderWorkspaces(workspaceIds: List<Long>) {
+        viewModelScope.launch {
+            workspaceRepository?.reorderWorkspaces(workspaceIds)
+        }
+    }
+
     companion object {
         fun provideFactory(
             folderRepository: FolderRepository,
@@ -879,7 +1209,8 @@ class HomeViewModel(
             settingsRepository: SettingsRepository? = null,
             textNoteRepository: TextNoteRepository? = null,
             documentRepository: DocumentRepository? = null,
-            canvasNoteRepository: CanvasNoteRepository? = null
+            canvasNoteRepository: CanvasNoteRepository? = null,
+            workspaceRepository: WorkspaceRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -890,7 +1221,8 @@ class HomeViewModel(
                     settingsRepository,
                     textNoteRepository,
                     documentRepository,
-                    canvasNoteRepository
+                    canvasNoteRepository,
+                    workspaceRepository
                 ) as T
             }
         }

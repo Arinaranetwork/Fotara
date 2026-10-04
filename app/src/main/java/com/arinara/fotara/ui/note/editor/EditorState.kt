@@ -99,6 +99,10 @@ class EditorState(
         private set
     var isChecklist by mutableStateOf(false)
         private set
+    var canIndent by mutableStateOf(false)
+        private set
+    var canOutdent by mutableStateOf(false)
+        private set
 
     // Counters
     var wordCount by mutableStateOf(0)
@@ -199,6 +203,11 @@ class EditorState(
         scheduleAutosave()
     }
 
+    fun updateSelection(selection: TextRange) {
+        bodyValue = bodyValue.copy(selection = selection)
+        updateDerivedStates(bodyValue)
+    }
+
     private fun pushUndo(snapshot: TextFieldValue) {
         undoStack.add(snapshot)
         if (undoStack.size > 60) {
@@ -268,6 +277,9 @@ class EditorState(
         isBulletList = syntax.isBulletList
         isNumberedList = syntax.isNumberedList
         isChecklist = syntax.isChecklist
+
+        canIndent = TextEditorOps.canIndent(value.text, value.selection.start, value.selection.end)
+        canOutdent = TextEditorOps.canOutdent(value.text, value.selection.start, value.selection.end)
 
         // 2. Counts
         val trimmed = value.text.trim()

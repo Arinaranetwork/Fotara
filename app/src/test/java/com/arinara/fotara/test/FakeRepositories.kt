@@ -35,11 +35,19 @@ import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.repository.CanvasNoteRepository
+import com.arinara.fotara.data.model.Workspace
+import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.repository.WorkspaceRepository
+import com.arinara.fotara.data.repository.WorkspaceResult
+import com.arinara.fotara.data.repository.WorkspaceError
+import com.arinara.fotara.data.repository.WorkspaceContentStats
+import com.arinara.fotara.data.repository.WorkspaceValidator
 import android.net.Uri
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.atomic.AtomicLong
 
@@ -62,17 +70,21 @@ class FakeFolderRepository(
 
     override fun getFolders(): Flow<List<Folder>> = foldersFlow.asStateFlow()
 
+    override fun getFoldersByWorkspace(workspaceId: Long): Flow<List<Folder>> =
+        foldersFlow.map { list -> list.filter { it.workspaceId == workspaceId } }
+
     override fun getFolderById(id: Long): Flow<Folder?> =
         foldersFlow.map { list -> list.firstOrNull { it.id == id } }
 
-    override suspend fun createFolder(name: String, colorLabel: String, isPinned: Boolean): Long {
+    override suspend fun createFolder(name: String, colorLabel: String, isPinned: Boolean, workspaceId: Long): Long {
         val id = nextFolderId.incrementAndGet()
         val newFolder = Folder(
             id = id,
             name = name,
             colorLabel = colorLabel,
             isPinned = isPinned,
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            workspaceId = workspaceId
         )
         val current = foldersFlow.value.toMutableList()
         if (isPinned) {
@@ -190,11 +202,22 @@ class FakeFolderRepository(
 
     override fun getTrashedFolders(): Flow<List<Folder>> = trashedFoldersFlow.asStateFlow()
 
-    override suspend fun restoreFolder(id: Long) {
+    override suspend fun restoreFolder(id: Long, targetWorkspaceId: Long?) {
         val trashed = trashedFoldersFlow.value.firstOrNull { it.id == id }
         if (trashed != null) {
             trashedFoldersFlow.value = trashedFoldersFlow.value.filterNot { it.id == id }
-            foldersFlow.value = foldersFlow.value + trashed.copy(isTrashed = false, deletedAt = null)
+            val restored = if (targetWorkspaceId != null) {
+                trashed.copy(isTrashed = false, deletedAt = null, workspaceId = targetWorkspaceId)
+            } else {
+                trashed.copy(isTrashed = false, deletedAt = null)
+            }
+            foldersFlow.value = foldersFlow.value + restored
+        }
+    }
+
+    fun moveFoldersToWorkspace(folderIds: List<Long>, workspaceId: Long) {
+        foldersFlow.value = foldersFlow.value.map {
+            if (it.id in folderIds) it.copy(workspaceId = workspaceId) else it
         }
     }
 
@@ -1051,6 +1074,10 @@ class FakeDocumentRepository(
         }
     }
 
+    override suspend fun backfillPdfOcr(onProgress: ((Int, Int) -> Unit)?): Int = 0
+
+    override suspend fun rebuildSearchIndex(): Int = 0
+
     override suspend fun refresh() {
         // no-op for in-memory fake
     }
@@ -1282,6 +1309,198 @@ class FakeCanvasNoteRepository(
         notesFlow.value = notesFlow.value.map {
             if (ids.contains(it.id)) it.copy(folderId = targetFolderId, subfolderId = targetSubfolderId) else it
         }
+    }
+
+    override suspend fun refresh() {}
+}
+
+class FakeWorkspaceRepository(
+    initialWorkspaces: List<Workspace> = listOf(
+        Workspace(id = 1L, uuid = "00000000-0000-4000-8000-000000000001", kind = WorkspaceKind.HOME, name = "", position = 0),
+        Workspace(id = 2L, uuid = "00000000-0000-4000-8000-000000000002", kind = WorkspaceKind.ARCHIVE, name = "", position = 1)
+    ),
+    private val folderRepository: FolderRepository = FakeFolderRepository()
+) : WorkspaceRepository {
+
+    private val workspacesFlow = MutableStateFlow(initialWorkspaces)
+    private val nextId = AtomicLong(100L)
+    private val _selectedWorkspaceId = MutableStateFlow(1L)
+    override val selectedWorkspaceId: StateFlow<Long> = _selectedWorkspaceId.asStateFlow()
+
+    override fun selectWorkspace(workspaceId: Long) {
+        _selectedWorkspaceId.value = workspaceId
+    }
+
+    override fun observeWorkspaces(): Flow<List<Workspace>> = workspacesFlow.asStateFlow()
+
+    override fun observeFoldersIn(workspaceId: Long): Flow<List<Folder>> {
+        return folderRepository.getFoldersByWorkspace(workspaceId)
+    }
+
+    override suspend fun getWorkspacesSync(): List<Workspace> = workspacesFlow.value
+
+    override suspend fun getHomeWorkspace(): Workspace {
+        return workspacesFlow.value.first { it.kind == WorkspaceKind.HOME }
+    }
+
+    override suspend fun getArchiveWorkspace(): Workspace {
+        return workspacesFlow.value.first { it.kind == WorkspaceKind.ARCHIVE }
+    }
+
+    override suspend fun createWorkspace(name: String): WorkspaceResult<Workspace> {
+        val current = workspacesFlow.value
+        val customCount = current.count { it.kind == WorkspaceKind.CUSTOM }
+        if (customCount >= WorkspaceValidator.MAX_CUSTOM_WORKSPACES) {
+            return WorkspaceResult.Error(WorkspaceError.LimitReached)
+        }
+
+        val err = WorkspaceValidator.validateName(name, current)
+        if (err != null) return WorkspaceResult.Error(err)
+
+        val normalized = WorkspaceValidator.normalizeName(name)
+        val newWs = Workspace(
+            id = nextId.incrementAndGet(),
+            uuid = java.util.UUID.randomUUID().toString(),
+            kind = WorkspaceKind.CUSTOM,
+            name = normalized,
+            position = current.size
+        )
+        workspacesFlow.value = current + newWs
+        return WorkspaceResult.Success(newWs)
+    }
+
+    override suspend fun renameWorkspace(workspaceId: Long, newName: String): WorkspaceResult<Unit> {
+        val current = workspacesFlow.value
+        val target = current.firstOrNull { it.id == workspaceId }
+            ?: return WorkspaceResult.Error(WorkspaceError.NotFound)
+
+        if (target.kind != WorkspaceKind.CUSTOM) {
+            return WorkspaceResult.Error(WorkspaceError.BuiltInImmutable)
+        }
+
+        val err = WorkspaceValidator.validateName(newName, current, editingWorkspaceId = workspaceId)
+        if (err != null) return WorkspaceResult.Error(err)
+
+        val normalized = WorkspaceValidator.normalizeName(newName)
+        workspacesFlow.value = current.map {
+            if (it.id == workspaceId) it.copy(name = normalized) else it
+        }
+        return WorkspaceResult.Success(Unit)
+    }
+
+    override suspend fun reorderWorkspaces(workspaceIds: List<Long>): WorkspaceResult<Unit> {
+        val current = workspacesFlow.value
+        if (workspaceIds.isEmpty() || current.isEmpty()) {
+            return WorkspaceResult.Error(WorkspaceError.InvalidReorder)
+        }
+        val homeWs = current.firstOrNull { it.kind == WorkspaceKind.HOME }
+            ?: return WorkspaceResult.Error(WorkspaceError.NotFound)
+
+        if (workspaceIds.first() != homeWs.id) {
+            return WorkspaceResult.Error(WorkspaceError.InvalidReorder)
+        }
+        if (workspaceIds.toSet() != current.map { it.id }.toSet() || workspaceIds.size != current.size) {
+            return WorkspaceResult.Error(WorkspaceError.InvalidReorder)
+        }
+
+        val map = current.associateBy { it.id }
+        workspacesFlow.value = workspaceIds.mapIndexed { idx, id ->
+            map[id]!!.copy(position = idx)
+        }
+        return WorkspaceResult.Success(Unit)
+    }
+
+    override suspend fun moveFolders(folderIds: List<Long>, targetWorkspaceId: Long): WorkspaceResult<Unit> {
+        val current = workspacesFlow.value
+        if (!current.any { it.id == targetWorkspaceId }) {
+            return WorkspaceResult.Error(WorkspaceError.NotFound)
+        }
+        val trashed = folderRepository.getTrashedFolders().first()
+        if (trashed.any { it.id in folderIds }) {
+            return WorkspaceResult.Error(WorkspaceError.TrashedFolderCannotMove)
+        }
+        if (folderRepository is FakeFolderRepository) {
+            folderRepository.moveFoldersToWorkspace(folderIds, targetWorkspaceId)
+        }
+        return WorkspaceResult.Success(Unit)
+    }
+
+    override suspend fun getWorkspaceStats(workspaceId: Long): WorkspaceContentStats {
+        val folders = folderRepository.getFoldersByWorkspace(workspaceId).first()
+        val noteCount = folders.sumOf { it.photoCount }
+        val sizeBytes = folders.sumOf { it.totalSizeBytes }
+        return WorkspaceContentStats(
+            folderCount = folders.size,
+            noteCount = noteCount,
+            totalSizeBytes = sizeBytes
+        )
+    }
+
+    override suspend fun deleteWorkspaceMoveFoldersToHome(workspaceId: Long): WorkspaceResult<Unit> {
+        val current = workspacesFlow.value
+        val target = current.firstOrNull { it.id == workspaceId }
+            ?: return WorkspaceResult.Error(WorkspaceError.NotFound)
+        if (target.kind != WorkspaceKind.CUSTOM) {
+            return WorkspaceResult.Error(WorkspaceError.BuiltInImmutable)
+        }
+
+        if (folderRepository is FakeFolderRepository) {
+            folderRepository.moveFoldersToWorkspace(
+                folderRepository.getFoldersByWorkspace(workspaceId).first().map { it.id },
+                1L
+            )
+        }
+        val remaining = current.filterNot { it.id == workspaceId }.mapIndexed { idx, ws ->
+            ws.copy(position = idx)
+        }
+        if (_selectedWorkspaceId.value == workspaceId) {
+            _selectedWorkspaceId.value = 1L
+        }
+        workspacesFlow.value = remaining
+        return WorkspaceResult.Success(Unit)
+    }
+
+    override suspend fun deleteWorkspaceWithContents(
+        workspaceId: Long,
+        permanent: Boolean,
+        onProgress: (current: Int, total: Int) -> Unit
+    ): WorkspaceResult<Unit> {
+        val current = workspacesFlow.value
+        val target = current.firstOrNull { it.id == workspaceId }
+            ?: return WorkspaceResult.Error(WorkspaceError.NotFound)
+        if (target.kind != WorkspaceKind.CUSTOM) {
+            return WorkspaceResult.Error(WorkspaceError.BuiltInImmutable)
+        }
+
+        val folders = folderRepository.getFoldersByWorkspace(workspaceId).first()
+        val total = folders.size
+        for ((idx, f) in folders.withIndex()) {
+            if (permanent) {
+                folderRepository.purgeFolderPermanently(f.id)
+            } else {
+                folderRepository.deleteFolders(listOf(f.id))
+            }
+            onProgress(idx + 1, total)
+        }
+
+        val remaining = current.filterNot { it.id == workspaceId }.mapIndexed { idx, ws ->
+            ws.copy(position = idx)
+        }
+        if (_selectedWorkspaceId.value == workspaceId) {
+            _selectedWorkspaceId.value = 1L
+        }
+        workspacesFlow.value = remaining
+        return WorkspaceResult.Success(Unit)
+    }
+
+    override suspend fun repairDanglingWorkspaces(): Int {
+        val validIds = workspacesFlow.value.map { it.id }.toSet()
+        val allFolders = folderRepository.getFolders().first()
+        val dangling = allFolders.filter { it.workspaceId !in validIds }
+        if (dangling.isNotEmpty() && folderRepository is FakeFolderRepository) {
+            folderRepository.moveFoldersToWorkspace(dangling.map { it.id }, 1L)
+        }
+        return dangling.size
     }
 
     override suspend fun refresh() {}

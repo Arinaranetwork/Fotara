@@ -101,10 +101,10 @@ fun BorderPickerDialog(
                                 .fillMaxWidth()
                                 .padding(12.dp)
                         ) {
-                            ProfileAvatarView(
+                            ProfileAvatar(
                                 avatarPath = currentAvatarPath,
                                 borderId = borderItem.id,
-                                avatarSize = 52.dp,
+                                avatarSize = ProfileAvatarDefaults.PickerAvatarSize,
                                 showEditButton = false
                             )
 

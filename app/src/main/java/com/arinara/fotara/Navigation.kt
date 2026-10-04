@@ -107,7 +107,8 @@ fun MainNavigation(
                         settingsRepository = appContainer.settingsRepository,
                         textNoteRepository = appContainer.textNoteRepository,
                         documentRepository = appContainer.documentRepository,
-                        canvasNoteRepository = appContainer.canvasNoteRepository
+                        canvasNoteRepository = appContainer.canvasNoteRepository,
+                        workspaceRepository = appContainer.workspaceRepository
                     )
                 )
                 val settingsViewModel: SettingsViewModel = viewModel(
@@ -121,7 +122,8 @@ fun MainNavigation(
                         documentRepository = appContainer.documentRepository,
                         textNoteRepository = appContainer.textNoteRepository,
                         canvasNoteRepository = appContainer.canvasNoteRepository,
-                        folderRepository = appContainer.folderRepository
+                        folderRepository = appContainer.folderRepository,
+                        workspaceRepository = appContainer.workspaceRepository
                     )
                 )
                 HomeScreen(
@@ -196,7 +198,8 @@ fun MainNavigation(
                         settingsRepository = appContainer.settingsRepository,
                         documentRepository = appContainer.documentRepository,
                         textNoteRepository = appContainer.textNoteRepository,
-                        canvasNoteRepository = appContainer.canvasNoteRepository
+                        canvasNoteRepository = appContainer.canvasNoteRepository,
+                        workspaceRepository = appContainer.workspaceRepository
                     )
                 )
                 FolderDetailScreen(
@@ -234,6 +237,7 @@ fun MainNavigation(
                         targetPhotoId = key.targetPhotoId,
                         photoRepository = appContainer.photoRepository,
                         folderRepository = appContainer.folderRepository,
+                        workspaceRepository = appContainer.workspaceRepository,
                         settingsRepository = appContainer.settingsRepository,
                         ocrEngine = appContainer.ocrEngine,
                         photoStorageManager = appContainer.photoStorageManager,
@@ -254,7 +258,8 @@ fun MainNavigation(
                 val trashViewModel: TrashViewModel = viewModel(
                     factory = TrashViewModel.provideFactory(
                         folderRepository = appContainer.folderRepository,
-                        photoRepository = appContainer.photoRepository
+                        photoRepository = appContainer.photoRepository,
+                        workspaceRepository = appContainer.workspaceRepository
                     )
                 )
                 TrashScreen(
@@ -338,7 +343,8 @@ fun MainNavigation(
                         photoRepository = appContainer.photoRepository,
                         folderRepository = appContainer.folderRepository,
                         settingsRepository = appContainer.settingsRepository,
-                        scheduleManager = appContainer.noteScheduleManager
+                        scheduleManager = appContainer.noteScheduleManager,
+                        workspaceRepository = appContainer.workspaceRepository
                     )
                 )
                 com.arinara.fotara.ui.canvas.CanvasScreen(

@@ -26,11 +26,13 @@ import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.PhotoSource
 import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.model.Subfolder
+import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.repository.DocumentRepository
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.data.repository.TextNoteRepository
+import com.arinara.fotara.data.repository.WorkspaceRepository
 import com.arinara.fotara.data.storage.PhotoStorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +59,7 @@ data class SharePlacementUiState(
     val availableGroups: List<PhotoGroup> = emptyList(),
     val selectedGroupId: Long? = null,
     val recentDestinations: List<RecentDestination> = emptyList(),
+    val workspaces: List<Workspace> = emptyList(),
     val unlockedFolderIds: Set<Long> = emptySet(),
     val folderToUnlock: Folder? = null,
     val isSidePanelOpen: Boolean = false,
@@ -81,7 +84,8 @@ class SharePlacementViewModel(
     private val documentRepository: DocumentRepository,
     private val textNoteRepository: TextNoteRepository,
     private val photoStorageManager: PhotoStorageManager,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val workspaceRepository: WorkspaceRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SharePlacementUiState())
@@ -92,6 +96,14 @@ class SharePlacementViewModel(
     }
 
     init {
+        if (workspaceRepository != null) {
+            viewModelScope.launch {
+                workspaceRepository.observeWorkspaces().collect { workspaces ->
+                    _uiState.update { it.copy(workspaces = workspaces) }
+                }
+            }
+        }
+
         // Observe folders
         viewModelScope.launch {
             folderRepository.getFolders().collect { folderList ->
@@ -728,7 +740,8 @@ class SharePlacementViewModelFactory(
     private val documentRepository: DocumentRepository,
     private val textNoteRepository: TextNoteRepository,
     private val photoStorageManager: PhotoStorageManager,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val workspaceRepository: WorkspaceRepository? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -739,7 +752,8 @@ class SharePlacementViewModelFactory(
             documentRepository = documentRepository,
             textNoteRepository = textNoteRepository,
             photoStorageManager = photoStorageManager,
-            settingsRepository = settingsRepository
+            settingsRepository = settingsRepository,
+            workspaceRepository = workspaceRepository
         ) as T
     }
 }

@@ -13,6 +13,7 @@ import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
+import com.arinara.fotara.data.repository.WorkspaceRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,7 +23,8 @@ import kotlinx.coroutines.launch
 
 class TrashViewModel(
     private val folderRepository: FolderRepository,
-    private val photoRepository: PhotoRepository
+    private val photoRepository: PhotoRepository,
+    private val workspaceRepository: WorkspaceRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TrashUiState())
@@ -50,6 +52,14 @@ class TrashViewModel(
                 _uiState.update { it.copy(activeFolders = folders) }
             }
         }
+
+        workspaceRepository?.let { repo ->
+            viewModelScope.launch {
+                repo.observeWorkspaces().collect { workspaces ->
+                    _uiState.update { it.copy(workspaces = workspaces) }
+                }
+            }
+        }
     }
 
     fun selectTab(tab: TrashTab) {
@@ -57,9 +67,24 @@ class TrashViewModel(
     }
 
     fun requestRestoreFolder(folder: Folder) {
+        _uiState.update { it.copy(folderToRestoreDestination = folder) }
+    }
+
+    fun dismissRestoreFolderDestinationDialog() {
+        _uiState.update { it.copy(folderToRestoreDestination = null) }
+    }
+
+    fun confirmRestoreFolder(folder: Folder, targetWorkspaceId: Long) {
         viewModelScope.launch {
-            folderRepository.restoreFolder(folder.id)
-            _uiState.update { it.copy(userMessage = "Folder \"${folder.name}\" restored") }
+            folderRepository.restoreFolder(folder.id, targetWorkspaceId)
+            val wsName = _uiState.value.workspaces.firstOrNull { it.id == targetWorkspaceId }?.name
+            val msg = if (!wsName.isNullOrEmpty()) "Restored to $wsName" else "Folder \"${folder.name}\" restored"
+            _uiState.update {
+                it.copy(
+                    folderToRestoreDestination = null,
+                    userMessage = msg
+                )
+            }
         }
     }
 
@@ -85,15 +110,33 @@ class TrashViewModel(
         _uiState.update { it.copy(orphanPhotoToRestore = null, parentFolderForOrphan = null) }
     }
 
-    fun confirmRestoreBoth(photo: Photo, parentFolderId: Long) {
+    fun requestRestoreBoth(photo: Photo, parentFolderId: Long) {
+        _uiState.update {
+            it.copy(
+                orphanPhotoToRestore = null,
+                orphanToRestoreDestination = Pair(photo, parentFolderId)
+            )
+        }
+    }
+
+    fun dismissOrphanRestoreDestinationDialog() {
+        _uiState.update { it.copy(orphanToRestoreDestination = null) }
+    }
+
+    fun confirmRestoreBoth(photo: Photo, parentFolderId: Long, targetWorkspaceId: Long? = null) {
         viewModelScope.launch {
-            folderRepository.restoreFolder(parentFolderId)
+            folderRepository.restoreFolder(parentFolderId, targetWorkspaceId)
             photoRepository.restorePhoto(photo.id)
+            val wsName = if (targetWorkspaceId != null) {
+                _uiState.value.workspaces.firstOrNull { it.id == targetWorkspaceId }?.name
+            } else null
+            val msg = if (!wsName.isNullOrEmpty()) "Restored to $wsName" else "Folder and note restored"
             _uiState.update {
                 it.copy(
                     orphanPhotoToRestore = null,
+                    orphanToRestoreDestination = null,
                     parentFolderForOrphan = null,
-                    userMessage = "Folder and note restored"
+                    userMessage = msg
                 )
             }
         }
@@ -181,11 +224,12 @@ class TrashViewModel(
     companion object {
         fun provideFactory(
             folderRepository: FolderRepository,
-            photoRepository: PhotoRepository
+            photoRepository: PhotoRepository,
+            workspaceRepository: WorkspaceRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return TrashViewModel(folderRepository, photoRepository) as T
+                return TrashViewModel(folderRepository, photoRepository, workspaceRepository) as T
             }
         }
     }

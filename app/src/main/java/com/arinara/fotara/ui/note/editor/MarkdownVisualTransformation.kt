@@ -109,10 +109,12 @@ class MarkdownVisualTransformation(
             } else {
                 val parsed = TextEditorOps.parseLine(lineIndex, lineStart, lineEnd, lineText)
 
-                // 1. Indent
+                // 1. Indent with ~24dp visual indentation per level
                 if (parsed.indent.isNotEmpty()) {
                     val tIndentStart = sb.length
-                    sb.append(parsed.indent)
+                    val levels = (parsed.indent.length / 2).coerceIn(1, 3)
+                    val visualIndent = "\u2003\u2002".repeat(levels)
+                    sb.append(visualIndent)
                     chunks.add(TextMappingChunk(lineStart, lineStart + parsed.indent.length, tIndentStart, sb.length))
                 }
 
@@ -123,14 +125,10 @@ class MarkdownVisualTransformation(
 
                 when (parsed.prefixType) {
                     LineToolType.CHECKBOX -> {
-                        val isChecked = parsed.prefixString.contains(Regex("""\[[xX]\]"""))
-                        if (isChecked) {
-                            sb.append("☑ ")
-                            styles.add(SpanStyle(color = accentColor.copy(alpha = 0.7f), fontWeight = FontWeight.Bold) to (tPrefixStart until sb.length))
-                        } else {
-                            sb.append("☐ ")
-                            styles.add(SpanStyle(color = accentColor, fontWeight = FontWeight.Bold) to (tPrefixStart until sb.length))
-                        }
+                        // 4 spaces (~24dp width) placeholder for the real drawn vector checkbox
+                        val boxPlaceholder = "    "
+                        sb.append(boxPlaceholder)
+                        styles.add(SpanStyle(color = Color.Transparent) to (tPrefixStart until sb.length))
                         chunks.add(TextMappingChunk(prefixOrigStart, prefixOrigEnd, tPrefixStart, sb.length, isAtomicPrefix = true))
                     }
                     LineToolType.NUMBERED_LIST -> {

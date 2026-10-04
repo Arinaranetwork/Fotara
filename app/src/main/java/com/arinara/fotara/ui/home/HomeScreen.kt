@@ -41,7 +41,9 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -135,9 +137,22 @@ import com.arinara.fotara.ui.components.FolderCard
 import com.arinara.fotara.ui.components.FolderUnlockDialog
 import com.arinara.fotara.ui.components.HomeBottomNavBar
 import com.arinara.fotara.ui.components.HomeNavTab
-import com.arinara.fotara.ui.components.HomeSegment
-import com.arinara.fotara.ui.components.HomeSegmentedTabBar
 import com.arinara.fotara.ui.components.NewFolderDialog
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import com.arinara.fotara.ui.home.WorkspaceDeleteStep
+import com.arinara.fotara.ui.components.ScreenHeader
+import com.arinara.fotara.ui.components.ScreenHeaderActionButton
+import com.arinara.fotara.ui.components.ScreenHeaderDefaults
+import com.arinara.fotara.ui.home.workspace.WorkspaceTabBar
+import com.arinara.fotara.ui.home.workspace.AddWorkspaceDialog
+import com.arinara.fotara.ui.home.workspace.RenameWorkspaceDialog
+import com.arinara.fotara.ui.home.workspace.MoveToWorkspaceDialog
+import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceConfirmDialog
+import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceChoiceDialog
+import com.arinara.fotara.ui.home.workspace.DeleteWorkspacePermanentConfirmDialog
+import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceProgressDialog
+import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.repository.WorkspaceValidator
 import com.arinara.fotara.ui.components.ResetFolderPinDialog
 import com.arinara.fotara.ui.components.SetFolderLockDialog
 import com.arinara.fotara.ui.components.computeFolderGlowAnchors
@@ -183,7 +198,6 @@ fun HomeScreen(
     val context = LocalContext.current
     val keyguardManager = remember { context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager }
 
-    var selectedSegment by remember { mutableStateOf(HomeSegment.ALL) }
     var selectedNavTab by remember { mutableStateOf(HomeNavTab.HOME) }
 
     var activeContextFolder by remember { mutableStateOf<Folder?>(null) }
@@ -366,6 +380,19 @@ fun HomeScreen(
                                     tint = Color.White
                                 )
                             }
+                            IconButton(
+                                onClick = {
+                                    val selected = uiState.folders.filter { it.id in uiState.selectedFolderIds }
+                                    viewModel.openMoveFoldersDialog(selected)
+                                },
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                                    contentDescription = stringResource(R.string.folder_menu_move_to_workspace),
+                                    tint = Color.White
+                                )
+                            }
                         }
                         IconButton(
                             onClick = { viewModel.selectAllFolders() },
@@ -479,81 +506,27 @@ fun HomeScreen(
                     ) {
                         // Header section: Brand & Top-right circular buttons (hidden during multi-select)
                         if (!uiState.isMultiSelectMode) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Title & Tagline
-                                Column {
-                                    Text(
-                                        text = "Fotara",
-                                        color = Color.White,
-                                        fontSize = 38.sp,
-                                        fontFamily = ElmsSans,
-                                        fontWeight = FontWeight.Medium,
-                                        letterSpacing = (-0.5).sp
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = stringResource(R.string.home_tagline),
-                                        color = HomeSubtitleGray,
-                                        fontSize = 15.sp,
-                                        fontFamily = ElmsSans,
-                                        fontWeight = FontWeight.Light
-                                    )
-                                }
-
-                                // Dual 40dp round buttons with 48dp minimum touch targets
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                            ScreenHeader(
+                                title = "Fotara",
+                                tagline = stringResource(R.string.home_tagline),
+                                actions = {
                                     // 1: Magnifier search trigger
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clickable { viewModel.activateSearch() },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape)
-                                                .background(HomeHeaderButtonBg),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Search,
-                                                contentDescription = "Search",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
+                                    ScreenHeaderActionButton(
+                                        onClick = { viewModel.activateSearch() },
+                                        icon = Icons.Default.Search,
+                                        contentDescription = "Search"
+                                    )
 
                                     // 2: Vertical dots menu trigger
                                     Box(
-                                        modifier = Modifier.size(48.dp),
+                                        modifier = Modifier.size(ScreenHeaderDefaults.ActionButtonSize),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape)
-                                                .background(HomeHeaderButtonBg)
-                                                .clickable { showHomeOverflowMenu = true },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.MoreVert,
-                                                contentDescription = "Options",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
+                                        ScreenHeaderActionButton(
+                                            onClick = { showHomeOverflowMenu = true },
+                                            icon = Icons.Default.MoreVert,
+                                            contentDescription = "Options"
+                                        )
 
                                         DropdownMenu(
                                             expanded = showHomeOverflowMenu,
@@ -574,6 +547,21 @@ fun HomeScreen(
                                                 onClick = {
                                                     showHomeOverflowMenu = false
                                                     viewModel.enterMultiSelectMode(null)
+                                                }
+                                            )
+                                            HorizontalDivider(color = HomeCardBorder)
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(R.string.menu_add_workspace), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Add,
+                                                        contentDescription = null,
+                                                        tint = Color(0xFF60A5FA)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showHomeOverflowMenu = false
+                                                    viewModel.openAddWorkspaceDialog()
                                                 }
                                             )
                                             HorizontalDivider(color = HomeCardBorder)
@@ -635,20 +623,6 @@ fun HomeScreen(
                                             )
                                             HorizontalDivider(color = HomeCardBorder)
                                             DropdownMenuItem(
-                                                text = { Text("Settings", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Settings,
-                                                        contentDescription = null,
-                                                        tint = Color.White
-                                                    )
-                                                },
-                                                onClick = {
-                                                    showHomeOverflowMenu = false
-                                                    selectedNavTab = HomeNavTab.SETTINGS
-                                                }
-                                            )
-                                            DropdownMenuItem(
                                                 text = { Text("Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                 leadingIcon = {
                                                     Icon(
@@ -665,12 +639,20 @@ fun HomeScreen(
                                         }
                                     }
                                 }
-                            }
+                            )
+                        }
 
-                            // 48dp Segmented Tab Bar: All, Favorit, Arsip
-                            HomeSegmentedTabBar(
-                                selectedSegment = selectedSegment,
-                                onSegmentSelected = { selectedSegment = it }
+                            // Workspace Tab Bar (Phase 27 - Batch 2A / Phase 28 - Batch 2B)
+                            WorkspaceTabBar(
+                                workspaces = uiState.workspaces,
+                                selectedWorkspaceId = uiState.selectedWorkspaceId,
+                                isSelectMode = uiState.isMultiSelectMode,
+                                onWorkspaceSelected = { ws -> viewModel.selectWorkspace(ws.id) },
+                                onAddClick = { viewModel.openAddWorkspaceDialog() },
+                                onLimitReached = { viewModel.openAddWorkspaceDialog() },
+                                onRenameClick = { ws -> viewModel.openRenameWorkspaceDialog(ws) },
+                                onDeleteClick = { ws -> viewModel.initiateDeleteWorkspace(ws) },
+                                onReorderWorkspaces = { ids -> viewModel.reorderWorkspaces(ids) }
                             )
 
                             // Due Tomorrow Deadline Summary (if active)
@@ -680,106 +662,136 @@ fun HomeScreen(
                                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
                                 )
                             }
-                        }
 
                         // Content Area
-                        when (selectedSegment) {
-                            HomeSegment.ALL -> {
-                                val bottomStackDp = with(density) { bottomStackHeightPx.toDp() }
-                                val dynamicBottomPadding = HomeLayoutHelper.computeBottomContentPadding(
-                                    measuredBottomStackHeightDp = bottomStackDp.value,
-                                    additionalBufferDp = 16f,
-                                    fallbackPaddingDp = 170f
-                                ).dp
+                        val bottomStackDp = with(density) { bottomStackHeightPx.toDp() }
+                        val dynamicBottomPadding = HomeLayoutHelper.computeBottomContentPadding(
+                            measuredBottomStackHeightDp = bottomStackDp.value,
+                            additionalBufferDp = 16f,
+                            fallbackPaddingDp = 170f
+                        ).dp
 
-                                val homeGridState = rememberLazyGridState()
-                                val isOverlayOpen = folderToUnlock != null || activeContextFolder != null || folderToLock != null || folderToResetPin != null || uiState.showNewFolderDialog || uiState.showBulkDeleteDialog
-                                val canRefresh = PullToRefreshHelper.canTriggerRefresh(
-                                    isAtTop = homeGridState.firstVisibleItemIndex == 0 && homeGridState.firstVisibleItemScrollOffset == 0,
-                                    isMultiSelectActive = uiState.isMultiSelectMode,
-                                    isSearchFocused = uiState.isSearchActive,
-                                    isOverlayOpen = isOverlayOpen
-                                )
+                        val homeGridState = rememberLazyGridState()
+                        val isOverlayOpen = folderToUnlock != null || activeContextFolder != null || folderToLock != null || folderToResetPin != null || uiState.showNewFolderDialog || uiState.showBulkDeleteDialog || uiState.showAddWorkspaceDialog || uiState.workspaceToRename != null || uiState.foldersToMoveWorkspace != null || uiState.workspaceDeleteStep != WorkspaceDeleteStep.NONE
+                        val canRefresh = PullToRefreshHelper.canTriggerRefresh(
+                            isAtTop = homeGridState.firstVisibleItemIndex == 0 && homeGridState.firstVisibleItemScrollOffset == 0,
+                            isMultiSelectActive = uiState.isMultiSelectMode,
+                            isSearchFocused = uiState.isSearchActive,
+                            isOverlayOpen = isOverlayOpen
+                        )
 
-                                PullToRefreshLayout(
-                                    isRefreshing = uiState.isRefreshing,
-                                    onRefresh = { viewModel.refresh() },
-                                    enabled = canRefresh,
-                                    modifier = Modifier.fillMaxSize()
+                        PullToRefreshLayout(
+                            isRefreshing = uiState.isRefreshing,
+                            onRefresh = { viewModel.refresh() },
+                            enabled = canRefresh,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            if (uiState.folders.isEmpty()) {
+                                val currentWs = uiState.workspaces.firstOrNull { it.id == uiState.selectedWorkspaceId }
+                                val wsDisplayName = when (currentWs?.kind) {
+                                    WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
+                                    WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
+                                    WorkspaceKind.CUSTOM -> currentWs.name
+                                    null -> stringResource(R.string.workspace_home)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 24.dp, vertical = 60.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    LazyVerticalGrid(
-                                        columns = GridCells.Fixed(folderColumns),
-                                        state = homeGridState,
-                                        contentPadding = PaddingValues(
-                                            start = 18.dp,
-                                            end = 18.dp,
-                                            top = 20.dp,
-                                            bottom = dynamicBottomPadding
-                                        ),
-                                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .verticalEdgeFade(top = 20.dp)
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        items(uiState.folders, key = { it.id }) { folder ->
-                                            FolderCard(
-                                                folder = folder,
-                                                isSelectionMode = uiState.isMultiSelectMode,
-                                                isSelected = uiState.selectedFolderIds.contains(folder.id),
-                                                glowAnchors = folderGlowAnchors[folder.id] ?: emptySet(),
-                                                onClick = {
-                                                    if (uiState.isMultiSelectMode) {
-                                                        viewModel.toggleFolderSelection(folder.id)
-                                                    } else if (folder.isLocked) {
-                                                        folderToUnlock = folder
-                                                    } else {
-                                                        onFolderClick(folder)
-                                                    }
-                                                },
-                                                onPinClick = {
-                                                    viewModel.togglePinFolder(folder.id)
-                                                },
-                                                onRenameClick = {
-                                                    renameInputText = folder.name
-                                                    folderToRename = folder
-                                                },
-                                                onSelectClick = {
-                                                    viewModel.enterMultiSelectMode(folder.id)
-                                                },
-                                                onLockClick = {
-                                                    if (folder.isLocked) {
-                                                        isRemovingLock = true
-                                                        folderToUnlock = folder
-                                                    } else {
-                                                        folderToLock = folder
-                                                    }
-                                                },
-                                                onUnlinkClick = {
-                                                    viewModel.unlinkFolder(folder.id)
-                                                },
-                                                onDeleteClick = {
-                                                    viewModel.deleteFolder(folder.id)
-                                                },
-                                                onRename = { newName ->
-                                                    viewModel.renameFolder(folder.id, newName)
-                                                },
-                                                onCardLongClick = {
-                                                    if (uiState.isMultiSelectMode) {
-                                                        viewModel.toggleFolderSelection(folder.id)
-                                                    } else {
-                                                        activeContextFolder = folder
-                                                    }
-                                                }
-                                            )
-                                        }
+                                        Text(
+                                            text = stringResource(R.string.workspace_empty_state_title, wsDisplayName),
+                                            color = Color.White,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = ElmsSans,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.workspace_empty_state_hint),
+                                            color = Color(0xFF9CA3AF),
+                                            fontSize = 14.sp,
+                                            fontFamily = ElmsSans,
+                                            textAlign = TextAlign.Center
+                                        )
                                     }
                                 }
-                            }
-
-                            HomeSegment.FAVORIT, HomeSegment.ARSIP -> {
-                                // Explicit specification: leave content area blank
-                                Box(modifier = Modifier.fillMaxSize())
+                            } else {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(folderColumns),
+                                    state = homeGridState,
+                                    contentPadding = PaddingValues(
+                                        start = 18.dp,
+                                        end = 18.dp,
+                                        top = 20.dp,
+                                        bottom = dynamicBottomPadding
+                                    ),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .verticalEdgeFade(top = 20.dp)
+                                ) {
+                                    items(uiState.folders, key = { it.id }) { folder ->
+                                        FolderCard(
+                                            folder = folder,
+                                            isSelectionMode = uiState.isMultiSelectMode,
+                                            isSelected = uiState.selectedFolderIds.contains(folder.id),
+                                            glowAnchors = folderGlowAnchors[folder.id] ?: emptySet(),
+                                            onClick = {
+                                                if (uiState.isMultiSelectMode) {
+                                                    viewModel.toggleFolderSelection(folder.id)
+                                                } else if (folder.isLocked) {
+                                                    folderToUnlock = folder
+                                                } else {
+                                                    onFolderClick(folder)
+                                                }
+                                            },
+                                            onPinClick = {
+                                                viewModel.togglePinFolder(folder.id)
+                                            },
+                                            onRenameClick = {
+                                                renameInputText = folder.name
+                                                folderToRename = folder
+                                            },
+                                            onMoveToWorkspaceClick = {
+                                                viewModel.openMoveFoldersDialog(listOf(folder))
+                                            },
+                                            onSelectClick = {
+                                                viewModel.enterMultiSelectMode(folder.id)
+                                            },
+                                            onLockClick = {
+                                                if (folder.isLocked) {
+                                                    isRemovingLock = true
+                                                    folderToUnlock = folder
+                                                } else {
+                                                    folderToLock = folder
+                                                }
+                                            },
+                                            onUnlinkClick = {
+                                                viewModel.unlinkFolder(folder.id)
+                                            },
+                                            onDeleteClick = {
+                                                viewModel.deleteFolder(folder.id)
+                                            },
+                                            onRename = { newName ->
+                                                viewModel.renameFolder(folder.id, newName)
+                                            },
+                                            onCardLongClick = {
+                                                if (uiState.isMultiSelectMode) {
+                                                    viewModel.toggleFolderSelection(folder.id)
+                                                } else {
+                                                    activeContextFolder = folder
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1353,6 +1365,9 @@ fun HomeScreen(
                     documentResults = uiState.documentSearchResults,
                     canvasNoteResults = uiState.canvasNoteSearchResults,
                     recentSearches = uiState.recentSearches,
+                    workspaces = uiState.workspaces,
+                    selectedWorkspaceScopeId = uiState.searchWorkspaceScopeId,
+                    onSelectWorkspaceScope = { viewModel.setSearchWorkspaceScope(it) },
                     selectedDateFilter = uiState.searchDateFilter,
                     onSelectDateFilter = { viewModel.setDateFilter(it) },
                     selectedColorFilter = uiState.searchColorFilter,
@@ -1479,6 +1494,87 @@ fun HomeScreen(
                 updatePopupRelease = null
             }
         )
+    }
+
+    if (uiState.showAddWorkspaceDialog) {
+        AddWorkspaceDialog(
+            workspaces = uiState.workspaces,
+            onDismiss = { viewModel.closeAddWorkspaceDialog() },
+            onCreate = { name -> viewModel.createWorkspace(name) }
+        )
+    }
+
+    uiState.workspaceToRename?.let { wsToRename ->
+        RenameWorkspaceDialog(
+            workspace = wsToRename,
+            workspaces = uiState.workspaces,
+            onDismiss = { viewModel.closeRenameWorkspaceDialog() },
+            onRename = { newName -> viewModel.renameWorkspace(wsToRename.id, newName) }
+        )
+    }
+
+    uiState.foldersToMoveWorkspace?.let { folders ->
+        MoveToWorkspaceDialog(
+            folders = folders,
+            workspaces = uiState.workspaces,
+            onDismiss = { viewModel.closeMoveFoldersDialog() },
+            onMove = { targetWsId ->
+                viewModel.moveFoldersToWorkspace(folders.map { it.id }, targetWsId)
+            }
+        )
+    }
+
+    when (uiState.workspaceDeleteStep) {
+        WorkspaceDeleteStep.CONFIRM -> {
+            uiState.workspaceToDelete?.let { ws ->
+                DeleteWorkspaceConfirmDialog(
+                    workspace = ws,
+                    stats = uiState.workspaceDeleteStats,
+                    onDismiss = { viewModel.dismissDeleteWorkspace() },
+                    onConfirmDelete = { alsoDeleteContents ->
+                        if (alsoDeleteContents) {
+                            viewModel.proceedDeleteChoice()
+                        } else {
+                            viewModel.deleteWorkspaceMoveFoldersToHome(ws)
+                        }
+                    }
+                )
+            }
+        }
+        WorkspaceDeleteStep.CHOICE -> {
+            val ws = uiState.workspaceToDelete
+            val stats = uiState.workspaceDeleteStats
+            if (ws != null && stats != null) {
+                DeleteWorkspaceChoiceDialog(
+                    workspace = ws,
+                    stats = stats,
+                    onDismiss = { viewModel.dismissDeleteWorkspace() },
+                    onSelectTrash = { viewModel.executeDeleteWorkspaceContents(ws, permanent = false) },
+                    onSelectPermanent = { viewModel.proceedDeletePermanentConfirm() }
+                )
+            }
+        }
+        WorkspaceDeleteStep.PERMANENT_CONFIRM -> {
+            val ws = uiState.workspaceToDelete
+            val stats = uiState.workspaceDeleteStats
+            if (ws != null && stats != null) {
+                DeleteWorkspacePermanentConfirmDialog(
+                    workspace = ws,
+                    stats = stats,
+                    onDismiss = { viewModel.dismissDeleteWorkspace() },
+                    onConfirmDeleteForever = { viewModel.executeDeleteWorkspaceContents(ws, permanent = true) }
+                )
+            }
+        }
+        WorkspaceDeleteStep.PROGRESS -> {
+            val progress = uiState.workspaceDeleteProgress
+            DeleteWorkspaceProgressDialog(
+                workspaceName = uiState.workspaceToDelete?.name ?: "",
+                current = progress?.first ?: 0,
+                total = progress?.second ?: 0
+            )
+        }
+        WorkspaceDeleteStep.NONE -> { /* No delete dialog */ }
     }
     }
 }

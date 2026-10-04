@@ -26,46 +26,56 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.arinara.fotara.R
 import com.arinara.fotara.data.model.ProfileBorders
 import java.io.File
 
+object ProfileAvatarDefaults {
+    val DefaultAvatarSize: Dp = 78.dp
+    val PickerAvatarSize: Dp = 52.dp
+    val FixedRingAllowance: Dp = 0.dp
+    const val InnerOverlapFraction: Float = 0.015f // 1.5% overlap
+    val EditButtonVisibleSize: Dp = 32.dp
+    val EditButtonTouchSize: Dp = 44.dp
+    val EditButtonIconSize: Dp = 16.dp
+    const val CosSin45: Float = 0.7071068f
+}
+
 /**
- * Centered profile avatar with an overlaid decorative border and optional overlapping edit button.
- * The border image is sized and offset so its inner transparent circle matches the avatar circle
- * with zero gap and zero overlap.
+ * Standardized profile avatar with normalized decorative border and 45-degree edit button.
+ * - The avatar is clipped to a circle of fixed diameter D, invariant to border selection.
+ * - The border is scaled so its inner circle equals D with a ~1.5% anti-aliased overlap seam,
+ *   and translated via draw-phase graphicsLayer so its inner circle center equals the avatar center.
+ * - The edit button is anchored relative to the avatar circle at 45 degrees, never moving on border changes.
  */
 @Composable
-fun ProfileAvatarView(
+fun ProfileAvatar(
     avatarPath: String?,
     borderId: String?,
     modifier: Modifier = Modifier,
-    avatarSize: Dp = 78.dp,
+    avatarSize: Dp = ProfileAvatarDefaults.DefaultAvatarSize,
     avatarUpdatedAt: Long = 0L,
     showEditButton: Boolean = false,
     onEditClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val border = remember(borderId) { ProfileBorders.getById(borderId) }
-
-    // Outer container accommodates both the avatar and decorative border extensions
-    val borderSize = if (border.drawableRes != 0) {
-        avatarSize / border.innerRatio
-    } else {
-        avatarSize
-    }
+    val slotSize = avatarSize + (ProfileAvatarDefaults.FixedRingAllowance * 2)
 
     Box(
         contentAlignment = Alignment.Center,
-        modifier = modifier.size(maxOf(avatarSize, borderSize))
+        modifier = modifier.size(slotSize)
     ) {
-        // 1. Avatar Circle
+        // 1. Avatar Circle (Fixed diameter D, identical position for all borders)
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -100,29 +110,42 @@ fun ProfileAvatarView(
             }
         }
 
-        // 2. Overlaid Decorative Border (Centered with inner-circle precision)
+        // 2. Overlaid Decorative Border (Normalized to avatar center with 1.5% overlap)
         if (border.drawableRes != 0) {
-            val offsetX = (borderSize * -border.centerOffsetX)
-            val offsetY = (borderSize * -border.centerOffsetY)
+            val overlap = ProfileAvatarDefaults.InnerOverlapFraction
+            val scaleWidth = (avatarSize * (1f - overlap)) / border.innerDiameterRatio
+            val scaleHeight = scaleWidth * (border.canvasHeight.toFloat() / border.canvasWidth.toFloat())
+
+            // Center of inner hole relative to image center
+            val shiftX = scaleWidth * -(border.innerCenterX - 0.5f)
+            val shiftY = scaleHeight * -(border.innerCenterY - 0.5f)
 
             Image(
                 painter = painterResource(border.drawableRes),
                 contentDescription = border.displayName,
-                contentScale = ContentScale.Fit,
+                contentScale = ContentScale.FillBounds,
                 modifier = Modifier
-                    .size(borderSize)
-                    .offset(x = offsetX, y = offsetY)
+                    .size(width = scaleWidth, height = scaleHeight)
+                    .align(Alignment.Center)
+                    .graphicsLayer {
+                        clip = false
+                        translationX = shiftX.toPx()
+                        translationY = shiftY.toPx()
+                    }
             )
         }
 
-        // 3. Circular Edit Pen Button (Overlapping bottom-right of avatar)
+        // 3. Circular Edit Pen Button (Anchored to avatar circle at 45 degrees)
         if (showEditButton) {
+            val radius = avatarSize / 2f
+            val offset45 = radius * ProfileAvatarDefaults.CosSin45
+
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .offset(x = (-2).dp, y = (-2).dp)
-                    .size(44.dp) // Accessible touch target
+                    .align(Alignment.Center)
+                    .offset(x = offset45, y = offset45)
+                    .size(ProfileAvatarDefaults.EditButtonTouchSize) // 44dp touch target
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = ripple(bounded = false, radius = 22.dp),
@@ -132,19 +155,43 @@ fun ProfileAvatarView(
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(ProfileAvatarDefaults.EditButtonVisibleSize) // 32dp visible circle
                         .clip(CircleShape)
                         .background(Color(0xFF131925))
                         .border(1.5.dp, Color(0xFF3B82F6), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit Profile",
-                        tint = Color.White,
-                        modifier = Modifier.size(15.dp)
+                        contentDescription = stringResource(R.string.cd_edit_profile),
+                        tint = Color(0xFF60A5FA),
+                        modifier = Modifier.size(ProfileAvatarDefaults.EditButtonIconSize)
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * Backward-compatible wrapper delegating directly to [ProfileAvatar].
+ */
+@Composable
+fun ProfileAvatarView(
+    avatarPath: String?,
+    borderId: String?,
+    modifier: Modifier = Modifier,
+    avatarSize: Dp = ProfileAvatarDefaults.DefaultAvatarSize,
+    avatarUpdatedAt: Long = 0L,
+    showEditButton: Boolean = false,
+    onEditClick: () -> Unit = {}
+) {
+    ProfileAvatar(
+        avatarPath = avatarPath,
+        borderId = borderId,
+        modifier = modifier,
+        avatarSize = avatarSize,
+        avatarUpdatedAt = avatarUpdatedAt,
+        showEditButton = showEditButton,
+        onEditClick = onEditClick
+    )
 }

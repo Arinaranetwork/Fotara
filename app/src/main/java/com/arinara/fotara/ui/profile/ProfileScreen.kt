@@ -290,7 +290,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
             ) {
-                ProfileAvatarView(
+                ProfileAvatar(
                     avatarPath = profile.avatarPath,
                     borderId = profile.borderId,
                     avatarSize = 78.dp,

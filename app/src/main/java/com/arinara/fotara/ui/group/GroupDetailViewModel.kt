@@ -21,6 +21,7 @@ import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
+import com.arinara.fotara.data.repository.WorkspaceRepository
 import com.arinara.fotara.data.storage.PhotoStorageManager
 import com.arinara.fotara.ocr.OcrEngine
 import com.arinara.fotara.util.DeadlineNotificationManager
@@ -43,6 +44,7 @@ class GroupDetailViewModel(
     val targetPhotoId: Long? = null,
     private val photoRepository: PhotoRepository,
     private val folderRepository: FolderRepository,
+    private val workspaceRepository: WorkspaceRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
     private val ocrEngine: OcrEngine? = null,
     private val photoStorageManager: PhotoStorageManager? = null,
@@ -61,6 +63,14 @@ class GroupDetailViewModel(
     }
 
     private fun loadGroupData() {
+        if (workspaceRepository != null) {
+            viewModelScope.launch {
+                workspaceRepository.observeWorkspaces().collect { workspaces ->
+                    _uiState.update { it.copy(workspaces = workspaces) }
+                }
+            }
+        }
+
         viewModelScope.launch {
             folderRepository.getFolderById(folderId).collect { folder ->
                 _uiState.update { it.copy(folder = folder) }
@@ -364,6 +374,7 @@ class GroupDetailViewModel(
             targetPhotoId: Long? = null,
             photoRepository: PhotoRepository,
             folderRepository: FolderRepository,
+            workspaceRepository: WorkspaceRepository? = null,
             settingsRepository: SettingsRepository? = null,
             ocrEngine: OcrEngine? = null,
             photoStorageManager: PhotoStorageManager? = null,
@@ -377,6 +388,7 @@ class GroupDetailViewModel(
                     targetPhotoId = targetPhotoId,
                     photoRepository = photoRepository,
                     folderRepository = folderRepository,
+                    workspaceRepository = workspaceRepository,
                     settingsRepository = settingsRepository,
                     ocrEngine = ocrEngine,
                     photoStorageManager = photoStorageManager,

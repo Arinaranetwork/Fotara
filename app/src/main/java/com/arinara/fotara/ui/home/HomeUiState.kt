@@ -44,5 +44,23 @@ data class HomeUiState(
     val selectedFolderIds: Set<Long> = emptySet(),
     val showBulkDeleteDialog: Boolean = false,
     val bulkDeleteStats: FolderBulkDeleteResult? = null,
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
+    val workspaces: List<com.arinara.fotara.data.model.Workspace> = emptyList(),
+    val selectedWorkspaceId: Long = 1L,
+    val showAddWorkspaceDialog: Boolean = false,
+    val workspaceToRename: com.arinara.fotara.data.model.Workspace? = null,
+    val foldersToMoveWorkspace: List<Folder>? = null,
+    val workspaceToDelete: com.arinara.fotara.data.model.Workspace? = null,
+    val workspaceDeleteStats: com.arinara.fotara.data.repository.WorkspaceContentStats? = null,
+    val workspaceDeleteStep: WorkspaceDeleteStep = WorkspaceDeleteStep.NONE,
+    val workspaceDeleteProgress: Pair<Int, Int>? = null,
+    val searchWorkspaceScopeId: Long? = null
 )
+
+enum class WorkspaceDeleteStep {
+    NONE,
+    CONFIRM,
+    CHOICE,
+    PERMANENT_CONFIRM,
+    PROGRESS
+}

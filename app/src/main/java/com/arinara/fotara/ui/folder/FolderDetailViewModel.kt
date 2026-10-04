@@ -61,7 +61,8 @@ class FolderDetailViewModel(
     private val settingsRepository: SettingsRepository? = null,
     val documentRepository: DocumentRepository? = null,
     val textNoteRepository: TextNoteRepository? = null,
-    val canvasNoteRepository: CanvasNoteRepository? = null
+    val canvasNoteRepository: CanvasNoteRepository? = null,
+    val workspaceRepository: com.arinara.fotara.data.repository.WorkspaceRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -102,6 +103,14 @@ class FolderDetailViewModel(
         viewModelScope.launch {
             photoRepository.getAllActiveGroups().collect { groups ->
                 _uiState.update { it.copy(availableGroups = groups) }
+            }
+        }
+
+        workspaceRepository?.let { repo ->
+            viewModelScope.launch {
+                repo.observeWorkspaces().collect { workspaces ->
+                    _uiState.update { it.copy(workspaces = workspaces) }
+                }
             }
         }
 
@@ -1560,7 +1569,8 @@ class FolderDetailViewModel(
             settingsRepository: SettingsRepository? = null,
             documentRepository: DocumentRepository? = null,
             textNoteRepository: TextNoteRepository? = null,
-            canvasNoteRepository: CanvasNoteRepository? = null
+            canvasNoteRepository: CanvasNoteRepository? = null,
+            workspaceRepository: com.arinara.fotara.data.repository.WorkspaceRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -1581,7 +1591,8 @@ class FolderDetailViewModel(
                     settingsRepository = settingsRepository,
                     documentRepository = documentRepository,
                     textNoteRepository = textNoteRepository,
-                    canvasNoteRepository = canvasNoteRepository
+                    canvasNoteRepository = canvasNoteRepository,
+                    workspaceRepository = workspaceRepository
                 ) as T
             }
         }

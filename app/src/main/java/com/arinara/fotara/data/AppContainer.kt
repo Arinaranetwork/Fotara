@@ -33,7 +33,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
+import com.arinara.fotara.data.repository.WorkspaceRepository
+import com.arinara.fotara.data.repository.SqliteWorkspaceRepository
+
 interface AppContainer {
+    val workspaceRepository: WorkspaceRepository
     val folderRepository: FolderRepository
     val photoRepository: PhotoRepository
     val ocrEngine: OcrEngine
@@ -65,6 +69,10 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         SqliteFolderRepository(dbHelper, photoStorageManager)
     }
 
+    override val workspaceRepository: WorkspaceRepository by lazy {
+        SqliteWorkspaceRepository(dbHelper, folderRepository)
+    }
+
     override val photoRepository: PhotoRepository by lazy {
         SqlitePhotoRepository(dbHelper, folderRepository, photoStorageManager)
     }
@@ -86,7 +94,9 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
             context = context,
             folderRepository = folderRepository,
             photoRepository = photoRepository,
-            photoStorageManager = photoStorageManager
+            photoStorageManager = photoStorageManager,
+            workspaceRepository = workspaceRepository,
+            documentRepositoryProvider = { documentRepository }
         )
     }
 
@@ -96,16 +106,17 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
             dbHelper = dbHelper,
             photoRepository = photoRepository,
             photoStorageManager = photoStorageManager,
-            ocrEngine = ocrEngine
+            ocrEngine = ocrEngine,
+            folderRepository = folderRepository
         )
     }
 
     override val textNoteRepository: TextNoteRepository by lazy {
-        SqliteTextNoteRepository(dbHelper)
+        SqliteTextNoteRepository(dbHelper, folderRepository)
     }
 
     override val canvasNoteRepository: CanvasNoteRepository by lazy {
-        SqliteCanvasNoteRepository(dbHelper)
+        SqliteCanvasNoteRepository(dbHelper, folderRepository)
     }
 
     override val canvasAssetManager: com.arinara.fotara.canvas.persistence.CanvasAssetManager by lazy {

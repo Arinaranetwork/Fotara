@@ -392,14 +392,41 @@ object TextEditorOps {
 
     // --- 3. Indent and Outdent ---
 
+    fun canIndent(text: String, selStart: Int, selEnd: Int): Boolean {
+        val touched = getTouchedLines(text, selStart, selEnd)
+        if (touched.isEmpty()) return false
+        val listLines = touched.filter { it.prefixType in listOf(LineToolType.BULLET_LIST, LineToolType.NUMBERED_LIST, LineToolType.CHECKBOX) }
+        if (listLines.isEmpty()) return false
+        return listLines.any { it.indent.length < 6 }
+    }
+
+    fun canOutdent(text: String, selStart: Int, selEnd: Int): Boolean {
+        val touched = getTouchedLines(text, selStart, selEnd)
+        if (touched.isEmpty()) return false
+        val listLines = touched.filter { it.prefixType in listOf(LineToolType.BULLET_LIST, LineToolType.NUMBERED_LIST, LineToolType.CHECKBOX) }
+        if (listLines.isEmpty()) return false
+        return listLines.any { it.indent.length >= 2 }
+    }
+
     fun indent(text: String, selStart: Int, selEnd: Int): TextEditResult {
         val touched = getTouchedLines(text, selStart, selEnd)
         if (touched.isEmpty()) return TextEditResult(text, selStart, selEnd)
 
-        // Max 3 levels: 0, 2, 4, 6 spaces
+        var hasChange = false
         val newLines = touched.map {
-            if (it.indent.length >= 6) it.text else "  " + it.text
+            if (it.prefixType in listOf(LineToolType.BULLET_LIST, LineToolType.NUMBERED_LIST, LineToolType.CHECKBOX)) {
+                if (it.indent.length < 6) {
+                    hasChange = true
+                    "  " + it.text
+                } else {
+                    it.text
+                }
+            } else {
+                it.text
+            }
         }
+        if (!hasChange) return TextEditResult(text, selStart, selEnd)
+
         val blockStart = touched.first().originalStart
         val blockEnd = touched.last().originalEnd
 
@@ -418,14 +445,29 @@ object TextEditorOps {
         val touched = getTouchedLines(text, selStart, selEnd)
         if (touched.isEmpty()) return TextEditResult(text, selStart, selEnd)
 
+        var hasChange = false
         val newLines = touched.map {
-            when {
-                it.text.startsWith("  ") -> it.text.substring(2)
-                it.text.startsWith(" ") -> it.text.substring(1)
-                it.text.startsWith("\t") -> it.text.substring(1)
-                else -> it.text
+            if (it.prefixType in listOf(LineToolType.BULLET_LIST, LineToolType.NUMBERED_LIST, LineToolType.CHECKBOX)) {
+                when {
+                    it.text.startsWith("  ") -> {
+                        hasChange = true
+                        it.text.substring(2)
+                    }
+                    it.text.startsWith(" ") -> {
+                        hasChange = true
+                        it.text.substring(1)
+                    }
+                    it.text.startsWith("\t") -> {
+                        hasChange = true
+                        it.text.substring(1)
+                    }
+                    else -> it.text
+                }
+            } else {
+                it.text
             }
         }
+        if (!hasChange) return TextEditResult(text, selStart, selEnd)
 
         val blockStart = touched.first().originalStart
         val blockEnd = touched.last().originalEnd
@@ -545,9 +587,28 @@ object TextEditorOps {
         val cursor = selStart.coerceIn(0, text.length)
         if (cursor == 0) return null
 
-        val lineStart = text.lastIndexOf('\n', (cursor - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
+        val lineStart = if (cursor == 0) 0 else {
+            val prevNl = text.lastIndexOf('\n', cursor - 1)
+            if (prevNl == -1) 0 else prevNl + 1
+        }
         val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
         val lineText = text.substring(lineStart, lineEnd)
+
+        // Check if cursor is at start of line below a divider
+        if (cursor == lineStart && lineStart > 0) {
+            val prevLineEnd = lineStart - 1
+            val prevLineStart = if (prevLineEnd == 0) 0 else {
+                val p = text.lastIndexOf('\n', prevLineEnd - 1)
+                if (p == -1) 0 else p + 1
+            }
+            val prevLine = text.substring(prevLineStart, prevLineEnd).trim()
+            if (prevLine == "---" || prevLine == "***") {
+                val newText = text.substring(0, prevLineStart) + text.substring(lineStart)
+                val newCursor = prevLineStart.coerceIn(0, newText.length)
+                return TextEditResult(newText, newCursor, newCursor)
+            }
+        }
+
         val parsed = parseLine(0, lineStart, lineEnd, lineText)
 
         if (parsed.prefixType != null) {
@@ -756,10 +817,14 @@ object TextEditorOps {
     // --- 11. Checkbox Toggle at Offset / Line ---
 
     fun toggleChecklistAtOffset(text: String, selStart: Int, selEnd: Int, charOffset: Int): TextEditResult {
-        if (charOffset !in 0..text.length) return TextEditResult(text, selStart, selEnd)
+        if (text.isEmpty() || charOffset !in 0..text.length) return TextEditResult(text, selStart, selEnd)
 
-        val lineStart = text.lastIndexOf('\n', (charOffset - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
-        val lineEnd = text.indexOf('\n', charOffset).let { if (it == -1) text.length else it }
+        val clamped = charOffset.coerceIn(0, text.length)
+        val lineStart = if (clamped == 0) 0 else {
+            val prevNl = text.lastIndexOf('\n', clamped - 1)
+            if (prevNl == -1) 0 else prevNl + 1
+        }
+        val lineEnd = text.indexOf('\n', clamped).let { if (it == -1) text.length else it }
         val line = text.substring(lineStart, lineEnd)
 
         val uncheckedRegex = Regex("""^(\s*[-*+]\s*)\[\s\](\s*)""")
@@ -769,14 +834,14 @@ object TextEditorOps {
         if (unMatch != null) {
             val newLine = line.replaceFirst(Regex("""\[\s\]"""), "[x]")
             val newText = text.substring(0, lineStart) + newLine + text.substring(lineEnd)
-            return TextEditResult(newText, selStart, selEnd)
+            return TextEditResult(newText, selStart.coerceIn(0, newText.length), selEnd.coerceIn(0, newText.length))
         }
 
         val chMatch = checkedRegex.find(line)
         if (chMatch != null) {
             val newLine = line.replaceFirst(Regex("""\[[xX]\]"""), "[ ]")
             val newText = text.substring(0, lineStart) + newLine + text.substring(lineEnd)
-            return TextEditResult(newText, selStart, selEnd)
+            return TextEditResult(newText, selStart.coerceIn(0, newText.length), selEnd.coerceIn(0, newText.length))
         }
 
         return TextEditResult(text, selStart, selEnd)
