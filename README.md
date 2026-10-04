@@ -82,6 +82,7 @@
 - **Lossless PNG Profile Picture & Banner Support**: Enforced true PNG format preservation with full 32-bit ARGB_8888 alpha transparency for custom avatars and banners, resolving encoder failures on transparent PNG images.
 - **Expanded & Formatted In-App Update Modal**: Upgraded update popup modal with an expanded vertical layout (up to 440dp height) and native Rich Markdown rendering, cleanly displaying headings (H1, H2, H3), bold text, bullet lists, blockquotes, and release note formatting.
 - **LinkIt Converging Cluster Glow**: For linked groups of 3 or 4 cards arranged in a 2x2 grid cluster (including L-shaped triads), corner glows now converge toward the shared central intersection point with cardinal side glows suppressed within qualifying blocks. Pairwise cardinal edge glows are preserved for isolated pairs and straight line layouts across grid densities 2, 3, and 4.
+- **Updated What's New Dashboard**: In-app "What's New" screen now reflects the 1.5.10 release notes and feature highlights with fallback offline support.
 - **Aspect-Locked Fullscreen Crop Editor**: Fullscreen interactive crop editor supporting 1:1 circular guide for profile pictures and exact layout-matched aspect ratio for banners with four accessible 44dp corner handles, two-finger pinch scaling, and drag panning with boundary clamping.
 
 ---
@@ -95,7 +96,7 @@
 | **Supported Devices** | Android 7.0 (API 24) through Android 16 (API 36) |
 | **Architecture** | Offline-First, On-Device Processing |
 | **Distribution Model** | **Free for Personal and Educational Use** |
-| **APK Checksum (SHA256)** | `B96B74360AD974444FD095348E1EE36FBE3650940E296A65AEBF910FDBE05CCB` |
+| **APK Checksum (SHA256)** | `ED98E488C665C8D3F0D1C828A180432BBFCBE7F9F63AEEEC0352A4F7E2C9D731` |
 
 ---
 
