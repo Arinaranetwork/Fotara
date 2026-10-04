@@ -21,6 +21,13 @@ enum class StrokeToolType {
     HIGHLIGHTER
 }
 
+enum class StrokeBlendMode {
+    NORMAL,
+    MULTIPLY,
+    DARKEN,
+    SCREEN
+}
+
 /**
  * Individual point within a stroke containing 2D position and normalized stylus/touch pressure.
  */
@@ -47,7 +54,7 @@ sealed class CanvasElement {
 }
 
 /**
- * Freehand drawing stroke with variable pressure, color, width, and tool type.
+ * Freehand drawing stroke with variable pressure, color, width, tool type, and blend mode.
  */
 data class StrokeElement(
     override val id: String = UUID.randomUUID().toString(),
@@ -56,6 +63,7 @@ data class StrokeElement(
     val color: Long, // ARGB 32-bit packed
     val width: Float,
     val toolType: StrokeToolType = StrokeToolType.PEN,
+    val blendMode: StrokeBlendMode = StrokeBlendMode.NORMAL,
     override val bounds: CanvasRect,
     override val zIndex: Int = 0
 ) : CanvasElement() {
@@ -153,7 +161,7 @@ data class CanvasDocument(
      * Returns all elements belonging to a specific layer.
      */
     fun getElementsForLayer(layerId: String): List<CanvasElement> {
-        return elements.filter { it.layerId == layerId }.sortedBy { it.zIndex }
+        return elements.filter { it.layerId == layerId }.sortedWith(compareBy<CanvasElement> { it.zIndex }.thenBy { it.id })
     }
 
     /**

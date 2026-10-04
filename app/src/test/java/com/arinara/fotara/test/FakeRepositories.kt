@@ -20,6 +20,7 @@ import com.arinara.fotara.data.model.StorageLocation
 import com.arinara.fotara.data.model.Subfolder
 import com.arinara.fotara.data.model.TagColor
 import com.arinara.fotara.data.model.ThemeMode
+import com.arinara.fotara.data.model.UserProfile
 import com.arinara.fotara.data.model.UserSettings
 import com.arinara.fotara.data.repository.FolderBulkDeleteResult
 import com.arinara.fotara.data.repository.FolderRepository
@@ -437,6 +438,7 @@ class FakePhotoRepository(
     }
 
     override suspend fun getAllActivePhotos(): List<Photo> = photosFlow.value
+    override fun getAllActivePhotosFlow(): Flow<List<Photo>> = photosFlow.asStateFlow()
 
     override suspend fun rebuildSearchIndex(): Int = photosFlow.value.size
 
@@ -571,8 +573,15 @@ class FakePhotoRepository(
     }
 
     override suspend fun addPhotosToGroup(groupId: Long, photoIds: List<Long>) {
+        val targetGroup = groupsFlow.value.firstOrNull { it.id == groupId }
         photosFlow.value = photosFlow.value.map {
-            if (it.id in photoIds) it.copy(groupId = groupId) else it
+            if (it.id in photoIds) {
+                it.copy(
+                    groupId = groupId,
+                    folderId = targetGroup?.folderId ?: it.folderId,
+                    subfolderId = targetGroup?.subfolderId
+                )
+            } else it
         }
     }
 
@@ -728,6 +737,9 @@ class FakeSettingsRepository : SettingsRepository {
     private val _settingsFlow = MutableStateFlow(UserSettings())
     override val settingsFlow: StateFlow<UserSettings> = _settingsFlow.asStateFlow()
 
+    private val _profileFlow = MutableStateFlow(UserProfile())
+    override val profileFlow: StateFlow<UserProfile> = _profileFlow.asStateFlow()
+
     var storageBreakdown = StorageBreakdown(
         photosSizeBytes = 1048576L,
         thumbnailsSizeBytes = 204800L,
@@ -740,6 +752,44 @@ class FakeSettingsRepository : SettingsRepository {
     var importResult = ImportResult(success = true, foldersImported = 2, photosImported = 4, message = "Import success")
     var onboardingCompleted = false
     private val recentSearches = mutableListOf<String>()
+
+    override suspend fun updateProfileName(name: String) {
+        val trimmed = name.trim().take(30)
+        _profileFlow.value = _profileFlow.value.copy(name = trimmed)
+    }
+
+    override suspend fun updateProfileEmail(email: String) {
+        val trimmed = email.trim().take(60)
+        _profileFlow.value = _profileFlow.value.copy(email = trimmed)
+    }
+
+    override suspend fun updateProfileBorder(borderId: String) {
+        _profileFlow.value = _profileFlow.value.copy(borderId = borderId)
+    }
+
+    override suspend fun saveProfileAvatar(bitmap: android.graphics.Bitmap): String? {
+        val fakePath = "/fake/files/profile/avatar.webp"
+        val now = System.currentTimeMillis()
+        _profileFlow.value = _profileFlow.value.copy(avatarPath = fakePath, avatarUpdatedAt = now)
+        return fakePath
+    }
+
+    override suspend fun removeProfileAvatar() {
+        val now = System.currentTimeMillis()
+        _profileFlow.value = _profileFlow.value.copy(avatarPath = null, avatarUpdatedAt = now)
+    }
+
+    override suspend fun saveProfileBanner(bitmap: android.graphics.Bitmap): String? {
+        val fakePath = "/fake/files/profile/banner.webp"
+        val now = System.currentTimeMillis()
+        _profileFlow.value = _profileFlow.value.copy(bannerPath = fakePath, bannerUpdatedAt = now)
+        return fakePath
+    }
+
+    override suspend fun removeProfileBanner() {
+        val now = System.currentTimeMillis()
+        _profileFlow.value = _profileFlow.value.copy(bannerPath = null, bannerUpdatedAt = now)
+    }
 
     override suspend fun updateSortOrder(sortOrder: SortOrder) {
         _settingsFlow.value = _settingsFlow.value.copy(defaultSortOrder = sortOrder)
@@ -842,6 +892,10 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun updateOptInCrashReporting(enabled: Boolean) {
         _settingsFlow.value = _settingsFlow.value.copy(optInCrashReporting = enabled)
     }
+
+    override suspend fun updateCombineFileNamePreset(preset: String) {
+        _settingsFlow.value = _settingsFlow.value.copy(combineFileNamePreset = preset)
+    }
 }
 
 class FakeDocumentRepository(
@@ -859,6 +913,9 @@ class FakeDocumentRepository(
 
     override fun getDocumentPages(documentNoteId: Long): Flow<List<DocumentPage>> =
         pagesFlow.map { it[documentNoteId] ?: emptyList() }
+
+    override fun getAllDocumentPages(): Flow<Map<Long, List<DocumentPage>>> =
+        pagesFlow
 
     override suspend fun getDocumentNoteById(id: Long): DocumentNote? =
         notesFlow.value.firstOrNull { it.id == id }

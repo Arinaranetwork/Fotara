@@ -21,6 +21,26 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.arinara.fotara.R
+import com.arinara.fotara.canvas.model.StrokeBlendMode
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,12 +54,14 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -65,7 +87,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -82,8 +103,6 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.VerticalAlignBottom
-import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -112,6 +131,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -150,7 +170,23 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import kotlinx.coroutines.delay
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CanvasScreen(
     viewModel: CanvasViewModel,
@@ -187,9 +223,23 @@ fun CanvasScreen(
     var drawingViewRef by remember { mutableStateOf<CanvasDrawingView?>(null) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var renameInput by remember { mutableStateOf("") }
-    var newLayerName by remember { mutableStateOf("") }
-    var showAddLayerDialog by remember { mutableStateOf(false) }
+    var editingLayerId by remember { mutableStateOf<String?>(null) }
+    var editingLayerName by remember { mutableStateOf(TextFieldValue()) }
+    val renameFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
     var showMoveElementsLayerPicker by remember { mutableStateOf(false) }
+    var topCapsulesHeightPx by remember { mutableIntStateOf(0) }
+    var dockHeightPx by remember { mutableIntStateOf(0) }
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+
+    LaunchedEffect(editingLayerId) {
+        if (editingLayerId != null) {
+            delay(50L)
+            renameFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
 
     // System Photo Picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -229,12 +279,18 @@ fun CanvasScreen(
                     onViewportChanged = { v ->
                         viewModel.setZoomPercentage(v.scale)
                     }
+                    onSelectionChanged = { sel ->
+                        viewModel.updateSelection(sel)
+                    }
                     drawingViewRef = this
                 }
             },
             update = { view ->
                 if (view.documentSnapshot != uiState.document) {
                     view.documentSnapshot = uiState.document
+                }
+                if (view.activeLayerId != uiState.activeLayerId) {
+                    view.activeLayerId = uiState.activeLayerId
                 }
                 drawingViewRef = view
             }
@@ -249,6 +305,7 @@ fun CanvasScreen(
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(horizontal = 8.dp, vertical = 6.dp)
+                .onSizeChanged { topCapsulesHeightPx = it.height }
                 .zIndex(10f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -522,8 +579,14 @@ fun CanvasScreen(
         // ==========================================
         // Z7: Bottom-Left Zoom & Fit-to-Content
         // ==========================================
+        val dockHeightDp = with(density) { dockHeightPx.toDp() }
+        val targetZ7Padding = CanvasDockLayoutHelper.computeZ7BottomPadding(
+            dockHeightDp = dockHeightDp.value,
+            isCollapsed = uiState.isBottomDockCollapsed
+        ).dp
+
         val zoomBottomPadding by animateDpAsState(
-            targetValue = if (uiState.isBottomDockCollapsed) 20.dp else 92.dp,
+            targetValue = targetZ7Padding,
             label = "zoom_bottom_padding"
         )
 
@@ -576,6 +639,23 @@ fun CanvasScreen(
         // ==========================================
         // Z4: Tool Options Popup (Anchored Above Z3)
         // ==========================================
+        val targetZ4Padding = CanvasDockLayoutHelper.computeZ4BottomPadding(
+            dockHeightDp = dockHeightDp.value,
+            isCollapsed = uiState.isBottomDockCollapsed
+        ).dp
+
+        val configuration = LocalConfiguration.current
+        val screenHeightDp = configuration.screenHeightDp.dp
+        val statusBarTopDp = maxOf(
+            WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+            WindowInsets.displayCutout.asPaddingValues().calculateTopPadding()
+        )
+        val navBarBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val topCapsulesDp = with(density) { topCapsulesHeightPx.toDp() }
+        val topClearanceDp = statusBarTopDp + topCapsulesDp + 12.dp
+        val bottomClearanceDp = navBarBottomDp + targetZ4Padding + 8.dp
+        val maxPanelHeightDp = (screenHeightDp - topClearanceDp - bottomClearanceDp).coerceAtLeast(160.dp)
+
         AnimatedVisibility(
             visible = uiState.showToolOptions,
             enter = fadeIn() + slideInVertically { it / 2 },
@@ -583,7 +663,7 @@ fun CanvasScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 88.dp)
+                .padding(bottom = targetZ4Padding)
                 .zIndex(12f)
         ) {
             Surface(
@@ -594,9 +674,12 @@ fun CanvasScreen(
                 modifier = Modifier
                     .width(320.dp)
                     .padding(horizontal = 16.dp)
+                    .heightIn(max = maxPanelHeightDp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
                     // Title and Close
                     Row(
@@ -606,11 +689,10 @@ fun CanvasScreen(
                     ) {
                         Text(
                             text = when (uiState.toolState.activeTool) {
-                                CanvasToolType.PEN -> "Pen Options"
-                                CanvasToolType.HIGHLIGHTER -> "Highlighter Options"
-                                CanvasToolType.ERASER_STROKE -> "Stroke Eraser"
-                                CanvasToolType.ERASER_AREA -> "Area Eraser"
-                                CanvasToolType.SELECT -> "Select Options"
+                                CanvasToolType.PEN -> stringResource(R.string.canvas_tool_pen)
+                                CanvasToolType.HIGHLIGHTER -> stringResource(R.string.canvas_tool_highlighter)
+                                CanvasToolType.ERASER -> stringResource(R.string.canvas_tool_eraser)
+                                CanvasToolType.SELECT -> stringResource(R.string.canvas_tool_select)
                             },
                             color = TextPrimary,
                             fontSize = 14.sp,
@@ -694,9 +776,73 @@ fun CanvasScreen(
                                     }
                                 }
                             }
+
+                            // Blending Mode Row for Highlighter
+                            if (isHighlighter) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = stringResource(R.string.canvas_blend_mode),
+                                    color = TextSecondary,
+                                    fontSize = 12.sp
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    val currentBlend = uiState.toolState.highlighterBlendMode
+                                    val modes = listOf(
+                                        StrokeBlendMode.NORMAL to R.string.canvas_blend_normal,
+                                        StrokeBlendMode.MULTIPLY to R.string.canvas_blend_multiply,
+                                        StrokeBlendMode.DARKEN to R.string.canvas_blend_darken,
+                                        StrokeBlendMode.SCREEN to R.string.canvas_blend_screen
+                                    )
+                                    for ((mode, strRes) in modes) {
+                                        val isSelected = currentBlend == mode
+                                        val modeLabel = stringResource(strRes)
+                                        Surface(
+                                            color = if (isSelected) FolderTabCream else MidnightSurface.copy(alpha = 0.6f),
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = BorderStroke(
+                                                1.dp,
+                                                if (isSelected) FolderTabCream else MidnightCardOutline
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(48.dp)
+                                                .clickable { viewModel.setHighlighterBlendMode(mode) }
+                                                .semantics { contentDescription = modeLabel }
+                                        ) {
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(horizontal = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = modeLabel,
+                                                    color = if (isSelected) MidnightNavy else FolderTabCream,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = stringResource(R.string.canvas_blend_hint),
+                                    color = TextMuted,
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
                         }
-                        CanvasToolType.ERASER_STROKE, CanvasToolType.ERASER_AREA -> {
-                            Text("Eraser Radius", color = TextSecondary, fontSize = 12.sp)
+                        CanvasToolType.ERASER -> {
+                            Text(stringResource(R.string.canvas_eraser_size), color = TextSecondary, fontSize = 12.sp)
                             Slider(
                                 value = uiState.toolState.eraserRadius,
                                 onValueChange = { viewModel.setEraserRadius(it) },
@@ -707,25 +853,6 @@ fun CanvasScreen(
                                     inactiveTrackColor = MidnightNavy
                                 )
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MidnightNavy)
-                                    .clickable { viewModel.toggleEraserMode() }
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (uiState.toolState.activeTool == CanvasToolType.ERASER_STROKE) "Mode: Delete Stroke" else "Mode: Slice & Erase Area",
-                                    color = FolderTabCream,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text("Switch", color = TagAmber, fontSize = 12.sp)
-                            }
                         }
                         CanvasToolType.SELECT -> {
                             Text(
@@ -748,30 +875,31 @@ fun CanvasScreen(
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp)
+                .onSizeChanged { dockHeightPx = it.height }
                 .zIndex(10f)
         ) {
             Surface(
                 color = DockSlatePill,
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(24.dp),
                 shadowElevation = 12.dp,
                 border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline)
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    // Collapsible Handle
+                    // Collapsible Handle (Sleeker smaller handle)
                     IconButton(
                         onClick = { viewModel.toggleBottomDock() },
                         modifier = Modifier
-                            .size(24.dp)
-                            .padding(bottom = 2.dp)
+                            .size(width = 36.dp, height = 16.dp)
+                            .padding(bottom = 1.dp)
                     ) {
                         Icon(
                             imageVector = if (uiState.isBottomDockCollapsed) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                             contentDescription = "Collapse Dock",
                             tint = FolderTabCream.copy(alpha = 0.6f),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
 
@@ -782,7 +910,7 @@ fun CanvasScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             // Select & Move
                             val isSelect = uiState.toolState.activeTool == CanvasToolType.SELECT
@@ -795,7 +923,7 @@ fun CanvasScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.NearMe,
-                                    contentDescription = "Select",
+                                    contentDescription = stringResource(R.string.canvas_tool_select),
                                     tint = if (isSelect) MidnightNavy else FolderTabCream,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -803,18 +931,25 @@ fun CanvasScreen(
 
                             Spacer(modifier = Modifier.width(4.dp))
 
-                            // Pen
+                            // Pen (Tap selects, Long-press opens Z4 options popup with haptics)
                             val isPen = uiState.toolState.activeTool == CanvasToolType.PEN
-                            IconButton(
-                                onClick = { viewModel.setTool(CanvasToolType.PEN) },
+                            Box(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .clip(CircleShape)
                                     .background(if (isPen) FolderTabCream else Color.Transparent)
+                                    .combinedClickable(
+                                        onClick = { viewModel.setTool(CanvasToolType.PEN) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.showPenOptions()
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
-                                    contentDescription = "Pen",
+                                    contentDescription = stringResource(R.string.canvas_tool_pen),
                                     tint = if (isPen) MidnightNavy else FolderTabCream,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -822,18 +957,25 @@ fun CanvasScreen(
 
                             Spacer(modifier = Modifier.width(4.dp))
 
-                            // Highlighter
+                            // Highlighter (Tap selects, Long-press opens Z4 options popup with haptics)
                             val isHighlighter = uiState.toolState.activeTool == CanvasToolType.HIGHLIGHTER
-                            IconButton(
-                                onClick = { viewModel.setTool(CanvasToolType.HIGHLIGHTER) },
+                            Box(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .clip(CircleShape)
                                     .background(if (isHighlighter) FolderTabCream else Color.Transparent)
+                                    .combinedClickable(
+                                        onClick = { viewModel.setTool(CanvasToolType.HIGHLIGHTER) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.showHighlighterOptions()
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Palette,
-                                    contentDescription = "Highlighter",
+                                    painter = painterResource(id = R.drawable.ic_highlighter),
+                                    contentDescription = stringResource(R.string.canvas_tool_highlighter),
                                     tint = if (isHighlighter) MidnightNavy else FolderTabCream,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -841,41 +983,48 @@ fun CanvasScreen(
 
                             Spacer(modifier = Modifier.width(4.dp))
 
-                            // Eraser (Tapping toggles Stroke vs Area)
-                            val isEraser = uiState.toolState.activeTool == CanvasToolType.ERASER_STROKE || uiState.toolState.activeTool == CanvasToolType.ERASER_AREA
-                            IconButton(
-                                onClick = {
-                                    if (isEraser) {
-                                        viewModel.toggleEraserMode()
-                                    } else {
-                                        viewModel.setTool(CanvasToolType.ERASER_STROKE)
-                                    }
-                                },
+                            // Eraser (Plain tap selects tool; Long-press opens Z4 options popup)
+                            val isEraser = uiState.toolState.activeTool == CanvasToolType.ERASER
+                            Box(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .clip(CircleShape)
                                     .background(if (isEraser) FolderTabCream else Color.Transparent)
+                                    .combinedClickable(
+                                        onClick = { viewModel.setTool(CanvasToolType.ERASER) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.showEraserOptions()
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.CleaningServices,
-                                    contentDescription = "Eraser",
+                                    painter = painterResource(id = R.drawable.ic_eraser),
+                                    contentDescription = stringResource(R.string.canvas_tool_eraser),
                                     tint = if (isEraser) MidnightNavy else FolderTabCream,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
 
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
 
                             // Active Color Swatch (Tapping opens Z4)
                             val currentColor = if (isHighlighter) uiState.toolState.highlighterColor else uiState.toolState.penColor
                             Box(
                                 modifier = Modifier
-                                    .size(30.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(currentColor.toInt()))
-                                    .border(1.5.dp, Color.White.copy(alpha = 0.8f), CircleShape)
-                                    .clickable { viewModel.toggleToolOptions() }
-                            )
+                                    .size(44.dp)
+                                    .clickable { viewModel.toggleToolOptions() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(currentColor.toInt()))
+                                        .border(1.5.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                                )
+                            }
                         }
                     }
                 }
@@ -885,18 +1034,23 @@ fun CanvasScreen(
         // ==========================================
         // Z8: Contextual Object Bar (Selection Actions)
         // ==========================================
-        if (uiState.toolState.selectedElementIds.isNotEmpty()) {
+        val isSelectActive = uiState.toolState.activeTool == CanvasToolType.SELECT
+        val hasSelection = uiState.toolState.selection.isNotEmpty
+        if (isSelectActive || hasSelection) {
+            val topOffsetDp = CanvasDockLayoutHelper.computeZ8TopOffset(
+                with(density) { topCapsulesHeightPx.toDp() }.value
+            ).dp
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(top = 64.dp)
+                    .padding(top = topOffsetDp)
                     .zIndex(15f)
             ) {
                 Surface(
                     color = MidnightSurface,
                     shape = RoundedCornerShape(20.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, FolderTabCream.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, FolderTabCream.copy(alpha = if (hasSelection) 0.5f else 0.2f)),
                     shadowElevation = 14.dp
                 ) {
                     Row(
@@ -906,41 +1060,43 @@ fun CanvasScreen(
                         // Duplicate
                         IconButton(
                             onClick = { viewModel.duplicateSelectedElements() },
+                            enabled = hasSelection,
                             modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(Icons.Default.ContentCopy, "Duplicate", tint = FolderTabCream, modifier = Modifier.size(18.dp))
-                        }
-
-                        // Bring Forward
-                        IconButton(
-                            onClick = { viewModel.bringForwardSelection() },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(Icons.Default.VerticalAlignTop, "Bring Forward", tint = FolderTabCream, modifier = Modifier.size(18.dp))
-                        }
-
-                        // Send Backward
-                        IconButton(
-                            onClick = { viewModel.sendBackwardSelection() },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(Icons.Default.VerticalAlignBottom, "Send Backward", tint = FolderTabCream, modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = stringResource(R.string.canvas_action_duplicate),
+                                tint = if (hasSelection) FolderTabCream else TextMuted.copy(alpha = 0.35f),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
 
                         // Move to Layer
                         IconButton(
                             onClick = { showMoveElementsLayerPicker = true },
+                            enabled = hasSelection,
                             modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(Icons.Default.Layers, "Move to Layer", tint = TagAmber, modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.Layers,
+                                contentDescription = stringResource(R.string.canvas_action_move_to_layer),
+                                tint = if (hasSelection) TagAmber else TextMuted.copy(alpha = 0.35f),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
 
                         // Delete
                         IconButton(
                             onClick = { viewModel.deleteSelectedElements() },
+                            enabled = hasSelection,
                             modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(Icons.Default.Delete, "Delete", tint = TagCrimson, modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.canvas_action_delete_selection),
+                                tint = if (hasSelection) TagCrimson else TextMuted.copy(alpha = 0.35f),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }
@@ -973,8 +1129,7 @@ fun CanvasScreen(
                         )
                         Button(
                             onClick = {
-                                newLayerName = ""
-                                showAddLayerDialog = true
+                                viewModel.addDefaultLayer()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = FolderBodyBlue),
                             shape = RoundedCornerShape(12.dp)
@@ -1012,12 +1167,55 @@ fun CanvasScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = layer.name,
-                                            color = TextPrimary,
-                                            fontSize = 14.sp,
-                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                                        )
+                                        if (editingLayerId == layer.id) {
+                                            BasicTextField(
+                                                value = editingLayerName,
+                                                onValueChange = { editingLayerName = it },
+                                                singleLine = true,
+                                                textStyle = TextStyle(
+                                                    color = TextPrimary,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                ),
+                                                cursorBrush = SolidColor(FolderTabCream),
+                                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                                keyboardActions = KeyboardActions(
+                                                    onDone = {
+                                                        viewModel.renameLayer(layer.id, editingLayerName.text)
+                                                        editingLayerId = null
+                                                        keyboardController?.hide()
+                                                    }
+                                                ),
+                                                modifier = Modifier
+                                                    .weight(1f, fill = false)
+                                                    .focusRequester(renameFocusRequester)
+                                                    .onFocusChanged { focusState ->
+                                                        if (!focusState.isFocused && editingLayerId == layer.id) {
+                                                            viewModel.renameLayer(layer.id, editingLayerName.text)
+                                                            editingLayerId = null
+                                                        }
+                                                    }
+                                            )
+                                        } else {
+                                            Text(
+                                                text = layer.name,
+                                                color = TextPrimary,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                                                modifier = Modifier
+                                                    .weight(1f, fill = false)
+                                                    .combinedClickable(
+                                                        onClick = { viewModel.setActiveLayer(layer.id) },
+                                                        onLongClick = {
+                                                            editingLayerId = layer.id
+                                                            editingLayerName = TextFieldValue(
+                                                                text = layer.name,
+                                                                selection = TextRange(0, layer.name.length)
+                                                            )
+                                                        }
+                                                    )
+                                            )
+                                        }
 
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             // Move Up
@@ -1139,41 +1337,6 @@ fun CanvasScreen(
             )
         }
 
-        // Add Layer Dialog
-        if (showAddLayerDialog) {
-            AlertDialog(
-                onDismissRequest = { showAddLayerDialog = false },
-                title = { Text("New Layer", color = TextPrimary) },
-                text = {
-                    OutlinedTextField(
-                        value = newLayerName,
-                        onValueChange = { newLayerName = it },
-                        placeholder = { Text("e.g. Inking, Background, Annotations", color = TextMuted) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedBorderColor = FolderTabCream,
-                            unfocusedBorderColor = MidnightCardOutline
-                        )
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.addLayer(newLayerName)
-                        showAddLayerDialog = false
-                    }) {
-                        Text("Create", color = FolderTabCream)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showAddLayerDialog = false }) {
-                        Text("Cancel", color = TextMuted)
-                    }
-                },
-                containerColor = MidnightSurface
-            )
-        }
 
         // Background Style Picker Dialog
         if (uiState.showBackgroundPicker) {

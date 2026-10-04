@@ -119,33 +119,6 @@ object StrokeProcessor {
         }
     }
 
-    /**
-     * Midpoint quadratic curve smoothing.
-     * Transforms raw discretized points into smooth, natural curves.
-     */
-    fun smoothStroke(rawPoints: List<StrokePoint>): List<StrokePoint> {
-        if (rawPoints.size <= 2) {
-            return rawPoints
-        }
-
-        val result = mutableListOf<StrokePoint>()
-        result.add(rawPoints.first())
-
-        for (i in 0 until (rawPoints.size - 1)) {
-            val p0 = rawPoints[i]
-            val p1 = rawPoints[i + 1]
-
-            // Midpoint between p0 and p1
-            val midX = (p0.x + p1.x) / 2f
-            val midY = (p0.y + p1.y) / 2f
-            val midP = (p0.pressure + p1.pressure) / 2f
-
-            result.add(StrokePoint(midX, midY, midP))
-            result.add(p1)
-        }
-
-        return result
-    }
 
     /**
      * Computes the perpendicular distance from point (px, py) to line segment (x1, y1)-(x2, y2).
@@ -275,47 +248,149 @@ object StrokeProcessor {
         eraserY: Float,
         eraserRadius: Float
     ): List<StrokeElement> {
+        return eraseStrokeWithCapsule(stroke, eraserX, eraserY, eraserX, eraserY, eraserRadius, stroke.width)
+    }
+
+    /**
+     * Erases content along the capsule swept between consecutive points (ax, ay) and (bx, by).
+     * Cuts strokes at exact boundary points, eliminates gaps during fast drags,
+     * and drops surviving fragments shorter than max(stroke.width, minRemainder).
+     */
+    fun eraseStrokeWithCapsule(
+        stroke: StrokeElement,
+        ax: Float,
+        ay: Float,
+        bx: Float,
+        by: Float,
+        eraserRadius: Float,
+        minRemainder: Float = 0.0f
+    ): List<StrokeElement> {
         val totalEraseRadius = eraserRadius + (stroke.width / 2.0f)
         val expandedBounds = stroke.bounds.expanded(totalEraseRadius)
 
-        // Fast bounding-box check
-        if (!expandedBounds.contains(eraserX, eraserY)) {
+        // Fast bounding-box check against capsule bounding box
+        val capMinX = minOf(ax, bx) - totalEraseRadius
+        val capMaxX = maxOf(ax, bx) + totalEraseRadius
+        val capMinY = minOf(ay, by) - totalEraseRadius
+        val capMaxY = maxOf(ay, by) + totalEraseRadius
+
+        if (expandedBounds.right < capMinX || expandedBounds.left > capMaxX ||
+            expandedBounds.bottom < capMinY || expandedBounds.top > capMaxY) {
             return listOf(stroke)
+        }
+
+        val pts = stroke.points
+        if (pts.isEmpty()) return emptyList()
+
+        if (pts.size == 1) {
+            val d = distanceToSegment(pts[0].x, pts[0].y, ax, ay, bx, by)
+            return if (d <= totalEraseRadius) emptyList() else listOf(stroke)
         }
 
         val survivingSegments = mutableListOf<MutableList<StrokePoint>>()
         var currentSegment = mutableListOf<StrokePoint>()
 
-        for (point in stroke.points) {
-            val dist = hypot(point.x - eraserX, point.y - eraserY)
-            val isErased = dist <= totalEraseRadius
+        fun distanceToCap(x: Float, y: Float): Float {
+            return distanceToSegment(x, y, ax, ay, bx, by)
+        }
 
-            if (isErased) {
+        fun findBoundaryPoint(p1: StrokePoint, p2: StrokePoint, p1Erased: Boolean): StrokePoint {
+            var low = 0.0f
+            var high = 1.0f
+            for (step in 0 until 12) {
+                val mid = (low + high) / 2.0f
+                val mx = p1.x + mid * (p2.x - p1.x)
+                val my = p1.y + mid * (p2.y - p1.y)
+                val d = distanceToCap(mx, my)
+                val midErased = d <= totalEraseRadius
+                if (p1Erased) {
+                    if (midErased) low = mid else high = mid
+                } else {
+                    if (midErased) high = mid else low = mid
+                }
+            }
+            val t = (low + high) / 2.0f
+            return StrokePoint(
+                p1.x + t * (p2.x - p1.x),
+                p1.y + t * (p2.y - p1.y),
+                p1.pressure + t * (p2.pressure - p1.pressure)
+            )
+        }
+
+        var prevPt = pts[0]
+        var prevErased = distanceToCap(prevPt.x, prevPt.y) <= totalEraseRadius
+
+        if (!prevErased) {
+            currentSegment.add(prevPt)
+        }
+
+        for (i in 1 until pts.size) {
+            val curPt = pts[i]
+            val curErased = distanceToCap(curPt.x, curPt.y) <= totalEraseRadius
+
+            if (!prevErased && curErased) {
+                // Leaving surviving zone, entering erased zone: find boundary point
+                val boundary = findBoundaryPoint(prevPt, curPt, p1Erased = false)
+                currentSegment.add(boundary)
                 if (currentSegment.isNotEmpty()) {
                     survivingSegments.add(currentSegment)
                     currentSegment = mutableListOf()
                 }
-            } else {
-                currentSegment.add(point)
+            } else if (prevErased && !curErased) {
+                // Leaving erased zone, entering surviving zone: find boundary point
+                val boundary = findBoundaryPoint(prevPt, curPt, p1Erased = true)
+                currentSegment.add(boundary)
+                currentSegment.add(curPt)
+            } else if (!curErased) {
+                // Both outside: check if segment dips through capsule
+                val midX = (prevPt.x + curPt.x) / 2.0f
+                val midY = (prevPt.y + curPt.y) / 2.0f
+                if (distanceToCap(midX, midY) <= totalEraseRadius) {
+                    val midPt = StrokePoint(midX, midY, (prevPt.pressure + curPt.pressure) / 2.0f)
+                    val b1 = findBoundaryPoint(prevPt, midPt, p1Erased = false)
+                    val b2 = findBoundaryPoint(midPt, curPt, p1Erased = true)
+                    currentSegment.add(b1)
+                    survivingSegments.add(currentSegment)
+                    currentSegment = mutableListOf(b2, curPt)
+                } else {
+                    currentSegment.add(curPt)
+                }
             }
+
+            prevPt = curPt
+            prevErased = curErased
         }
 
         if (currentSegment.isNotEmpty()) {
             survivingSegments.add(currentSegment)
         }
 
-        // If stroke was completely erased
-        if (survivingSegments.isEmpty()) {
-            return emptyList()
-        }
+        if (survivingSegments.isEmpty()) return emptyList()
 
-        // If stroke was completely untouched
+        // Check if untouched
         if (survivingSegments.size == 1 && survivingSegments[0].size == stroke.points.size) {
             return listOf(stroke)
         }
 
-        // Convert surviving point sub-sequences into valid child StrokeElements
-        return survivingSegments.map { subPoints ->
+        val remnantThreshold = maxOf(stroke.width, minRemainder)
+
+        fun segmentLength(ptsList: List<StrokePoint>): Float {
+            var sum = 0.0f
+            for (j in 0 until (ptsList.size - 1)) {
+                sum += hypot(ptsList[j + 1].x - ptsList[j].x, ptsList[j + 1].y - ptsList[j].y)
+            }
+            return sum
+        }
+
+        val filteredSegments = survivingSegments.filter { sub ->
+            if (sub.size <= 1) {
+                false // Drop single dot remnants created by cutting
+            } else {
+                segmentLength(sub) >= remnantThreshold
+            }
+        }
+
+        return filteredSegments.map { subPoints ->
             val subBounds = computeBounds(subPoints, stroke.width)
             stroke.copy(
                 id = UUID.randomUUID().toString(),

@@ -23,6 +23,7 @@ import com.arinara.fotara.canvas.gesture.PointerPoint
 import com.arinara.fotara.canvas.gesture.PointerStateMachine
 import com.arinara.fotara.canvas.gesture.PointerToolType
 import com.arinara.fotara.canvas.model.CanvasDocument
+import com.arinara.fotara.canvas.model.CanvasSelection
 import com.arinara.fotara.canvas.model.StrokeToolType
 import com.arinara.fotara.canvas.tool.CanvasToolController
 import com.arinara.fotara.canvas.tool.CanvasToolType
@@ -49,7 +50,8 @@ class CanvasDrawingView(
     private val historyManager: CanvasHistoryManager,
     private val spatialIndex: QuadTreeSpatialIndex,
     var onDocumentChanged: ((CanvasDocument, CanvasRect?) -> Unit)? = null,
-    var onViewportChanged: ((ViewportState) -> Unit)? = null
+    var onViewportChanged: ((ViewportState) -> Unit)? = null,
+    var onSelectionChanged: ((CanvasSelection) -> Unit)? = null
 ) : View(context) {
 
     var viewport: ViewportState = ViewportState()
@@ -62,6 +64,8 @@ class CanvasDrawingView(
             invalidate()
         }
 
+    var activeLayerId: String = "layer_default"
+
     private val scroller = OverScroller(context)
     private var activeLassoPolygon: List<Pair<Float, Float>>? = null
 
@@ -70,6 +74,13 @@ class CanvasDrawingView(
         isClickable = true
         // Enable hardware acceleration
         setLayerType(LAYER_TYPE_HARDWARE, null)
+
+        toolController.density = resources.displayMetrics.density
+
+        // Route selection handle hit-testing to tool controller
+        pointerStateMachine.onHitTestSelection = { sx, sy ->
+            toolController.hitTestHandles(sx, sy, viewport, resources.displayMetrics.density)
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -152,7 +163,8 @@ class CanvasDrawingView(
                     needsInvalidate = true
                 }
                 is PointerAction.FinishStroke -> {
-                    val (updatedDoc, strokeBounds) = toolController.finishStroke(documentSnapshot, historyManager)
+                    toolController.activeLayerId = activeLayerId.ifEmpty { documentSnapshot.getPrimaryLayerId() }
+                    val (updatedDoc, strokeBounds) = toolController.finishStroke(documentSnapshot, historyManager, viewport.scale)
                     documentSnapshot = updatedDoc
                     spatialIndex.rebuild(updatedDoc.elements)
                     tileCacheManager.invalidateRegion(strokeBounds)
@@ -197,26 +209,45 @@ class CanvasDrawingView(
                     )
                     postInvalidateOnAnimation()
                 }
-                is PointerAction.EraseAt -> {
-                    val (updatedDoc, dirtyBounds) = toolController.eraseAt(
-                        screenX = action.screenX,
-                        screenY = action.screenY,
+                is PointerAction.StartEraser -> {
+                    toolController.startEraser(action.screenX, action.screenY)
+                }
+                is PointerAction.EraseSweep -> {
+                    val (liveDoc, dirtyBounds) = toolController.sweepEraser(
+                        points = action.points,
                         viewport = viewport,
+                        document = documentSnapshot
+                    )
+                    if (dirtyBounds != null) {
+                        documentSnapshot = liveDoc
+                        spatialIndex.rebuild(liveDoc.elements)
+                        needsInvalidate = true
+                    }
+                }
+                is PointerAction.FinishEraser -> {
+                    val (committedDoc, dirtyBounds) = toolController.finishEraser(
                         document = documentSnapshot,
                         historyManager = historyManager
                     )
                     if (dirtyBounds != null) {
-                        documentSnapshot = updatedDoc
-                        spatialIndex.rebuild(updatedDoc.elements)
+                        documentSnapshot = committedDoc
+                        spatialIndex.rebuild(committedDoc.elements)
                         tileCacheManager.invalidateRegion(dirtyBounds)
-                        onDocumentChanged?.invoke(updatedDoc, dirtyBounds)
+                        onDocumentChanged?.invoke(committedDoc, dirtyBounds)
                         needsInvalidate = true
                     }
                 }
+                is PointerAction.CancelEraser -> {
+                    toolController.cancelEraser()
+                    needsInvalidate = true
+                }
+                is PointerAction.EraseAt -> {
+                    // Handled through StartEraser and EraseSweep
+                }
                 is PointerAction.TapSelect -> {
-                    val selectedIds = toolController.selectTap(action.screenX, action.screenY, viewport, documentSnapshot)
-                    toolController.toolState = toolController.toolState.copy(selectedElementIds = selectedIds)
+                    val newSelection = toolController.selectTap(action.screenX, action.screenY, viewport, documentSnapshot)
                     activeLassoPolygon = null
+                    onSelectionChanged?.invoke(newSelection)
                     needsInvalidate = true
                 }
                 is PointerAction.LassoProgress -> {
@@ -224,28 +255,46 @@ class CanvasDrawingView(
                     needsInvalidate = true
                 }
                 is PointerAction.LassoComplete -> {
-                    val selectedIds = toolController.selectLasso(action.polygon, viewport, documentSnapshot)
-                    toolController.toolState = toolController.toolState.copy(selectedElementIds = selectedIds)
+                    val newSelection = toolController.selectLasso(action.polygon, viewport, documentSnapshot)
                     activeLassoPolygon = null
+                    onSelectionChanged?.invoke(newSelection)
                     needsInvalidate = true
                 }
+                is PointerAction.StartTransform -> {
+                    toolController.startTransformGesture(action.screenX, action.screenY, viewport, documentSnapshot)
+                }
                 is PointerAction.TransformDelta -> {
-                    val updatedDoc = toolController.applyTransformDelta(
+                    toolController.updateTransformPreview(
                         handleId = action.handleId,
-                        deltaScreenX = action.deltaScreenX,
-                        deltaScreenY = action.deltaScreenY,
+                        currentScreenX = action.currentScreenX,
+                        currentScreenY = action.currentScreenY,
                         viewport = viewport,
-                        selectedIds = toolController.toolState.selectedElementIds,
                         document = documentSnapshot,
-                        historyManager = historyManager
+                        density = resources.displayMetrics.density
                     )
-                    documentSnapshot = updatedDoc
-                    spatialIndex.rebuild(updatedDoc.elements)
-                    tileCacheManager.invalidateAll()
-                    onDocumentChanged?.invoke(updatedDoc, null)
                     needsInvalidate = true
                 }
                 is PointerAction.FinishTransform -> {
+                    val (updatedDoc, dirtyBounds) = toolController.commitTransform(
+                        handleId = action.handleId,
+                        totalDeltaX = action.totalDeltaX,
+                        totalDeltaY = action.totalDeltaY,
+                        viewport = viewport,
+                        document = documentSnapshot,
+                        historyManager = historyManager,
+                        density = resources.displayMetrics.density
+                    )
+                    documentSnapshot = updatedDoc
+                    spatialIndex.rebuild(updatedDoc.elements)
+                    if (dirtyBounds != null) {
+                        tileCacheManager.invalidateRegion(dirtyBounds)
+                    }
+                    onDocumentChanged?.invoke(updatedDoc, dirtyBounds)
+                    onSelectionChanged?.invoke(toolController.selection)
+                    needsInvalidate = true
+                }
+                is PointerAction.CancelTransform -> {
+                    toolController.cancelTransformGesture()
                     needsInvalidate = true
                 }
             }
@@ -271,8 +320,7 @@ class CanvasDrawingView(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        val isEraser = toolController.toolState.activeTool == CanvasToolType.ERASER_STROKE ||
-                toolController.toolState.activeTool == CanvasToolType.ERASER_AREA
+        val isEraser = toolController.toolState.activeTool == CanvasToolType.ERASER
         val inProgressPoints = if (!isEraser && toolController.isDrawing()) toolController.currentPoints else null
         val inProgressTool = when (toolController.toolState.activeTool) {
             CanvasToolType.HIGHLIGHTER -> StrokeToolType.HIGHLIGHTER
@@ -288,6 +336,11 @@ class CanvasDrawingView(
         } else {
             toolController.toolState.penSize
         }
+        val inProgressBlendMode = if (inProgressTool == StrokeToolType.HIGHLIGHTER) {
+            toolController.toolState.highlighterBlendMode
+        } else {
+            com.arinara.fotara.canvas.model.StrokeBlendMode.NORMAL
+        }
 
         canvasRenderer.drawCanvas(
             canvas = canvas,
@@ -300,8 +353,12 @@ class CanvasDrawingView(
             inProgressTool = inProgressTool,
             inProgressColor = inProgressColor,
             inProgressWidth = inProgressWidth,
-            selectedElementIds = toolController.toolState.selectedElementIds,
+            inProgressBlendMode = inProgressBlendMode,
+            inProgressLayerId = activeLayerId.ifEmpty { documentSnapshot.getPrimaryLayerId() },
+            selection = toolController.selectionToDraw,
+            previewElements = toolController.previewElements,
             activeLassoPolygon = activeLassoPolygon,
+            density = resources.displayMetrics.density,
             onTileInvalidated = { postInvalidate() }
         )
     }

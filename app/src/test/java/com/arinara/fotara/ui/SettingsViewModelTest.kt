@@ -17,6 +17,7 @@ import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.ui.settings.SettingsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -176,5 +177,39 @@ class SettingsViewModelTest {
         assertTrue(viewModel.uiState.value.showLicensesDialog)
         viewModel.setLicensesDialogVisible(false)
         assertFalse(viewModel.uiState.value.showLicensesDialog)
+    }
+
+    @Test
+    fun consumeFeedbackMessage_returnsOnceAndClearsState() = runTest(testDispatcher) {
+        advanceUntilIdle()
+
+        viewModel.rebuildSearchIndex()
+        advanceUntilIdle()
+
+        val firstRead = viewModel.consumeFeedbackMessage()
+        assertNotNull(firstRead)
+        assertTrue(firstRead!!.contains("Search index rebuilt successfully"))
+
+        // Second read must return null, confirming one-shot consumption
+        val secondRead = viewModel.consumeFeedbackMessage()
+        assertNull(secondRead)
+        assertNull(viewModel.uiState.value.feedbackMessage)
+    }
+
+    @Test
+    fun rebuildSearchIndex_emitsEventIntoEventFlow() = runTest(testDispatcher) {
+        advanceUntilIdle()
+
+        var receivedEvent: String? = null
+        val job = backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.eventFlow.collect { receivedEvent = it }
+        }
+
+        viewModel.rebuildSearchIndex()
+        advanceUntilIdle()
+
+        assertNotNull(receivedEvent)
+        assertTrue(receivedEvent!!.contains("Search index rebuilt successfully"))
+        job.cancel()
     }
 }

@@ -110,7 +110,12 @@ class FolderDetailViewModel(
         settingsRepository?.let { repo ->
             viewModelScope.launch {
                 repo.settingsFlow.collect { settings ->
-                    _uiState.update { it.copy(gridDensity = settings.gridDensity) }
+                    _uiState.update {
+                        it.copy(
+                            gridDensity = settings.gridDensity,
+                            combineFileNamePreset = settings.combineFileNamePreset
+                        )
+                    }
                 }
             }
         }
@@ -124,7 +129,8 @@ class FolderDetailViewModel(
         val allDocs: List<DocumentNote>,
         val allTextNotes: List<TextNote>,
         val allCanvasNotes: List<CanvasNote>,
-        val gridLinkGroups: List<LinkGroup>
+        val gridLinkGroups: List<LinkGroup>,
+        val docPagesMap: Map<Long, List<DocumentPage>> = emptyMap()
     )
 
     private data class GridRenderPayload(
@@ -138,6 +144,7 @@ class FolderDetailViewModel(
 
     private fun observePhotos() {
         val docFlow = documentRepository?.getDocumentNotesByFolder(folderId, null) ?: flowOf(emptyList())
+        val docPagesFlow = documentRepository?.getAllDocumentPages() ?: flowOf(emptyMap())
         val textNoteFlow = textNoteRepository?.getTextNotesByFolder(folderId, null) ?: flowOf(emptyList())
         val canvasFlow = canvasNoteRepository?.getCanvasNotesByFolder(folderId, null) ?: flowOf(emptyList())
 
@@ -148,7 +155,8 @@ class FolderDetailViewModel(
                 docFlow,
                 textNoteFlow,
                 canvasFlow,
-                photoRepository.getGridLinkGroups()
+                photoRepository.getGridLinkGroups(),
+                docPagesFlow
             )
         ) { array ->
             @Suppress("UNCHECKED_CAST")
@@ -158,7 +166,8 @@ class FolderDetailViewModel(
                 allDocs = array[2] as List<DocumentNote>,
                 allTextNotes = array[3] as List<TextNote>,
                 allCanvasNotes = array[4] as List<CanvasNote>,
-                gridLinkGroups = array[5] as List<LinkGroup>
+                gridLinkGroups = array[5] as List<LinkGroup>,
+                docPagesMap = array[6] as Map<Long, List<DocumentPage>>
             )
         }
 
@@ -203,7 +212,7 @@ class FolderDetailViewModel(
                 val docItems = filteredDocs.map { doc ->
                     FolderGridItem.Document(
                         documentNote = doc,
-                        pages = emptyList(),
+                        pages = bundle.docPagesMap[doc.id] ?: emptyList(),
                         linkGroupId = itemToLinkGroupMap[doc.id + 1_000_000_000L]?.id
                     )
                 }
@@ -452,8 +461,40 @@ class FolderDetailViewModel(
                 selectedPhotoIds = it.photos.filter { p -> p.groupId == null }.map { p -> p.id }.toSet(),
                 selectedGroupIds = it.groups.map { g -> g.id }.toSet(),
                 selectedDocumentIds = it.documents.map { d -> d.id }.toSet(),
-                selectedTextNoteIds = it.textNotes.map { tn -> tn.id }.toSet()
+                selectedTextNoteIds = it.textNotes.map { tn -> tn.id }.toSet(),
+                selectedCanvasNoteIds = it.canvasNotes.map { cn -> cn.id }.toSet()
             )
+        }
+    }
+
+    fun invertSelection() {
+        _uiState.update { current ->
+            val allEligiblePhotoIds = current.photos.filter { p -> p.groupId == null }.map { p -> p.id }.toSet()
+            val allGroupIds = current.groups.map { g -> g.id }.toSet()
+            val allDocumentIds = current.documents.map { d -> d.id }.toSet()
+            val allTextNoteIds = current.textNotes.map { tn -> tn.id }.toSet()
+            val allCanvasNoteIds = current.canvasNotes.map { cn -> cn.id }.toSet()
+
+            current.copy(
+                selectedPhotoIds = allEligiblePhotoIds - current.selectedPhotoIds,
+                selectedGroupIds = allGroupIds - current.selectedGroupIds,
+                selectedDocumentIds = allDocumentIds - current.selectedDocumentIds,
+                selectedTextNoteIds = allTextNoteIds - current.selectedTextNoteIds,
+                selectedCanvasNoteIds = allCanvasNoteIds - current.selectedCanvasNoteIds
+            )
+        }
+    }
+
+    fun selectAllSubfolders() {
+        _uiState.update { current ->
+            current.copy(selectedSubfolderIds = current.subfolders.map { it.id }.toSet())
+        }
+    }
+
+    fun invertSubfolderSelection() {
+        _uiState.update { current ->
+            val allSubfolderIds = current.subfolders.map { it.id }.toSet()
+            current.copy(selectedSubfolderIds = allSubfolderIds - current.selectedSubfolderIds)
         }
     }
 
@@ -1339,12 +1380,28 @@ class FolderDetailViewModel(
         }
     }
 
+    private var isRefreshingData = false
+
     fun refresh() {
+        if (isRefreshingData) return
+        isRefreshingData = true
+        _uiState.update { it.copy(isRefreshing = true) }
         viewModelScope.launch {
-            photoRepository.refresh()
-            documentRepository?.refresh()
-            textNoteRepository?.refresh()
-            canvasNoteRepository?.refresh()
+            try {
+                kotlinx.coroutines.withTimeoutOrNull(com.arinara.fotara.ui.components.PullToRefreshHelper.REFRESH_TIMEOUT_MS) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        folderRepository.refresh()
+                        photoRepository.refresh()
+                        documentRepository?.refresh()
+                        textNoteRepository?.refresh()
+                        canvasNoteRepository?.refresh()
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                isRefreshingData = false
+                _uiState.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 
@@ -1431,6 +1488,8 @@ class FolderDetailViewModel(
                 photoRepository.updatePhoto(finalPhoto)
                 _uiState.update { it.copy(userMessage = "Photo rotated 90°") }
                 onUpdated?.invoke(finalPhoto)
+            } else {
+                _uiState.update { it.copy(userMessage = "Unable to edit photo. Original file preserved.") }
             }
         }
     }
@@ -1453,6 +1512,8 @@ class FolderDetailViewModel(
                 photoRepository.updatePhoto(finalPhoto)
                 _uiState.update { it.copy(userMessage = "Photo re-cropped and text re-indexed") }
                 onUpdated?.invoke(finalPhoto)
+            } else {
+                _uiState.update { it.copy(userMessage = "Unable to edit photo. Original file preserved.") }
             }
         }
     }

@@ -117,8 +117,8 @@ class CanvasViewModelTest {
         viewModel.setTool(CanvasToolType.HIGHLIGHTER)
         assertEquals(CanvasToolType.HIGHLIGHTER, viewModel.uiState.value.toolState.activeTool)
 
-        viewModel.setTool(CanvasToolType.ERASER_STROKE)
-        assertEquals(CanvasToolType.ERASER_STROKE, viewModel.uiState.value.toolState.activeTool)
+        viewModel.setTool(CanvasToolType.ERASER)
+        assertEquals(CanvasToolType.ERASER, viewModel.uiState.value.toolState.activeTool)
 
         viewModel.setTool(CanvasToolType.SELECT)
         assertEquals(CanvasToolType.SELECT, viewModel.uiState.value.toolState.activeTool)
@@ -157,18 +157,16 @@ class CanvasViewModelTest {
     }
 
     @Test
-    fun eraserProperties_andModeToggle() = runTest(testDispatcher) {
+    fun eraserProperties_andShowOptions() = runTest(testDispatcher) {
         val viewModel = createViewModel(canvasId = 1L)
         advanceUntilIdle()
 
         viewModel.setEraserRadius(30f)
         assertEquals(30f, viewModel.uiState.value.toolState.eraserRadius, 0.01f)
 
-        viewModel.setTool(CanvasToolType.ERASER_STROKE)
-        val initialTool = viewModel.uiState.value.toolState.activeTool
-        viewModel.toggleEraserMode()
-        val toggledTool = viewModel.uiState.value.toolState.activeTool
-        assertEquals(CanvasToolType.ERASER_AREA, toggledTool)
+        viewModel.showEraserOptions()
+        assertEquals(CanvasToolType.ERASER, viewModel.uiState.value.toolState.activeTool)
+        assertTrue(viewModel.uiState.value.showToolOptions)
     }
 
     @Test
@@ -271,7 +269,7 @@ class CanvasViewModelTest {
     }
 
     @Test
-    fun contextualZ8_bringForwardAndSendBackward() = runTest(testDispatcher) {
+    fun contextualZ8_deleteSelection_clearsSelectionAndRestoresOnUndo() = runTest(testDispatcher) {
         val viewModel = createViewModel(canvasId = 1L)
         advanceUntilIdle()
 
@@ -281,36 +279,30 @@ class CanvasViewModelTest {
             layerId = activeLayerId,
             points = listOf(StrokePoint(0f, 0f), StrokePoint(10f, 10f)),
             toolType = StrokeToolType.PEN,
-            color = 0xFF000000L,
-            width = 2f,
-            bounds = CanvasRect(0f, 0f, 10f, 10f),
-            zIndex = 0
-        )
-        val elemB = StrokeElement(
-            id = "elem-B",
-            layerId = activeLayerId,
-            points = listOf(StrokePoint(20f, 20f), StrokePoint(30f, 30f)),
-            toolType = StrokeToolType.PEN,
             color = 0xFFFFFFFFL,
             width = 2f,
-            bounds = CanvasRect(20f, 20f, 30f, 30f),
-            zIndex = 1
+            bounds = CanvasRect(0f, 0f, 10f, 10f)
         )
 
-        val updatedDoc = viewModel.uiState.value.document.copy(elements = listOf(elemA, elemB))
-        viewModel.setSelectedElementIds(setOf("elem-A"))
+        val updatedDoc = viewModel.uiState.value.document.copy(elements = listOf(elemA))
         viewModel.onElementsChanged(updatedDoc)
+        viewModel.setSelectedElementIds(setOf("elem-A"))
+        assertTrue(viewModel.uiState.value.toolState.selection.isNotEmpty)
 
-        // Send Backward (elem-A is already at min zIndex)
-        viewModel.sendBackwardSelection()
+        // Delete selection
+        viewModel.deleteSelectedElements()
         advanceUntilIdle()
 
-        // Bring Forward (elem-A increases zIndex)
-        viewModel.bringForwardSelection()
+        assertTrue(viewModel.uiState.value.document.elements.isEmpty())
+        assertTrue(viewModel.uiState.value.toolState.selection.isEmpty)
+
+        // Undo restores element and ensures selection remains cleared (no ghost box)
+        viewModel.undo()
         advanceUntilIdle()
 
-        val sorted = viewModel.uiState.value.document.elements.sortedBy { it.zIndex }
-        assertEquals("elem-A", sorted.last().id)
+        assertEquals(1, viewModel.uiState.value.document.elements.size)
+        assertEquals("elem-A", viewModel.uiState.value.document.elements.first().id)
+        assertTrue(viewModel.uiState.value.toolState.selection.isEmpty)
     }
 
     @Test

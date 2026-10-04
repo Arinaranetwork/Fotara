@@ -286,4 +286,21 @@ class HomeViewModelTest {
         advanceUntilIdle()
         assertNull(viewModel.uiState.value.selectedSmartTag)
     }
+
+    @Test
+    fun invertFolderSelection_togglesUnselectedAndSelected() = runTest(testDispatcher) {
+        advanceUntilIdle()
+        val allFolders = viewModel.uiState.value.folders
+        assertTrue(allFolders.size >= 2)
+
+        // Select first folder
+        val firstId = allFolders[0].id
+        viewModel.enterMultiSelectMode(firstId)
+        assertEquals(setOf(firstId), viewModel.uiState.value.selectedFolderIds)
+
+        // Invert selection
+        viewModel.invertFolderSelection()
+        val expected = allFolders.map { it.id }.toSet() - setOf(firstId)
+        assertEquals(expected, viewModel.uiState.value.selectedFolderIds)
+    }
 }

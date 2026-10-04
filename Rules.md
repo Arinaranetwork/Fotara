@@ -1,5 +1,5 @@
-# Rules - Fotara
-Last Updated: 2026-10-02
+﻿# Rules - Fotara
+Last Updated: 2026-10-04
 
 ## Engineering
 ### R-001 - Strict Layered Architecture
@@ -21,3 +21,6 @@ All shipped screens and components must provide complete empty, loading, error, 
 ## Release
 ### R-006 - Release Artifact Discipline
 Shippable release artifacts must be packaged and copied into `/Output/Release/` adhering to the standard naming template `Fotara_<x.y.z>[_Beta][_<Platform>_<Arch>].apk`. Intermediate build outputs in `build/` or `app/build/` must remain gitignored. Reason: Ensures clean, reproducible release tracking. Example violation: Copying unversioned `app-debug.apk` directly to repository root.
+
+### R-007 - Autonomous GitHub Release Workflow
+GitHub releases, tags, asset attachments, and repository operations are executed autonomously using pre-configured machine credentials (`GH_TOKEN` / Windows Keyring `gh auth`) via GitHub CLI (`gh`). Releases must bundle shippable artifacts from `/Output/Release/` and notes from `/Changelog/`. Reason: Guarantees reliable, unprompted release deployment across AI sessions and tools. Example violation: Requesting manual user credentials or skipping APK asset upload.

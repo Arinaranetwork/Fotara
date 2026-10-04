@@ -115,26 +115,46 @@ fun MainNavigation(
                         settingsRepository = appContainer.settingsRepository
                     )
                 )
+                val notesViewModel: com.arinara.fotara.ui.notes.NotesViewModel = viewModel(
+                    factory = com.arinara.fotara.ui.notes.NotesViewModel.provideFactory(
+                        photoRepository = appContainer.photoRepository,
+                        documentRepository = appContainer.documentRepository,
+                        textNoteRepository = appContainer.textNoteRepository,
+                        canvasNoteRepository = appContainer.canvasNoteRepository,
+                        folderRepository = appContainer.folderRepository
+                    )
+                )
                 HomeScreen(
                     viewModel = homeViewModel,
                     settingsViewModel = settingsViewModel,
+                    notesViewModel = notesViewModel,
+                    updateManager = appContainer.updateManager,
                     onFolderClick = { folder ->
                         backStack.add(FolderDetailNavKey(folder.id))
                     },
                     onNavigateToPhoto = { folderId, subfolderId, photoId ->
-                        backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetPhotoId = photoId))
+                        backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetPhotoId = photoId, openViewerDirectly = true))
                     },
                     onNavigateToGroup = { folderId, subfolderId, groupId ->
                         backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetGroupId = groupId))
                     },
-                    onNavigateToDocument = { folderId, subfolderId, docId ->
-                        backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetDocumentId = docId))
+                    onNavigateToDocument = { folderId, subfolderId, docId, targetPageIndex ->
+                        backStack.add(FolderDetailNavKey(
+                            folderId = folderId,
+                            initialSubfolderId = subfolderId,
+                            targetDocumentId = docId,
+                            openViewerDirectly = true,
+                            targetPageIndex = targetPageIndex
+                        ))
                     },
                     onNavigateToTextNote = { folderId, subfolderId, noteId ->
                         backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetTextNoteId = noteId))
                     },
                     onNavigateToCanvasNote = { folderId, subfolderId, canvasId ->
                         backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetCanvasId = canvasId))
+                    },
+                    onOpenDocx = { docId ->
+                        backStack.add(DocxViewerNavKey(documentId = docId))
                     },
                     onOpenTrash = {
                         backStack.add(TrashNavKey)
@@ -186,6 +206,7 @@ fun MainNavigation(
                     folderSuggestEngine = appContainer.folderSuggestEngine,
                     onBackClick = { safePopBack() },
                     openViewerDirectly = key.openViewerDirectly,
+                    targetPageIndex = key.targetPageIndex,
                     onOpenGroup = { fId, gId, targetPhotoId ->
                         backStack.add(GroupDetailNavKey(folderId = fId, groupId = gId, targetPhotoId = targetPhotoId))
                     },
@@ -198,6 +219,8 @@ fun MainNavigation(
                     onOpenCanvasNote = { cId, fId, sId ->
                         backStack.add(CanvasNoteNavKey(canvasId = cId, folderId = fId, subfolderId = sId))
                     },
+                    canvasRepository = appContainer.canvasRepository,
+                    canvasAssetManager = appContainer.canvasAssetManager,
                     modifier = Modifier.fillMaxSize()
                 )
             }

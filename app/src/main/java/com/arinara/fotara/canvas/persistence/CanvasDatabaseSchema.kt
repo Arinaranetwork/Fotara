@@ -142,7 +142,7 @@ class SqliteCanvasDao(private val dbHelper: FotaraDbHelper) : CanvasDao {
             SELECT id, canvas_id, layer_id, element_type, bounds_left, bounds_top, bounds_right, bounds_bottom, z_index, data_chunk
             FROM canvas_elements
             WHERE canvas_id = ?
-            ORDER BY z_index ASC
+            ORDER BY z_index ASC, rowid ASC
             LIMIT ? OFFSET ?
             """.trimIndent(),
             arrayOf(canvasId.toString(), limit.toString(), offset.toString())

@@ -9,16 +9,22 @@ package com.arinara.fotara.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.pdf.PdfDocument
+import com.arinara.fotara.canvas.export.CanvasImageExporter
+import com.arinara.fotara.canvas.model.CanvasDocument
+import com.arinara.fotara.canvas.persistence.CanvasAssetManager
+import com.arinara.fotara.canvas.persistence.CanvasRepository
+import com.arinara.fotara.data.db.FotaraDbHelper
+import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.DocumentNote
 import com.arinara.fotara.data.model.DocumentPage
 import com.arinara.fotara.data.model.DocumentType
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
+import com.arinara.fotara.data.model.TextNote
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -30,11 +36,15 @@ sealed class CombineItem {
     data class StandalonePhoto(val photo: Photo) : CombineItem()
     data class Group(val group: PhotoGroup, val members: List<Photo>) : CombineItem()
     data class Document(val documentNote: DocumentNote, val pages: List<DocumentPage>) : CombineItem()
+    data class TextNoteItem(val textNote: TextNote) : CombineItem()
+    data class CanvasNoteItem(val canvasNote: CanvasNote) : CombineItem()
 
     fun pageCount(): Int = when (this) {
         is StandalonePhoto -> 1
         is Group -> members.size.coerceAtLeast(1)
         is Document -> if (documentNote.docType == DocumentType.PDF) pages.size.coerceAtLeast(1) else 1
+        is TextNoteItem -> TextNotePdfRenderer.estimatePageCount(textNote)
+        is CanvasNoteItem -> 1
     }
 }
 
@@ -42,9 +52,29 @@ class PageLimitExceededException(val totalPages: Int) : Exception(
     "Selection exceeds the 100-page limit (Selected: $totalPages pages). Please reduce your selection to ensure memory stability."
 )
 
-class CombineManager(private val context: Context) {
+class CombineManager(
+    private val context: Context,
+    private val canvasRepository: CanvasRepository? = null,
+    private val canvasAssetManager: CanvasAssetManager? = null
+) {
 
     private val docxExporter = DocxExporter(context)
+
+    private val resolvedCanvasRepository by lazy {
+        canvasRepository ?: run {
+            val dbHelper = FotaraDbHelper(context)
+            val assetMgr = canvasAssetManager ?: CanvasAssetManager(context)
+            com.arinara.fotara.canvas.persistence.DefaultCanvasRepository(
+                canvasDao = com.arinara.fotara.canvas.persistence.SqliteCanvasDao(dbHelper),
+                assetManager = assetMgr,
+                dbHelper = dbHelper
+            )
+        }
+    }
+
+    private fun isCanvasEmpty(doc: CanvasDocument): Boolean {
+        return doc.elements.isEmpty()
+    }
 
     fun calculateTotalPages(items: List<CombineItem>): Int {
         return items.sumOf { it.pageCount() }
@@ -53,25 +83,49 @@ class CombineManager(private val context: Context) {
     suspend fun combineToPdf(
         title: String,
         items: List<CombineItem>,
+        outputFileName: String? = null,
         onProgress: ((current: Int, total: Int) -> Unit)? = null
     ): File = withContext(Dispatchers.IO) {
-        val totalPages = calculateTotalPages(items)
+        // Pre-calculate exact pages, skipping empty canvases
+        var totalPages = 0
+        val preparedItems = mutableListOf<CombineItem>()
+        for (item in items) {
+            when (item) {
+                is CombineItem.CanvasNoteItem -> {
+                    val doc = resolvedCanvasRepository.loadDocument(item.canvasNote.id)
+                    if (doc != null && !isCanvasEmpty(doc)) {
+                        totalPages += 1
+                        preparedItems.add(item)
+                    }
+                }
+                is CombineItem.TextNoteItem -> {
+                    val count = TextNotePdfRenderer.estimatePageCount(item.textNote)
+                    totalPages += count
+                    preparedItems.add(item)
+                }
+                else -> {
+                    totalPages += item.pageCount()
+                    preparedItems.add(item)
+                }
+            }
+        }
+
         if (totalPages > 100) {
             throw PageLimitExceededException(totalPages)
         }
 
         val exportsDir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
-        val cleanName = title.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-        val outputFile = File(exportsDir, "${cleanName}_${System.currentTimeMillis()}.pdf")
+        val targetName = outputFileName ?: "${title.replace(Regex("[^a-zA-Z0-9_-]"), "_")}_${System.currentTimeMillis()}.pdf"
+        val outputFile = FileNamePresetHelper.ensureUniqueFile(exportsDir, targetName)
 
         val pdfDoc = PdfDocument()
-        val pageWidth = 595
-        val pageHeight = 842
+        val pageWidth = TextNotePdfRenderer.PAGE_WIDTH
+        val pageHeight = TextNotePdfRenderer.PAGE_HEIGHT
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         var currentPageNum = 0
 
         try {
-            for (item in items) {
+            for (item in preparedItems) {
                 ensureActive()
                 when (item) {
                     is CombineItem.StandalonePhoto -> {
@@ -105,6 +159,32 @@ class CombineManager(private val context: Context) {
                             onProgress?.invoke(currentPageNum, totalPages)
                         }
                     }
+                    is CombineItem.TextNoteItem -> {
+                        ensureActive()
+                        val renderedCount = TextNotePdfRenderer.renderTextNote(
+                            pdfDoc = pdfDoc,
+                            textNote = item.textNote,
+                            startPageNum = currentPageNum + 1,
+                            totalPages = totalPages,
+                            onPageRendered = { pageNum ->
+                                currentPageNum = pageNum
+                                onProgress?.invoke(currentPageNum, totalPages)
+                            }
+                        )
+                    }
+                    is CombineItem.CanvasNoteItem -> {
+                        ensureActive()
+                        val doc = resolvedCanvasRepository.loadDocument(item.canvasNote.id)
+                        if (doc != null && !isCanvasEmpty(doc)) {
+                            val bitmap = CanvasImageExporter.renderCanvasToBitmap(doc, canvasAssetManager)
+                            if (bitmap != null) {
+                                currentPageNum++
+                                renderBitmapPage(pdfDoc, bitmap, item.canvasNote.title, currentPageNum, totalPages, pageWidth, pageHeight, paint)
+                                bitmap.recycle()
+                                onProgress?.invoke(currentPageNum, totalPages)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -127,6 +207,7 @@ class CombineManager(private val context: Context) {
     suspend fun combineToDocx(
         title: String,
         items: List<CombineItem>,
+        outputFileName: String? = null,
         onProgress: ((current: Int, total: Int) -> Unit)? = null
     ): File = withContext(Dispatchers.IO) {
         val totalPages = calculateTotalPages(items)
@@ -135,8 +216,9 @@ class CombineManager(private val context: Context) {
         }
 
         val exportsDir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
-        val cleanName = title.replace(Regex("[^a-zA-Z0-9_-]"), "_")
-        val outputFile = File(exportsDir, "${cleanName}_${System.currentTimeMillis()}.docx")
+        val targetName = outputFileName ?: "${title.replace(Regex("[^a-zA-Z0-9_-]"), "_")}_${System.currentTimeMillis()}.docx"
+        val outputFile = FileNamePresetHelper.ensureUniqueFile(exportsDir, targetName)
+        val tempFilesToClean = mutableListOf<File>()
 
         val docxItems = mutableListOf<DocxContentItem>()
         for (item in items) {
@@ -159,6 +241,24 @@ class CombineManager(private val context: Context) {
                         docxItems.add(DocxContentItem.TextSection(item.documentNote.name, item.documentNote.extractedText ?: ""))
                     }
                 }
+                is CombineItem.TextNoteItem -> {
+                    docxItems.add(DocxContentItem.FormattedMarkdownSection(item.textNote.title, item.textNote.bodyMarkdown))
+                }
+                is CombineItem.CanvasNoteItem -> {
+                    val doc = resolvedCanvasRepository.loadDocument(item.canvasNote.id)
+                    if (doc != null && !isCanvasEmpty(doc)) {
+                        val bitmap = CanvasImageExporter.renderCanvasToBitmap(doc, canvasAssetManager)
+                        if (bitmap != null) {
+                            val tempFile = File(exportsDir, "temp_canvas_${item.canvasNote.id}_${System.currentTimeMillis()}.png")
+                            FileOutputStream(tempFile).use { fos ->
+                                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                            }
+                            bitmap.recycle()
+                            tempFilesToClean.add(tempFile)
+                            docxItems.add(DocxContentItem.ImagePage(tempFile.absolutePath, item.canvasNote.title))
+                        }
+                    }
+                }
             }
         }
 
@@ -171,6 +271,10 @@ class CombineManager(private val context: Context) {
         } catch (e: Exception) {
             if (outputFile.exists()) outputFile.delete()
             throw e
+        } finally {
+            for (f in tempFilesToClean) {
+                if (f.exists()) f.delete()
+            }
         }
     }
 
@@ -224,6 +328,42 @@ class CombineManager(private val context: Context) {
             }
         }
 
+        pdfDoc.finishPage(page)
+    }
+
+    private fun renderBitmapPage(
+        pdfDoc: PdfDocument,
+        bitmap: Bitmap,
+        caption: String,
+        pageNum: Int,
+        total: Int,
+        pageWidth: Int,
+        pageHeight: Int,
+        paint: Paint
+    ) {
+        val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+        val page = pdfDoc.startPage(pageInfo)
+        val canvas = page.canvas
+
+        canvas.drawColor(Color.WHITE)
+
+        paint.color = Color.DKGRAY
+        paint.textSize = 14f
+        canvas.drawText(caption, 36f, 40f, paint)
+
+        paint.textSize = 10f
+        paint.color = Color.GRAY
+        canvas.drawText("Page $pageNum of $total • Fotara Canvas", 36f, 56f, paint)
+
+        val maxW = pageWidth - 72
+        val maxH = pageHeight - 120
+        val scale = minOf(maxW.toFloat() / bitmap.width, maxH.toFloat() / bitmap.height)
+        val dw = (bitmap.width * scale).toInt()
+        val dh = (bitmap.height * scale).toInt()
+        val left = (pageWidth - dw) / 2
+        val top = 70 + (maxH - dh) / 2
+
+        canvas.drawBitmap(bitmap, null, Rect(left, top, left + dw, top + dh), paint)
         pdfDoc.finishPage(page)
     }
 

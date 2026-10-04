@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
@@ -29,17 +32,27 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arinara.fotara.R
+import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.util.FileNamePresetHelper
 
 private val CardBg = Color(0xFF141936)
 private val TabCream = Color(0xFFEAE3D2)
@@ -60,7 +73,9 @@ fun UnifiedShareDialog(
     progressTotal: Int = 0,
     errorMessage: String? = null,
     containsTextNotes: Boolean = false,
-    onFormatSelected: (ShareFormatChoice) -> Unit,
+    fileNamePresetTemplate: String = FileNamePresetHelper.DEFAULT_PRESET,
+    folderName: String = "Coursework",
+    onFormatSelected: (ShareFormatChoice, customFileName: String?) -> Unit,
     onCancelProcessing: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
@@ -151,6 +166,15 @@ fun UnifiedShareDialog(
         return
     }
 
+    var customFileName by remember { mutableStateOf("") }
+    val defaultBaseName = remember(fileNamePresetTemplate, folderName, itemCount) {
+        FileNamePresetHelper.resolvePreset(
+            presetTemplate = fileNamePresetTemplate,
+            folderName = folderName,
+            itemCount = itemCount
+        )
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -169,13 +193,18 @@ fun UnifiedShareDialog(
             }
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+            ) {
                 ShareOptionCard(
                     icon = Icons.Default.Image,
                     title = "Original Files",
-                    subtitle = if (containsTextNotes) "Shares photos, docs, and text notes in their native formats (.md for text notes)" else "Share raw photos and document files without re-encoding",
+                    subtitle = if (containsTextNotes) "Shares photos, docs, canvas, and text notes in their native formats" else "Share raw photos and document files without re-encoding",
                     enabled = true,
-                    onClick = { onFormatSelected(ShareFormatChoice.ORIGINAL) }
+                    onClick = { onFormatSelected(ShareFormatChoice.ORIGINAL, null) }
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -184,9 +213,9 @@ fun UnifiedShareDialog(
                     icon = Icons.Default.PictureAsPdf,
                     title = "Combined PDF Document",
                     subtitle = "Compile all notes and document pages into a single PDF",
-                    enabled = !containsTextNotes,
-                    disabledReason = if (containsTextNotes) "PDF combine does not include text notes (Markdown/TXT only rule)" else null,
-                    onClick = { onFormatSelected(ShareFormatChoice.PDF) }
+                    enabled = true,
+                    disabledReason = null,
+                    onClick = { onFormatSelected(ShareFormatChoice.PDF, customFileName.ifBlank { null }) }
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -195,9 +224,57 @@ fun UnifiedShareDialog(
                     icon = Icons.Default.Description,
                     title = "Word Document (.docx)",
                     subtitle = "Compile images and text into an editable Word document",
-                    enabled = !containsTextNotes,
-                    disabledReason = if (containsTextNotes) "Word combine does not include text notes (Markdown/TXT only rule)" else null,
-                    onClick = { onFormatSelected(ShareFormatChoice.WORD) }
+                    enabled = true,
+                    disabledReason = null,
+                    onClick = { onFormatSelected(ShareFormatChoice.WORD, customFileName.ifBlank { null }) }
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Optional custom file name input (Task 3)
+                OutlinedTextField(
+                    value = customFileName,
+                    onValueChange = { customFileName = it },
+                    singleLine = true,
+                    label = {
+                        Text(
+                            text = stringResource(R.string.share_file_name_label),
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans
+                        )
+                    },
+                    placeholder = {
+                        Text(
+                            text = defaultBaseName,
+                            color = TabCream.copy(alpha = 0.35f),
+                            fontSize = 13.sp,
+                            fontFamily = ElmsSans
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TabCream,
+                        unfocusedTextColor = TabCream,
+                        focusedBorderColor = AccentGold,
+                        unfocusedBorderColor = TabCream.copy(alpha = 0.25f),
+                        cursorColor = AccentGold,
+                        focusedLabelColor = AccentGold,
+                        unfocusedLabelColor = TabCream.copy(alpha = 0.6f),
+                        focusedContainerColor = Color(0xFF03071E),
+                        unfocusedContainerColor = Color(0xFF03071E)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = stringResource(R.string.share_file_name_helper),
+                    color = TabCream.copy(alpha = 0.5f),
+                    fontSize = 11.sp,
+                    fontFamily = ElmsSans,
+                    lineHeight = 15.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
         },

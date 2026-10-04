@@ -43,5 +43,6 @@ data class HomeUiState(
     val isMultiSelectMode: Boolean = false,
     val selectedFolderIds: Set<Long> = emptySet(),
     val showBulkDeleteDialog: Boolean = false,
-    val bulkDeleteStats: FolderBulkDeleteResult? = null
+    val bulkDeleteStats: FolderBulkDeleteResult? = null,
+    val isRefreshing: Boolean = false
 )

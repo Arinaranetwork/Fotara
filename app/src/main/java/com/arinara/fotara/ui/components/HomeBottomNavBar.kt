@@ -46,6 +46,12 @@ import com.arinara.fotara.theme.HomeBottomNavSurface
 enum class HomeNavTab { HOME, NOTES, SETTINGS }
 
 /**
+ * Shared source of truth for the measured height of the floating bottom overlay.
+ * Used for list content padding, snackbar hosts, and floating action buttons across tab-hosted screens.
+ */
+val LocalBottomOverlayPadding = androidx.compose.runtime.compositionLocalOf { 0.dp }
+
+/**
  * Floating bottom navigation pill matching IMAGE A.
  * Features a ~66dp floating pill container with 12dp side margins, #111726 surface,
  * subtle border, and 3 equal tabs: Home, Notes, Settings.

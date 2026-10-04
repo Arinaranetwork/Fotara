@@ -57,9 +57,9 @@ class ToolControllerTest {
     }
 
     @Test
-    fun testStrokeEraser_RemovesEntireStrokeViaCommand() {
+    fun testFreeEraser_SweepRemovesEntireStrokeViaCommand() {
         val controller = CanvasToolController(
-            toolState = CanvasToolState(activeTool = CanvasToolType.ERASER_STROKE, eraserRadius = 20f)
+            toolState = CanvasToolState(activeTool = CanvasToolType.ERASER, eraserRadius = 25f)
         )
         val historyManager = CanvasHistoryManager()
         val layer = CanvasLayer(id = "layer_1", name = "Layer 1")
@@ -73,8 +73,14 @@ class ToolControllerTest {
         )
         val doc = CanvasDocument(layers = listOf(layer), elements = listOf(stroke))
 
-        // Hit stroke at (150, 150)
-        val (erasedDoc, dirtyBounds) = controller.eraseAt(150f, 150f, defaultViewport, doc, historyManager)
+        // Sweep over entire stroke from (90,90) to (210,210)
+        controller.startEraser(90f, 90f)
+        val (previewDoc, _) = controller.sweepEraser(
+            listOf(PointerPoint(150f, 150f), PointerPoint(210f, 210f)),
+            defaultViewport,
+            doc
+        )
+        val (erasedDoc, dirtyBounds) = controller.finishEraser(previewDoc, historyManager)
         assertEquals(0, erasedDoc.elements.size)
         assertNotNull(dirtyBounds)
 
@@ -87,7 +93,7 @@ class ToolControllerTest {
     @Test
     fun testAreaEraser_SplitsIntersectedStrokeIntoSurvivingParts() {
         val controller = CanvasToolController(
-            toolState = CanvasToolState(activeTool = CanvasToolType.ERASER_AREA, eraserRadius = 15f)
+            toolState = CanvasToolState(activeTool = CanvasToolType.ERASER, eraserRadius = 15f)
         )
         val historyManager = CanvasHistoryManager()
         val layer = CanvasLayer(id = "layer_1", name = "Layer 1")
@@ -120,7 +126,7 @@ class ToolControllerTest {
     @Test
     fun testLockedAndHiddenLayers_CannotBeErasedOrSelected() {
         val controller = CanvasToolController(
-            toolState = CanvasToolState(activeTool = CanvasToolType.ERASER_STROKE, eraserRadius = 30f)
+            toolState = CanvasToolState(activeTool = CanvasToolType.ERASER, eraserRadius = 30f)
         )
         val historyManager = CanvasHistoryManager()
 
@@ -158,11 +164,11 @@ class ToolControllerTest {
 
         // Attempt to tap-select locked stroke
         val selectedLocked = controller.selectTap(55f, 55f, defaultViewport, doc)
-        assertTrue(selectedLocked.isEmpty())
+        assertTrue(selectedLocked.isEmpty)
 
         // Attempt to tap-select hidden stroke
         val selectedHidden = controller.selectTap(110f, 110f, defaultViewport, doc)
-        assertTrue(selectedHidden.isEmpty())
+        assertTrue(selectedHidden.isEmpty)
     }
 
     @Test
@@ -191,8 +197,8 @@ class ToolControllerTest {
         val doc = CanvasDocument(layers = listOf(layer), elements = listOf(strokeBottom, strokeTop))
 
         val selected = controller.selectTap(125f, 125f, defaultViewport, doc)
-        assertEquals(1, selected.size)
-        assertEquals("top_stroke", selected.first())
+        assertEquals(1, selected.elementIds.size)
+        assertEquals("top_stroke", selected.elementIds.first())
     }
 
     @Test
@@ -227,7 +233,7 @@ class ToolControllerTest {
         )
 
         val selected = controller.selectLasso(polygon, defaultViewport, doc)
-        assertEquals(1, selected.size)
-        assertEquals("inside_stroke", selected.first())
+        assertEquals(1, selected.elementIds.size)
+        assertEquals("inside_stroke", selected.elementIds.first())
     }
 }

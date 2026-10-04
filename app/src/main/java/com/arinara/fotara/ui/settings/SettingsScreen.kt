@@ -7,7 +7,14 @@
 package com.arinara.fotara.ui.settings
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,14 +25,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FindInPage
 import androidx.compose.material.icons.filled.GridView
@@ -43,6 +56,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
@@ -51,6 +65,18 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.ViewStream
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.arinara.fotara.ui.profile.BorderPickerDialog
+import com.arinara.fotara.ui.profile.CropShape
+import com.arinara.fotara.ui.profile.ProfileAvatarView
+import com.arinara.fotara.ui.profile.ProfileCropScreen
+import com.arinara.fotara.ui.profile.ProfileEditBottomSheet
+import com.arinara.fotara.ui.profile.ProfileScreen
+import com.arinara.fotara.util.ProfileImageUtils
+import java.io.File
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -84,6 +110,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,6 +121,7 @@ import com.arinara.fotara.data.model.DownsampleQuality
 import com.arinara.fotara.data.model.SortOrder
 import com.arinara.fotara.data.model.StorageLocation
 import com.arinara.fotara.data.model.ThemeMode
+import com.arinara.fotara.R
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.HomeCardBorder
 import com.arinara.fotara.theme.HomeCardSurface
@@ -112,12 +140,13 @@ enum class SettingsSection(
     val subtitle: String,
     val icon: ImageVector
 ) {
-    GENERAL("General", "Grid density, default sort order, and storage path", Icons.Default.GridView),
-    APPEARANCE("Appearance", "Theme mode and visual display options", Icons.Default.Palette),
-    OCR("OCR & Recognition", "On-device text extraction, scripts, and quality", Icons.Default.TextFields),
-    NOTIFICATIONS("Notifications & Deadlines", "Reminders lead time, test alert, and due ribbon", Icons.Default.Notifications),
-    STORAGE("Storage & Data Management", "Storage breakdown, trash, re-indexing, and backup", Icons.Default.Storage),
-    ABOUT("About & Legal", "Version info, offline architecture, and licenses", Icons.Default.Info)
+    PROFILE("Profile", "Photo, border, banner, name, email", Icons.Default.Person),
+    GENERAL("General", "Grid density, default sort order", Icons.Default.GridView),
+    APPEARANCE("Appearance", "Theme mode and display options", Icons.Default.Palette),
+    OCR("OCR & Recognition", "On-device text extraction", Icons.Default.TextFields),
+    NOTIFICATIONS("Notifications & Deadlines", "Reminders and test alert", Icons.Default.Notifications),
+    STORAGE("Storage & Data Management", "Usage, trash, backup, re-indexing", Icons.Default.Storage),
+    ABOUT("About & Legal", "Version info and offline architecture", Icons.Default.Info)
 }
 
 /**
@@ -152,16 +181,16 @@ fun SettingsScreen(
                 @Suppress("DEPRECATION")
                 context.packageManager.getPackageInfo(context.packageName, 0)
             }
-            val vName = pInfo?.versionName ?: "1.5.4 Beta"
+            val vName = pInfo?.versionName ?: "1.5.7 Beta"
             val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                pInfo?.longVersionCode ?: 18L
+                pInfo?.longVersionCode ?: 21L
             } else {
                 @Suppress("DEPRECATION")
-                (pInfo?.versionCode ?: 18).toLong()
+                (pInfo?.versionCode ?: 21).toLong()
             }
             Pair(vName, vCode)
         } catch (_: Exception) {
-            Pair("1.5.4 Beta", 18L)
+            Pair("1.5.7 Beta", 21L)
         }
     }
 
@@ -172,37 +201,209 @@ fun SettingsScreen(
     var showQualityDialog by remember { mutableStateOf(false) }
     var showLeadTimeDialog by remember { mutableStateOf(false) }
     var showStorageLocationDialog by remember { mutableStateOf(false) }
+    var showCombineFileNameDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(uiState.feedbackMessage) {
-        uiState.feedbackMessage?.let { msg ->
+    LaunchedEffect(viewModel) {
+        val initialMsg = viewModel.consumeFeedbackMessage()
+        if (initialMsg != null) {
+            snackbarHostState.showSnackbar(initialMsg)
+        }
+        viewModel.eventFlow.collect { msg ->
+            viewModel.consumeFeedbackMessage()
             snackbarHostState.showSnackbar(msg)
-            viewModel.clearFeedbackMessage()
         }
     }
 
+    val bottomOverlayPadding = LocalBottomOverlayPadding.current
+
+    var showProfileEditSheet by remember { mutableStateOf(false) }
+    var showBorderPicker by remember { mutableStateOf(false) }
+    var pendingCropUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCropIsAvatar by rememberSaveable { mutableStateOf(true) }
+
+    val avatarPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            pendingCropUriString = uri.toString()
+            pendingCropIsAvatar = true
+        }
+    }
+
+    val bannerPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            pendingCropUriString = uri.toString()
+            pendingCropIsAvatar = false
+        }
+    }
+
+    if (pendingCropUriString != null) {
+        val cropUri = remember(pendingCropUriString) { Uri.parse(pendingCropUriString) }
+        val screenWidthDp = LocalConfiguration.current.screenWidthDp.toFloat()
+        val bannerRatio = screenWidthDp / 230f
+        ProfileCropScreen(
+            imageUri = cropUri,
+            isAvatar = pendingCropIsAvatar,
+            aspectRatio = if (pendingCropIsAvatar) 1.0f else bannerRatio,
+            onCropSaved = { cropped ->
+                if (pendingCropIsAvatar) {
+                    viewModel.saveProfileAvatar(cropped)
+                } else {
+                    viewModel.saveProfileBanner(cropped)
+                }
+                pendingCropUriString = null
+            },
+            onCancel = {
+                pendingCropUriString = null
+            }
+        )
+        return
+    }
+
+    if (showProfileEditSheet) {
+        ProfileEditBottomSheet(
+            hasCustomAvatar = uiState.userProfile.hasCustomAvatar,
+            hasCustomBanner = uiState.userProfile.hasCustomBanner,
+            onChangePicture = {
+                avatarPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onChooseBorder = { showBorderPicker = true },
+            onChangeBanner = {
+                bannerPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onEditNameEmail = { activeSection = SettingsSection.PROFILE },
+            onRemovePicture = { viewModel.removeProfileAvatar() },
+            onRemoveBanner = { viewModel.removeProfileBanner() },
+            onDismiss = { showProfileEditSheet = false }
+        )
+    }
+
+    if (showBorderPicker) {
+        BorderPickerDialog(
+            currentAvatarPath = uiState.userProfile.avatarPath,
+            selectedBorderId = uiState.userProfile.borderId,
+            onSelectBorder = { viewModel.updateProfileBorder(it) },
+            onDismiss = { showBorderPicker = false }
+        )
+    }
+
+    val effectiveBottomPadding = if (bottomOverlayPadding > 0.dp) bottomOverlayPadding else 96.dp
+
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .padding(bottom = effectiveBottomPadding + 8.dp)
+                    .imePadding()
+            )
+        },
         containerColor = HomeNearBlack,
         modifier = modifier
     ) { innerPadding ->
-        LazyColumn(
-            contentPadding = PaddingValues(
-                start = 18.dp,
-                end = 18.dp,
-                top = innerPadding.calculateTopPadding() + contentPadding.calculateTopPadding() + 8.dp,
-                bottom = innerPadding.calculateBottomPadding() + contentPadding.calculateBottomPadding() + 110.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            if (activeSection == null) {
-                // Header with Large "Settings" Title (same style as Fotara title, no tagline)
-                item {
+        if (activeSection == SettingsSection.PROFILE) {
+            ProfileScreen(
+                viewModel = viewModel,
+                onBackClick = { activeSection = null },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
+            )
+        } else if (activeSection == null) {
+            val rootScrollState = rememberScrollState()
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rootScrollState)
+                    .padding(bottom = effectiveBottomPadding + 24.dp)
+            ) {
+                // 1. Full-Width Banner with Gradient Fade
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(230.dp)
+                ) {
+                    val bannerFile = remember(uiState.userProfile.bannerPath, uiState.userProfile.bannerUpdatedAt) {
+                        uiState.userProfile.bannerPath?.let { File(it) }
+                    }
+                    if (bannerFile != null && bannerFile.exists()) {
+                        val bannerCacheKey = "${bannerFile.absolutePath}_${if (uiState.userProfile.bannerUpdatedAt > 0L) uiState.userProfile.bannerUpdatedAt else bannerFile.lastModified()}"
+                        val bannerReq = remember(bannerCacheKey) {
+                            ImageRequest.Builder(context)
+                                .data(bannerFile)
+                                .memoryCacheKey(bannerCacheKey)
+                                .diskCacheKey(bannerCacheKey)
+                                .crossfade(true)
+                                .build()
+                        }
+                        AsyncImage(
+                            model = bannerReq,
+                            contentDescription = "Profile Banner",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        // Subtle Theme Gradient Fallback
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFF1E293B),
+                                            Color(0xFF0F172A),
+                                            HomeNearBlack
+                                        )
+                                    )
+                                )
+                        )
+                    }
+
+                    // Top Scrim for Status Bar and Title Legibility
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(95.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.65f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+
+                    // Lower Gradient Mask Smoothly Fading into HomeNearBlack
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(115.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        HomeNearBlack.copy(alpha = 0.75f),
+                                        HomeNearBlack
+                                    )
+                                )
+                            )
+                    )
+
+                    // Top Row: Back Arrow + "Settings" Title
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 12.dp, bottom = 10.dp)
+                            .padding(WindowInsets.statusBars.asPaddingValues())
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
                     ) {
                         if (onBackClick != null) {
                             IconButton(
@@ -210,7 +411,7 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(RoundedCornerShape(20.dp))
-                                    .background(Color(0xFF131925))
+                                    .background(Color(0xFF131925).copy(alpha = 0.85f))
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -230,18 +431,77 @@ fun SettingsScreen(
                             letterSpacing = (-0.5).sp
                         )
                     }
+
+                    // Centered Profile Avatar + Border + Pen Button
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                    ) {
+                        ProfileAvatarView(
+                            avatarPath = uiState.userProfile.avatarPath,
+                            borderId = uiState.userProfile.borderId,
+                            avatarSize = 78.dp,
+                            avatarUpdatedAt = uiState.userProfile.avatarUpdatedAt,
+                            showEditButton = true,
+                            onEditClick = { showProfileEditSheet = true }
+                        )
+                    }
                 }
 
-                // 6 Main Section Rounded Cards
-                items(SettingsSection.entries, key = { it.name }) { section ->
-                    SettingsCardItem(
-                        title = section.title,
-                        subtitle = section.subtitle,
-                        icon = section.icon,
-                        onClick = { activeSection = section }
+                // Centered User Name & Optional Email
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp, bottom = 18.dp)
+                ) {
+                    val defaultName = stringResource(R.string.profile_default_name)
+                    Text(
+                        text = uiState.userProfile.resolvedName(defaultName),
+                        color = Color.White,
+                        fontSize = 22.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold
                     )
+                    if (uiState.userProfile.email.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = uiState.userProfile.email,
+                            color = HomeSubtitleGray,
+                            fontSize = 14.sp,
+                            fontFamily = ElmsSans
+                        )
+                    }
                 }
-            } else {
+
+                // 7 Category Cards
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp)
+                ) {
+                    SettingsSection.entries.forEach { section ->
+                        SettingsCardItem(
+                            title = section.title,
+                            subtitle = section.subtitle,
+                            icon = section.icon,
+                            onClick = { activeSection = section }
+                        )
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(
+                    start = 18.dp,
+                    end = 18.dp,
+                    top = innerPadding.calculateTopPadding() + contentPadding.calculateTopPadding() + 8.dp,
+                    bottom = innerPadding.calculateBottomPadding() + contentPadding.calculateBottomPadding() + effectiveBottomPadding + 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
                 // Header of Active Section with Back Arrow to Root
                 item {
                     Row(
@@ -277,6 +537,7 @@ fun SettingsScreen(
 
                 // Clean Un-carded List Rows inside Selected Section
                 when (activeSection) {
+                    SettingsSection.PROFILE -> {}
                     SettingsSection.GENERAL -> {
                         item {
                             SettingsRowItem(
@@ -302,6 +563,15 @@ fun SettingsScreen(
                                 subtitle = uiState.userSettings.storageLocation.displayName,
                                 icon = Icons.Default.Storage,
                                 onClick = { showStorageLocationDialog = true }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = stringResource(R.string.setting_combine_file_name_title),
+                                subtitle = uiState.userSettings.combineFileNamePreset,
+                                icon = Icons.Default.Description,
+                                onClick = { showCombineFileNameDialog = true }
                             )
                         }
                     }
@@ -598,6 +868,17 @@ fun SettingsScreen(
                 showStorageLocationDialog = false
             },
             onDismiss = { showStorageLocationDialog = false }
+        )
+    }
+
+    if (showCombineFileNameDialog) {
+        CombineFileNamePresetDialog(
+            initialPreset = uiState.userSettings.combineFileNamePreset,
+            onSave = { newPreset ->
+                viewModel.updateCombineFileNamePreset(newPreset)
+                showCombineFileNameDialog = false
+            },
+            onDismiss = { showCombineFileNameDialog = false }
         )
     }
 

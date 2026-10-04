@@ -41,6 +41,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.arinara.fotara.data.model.TagColor
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTextWhite
@@ -48,6 +52,7 @@ import com.arinara.fotara.theme.MidnightCardOutline
 import com.arinara.fotara.theme.MidnightSurface
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextSecondary
+import kotlinx.coroutines.delay
 
 @Composable
 fun NewFolderDialog(
@@ -58,6 +63,14 @@ fun NewFolderDialog(
     var selectedColor by remember { mutableStateOf(TagColor.SKY) }
     var isPinned by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) {
+        delay(100L)
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -92,7 +105,9 @@ fun NewFolderDialog(
                         unfocusedLabelColor = TextSecondary,
                         cursorColor = FolderBodyBlue
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
                 )
 
                 if (errorMessage != null) {

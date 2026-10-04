@@ -145,7 +145,9 @@ data class FolderDetailUiState(
     val highlightedTextNoteId: Long? = null,
     val highlightedCanvasId: Long? = null,
     val userMessage: String? = null,
-    val pendingUndoAction: UndoAction? = null
+    val pendingUndoAction: UndoAction? = null,
+    val combineFileNamePreset: String = com.arinara.fotara.util.FileNamePresetHelper.DEFAULT_PRESET,
+    val isRefreshing: Boolean = false
 ) {
     val totalSelectionCount: Int get() = selectedPhotoIds.size + selectedGroupIds.size + selectedDocumentIds.size + selectedTextNoteIds.size + selectedCanvasNoteIds.size
 }

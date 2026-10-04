@@ -588,5 +588,29 @@ class FolderDetailViewModelTest {
         assertTrue(viewModel.uiState.value.selectedSubfolderIds.isEmpty())
         assertTrue(viewModel.uiState.value.subfolders.none { it.id in listOf(1L, 2L) })
     }
+
+    @Test
+    fun batchSelect_invertSelection_invertsSelectedItems() = runTest(testDispatcher) {
+        advanceUntilIdle()
+        viewModel.startBatchSelection(1L)
+        assertTrue(viewModel.uiState.value.isBatchSelectMode)
+        assertEquals(setOf(1L), viewModel.uiState.value.selectedPhotoIds)
+
+        viewModel.invertSelection()
+        val remainingPhotoIds = viewModel.uiState.value.photos.filter { it.groupId == null && it.id != 1L }.map { it.id }.toSet()
+        assertEquals(remainingPhotoIds, viewModel.uiState.value.selectedPhotoIds)
+    }
+
+    @Test
+    fun subfolderMultiSelect_invertSelection_invertsSelectedSubfolders() = runTest(testDispatcher) {
+        advanceUntilIdle()
+        viewModel.startSubfolderMultiSelect(1L)
+        assertEquals(setOf(1L), viewModel.uiState.value.selectedSubfolderIds)
+
+        viewModel.invertSubfolderSelection()
+        val expected = viewModel.uiState.value.subfolders.map { it.id }.toSet() - setOf(1L)
+        assertEquals(expected, viewModel.uiState.value.selectedSubfolderIds)
+    }
 }
+
 

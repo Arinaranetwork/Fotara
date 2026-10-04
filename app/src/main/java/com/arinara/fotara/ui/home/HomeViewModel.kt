@@ -85,6 +85,31 @@ class HomeViewModel(
         }
     }
 
+    private var isRefreshingData = false
+
+    fun refresh() {
+        if (isRefreshingData) return
+        isRefreshingData = true
+        _uiState.update { it.copy(isRefreshing = true) }
+        viewModelScope.launch {
+            try {
+                kotlinx.coroutines.withTimeoutOrNull(com.arinara.fotara.ui.components.PullToRefreshHelper.REFRESH_TIMEOUT_MS) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        folderRepository.refresh()
+                        photoRepository.refresh()
+                        documentRepository?.refresh()
+                        textNoteRepository?.refresh()
+                        canvasNoteRepository?.refresh()
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                isRefreshingData = false
+                _uiState.update { it.copy(isRefreshing = false) }
+            }
+        }
+    }
+
     fun activateSearch() {
         val recents = settingsRepository?.getRecentSearches() ?: emptyList()
         _uiState.update { it.copy(isSearchActive = true, recentSearches = recents) }
@@ -480,17 +505,22 @@ class HomeViewModel(
 
     fun onDocumentSearchResultClicked(
         doc: DocumentNote,
-        onNavigate: (folderId: Long, subfolderId: Long?, docId: Long) -> Unit
+        onNavigate: (folderId: Long, subfolderId: Long?, docId: Long, targetPageIndex: Int?) -> Unit
     ) {
-        if (_uiState.value.searchQuery.isNotBlank()) {
-            submitSearch(_uiState.value.searchQuery)
+        val query = _uiState.value.searchQuery
+        if (query.isNotBlank()) {
+            submitSearch(query)
         }
         viewModelScope.launch {
             val freshDoc = documentRepository?.getDocumentNoteById(doc.id)
             val parentFolder = folderRepository.getFolderById(doc.folderId).firstOrNull()
             if (freshDoc != null && !freshDoc.isTrashed && parentFolder != null && !parentFolder.isTrashed) {
+                val targetPageIndex = if (freshDoc.docType == com.arinara.fotara.data.model.DocumentType.PDF) {
+                    val pages = documentRepository.getDocumentPages(freshDoc.id).firstOrNull() ?: emptyList()
+                    com.arinara.fotara.util.PdfPageMatcher.findMatchingPageIndex(pages, query)
+                } else null
                 deactivateSearch()
-                onNavigate(doc.folderId, freshDoc.subfolderId, doc.id)
+                onNavigate(doc.folderId, freshDoc.subfolderId, doc.id, targetPageIndex)
             } else {
                 _uiState.update { it.copy(userMessage = "Document is no longer in this folder") }
                 executeSearch(_uiState.value.searchQuery, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter)
@@ -637,6 +667,13 @@ class HomeViewModel(
     fun selectAllFolders() {
         val allIds = _uiState.value.folders.map { it.id }.toSet()
         _uiState.update { it.copy(selectedFolderIds = allIds) }
+    }
+
+    fun invertFolderSelection() {
+        val allIds = _uiState.value.folders.map { it.id }.toSet()
+        _uiState.update { current ->
+            current.copy(selectedFolderIds = allIds - current.selectedFolderIds)
+        }
     }
 
     fun exitMultiSelectMode() {

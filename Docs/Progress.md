@@ -1,27 +1,65 @@
 # Progress - Fotara
-Last Updated: 2026-10-03
+Last Updated: 2026-10-04
 
 ## Current Phase
-Phase 13 - FolderScreenRedesign [In Progress]
+Phase 24 - LinkItClustersAndProfileFixes [Completed]
 
 ## Phases
-| Phase | Name                                | Status      |
-|-------|-------------------------------------|-------------|
-| 1     | CoreFolderEngine                    | Completed   |
-| 2     | PhotoOcrEngine                      | Completed   |
-| 3     | CustomNotesAndSearch                | Completed   |
-| 4     | AdvancedFeatures                    | Completed   |
-| 5     | GroupExpansionAndLinkIt             | Completed   |
-| 6     | DocumentNotesAndConnectedFeatures   | Completed   |
-| 7     | NativeTextNotesAndAdvancedDocuments | Completed   |
-| 8     | MasterV150EcosystemAndCanvas        | Completed   |
-| 9     | PdfViewerEnhancementsAndFixes       | Completed   |
-| 10    | CanvasAndSearchImprovements         | Completed   |
-| 11    | HomeScreenRedesign                  | Completed   |
-| 12    | UIUXRefinementsAndSearchNavigation  | Completed   |
-| 13    | FolderScreenRedesign                | In Progress |
+| Phase | Name                              | Status      |
+|-------|-----------------------------------|-------------|
+| 1     | CoreFolderEngine                  | Completed   |
+| 2     | PhotoOcrEngine                    | Completed   |
+| 3     | CustomNotesAndSearch              | Completed   |
+| 4     | AdvancedFeatures                  | Completed   |
+| 5     | GroupExpansionAndLinkIt           | Completed   |
+| 6     | DocumentNotesAndConnectedFeatures | Completed   |
+| 7     | NativeTextNotesAndAdvancedDocs    | Completed   |
+| 8     | MasterV150EcosystemAndCanvas      | Completed   |
+| 9     | PdfViewerEnhancementsAndFixes     | Completed   |
+| 10    | CanvasAndSearchImprovements       | Completed   |
+| 11    | HomeScreenRedesign                | Completed   |
+| 12    | UIUXRefinementsAndSearchNav       | Completed   |
+| 13    | FolderScreenRedesign              | Completed   |
+| 14    | NotesScreenAndUpdatePopup         | Completed   |
+| 15    | PdfAndPhotoViewerEnhancements     | Completed   |
+| 16    | TextNoteEditorRework              | Completed   |
+| 17    | ViewerCanvasExportAndUxFixes      | Completed   |
+| 18    | CanvasSelectionAndEraser          | Completed   |
+| 19    | CanvasHighlighterAndScrollEdges   | Completed   |
+| 20    | PullToRefreshAndExportPresets     | Completed   |
+| 21    | CanvasStackingAndOverlayLayout    | Completed   |
+| 22    | VerificationAndRepair157          | Completed   |
+| 23    | SettingsAndSearchRedesign         | Completed   |
+| 24    | LinkItClustersAndProfileFixes     | Completed   |
 
 ## Completed
+- [x] Task 1: LinkIt cluster glow for groups of 3 or 4 converging on center point (pure anchor function & renderer) - Phase 24
+- [x] Task 2: Profile picture and banner loading defect fix (WebP encode check, API 24-36 format, cache invalidation timestamps) - Phase 24
+- [x] Task 3: Fullscreen aspect-locked crop editor with region decoding (pan, corner resize, pinch zoom, reset) - Phase 24
+- [x] Task 4: Finalize 1.5.8 Beta (versionName 1.5.8 Beta, versionCode 22, unit tests, release build) - Phase 24
+- [x] Task 1: Assets conversion and profile data layer (WebP borders, illustration, ratio table, atomic storage) - Phase 23
+- [x] Task 2: Settings screen redesign matching Screenshot 2 (banner fade, avatar & border, 7 cards, bottom nav clearance) - Phase 23
+- [x] Task 3: Profile editing features (pen button sheet, gallery photo picker, crop step, live border picker, ProfileScreen) - Phase 23
+- [x] Task 4: Search screen redesign matching Screenshot 1 (3 pills container, search field, recent chips, idle illustration) - Phase 23
+- [x] Task 5: Finalize and rebuild 1.5.7 (unit tests, APK build, changelog, progress) - Phase 23
+- [x] Task 1: Complete Phase 1 release audit and documentation - Phase 22
+- [x] Task 2: Implement LinkIt grid facing glow for same-row and vertical neighbor pairs across all card types and densities - Phase 22
+- [x] Task 3: Replace Home folder card 3-dot trigger with anchored DropdownMenu matching specification - Phase 22
+- [x] Task 4: Fix Settings repeating snackbar notification with one-shot event consumption - Phase 22
+- [x] Task 5: Enhance PDF/DOCX cards with page 1 preview, badge cleanup, date-only footer, and pluralization - Phase 22
+- [x] Task 6: Unit testing, release build verification, and final report - Phase 22
+- [x] Task 7: Implement Invert Selection button in Home and FolderDetail multi-select modes - Phase 22
+- [x] Task 8: Harden one-shot notification consumption with Channel/eventFlow to prevent any re-entry snackbar replay - Phase 22
+- [x] Task 1: Pull to refresh with animated curved-arrow vector indicator across Home, Notes, and FolderDetailScreen - Phase 20
+- [x] Task 2: "Add to Group" dialog grouped by folder with atomic folder/subfolder synchronization and preserved timestamps - Phase 20
+- [x] Task 3: Optional custom file name in "Share As" dialog with pure sanitization, keyboard-safe dialog, and unique suffixes - Phase 20
+- [x] Task 4: Combined file name preset setting with dynamic tokens ({folder}, {date}, {time}, {count}) and SharedPreferences storage - Phase 20
+- [x] Task 5: Finalize and build release 1.5.6 (signed Fotara_1.5.6_Beta.apk, 439 passing unit tests) - Phase 20
+- [x] Task 1: Free-form lasso selection (non-zero winding, partial stroke cutting, non-destructive references) - Phase 18
+- [x] Task 2: Selection action bar & partial delete (reactive visibility, duplicate, move to layer, partial delete) - Phase 18
+- [x] Task 3: Select tool move, stretch, rotate (handle hit targets, oriented box, anchor-fixed stretch, single commit) - Phase 18
+- [x] Task 4: Free eraser (capsule sweep, remnant rule, custom icon, size slider, single undo step) - Phase 18
+- [x] Task 5: Artifact-free guarantee and regression hardening (tests & validation) - Phase 18
 - [x] Phase 11 Task 1: Color palette definition & legacy folder color assignment (Blue, Brown, Purple, Green, Red, Slate) - Phase 11
 - [x] Phase 11 Task 2: Facing LinkIt corner stroke glow with folder-specific bright accent colors - Phase 11
 - [x] Phase 11 Task 3: Redesign FolderCard to dark rounded rectangle with top-left accent icon tile and top-right menu - Phase 11
@@ -234,13 +272,49 @@ Phase 13 - FolderScreenRedesign [In Progress]
 - [x] Task 4: Implement search-to-folder auto-scroll and 2-second exposure/brightness highlight across all note types - Phase 12
 - [x] Task 5: Build, test verification, and regression check - Phase 12
 - [x] Assemble, test, sign, and package Fotara 1.5.3 Beta APK artifact (versionCode 17, versionName 1.5.3 Beta) with Phase 12 UI/UX refinements - Phase 12
+- [x] Task 1: Unified Notes Data Model & NotesViewModel (reactive aggregation of Photos, Documents, Text Notes, Canvas Notes, Folder names, excluding trashed, date grouping by Today, Yesterday, calendar dates, type filtering, search) - Phase 14
+- [x] Task 2: NotesScreen UI matching Screenshot 1 (Header with Notes title, subtitle, Search & More circular buttons; pill filter chips; date-grouped cards; note item rows with thumbnails, titles, folders, timestamps, 3-dot menus; FAB for new notes; empty states) - Phase 14
+- [x] Task 3: In-App Update Engine Enhancements (UpdateManager skippedVersion persistence in SharedPreferences, semantic version check latestVersion > installedVersion && latestVersion != skippedVersion, session dismissal logic, reset mechanism) - Phase 14
+- [x] Task 4: In-App Update Modal Popup UI matching Screenshot 2 (Centered modal with 28dp radius, top banner with Coil/fallback, overlaid title, scrollable release notes, tonal "Later" and "Skip this version" pill buttons, integrated into HomeScreen) - Phase 14
+- [x] Task 5: Testing, string localization, build validation & verification - Phase 14
+
+- [x] Task 1: Reading Mode Zoom Gating in PDF Viewer (toggle via book icon, detached gestures outside reading mode, state reset on exit) - Phase 15
+- [x] Task 2: Smooth 1:1 GPU-Layer Zoom Engine (exact focal point tracking, graphicsLayer lambda, no recomposition, debounced sharpen) - Phase 15
+- [x] Task 3: Subtitle Relocation to Three-Dot Menu Info Section (single-line title in top bar, dynamic state-accurate Info header in menu) - Phase 15
+- [x] Task 4: Testing & Build Verification - Phase 15
+- [x] Task 1: Core Engine Rework (`TextEditorOps.kt`, `EditorActions.kt`): caret invariant, keyboard table (Enter, Backspace, Space), numbered renumbering, typing shortcuts - Phase 16
+- [x] Task 2: Live Rendering & Offset Mapping (`MarkdownVisualTransformation.kt`, `MarkdownOffsetMapping.kt`): prefix sprites, inline delimiter hiding, tappable checklist box - Phase 16
+- [x] Task 3: Toolbar Overhaul (`EditorToolbar.kt`): scrollable, full button suite, clean padding, active states - Phase 16
+- [x] Task 4: Top Bar & Info Section (`TextNoteEditorScreen.kt`, `strings.xml`): single-line title, word/char counts in 3-dot overflow Info menu - Phase 16
+- [x] Task 5: Unit & Regression Tests (`TextEditorOpsTest.kt`, regression test suite): full keyboard table, caret invariants, screenshot reproduction cases - Phase 16
+- [x] Task 6: Changelog Entry & Documentation Finalization: update `Changelog_1.5.md` and mark Phase 16 complete - Phase 16
+
+- [x] Task 1: High-zoom PDF sharp rendering up to 4.0x with memory budget and cache eviction - Phase 17
+- [x] Task 2: Direct PDF viewer opening from Notes tab & search with matching page jump - Phase 17
+- [x] Task 3: Combine share support for Text Notes (formatted markdown) & Canvas Notes (1x raster) - Phase 17
+- [x] Task 4: Rotate and crop safe atomic file writes, consistent OCR re-run, and FTS refresh - Phase 17
+- [x] Task 5: Standardization of three-dot overflow menu header to "Info" across viewers - Phase 17
+- [x] Task 6: Canvas smooth stroke Bezier path builder, zoom-aware tolerance, round highlighter - Phase 17
+- [x] Task 7: Canvas layer instant creation ("Layer N") and inline long-press renaming - Phase 17
+- [x] Task 8: New folder dialog immediate soft keyboard autofocus via FocusRequester - Phase 17
+- [x] Task 9: Remove camera option from Home screen (+) dock button, opening folder dialog directly - Phase 17
+- [x] Task 10: Pure-logic unit tests and manual test script validation - Phase 17
+
+- [x] Task 0: Carry-over checks (density-aware remnant threshold, consolidate test files, Z8 vertical offset) - Phase 19
+- [x] Task 1: Translucent highlighter in all phases, single-path rendering, ic_highlighter.xml icon - Phase 19
+- [x] Task 2: Layer-isolated blend modes (NORMAL, MULTIPLY, DARKEN, SCREEN), StrokeCodec V2, API 24-28 fallback - Phase 19
+- [x] Task 3: Long-press tool panels with haptic feedback, Highlighter Blending row - Phase 19
+- [x] Task 4: Shorter bottom dock (~20% reduction), shared/dynamic dock-anchored offsets - Phase 19
+- [x] Task 5: Home screen scroll edges (Modifier.verticalEdgeFade, dynamic bottom padding, Notes parity) - Phase 19
+
+- [x] Task 1: Unified canvas element stacking rule (layer order first, creation order inside layer, equal treatment of strokes and images) - Phase 21
+- [x] Task 2: Easy selection, scaling and stretching of images (60% viewport insert, auto-selection, proportional corner scale, 1D side stretch) - Phase 21
+- [x] Task 3: Tool options panels layout bug (wrap content, max height bounded between capsules and dock, scrollable, 48dp single-row blending chips) - Phase 21
+- [x] Task 4: Bottom overlay spacing (shared dynamic height source of truth, snackbars and Notes (+) FAB clear floating nav bar) - Phase 21
+- [x] Task 5: Overflow menu anchor position (nested in trigger IconButton, right-aligned, flipped upward if needed) - Phase 21
 
 ## In Progress
-- [ ] Task 1: Redesign Top App Bar with 40dp circular buttons, ElmsSans title, and folder color indicator - Phase 13
-- [ ] Task 2: Modernize category/filter tabs to rounded pill geometry (active blue, inactive dark surface with border) - Phase 13
-- [ ] Task 3: Redesign DetailPhotoCard and DetailGroupCard to dark rounded cards with internal photo clipping and 3-dots button - Phase 13
-- [ ] Task 4: Redesign DetailDocumentCard, DetailTextNoteCard, and DetailCanvasCard with new card design and badges - Phase 13
-- [ ] Task 5: Verify full-height viewport, system navigation insets, and run compile/test suite - Phase 13
+None.
 
 ## Pending
 None.

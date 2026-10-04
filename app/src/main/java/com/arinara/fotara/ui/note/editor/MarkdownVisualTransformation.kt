@@ -20,17 +20,17 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.sp
 
 /**
- * VisualTransformation providing rich interactive live-preview rendering in the Markdown editor.
- *
- * Rules:
- * 1. Active line (where the cursor or selection is) displays raw markers for natural editing,
- *    guaranteeing a 1:1 identity [OffsetMapping] on the active line so the caret never jumps.
- * 2. Inactive lines display real visual elements (sprites):
- *    - Checkbox: "☐ " / "☑ " with strikethrough and dimmed content when checked.
- *    - Horizontal rule: "───" divider styling.
- *    - Bullet list: "• " clean bullet glyph.
- *    - Blockquote: "▎ " vertical bar styling without italics.
- *    - Inline styles: syntax markers hidden, formatted with bold/italic/code/strike/link.
+ * VisualTransformation providing "Notion-lite" live interactive preview in the Markdown editor:
+ * 1. Block prefixes are NEVER shown as raw text:
+ *    - Bullet list: "• "
+ *    - Numbered list: "1. ", "2. "...
+ *    - Checkbox: "☐ " (unchecked) / "☑ " (checked, with dimmed strikethrough text)
+ *    - Quote: "▎ " vertical bar
+ *    - Divider: "────────────────────────"
+ *    - Headings H1-H3 sized without raw '#' prefixes
+ *    Caret is pinned to content boundary and can NEVER be placed inside brackets or prefixes.
+ * 2. Inline marks (**bold**, *italic*, ~~strike~~, `code`, [text](url)):
+ *    Hidden when caret is outside the span; shown/dimmed when caret is inside the span for editing.
  */
 class MarkdownVisualTransformation(
     val cursorStart: Int,
@@ -44,6 +44,9 @@ class MarkdownVisualTransformation(
     val mutedColor: Color = Color(0xFF8E9AAF)
 ) : VisualTransformation {
 
+    var lastOffsetMapping: OffsetMapping = OffsetMapping.Identity
+        private set
+
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
         if (raw.isEmpty()) {
@@ -53,190 +56,234 @@ class MarkdownVisualTransformation(
         val cMin = minOf(cursorStart, cursorEnd).coerceIn(0, raw.length)
         val cMax = maxOf(cursorStart, cursorEnd).coerceIn(0, raw.length)
 
-        // Find active line boundaries touched by the caret or selection
-        val activeLineStart = raw.lastIndexOf('\n', (cMin - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
-        val activeLineEnd = if (cMin == cMax) {
-            raw.indexOf('\n', cMax).let { if (it == -1) raw.length else it }
-        } else {
-            val endSearch = (cMax - 1).coerceAtLeast(cMin)
-            raw.indexOf('\n', endSearch).let { if (it == -1) raw.length else it }
-        }
+        val doc = MarkdownParser.parse(raw)
 
         val chunks = mutableListOf<TextMappingChunk>()
         val styles = mutableListOf<Pair<SpanStyle, IntRange>>()
-
         val sb = StringBuilder()
-        var curRaw = 0
 
-        // Parse lines sequentially
-        val lineEnds = mutableListOf<Int>()
+        // Find line boundaries
+        val lineRanges = mutableListOf<Pair<Int, Int>>()
         var searchPos = 0
         while (searchPos <= raw.length) {
             val nextNl = raw.indexOf('\n', searchPos)
             if (nextNl == -1) {
-                lineEnds.add(raw.length)
+                lineRanges.add(searchPos to raw.length)
                 break
             } else {
-                lineEnds.add(nextNl)
+                lineRanges.add(searchPos to nextNl)
                 searchPos = nextNl + 1
             }
         }
 
-        var lineStart = 0
-        for (lineEnd in lineEnds) {
-            val lineLen = lineEnd - lineStart
+        var lineIndex = 0
+        for ((lineStart, lineEnd) in lineRanges) {
             val lineText = raw.substring(lineStart, lineEnd)
-            val isActiveLine = (lineStart <= activeLineEnd && lineEnd >= activeLineStart)
-
             val tLineStart = sb.length
 
-            if (isActiveLine || !hideUntouchedMarkers) {
-                // Active line: keep characters 1:1, full identity mapping
+            val isInsideCodeBlock = doc.spans.any {
+                it.type == MarkdownSpanType.CODE_BLOCK && lineStart >= it.contentStart && lineEnd <= it.contentEnd
+            }
+
+            val isDivider = (lineText.trim() == "---" || lineText.trim() == "***") && !isInsideCodeBlock
+
+            if (isDivider) {
+                // Divider line: replace with clean horizontal rule sprite
+                val dividerSprite = "────────────────────────"
+                sb.append(dividerSprite)
+                val tDividerEnd = sb.length
+                chunks.add(TextMappingChunk(lineStart, lineEnd, tLineStart, tDividerEnd, isAtomicPrefix = true))
+                styles.add(SpanStyle(color = mutedColor.copy(alpha = 0.5f), fontWeight = FontWeight.Bold) to (tLineStart until tDividerEnd))
+            } else if (isInsideCodeBlock) {
+                // Code block interior: 1:1 monospace styling
                 sb.append(lineText)
                 chunks.add(TextMappingChunk(lineStart, lineEnd, tLineStart, sb.length))
+                styles.add(
+                    SpanStyle(
+                        fontFamily = FontFamily.Monospace,
+                        background = codeBgColor,
+                        color = codeTextColor,
+                        fontSize = 13.sp
+                    ) to (tLineStart until sb.length)
+                )
             } else {
-                // Inactive line: replace markdown prefixes with rich sprites
-                val trimmed = lineText.trimStart()
-                val leadingSpaces = lineText.length - trimmed.length
-                val indentStr = lineText.substring(0, leadingSpaces)
+                val parsed = TextEditorOps.parseLine(lineIndex, lineStart, lineEnd, lineText)
 
-                when {
-                    trimmed.startsWith("- [ ] ") || trimmed.startsWith("* [ ] ") -> {
-                        // Unchecked checkbox
-                        sb.append(indentStr)
-                        val tBoxStart = sb.length
-                        sb.append("☐ ")
-                        val tBoxEnd = sb.length
-                        styles.add(SpanStyle(color = accentColor, fontWeight = FontWeight.Bold) to (tBoxStart until tBoxEnd))
+                // 1. Indent
+                if (parsed.indent.isNotEmpty()) {
+                    val tIndentStart = sb.length
+                    sb.append(parsed.indent)
+                    chunks.add(TextMappingChunk(lineStart, lineStart + parsed.indent.length, tIndentStart, sb.length))
+                }
 
-                        val content = trimmed.substring(6)
-                        sb.append(content)
+                // 2. Prefix Sprite
+                val prefixOrigStart = lineStart + parsed.indent.length
+                val prefixOrigEnd = prefixOrigStart + parsed.prefixString.length
+                val tPrefixStart = sb.length
 
-                        // Mapped chunk: original [lineStart..lineStart+leadingSpaces+6] -> transformed [tLineStart..tBoxEnd]
-                        chunks.add(TextMappingChunk(lineStart, lineStart + leadingSpaces + 6, tLineStart, tBoxEnd))
-                        if (content.isNotEmpty()) {
-                            chunks.add(TextMappingChunk(lineStart + leadingSpaces + 6, lineEnd, tBoxEnd, sb.length))
+                when (parsed.prefixType) {
+                    LineToolType.CHECKBOX -> {
+                        val isChecked = parsed.prefixString.contains(Regex("""\[[xX]\]"""))
+                        if (isChecked) {
+                            sb.append("☑ ")
+                            styles.add(SpanStyle(color = accentColor.copy(alpha = 0.7f), fontWeight = FontWeight.Bold) to (tPrefixStart until sb.length))
+                        } else {
+                            sb.append("☐ ")
+                            styles.add(SpanStyle(color = accentColor, fontWeight = FontWeight.Bold) to (tPrefixStart until sb.length))
                         }
+                        chunks.add(TextMappingChunk(prefixOrigStart, prefixOrigEnd, tPrefixStart, sb.length, isAtomicPrefix = true))
                     }
-                    trimmed.startsWith("- [x] ") || trimmed.startsWith("- [X] ") ||
-                    trimmed.startsWith("* [x] ") || trimmed.startsWith("* [X] ") -> {
-                        // Checked checkbox
-                        sb.append(indentStr)
-                        val tBoxStart = sb.length
-                        sb.append("☑ ")
-                        val tBoxEnd = sb.length
-                        styles.add(SpanStyle(color = accentColor.copy(alpha = 0.65f), fontWeight = FontWeight.Bold) to (tBoxStart until tBoxEnd))
-
-                        val content = trimmed.substring(6)
-                        val tContentStart = sb.length
-                        sb.append(content)
-                        val tContentEnd = sb.length
-
-                        // Style content as strikethrough & dimmed
-                        styles.add(SpanStyle(color = mutedColor, textDecoration = TextDecoration.LineThrough) to (tContentStart until tContentEnd))
-
-                        chunks.add(TextMappingChunk(lineStart, lineStart + leadingSpaces + 6, tLineStart, tBoxEnd))
-                        if (content.isNotEmpty()) {
-                            chunks.add(TextMappingChunk(lineStart + leadingSpaces + 6, lineEnd, tBoxEnd, sb.length))
-                        }
+                    LineToolType.NUMBERED_LIST -> {
+                        val numStr = Regex("""^\d+""").find(parsed.prefixString)?.value ?: "1"
+                        sb.append("$numStr. ")
+                        styles.add(SpanStyle(color = accentColor, fontWeight = FontWeight.Bold) to (tPrefixStart until sb.length))
+                        chunks.add(TextMappingChunk(prefixOrigStart, prefixOrigEnd, tPrefixStart, sb.length, isAtomicPrefix = true))
                     }
-                    trimmed == "---" || trimmed == "***" -> {
-                        // Horizontal divider
-                        sb.append("──────────────────────────────────")
-                        styles.add(SpanStyle(color = mutedColor.copy(alpha = 0.5f), fontWeight = FontWeight.Bold) to (tLineStart until sb.length))
-                        chunks.add(TextMappingChunk(lineStart, lineEnd, tLineStart, sb.length))
-                    }
-                    trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
-                        // Bullet list
-                        sb.append(indentStr)
-                        val tBulletStart = sb.length
+                    LineToolType.BULLET_LIST -> {
                         sb.append("• ")
-                        val tBulletEnd = sb.length
-                        styles.add(SpanStyle(color = accentColor, fontWeight = FontWeight.Bold) to (tBulletStart until tBulletEnd))
-
-                        val content = trimmed.substring(2)
-                        sb.append(content)
-                        chunks.add(TextMappingChunk(lineStart, lineStart + leadingSpaces + 2, tLineStart, tBulletEnd))
-                        if (content.isNotEmpty()) {
-                            chunks.add(TextMappingChunk(lineStart + leadingSpaces + 2, lineEnd, tBulletEnd, sb.length))
-                        }
+                        styles.add(SpanStyle(color = accentColor, fontWeight = FontWeight.Bold) to (tPrefixStart until sb.length))
+                        chunks.add(TextMappingChunk(prefixOrigStart, prefixOrigEnd, tPrefixStart, sb.length, isAtomicPrefix = true))
                     }
-                    trimmed.startsWith("> ") -> {
-                        // Blockquote
-                        sb.append(indentStr)
-                        val tBarStart = sb.length
+                    LineToolType.QUOTE -> {
                         sb.append("▎ ")
-                        val tBarEnd = sb.length
-                        styles.add(SpanStyle(color = accentColor, fontWeight = FontWeight.Bold) to (tBarStart until tBarEnd))
+                        styles.add(SpanStyle(color = accentColor, fontWeight = FontWeight.Bold) to (tPrefixStart until sb.length))
+                        chunks.add(TextMappingChunk(prefixOrigStart, prefixOrigEnd, tPrefixStart, sb.length, isAtomicPrefix = true))
+                    }
+                    LineToolType.H1, LineToolType.H2, LineToolType.H3 -> {
+                        // Headings: prefix markers (#, ##, ###) hidden
+                        chunks.add(TextMappingChunk(prefixOrigStart, prefixOrigEnd, tPrefixStart, tPrefixStart, isAtomicPrefix = true))
+                    }
+                    null -> {
+                        // Plain text
+                    }
+                }
 
-                        val content = trimmed.substring(2)
-                        val tContentStart = sb.length
-                        sb.append(content)
-                        styles.add(SpanStyle(color = mutedColor) to (tContentStart until sb.length))
+                // 3. Content with Inline Formatting (delimiters hidden when untouched)
+                val contentStart = prefixOrigEnd
+                val contentEnd = lineEnd
+                val tContentStart = sb.length
 
-                        chunks.add(TextMappingChunk(lineStart, lineStart + leadingSpaces + 2, tLineStart, tBarEnd))
-                        if (content.isNotEmpty()) {
-                            chunks.add(TextMappingChunk(lineStart + leadingSpaces + 2, lineEnd, tBarEnd, sb.length))
-                        }
+                val lineInlineSpans = doc.spans.filter {
+                    it.start >= contentStart && it.end <= contentEnd && it.type.isInline
+                }
+
+                // Filter to non-overlapping spans
+                val nonOverlapping = mutableListOf<MarkdownSpan>()
+                var lastSpanEnd = -1
+                for (span in lineInlineSpans) {
+                    if (span.start >= lastSpanEnd) {
+                        nonOverlapping.add(span)
+                        lastSpanEnd = span.end
                     }
-                    trimmed.startsWith("# ") -> {
-                        sb.append(indentStr)
-                        val content = trimmed.substring(2)
-                        val tContentStart = sb.length
-                        sb.append(content)
-                        styles.add(SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = accentColor) to (tContentStart until sb.length))
-                        chunks.add(TextMappingChunk(lineStart, lineStart + leadingSpaces + 2, tLineStart, tContentStart))
-                        if (content.isNotEmpty()) {
-                            chunks.add(TextMappingChunk(lineStart + leadingSpaces + 2, lineEnd, tContentStart, sb.length))
-                        }
+                }
+
+                var curPos = contentStart
+                for (span in nonOverlapping) {
+                    if (span.start > curPos) {
+                        val tBeforeStart = sb.length
+                        sb.append(raw.substring(curPos, span.start))
+                        chunks.add(TextMappingChunk(curPos, span.start, tBeforeStart, sb.length))
                     }
-                    trimmed.startsWith("## ") -> {
-                        sb.append(indentStr)
-                        val content = trimmed.substring(3)
-                        val tContentStart = sb.length
-                        sb.append(content)
-                        styles.add(SpanStyle(fontSize = 19.sp, fontWeight = FontWeight.Bold, color = textColor) to (tContentStart until sb.length))
-                        chunks.add(TextMappingChunk(lineStart, lineStart + leadingSpaces + 3, tLineStart, tContentStart))
-                        if (content.isNotEmpty()) {
-                            chunks.add(TextMappingChunk(lineStart + leadingSpaces + 3, lineEnd, tContentStart, sb.length))
+
+                    val isTouched = span.touchesSelection(cMin, cMax)
+                    if (isTouched || !hideUntouchedMarkers) {
+                        // Caret is inside span: show markers so user can edit them
+                        val tSpanStart = sb.length
+                        sb.append(raw.substring(span.start, span.end))
+                        chunks.add(TextMappingChunk(span.start, span.end, tSpanStart, sb.length))
+
+                        // Dim the delimiter markers
+                        val dimmedStyle = SpanStyle(color = mutedColor.copy(alpha = 0.5f), fontSize = 11.5.sp)
+                        if (span.markerStartLen > 0) {
+                            styles.add(dimmedStyle to (tSpanStart until (tSpanStart + span.markerStartLen)))
                         }
-                    }
-                    trimmed.startsWith("### ") -> {
-                        sb.append(indentStr)
-                        val content = trimmed.substring(4)
-                        val tContentStart = sb.length
-                        sb.append(content)
-                        styles.add(SpanStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold, color = textColor) to (tContentStart until sb.length))
-                        chunks.add(TextMappingChunk(lineStart, lineStart + leadingSpaces + 4, tLineStart, tContentStart))
-                        if (content.isNotEmpty()) {
-                            chunks.add(TextMappingChunk(lineStart + leadingSpaces + 4, lineEnd, tContentStart, sb.length))
+                        if (span.markerEndLen > 0) {
+                            val tEndMarkerStart = tSpanStart + (span.end - span.start) - span.markerEndLen
+                            styles.add(dimmedStyle to (tEndMarkerStart until (tSpanStart + (span.end - span.start))))
                         }
+
+                        val spanStyle = getInlineSpanStyle(span.type, textColor, codeBgColor, codeTextColor, linkColor)
+                        if (spanStyle != null) {
+                            val tCStart = tSpanStart + span.markerStartLen
+                            val tCEnd = tSpanStart + (span.end - span.start) - span.markerEndLen
+                            if (tCStart < tCEnd) {
+                                styles.add(spanStyle to (tCStart until tCEnd))
+                            }
+                        }
+                    } else {
+                        // Caret is outside span: HIDE the markers!
+                        val tSpanStart = sb.length
+                        // 1. Hide opening marker
+                        chunks.add(TextMappingChunk(span.start, span.contentStart, tSpanStart, tSpanStart))
+
+                        // 2. Visible content
+                        val spanContent = raw.substring(span.contentStart, span.contentEnd)
+                        val tVisibleStart = sb.length
+                        sb.append(spanContent)
+                        val tVisibleEnd = sb.length
+                        if (spanContent.isNotEmpty()) {
+                            chunks.add(TextMappingChunk(span.contentStart, span.contentEnd, tVisibleStart, tVisibleEnd))
+                            val spanStyle = getInlineSpanStyle(span.type, textColor, codeBgColor, codeTextColor, linkColor)
+                            if (spanStyle != null) {
+                                styles.add(spanStyle to (tVisibleStart until tVisibleEnd))
+                            }
+                        }
+
+                        // 3. Hide closing marker
+                        chunks.add(TextMappingChunk(span.contentEnd, span.end, tVisibleEnd, tVisibleEnd))
                     }
-                    else -> {
-                        sb.append(lineText)
-                        chunks.add(TextMappingChunk(lineStart, lineEnd, tLineStart, sb.length))
+
+                    curPos = span.end
+                }
+
+                if (curPos < contentEnd) {
+                    val tTrailingStart = sb.length
+                    sb.append(raw.substring(curPos, contentEnd))
+                    chunks.add(TextMappingChunk(curPos, contentEnd, tTrailingStart, sb.length))
+                }
+
+                val tContentEnd = sb.length
+
+                // Apply line-level block styles
+                if (parsed.prefixType == LineToolType.CHECKBOX && parsed.prefixString.contains(Regex("""\[[xX]\]"""))) {
+                    if (tContentStart < tContentEnd) {
+                        styles.add(SpanStyle(color = mutedColor, textDecoration = TextDecoration.LineThrough) to (tContentStart until tContentEnd))
+                    }
+                } else if (parsed.prefixType == LineToolType.H1) {
+                    if (tContentStart < tContentEnd) {
+                        styles.add(SpanStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = accentColor) to (tContentStart until tContentEnd))
+                    }
+                } else if (parsed.prefixType == LineToolType.H2) {
+                    if (tContentStart < tContentEnd) {
+                        styles.add(SpanStyle(fontSize = 19.sp, fontWeight = FontWeight.Bold, color = textColor) to (tContentStart until tContentEnd))
+                    }
+                } else if (parsed.prefixType == LineToolType.H3) {
+                    if (tContentStart < tContentEnd) {
+                        styles.add(SpanStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold, color = textColor) to (tContentStart until tContentEnd))
+                    }
+                } else if (parsed.prefixType == LineToolType.QUOTE) {
+                    if (tContentStart < tContentEnd) {
+                        styles.add(SpanStyle(color = mutedColor) to (tContentStart until tContentEnd))
                     }
                 }
             }
 
+            // Newline
             if (lineEnd < raw.length && raw[lineEnd] == '\n') {
                 val tNl = sb.length
                 sb.append('\n')
                 chunks.add(TextMappingChunk(lineEnd, lineEnd + 1, tNl, tNl + 1))
             }
 
-            lineStart = lineEnd + 1
+            lineIndex++
         }
 
         val transformedString = sb.toString()
         val offsetMapping = MarkdownOffsetMapping(raw.length, transformedString.length, chunks)
+        lastOffsetMapping = offsetMapping
 
-        // Apply markdown syntax formatting across all spans
-        val doc = MarkdownParser.parse(raw)
         val annotated = buildAnnotatedString {
             append(transformedString)
-
-            // 1. Add line-level sprite styles
             for ((spanStyle, range) in styles) {
                 val cStart = range.first.coerceIn(0, length)
                 val cEnd = (range.last + 1).coerceIn(cStart, length)
@@ -244,87 +291,40 @@ class MarkdownVisualTransformation(
                     addStyle(spanStyle, cStart, cEnd)
                 }
             }
-
-            // 2. Add inline formatting styles
-            for (span in doc.spans) {
-                val tStart = offsetMapping.originalToTransformed(span.contentStart)
-                val tEnd = offsetMapping.originalToTransformed(span.contentEnd)
-                if (tStart < tEnd && tEnd <= length) {
-                    when (span.type) {
-                        MarkdownSpanType.BOLD -> {
-                            addStyle(SpanStyle(fontWeight = FontWeight.Bold, color = textColor), tStart, tEnd)
-                        }
-                        MarkdownSpanType.ITALIC -> {
-                            addStyle(SpanStyle(fontStyle = FontStyle.Italic), tStart, tEnd)
-                        }
-                        MarkdownSpanType.BOLD_ITALIC -> {
-                            addStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic, color = textColor), tStart, tEnd)
-                        }
-                        MarkdownSpanType.STRIKETHROUGH -> {
-                            addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), tStart, tEnd)
-                        }
-                        MarkdownSpanType.INLINE_CODE -> {
-                            addStyle(
-                                SpanStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    background = codeBgColor,
-                                    color = codeTextColor,
-                                    fontSize = 13.5.sp
-                                ),
-                                tStart,
-                                tEnd
-                            )
-                        }
-                        MarkdownSpanType.CODE_BLOCK -> {
-                            addStyle(
-                                SpanStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    background = codeBgColor,
-                                    color = codeTextColor,
-                                    fontSize = 13.sp
-                                ),
-                                tStart,
-                                tEnd
-                            )
-                        }
-                        MarkdownSpanType.LINK -> {
-                            addStyle(
-                                SpanStyle(
-                                    color = linkColor,
-                                    textDecoration = TextDecoration.Underline
-                                ),
-                                tStart,
-                                tEnd
-                            )
-                        }
-                        else -> {
-                            // Already handled by line sprite parser
-                        }
-                    }
-                }
-
-                // If on active line, dim raw marker tokens
-                val isTouched = span.touchesSelection(cursorStart, cursorEnd)
-                if (isTouched) {
-                    val dimmedStyle = SpanStyle(color = mutedColor.copy(alpha = 0.5f), fontSize = 11.5.sp)
-                    if (span.markerStartLen > 0) {
-                        val mStart = offsetMapping.originalToTransformed(span.start)
-                        val mEnd = offsetMapping.originalToTransformed(span.start + span.markerStartLen)
-                        if (mStart < mEnd && mEnd <= length) {
-                            addStyle(dimmedStyle, mStart, mEnd)
-                        }
-                    }
-                    if (span.markerEndLen > 0) {
-                        val mStart = offsetMapping.originalToTransformed(span.end - span.markerEndLen)
-                        val mEnd = offsetMapping.originalToTransformed(span.end)
-                        if (mStart < mEnd && mEnd <= length) {
-                            addStyle(dimmedStyle, mStart, mEnd)
-                        }
-                    }
-                }
-            }
         }
 
         return TransformedText(annotated, offsetMapping)
     }
+
+    private fun getInlineSpanStyle(
+        type: MarkdownSpanType,
+        textColor: Color,
+        codeBgColor: Color,
+        codeTextColor: Color,
+        linkColor: Color
+    ): SpanStyle? = when (type) {
+        MarkdownSpanType.BOLD -> SpanStyle(fontWeight = FontWeight.Bold, color = textColor)
+        MarkdownSpanType.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
+        MarkdownSpanType.BOLD_ITALIC -> SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic, color = textColor)
+        MarkdownSpanType.STRIKETHROUGH -> SpanStyle(textDecoration = TextDecoration.LineThrough)
+        MarkdownSpanType.INLINE_CODE -> SpanStyle(
+            fontFamily = FontFamily.Monospace,
+            background = codeBgColor,
+            color = codeTextColor,
+            fontSize = 13.5.sp
+        )
+        MarkdownSpanType.LINK -> SpanStyle(
+            color = linkColor,
+            textDecoration = TextDecoration.Underline
+        )
+        else -> null
+    }
+
+    private val MarkdownSpanType.isInline: Boolean
+        get() = this == MarkdownSpanType.BOLD ||
+                this == MarkdownSpanType.ITALIC ||
+                this == MarkdownSpanType.BOLD_ITALIC ||
+                this == MarkdownSpanType.STRIKETHROUGH ||
+                this == MarkdownSpanType.INLINE_CODE ||
+                this == MarkdownSpanType.LINK
 }

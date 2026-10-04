@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Password
+import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
@@ -81,22 +83,31 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arinara.fotara.ui.components.verticalEdgeFade
+import com.arinara.fotara.ui.components.PullToRefreshLayout
+import com.arinara.fotara.ui.components.PullToRefreshHelper
+import com.arinara.fotara.ui.home.HomeLayoutHelper
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arinara.fotara.R
 import com.arinara.fotara.data.model.CanvasNote
@@ -129,6 +140,7 @@ import com.arinara.fotara.ui.components.HomeSegmentedTabBar
 import com.arinara.fotara.ui.components.NewFolderDialog
 import com.arinara.fotara.ui.components.ResetFolderPinDialog
 import com.arinara.fotara.ui.components.SetFolderLockDialog
+import com.arinara.fotara.ui.components.computeFolderGlowAnchors
 import com.arinara.fotara.ui.components.computeFolderGlowOrientations
 import com.arinara.fotara.ui.settings.SettingsScreen
 import com.arinara.fotara.ui.settings.SettingsViewModel
@@ -149,12 +161,15 @@ import com.arinara.fotara.ui.settings.SettingsViewModel
 fun HomeScreen(
     viewModel: HomeViewModel,
     settingsViewModel: SettingsViewModel? = null,
+    notesViewModel: com.arinara.fotara.ui.notes.NotesViewModel? = null,
+    updateManager: com.arinara.fotara.online.UpdateManager? = null,
     onFolderClick: (Folder) -> Unit,
     onNavigateToPhoto: (folderId: Long, subfolderId: Long?, photoId: Long) -> Unit = { _, _, _ -> },
     onNavigateToGroup: (folderId: Long, subfolderId: Long?, groupId: Long) -> Unit = { _, _, _ -> },
-    onNavigateToDocument: (folderId: Long, subfolderId: Long?, docId: Long) -> Unit = { _, _, _ -> },
+    onNavigateToDocument: (folderId: Long, subfolderId: Long?, docId: Long, targetPageIndex: Int?) -> Unit = { _, _, _, _ -> },
     onNavigateToTextNote: (folderId: Long, subfolderId: Long?, noteId: Long) -> Unit = { _, _, _ -> },
     onNavigateToCanvasNote: (folderId: Long, subfolderId: Long?, canvasId: Long) -> Unit = { _, _, _ -> },
+    onOpenDocx: (documentId: Long) -> Unit = {},
     onOpenTrash: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenUpdates: () -> Unit = {},
@@ -177,6 +192,18 @@ fun HomeScreen(
     var showHomeOverflowMenu by remember { mutableStateOf(false) }
     var showBatchRenameDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
+    var updatePopupRelease by remember { mutableStateOf<com.arinara.fotara.online.ReleaseInfo?>(null) }
+
+    LaunchedEffect(updateManager) {
+        if (updateManager != null) {
+            try {
+                val rel = updateManager.checkForUpdates()
+                if (rel != null && updateManager.shouldShowUpdatePopup(rel)) {
+                    updatePopupRelease = rel
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     var folderToUnlock by remember { mutableStateOf<Folder?>(null) }
     var folderToLock by remember { mutableStateOf<Folder?>(null) }
@@ -188,6 +215,8 @@ fun HomeScreen(
     var pendingDocumentSearchResult by remember { mutableStateOf<DocumentNote?>(null) }
     var pendingTextNoteSearchResult by remember { mutableStateOf<TextNote?>(null) }
     var pendingCanvasSearchResult by remember { mutableStateOf<CanvasNote?>(null) }
+    var bottomStackHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
 
     val deviceLockLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -219,8 +248,8 @@ fun HomeScreen(
                     val doc = pendingDocumentSearchResult
                     pendingDocumentSearchResult = null
                     if (doc != null) {
-                        viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId ->
-                            onNavigateToDocument(folderId, subfolderId, docId)
+                        viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId, pageIndex ->
+                            onNavigateToDocument(folderId, subfolderId, docId, pageIndex)
                         }
                     }
                 } else if (pendingTextNoteSearchResult != null) {
@@ -245,9 +274,10 @@ fun HomeScreen(
     }
 
     LaunchedEffect(uiState.userMessage) {
-        uiState.userMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg)
+        val msg = uiState.userMessage
+        if (msg != null) {
             viewModel.clearUserMessage()
+            snackbarHostState.showSnackbar(msg)
         }
     }
 
@@ -267,16 +297,27 @@ fun HomeScreen(
         else -> 2
     }
 
-    val folderGlowOrientations = remember(uiState.folders, folderColumns) {
-        computeFolderGlowOrientations(uiState.folders, folderColumns)
+    val folderGlowAnchors = remember(uiState.folders, folderColumns) {
+        computeFolderGlowAnchors(uiState.folders, folderColumns)
     }
 
     val isImeVisible = WindowInsets.isImeVisible
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = HomeNearBlack,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    val bottomStackDp = with(density) { bottomStackHeightPx.toDp() }
+    val bottomOverlayPaddingDp = if (bottomStackDp > 0.dp) bottomStackDp else 96.dp
+
+    CompositionLocalProvider(LocalBottomOverlayPadding provides bottomOverlayPaddingDp) {
+        Scaffold(
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .padding(bottom = bottomOverlayPaddingDp + 8.dp)
+                        .imePadding()
+                )
+            },
+            containerColor = HomeNearBlack,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             if (uiState.isMultiSelectMode) {
                 TopAppBar(
@@ -337,6 +378,16 @@ fun HomeScreen(
                             )
                         }
                         IconButton(
+                            onClick = { viewModel.invertFolderSelection() },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FlipToBack,
+                                contentDescription = stringResource(R.string.action_invert_selection),
+                                tint = Color.White
+                            )
+                        }
+                        IconButton(
                             onClick = { viewModel.requestBulkDelete() },
                             enabled = uiState.selectedFolderIds.isNotEmpty(),
                             modifier = Modifier.size(48.dp)
@@ -369,7 +420,7 @@ fun HomeScreen(
                             onBackClick = { selectedNavTab = HomeNavTab.HOME },
                             onNavigateToTrash = onOpenTrash,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(bottom = 80.dp)
+                            contentPadding = PaddingValues(0.dp)
                         )
                     } else {
                         // Fallback if settingsViewModel was not passed
@@ -391,12 +442,33 @@ fun HomeScreen(
                 }
 
                 HomeNavTab.NOTES -> {
-                    // Blank page as specified in requirements
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(HomeNearBlack)
-                    )
+                    if (notesViewModel != null) {
+                        com.arinara.fotara.ui.notes.NotesScreen(
+                            viewModel = notesViewModel,
+                            onNavigateToPhoto = onNavigateToPhoto,
+                            onNavigateToDocument = onNavigateToDocument,
+                            onNavigateToTextNote = onNavigateToTextNote,
+                            onNavigateToCanvasNote = onNavigateToCanvasNote,
+                            onOpenDocx = onOpenDocx,
+                            onFolderClick = onFolderClick,
+                            onCreatePhotoNote = { folder -> onFolderClick(folder) },
+                            onCreateTextNote = { folder -> onNavigateToTextNote(folder.id, null, -1L) },
+                            onCreateCanvasNote = { folder -> onNavigateToCanvasNote(folder.id, null, -1L) },
+                            onImportDocument = { folder -> onFolderClick(folder) },
+                            onOpenSettings = { selectedNavTab = HomeNavTab.SETTINGS },
+                            onOpenTrash = onOpenTrash,
+                            onOpenUpdates = onOpenUpdates,
+                            onOpenWhatsNew = onOpenWhatsNew,
+                            onOpenFeedback = { showFeedbackDialog = true },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(HomeNearBlack)
+                        )
+                    }
                 }
 
                 HomeNavTab.HOME -> {
@@ -613,47 +685,94 @@ fun HomeScreen(
                         // Content Area
                         when (selectedSegment) {
                             HomeSegment.ALL -> {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Fixed(folderColumns),
-                                    contentPadding = PaddingValues(
-                                        start = 18.dp,
-                                        end = 18.dp,
-                                        top = 13.dp,
-                                        bottom = 110.dp
-                                    ),
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                                val bottomStackDp = with(density) { bottomStackHeightPx.toDp() }
+                                val dynamicBottomPadding = HomeLayoutHelper.computeBottomContentPadding(
+                                    measuredBottomStackHeightDp = bottomStackDp.value,
+                                    additionalBufferDp = 16f,
+                                    fallbackPaddingDp = 170f
+                                ).dp
+
+                                val homeGridState = rememberLazyGridState()
+                                val isOverlayOpen = folderToUnlock != null || activeContextFolder != null || folderToLock != null || folderToResetPin != null || uiState.showNewFolderDialog || uiState.showBulkDeleteDialog
+                                val canRefresh = PullToRefreshHelper.canTriggerRefresh(
+                                    isAtTop = homeGridState.firstVisibleItemIndex == 0 && homeGridState.firstVisibleItemScrollOffset == 0,
+                                    isMultiSelectActive = uiState.isMultiSelectMode,
+                                    isSearchFocused = uiState.isSearchActive,
+                                    isOverlayOpen = isOverlayOpen
+                                )
+
+                                PullToRefreshLayout(
+                                    isRefreshing = uiState.isRefreshing,
+                                    onRefresh = { viewModel.refresh() },
+                                    enabled = canRefresh,
                                     modifier = Modifier.fillMaxSize()
                                 ) {
-                                    items(uiState.folders, key = { it.id }) { folder ->
-                                        FolderCard(
-                                            folder = folder,
-                                            isSelectionMode = uiState.isMultiSelectMode,
-                                            isSelected = uiState.selectedFolderIds.contains(folder.id),
-                                            glowCorner = folderGlowOrientations[folder.id],
-                                            onClick = {
-                                                if (uiState.isMultiSelectMode) {
-                                                    viewModel.toggleFolderSelection(folder.id)
-                                                } else if (folder.isLocked) {
-                                                    folderToUnlock = folder
-                                                } else {
-                                                    onFolderClick(folder)
+                                    LazyVerticalGrid(
+                                        columns = GridCells.Fixed(folderColumns),
+                                        state = homeGridState,
+                                        contentPadding = PaddingValues(
+                                            start = 18.dp,
+                                            end = 18.dp,
+                                            top = 20.dp,
+                                            bottom = dynamicBottomPadding
+                                        ),
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalEdgeFade(top = 20.dp)
+                                    ) {
+                                        items(uiState.folders, key = { it.id }) { folder ->
+                                            FolderCard(
+                                                folder = folder,
+                                                isSelectionMode = uiState.isMultiSelectMode,
+                                                isSelected = uiState.selectedFolderIds.contains(folder.id),
+                                                glowAnchors = folderGlowAnchors[folder.id] ?: emptySet(),
+                                                onClick = {
+                                                    if (uiState.isMultiSelectMode) {
+                                                        viewModel.toggleFolderSelection(folder.id)
+                                                    } else if (folder.isLocked) {
+                                                        folderToUnlock = folder
+                                                    } else {
+                                                        onFolderClick(folder)
+                                                    }
+                                                },
+                                                onPinClick = {
+                                                    viewModel.togglePinFolder(folder.id)
+                                                },
+                                                onRenameClick = {
+                                                    renameInputText = folder.name
+                                                    folderToRename = folder
+                                                },
+                                                onSelectClick = {
+                                                    viewModel.enterMultiSelectMode(folder.id)
+                                                },
+                                                onLockClick = {
+                                                    if (folder.isLocked) {
+                                                        isRemovingLock = true
+                                                        folderToUnlock = folder
+                                                    } else {
+                                                        folderToLock = folder
+                                                    }
+                                                },
+                                                onUnlinkClick = {
+                                                    viewModel.unlinkFolder(folder.id)
+                                                },
+                                                onDeleteClick = {
+                                                    viewModel.deleteFolder(folder.id)
+                                                },
+                                                onRename = { newName ->
+                                                    viewModel.renameFolder(folder.id, newName)
+                                                },
+                                                onCardLongClick = {
+                                                    if (uiState.isMultiSelectMode) {
+                                                        viewModel.toggleFolderSelection(folder.id)
+                                                    } else {
+                                                        activeContextFolder = folder
+                                                    }
                                                 }
-                                            },
-                                            onMenuClick = {
-                                                activeContextFolder = folder
-                                            },
-                                            onRename = { newName ->
-                                                viewModel.renameFolder(folder.id, newName)
-                                            },
-                                            onCardLongClick = {
-                                                if (uiState.isMultiSelectMode) {
-                                                    viewModel.toggleFolderSelection(folder.id)
-                                                } else {
-                                                    activeContextFolder = folder
-                                                }
-                                            }
-                                        )
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -674,6 +793,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .onSizeChanged { bottomStackHeightPx = it.height }
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
@@ -696,14 +816,6 @@ fun HomeScreen(
                         if (selectedNavTab == HomeNavTab.HOME) {
                             FloatingDock(
                                 onSearchClick = { viewModel.activateSearch() },
-                                onCameraClick = {
-                                    val target = uiState.folders.firstOrNull { !it.isLocked } ?: uiState.folders.firstOrNull()
-                                    if (target != null) {
-                                        onFolderClick(target)
-                                    } else {
-                                        viewModel.openNewFolderDialog()
-                                    }
-                                },
                                 onNewFolderClick = { viewModel.openNewFolderDialog() }
                             )
                         }
@@ -1088,8 +1200,8 @@ fun HomeScreen(
                                 val doc = pendingDocumentSearchResult
                                 pendingDocumentSearchResult = null
                                 if (doc != null) {
-                                    viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId ->
-                                        onNavigateToDocument(folderId, subfolderId, docId)
+                                    viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId, pageIndex ->
+                                        onNavigateToDocument(folderId, subfolderId, docId, pageIndex)
                                     }
                                 }
                             }
@@ -1314,8 +1426,8 @@ fun HomeScreen(
                             pendingDocumentSearchResult = doc
                             folderToUnlock = targetFolder
                         } else {
-                            viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId ->
-                                onNavigateToDocument(folderId, subfolderId, docId)
+                            viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId, pageIndex ->
+                                onNavigateToDocument(folderId, subfolderId, docId, pageIndex)
                             }
                         }
                     },
@@ -1352,6 +1464,22 @@ fun HomeScreen(
             feedbackManager = feedbackManager,
             onDismiss = { showFeedbackDialog = false }
         )
+    }
+
+    updatePopupRelease?.let { release ->
+        com.arinara.fotara.ui.components.NewUpdateDialog(
+            release = release,
+            onLater = {
+                updateManager?.isPopupDismissedForSession = true
+                updatePopupRelease = null
+            },
+            onSkipVersion = {
+                updateManager?.setSkippedVersion(release.version)
+                updateManager?.isPopupDismissedForSession = true
+                updatePopupRelease = null
+            }
+        )
+    }
     }
 }
 

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,6 +62,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.FileCopy
+import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Image
@@ -87,7 +89,16 @@ import com.arinara.fotara.ui.components.GlowCorner
 import com.arinara.fotara.ui.components.GroupSliderViewerModal
 import com.arinara.fotara.ui.components.ShareFormatChoice
 import com.arinara.fotara.ui.components.UnifiedShareDialog
+import com.arinara.fotara.ui.components.PullToRefreshLayout
+import com.arinara.fotara.ui.components.PullToRefreshHelper
+import androidx.compose.ui.res.stringResource
+import com.arinara.fotara.R
 import com.arinara.fotara.ui.components.linkItCornerGlow
+import com.arinara.fotara.ui.components.GlowAnchor
+import com.arinara.fotara.ui.components.computeGridFacingGlowCorners
+import com.arinara.fotara.ui.components.computeGridGlowAnchors
+import com.arinara.fotara.ui.components.linkItGlow
+import com.arinara.fotara.ui.components.toGlowAnchor
 import com.arinara.fotara.ui.document.PdfViewerScreen
 import com.arinara.fotara.util.CombineItem
 import com.arinara.fotara.util.CombineManager
@@ -202,10 +213,13 @@ fun FolderDetailScreen(
     folderSuggestEngine: FolderSuggestEngine,
     onBackClick: () -> Unit,
     openViewerDirectly: Boolean = false,
+    targetPageIndex: Int? = null,
     onOpenGroup: ((folderId: Long, groupId: Long, targetPhotoId: Long?) -> Unit)? = null,
     onOpenTextNote: ((noteId: Long?, folderId: Long, subfolderId: Long?) -> Unit)? = null,
     onOpenDocx: ((documentId: Long) -> Unit)? = null,
     onOpenCanvasNote: ((canvasId: Long?, folderId: Long, subfolderId: Long?) -> Unit)? = null,
+    canvasRepository: com.arinara.fotara.canvas.persistence.CanvasRepository? = null,
+    canvasAssetManager: com.arinara.fotara.canvas.persistence.CanvasAssetManager? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -397,6 +411,10 @@ fun FolderDetailScreen(
             if (!isVisible) {
                 gridState.animateScrollToItem(targetIndex)
             }
+            val matchedDoc = (uiState.gridItems[targetIndex] as FolderGridItem.Document).documentNote
+            if (openViewerDirectly && inspectingDocument == null && matchedDoc.docType == com.arinara.fotara.data.model.DocumentType.PDF) {
+                inspectingDocument = matchedDoc
+            }
             highlightAlpha.animateTo(0.28f, tween(250, easing = FastOutSlowInEasing))
             delay(1500L)
             highlightAlpha.animateTo(0f, tween(350, easing = FastOutSlowInEasing))
@@ -466,8 +484,8 @@ fun FolderDetailScreen(
             }
             viewModel.clearUserMessage()
         } else {
-            snackbarHostState.showSnackbar(msg)
             viewModel.clearUserMessage()
+            snackbarHostState.showSnackbar(msg)
         }
     }
 
@@ -506,6 +524,20 @@ fun FolderDetailScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.selectAllSubfolders() }) {
+                            Icon(
+                                imageVector = Icons.Default.SelectAll,
+                                contentDescription = "Select All",
+                                tint = Color.White
+                            )
+                        }
+                        IconButton(onClick = { viewModel.invertSubfolderSelection() }) {
+                            Icon(
+                                imageVector = Icons.Default.FlipToBack,
+                                contentDescription = stringResource(R.string.action_invert_selection),
+                                tint = Color.White
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 if (uiState.selectedSubfolderIds.isNotEmpty()) {
@@ -552,6 +584,13 @@ fun FolderDetailScreen(
                             Icon(
                                 imageVector = Icons.Default.SelectAll,
                                 contentDescription = "Select All",
+                                tint = Color.White
+                            )
+                        }
+                        IconButton(onClick = { viewModel.invertSelection() }) {
+                            Icon(
+                                imageVector = Icons.Default.FlipToBack,
+                                contentDescription = stringResource(R.string.action_invert_selection),
                                 tint = Color.White
                             )
                         }
@@ -1202,7 +1241,31 @@ fun FolderDetailScreen(
                     else -> baseDensity
                 }
 
-                LazyVerticalGrid(
+                val isOverlayOpen = quickActionPhoto != null || photoToRename != null || inspectingPhoto != null || inspectingGroup != null || groupActionTarget != null || groupToRename != null || groupToDelete != null || showCreateGroupDialog || showAddPhotosToGroupDialog || showAddToGroupDialog || photoToCopy != null || groupToMove != null || showExportFormatDialog || groupToExport != null || showBatchRenameDialog || showUnifiedShareDialog || inspectingDocument != null || inspectingDocx != null || textNoteActionTarget != null || canvasNoteActionTarget != null || showMovePhotosDialog || showBatchColorDialog
+                val canRefresh = PullToRefreshHelper.canTriggerRefresh(
+                    isAtTop = gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0,
+                    isMultiSelectActive = uiState.isBatchSelectMode || uiState.isSubfolderMultiSelectMode,
+                    isSearchFocused = false,
+                    isOverlayOpen = isOverlayOpen
+                )
+
+                val gridGlowAnchors = remember(uiState.gridItems, photoColumns) {
+                    computeGridGlowAnchors(
+                        items = uiState.gridItems.map { it.itemId to it.linkGroupId },
+                        columns = photoColumns
+                    )
+                }
+
+                PullToRefreshLayout(
+                    isRefreshing = uiState.isRefreshing,
+                    onRefresh = { viewModel.refresh() },
+                    enabled = canRefresh,
+                    surfaceColor = MidnightSurface,
+                    accentColor = HomeMainButtonBlue,
+                    borderColor = MidnightCardOutline,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    LazyVerticalGrid(
                     columns = GridCells.Fixed(photoColumns),
                     state = gridState,
                     contentPadding = PaddingValues(16.dp),
@@ -1222,6 +1285,7 @@ fun FolderDetailScreen(
                                     isLinked = gridItem.isLinked,
                                     isHighlighted = isTarget && highlightAlpha.value > 0f,
                                     highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                    glowAnchors = gridGlowAnchors[photo.id] ?: emptySet(),
                                     onCardClick = {
                                         if (uiState.isBatchSelectMode) {
                                             viewModel.togglePhotoSelection(photo.id)
@@ -1243,6 +1307,7 @@ fun FolderDetailScreen(
                                     isSelected = uiState.selectedGroupIds.contains(gridItem.group.id),
                                     isHighlighted = isTarget && highlightAlpha.value > 0f,
                                     highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                    glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
                                     onCardClick = {
                                         if (uiState.isBatchSelectMode) {
                                             viewModel.toggleGroupSelection(gridItem.group.id)
@@ -1269,6 +1334,7 @@ fun FolderDetailScreen(
                                     isSelected = uiState.selectedDocumentIds.contains(doc.id),
                                     isHighlighted = isTarget && highlightAlpha.value > 0f,
                                     highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                    glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
                                     onCardClick = {
                                         if (uiState.isBatchSelectMode) {
                                             viewModel.toggleDocumentSelection(doc.id)
@@ -1299,6 +1365,7 @@ fun FolderDetailScreen(
                                     isSelected = uiState.selectedTextNoteIds.contains(textNote.id),
                                     isHighlighted = isTarget && highlightAlpha.value > 0f,
                                     highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                    glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
                                     onCardClick = {
                                         if (uiState.isBatchSelectMode) {
                                             viewModel.toggleTextNoteSelection(textNote.id)
@@ -1321,6 +1388,7 @@ fun FolderDetailScreen(
                                     isSelected = uiState.selectedCanvasNoteIds.contains(canvasNote.id),
                                     isHighlighted = isTarget && highlightAlpha.value > 0f,
                                     highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                    glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
                                     onCardClick = {
                                         if (uiState.isBatchSelectMode) {
                                             viewModel.toggleCanvasNoteSelection(canvasNote.id)
@@ -1340,6 +1408,7 @@ fun FolderDetailScreen(
             }
         }
     }
+}
 
     // Modal Action Sheet for Add Photo Button [+]
     if (showAddPhotoSheet) {
@@ -2092,48 +2161,83 @@ fun FolderDetailScreen(
         )
     }
 
-    // Dialog: Add to Group Picker
+    // Dialog: Add to Group Picker (Task 2)
     if (showAddToGroupDialog) {
+        val currentFolderId = uiState.folder?.id ?: viewModel.folderId
+        val currentFolderName = uiState.folder?.name ?: "Coursework"
+        val sectionResult = remember(currentFolderId, currentFolderName, uiState.availableFolders, uiState.availableGroups) {
+            AddToGroupSectionHelper.buildSections(
+                currentFolderId = currentFolderId,
+                currentFolderName = currentFolderName,
+                availableFolders = uiState.availableFolders,
+                allGroups = uiState.availableGroups
+            )
+        }
+
         AlertDialog(
             onDismissRequest = { showAddToGroupDialog = false },
             containerColor = MidnightSurface,
             shape = RoundedCornerShape(18.dp),
-            title = { Text("Add to Group", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
+            title = {
+                Column {
+                    Text(
+                        text = stringResource(R.string.add_to_group_title),
+                        color = TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (sectionResult.hasOtherFolderSections) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.add_to_group_other_folder_caption),
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            },
             text = {
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp)
+                        .heightIn(max = 360.dp)
                 ) {
-                    val recentGroups = uiState.recentDestinations.filter { it.type == DestinationType.GROUP }
-                    val allGroups = uiState.availableGroups
-
-                    if (allGroups.isEmpty()) {
-                        Text("No existing note groups in this coursework notebook.", color = TextSecondary, fontSize = 14.sp)
+                    if (sectionResult.sections.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.add_to_group_no_groups),
+                            color = TextSecondary,
+                            fontSize = 14.sp
+                        )
                     } else {
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (recentGroups.isNotEmpty()) {
-                                item {
+                            for (section in sectionResult.sections) {
+                                item(key = "header_${section.folderId}") {
+                                    val headerText = if (section.isCurrentFolder) {
+                                        stringResource(R.string.add_to_group_this_folder_header, section.folderName)
+                                    } else {
+                                        section.folderName
+                                    }
                                     Text(
-                                        text = "Recently Used",
-                                        color = FolderTabCream,
+                                        text = headerText,
+                                        color = TextSecondary,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                                     )
                                 }
-                                items(recentGroups, key = { "recent_${it.type}_${it.folderId}_${it.subfolderId}_${it.groupId}" }) { recent ->
+                                items(section.groups, key = { it.id }) { grp ->
                                     Surface(
                                         shape = RoundedCornerShape(10.dp),
-                                        color = DockSlatePill.copy(alpha = 0.5f),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, FolderTabCream.copy(alpha = 0.4f)),
+                                        color = DockSlatePill.copy(alpha = 0.35f),
+                                        border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                viewModel.addSelectedPhotosToGroup(recent.groupId ?: recent.folderId, recent.title)
+                                                viewModel.addSelectedPhotosToGroup(grp.id, grp.name)
                                                 showAddToGroupDialog = false
                                             }
                                     ) {
@@ -2143,40 +2247,8 @@ fun FolderDetailScreen(
                                         ) {
                                             Icon(Icons.Default.Layers, null, tint = FolderTabCream, modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(10.dp))
-                                            Text(recent.title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                            Text(grp.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                         }
-                                    }
-                                }
-                                item {
-                                    Text(
-                                        text = "All Groups",
-                                        color = TextSecondary,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                                    )
-                                }
-                            }
-
-                            items(allGroups, key = { it.id }) { grp ->
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = DockSlatePill.copy(alpha = 0.35f),
-                                    border = androidx.compose.foundation.BorderStroke(0.8.dp, MidnightCardOutline),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            viewModel.addSelectedPhotosToGroup(grp.id, grp.name)
-                                            showAddToGroupDialog = false
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(Icons.Default.Layers, null, tint = FolderTabCream, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(grp.name, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                     }
                                 }
                             }
@@ -2187,7 +2259,7 @@ fun FolderDetailScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showAddToGroupDialog = false }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text(stringResource(R.string.setting_combine_file_name_cancel), color = TextSecondary)
                 }
             }
         )
@@ -2717,12 +2789,13 @@ fun FolderDetailScreen(
                 is FolderGridItem.StandalonePhoto -> CombineItem.StandalonePhoto(item.photo)
                 is FolderGridItem.Group -> CombineItem.Group(item.group, item.memberPhotos)
                 is FolderGridItem.Document -> CombineItem.Document(item.documentNote, item.pages)
-                is FolderGridItem.TextNoteItem -> null
-                is FolderGridItem.CanvasNoteItem -> null
+                is FolderGridItem.TextNoteItem -> CombineItem.TextNoteItem(item.textNote)
+                is FolderGridItem.CanvasNoteItem -> CombineItem.CanvasNoteItem(item.canvasNote)
             }
         }
         val totalPages = combineItems.sumOf { it.pageCount() }
 
+        val folderTitle = uiState.folder?.name ?: "Coursework"
         UnifiedShareDialog(
             itemCount = itemsToShare.size,
             totalPages = totalPages,
@@ -2731,7 +2804,9 @@ fun FolderDetailScreen(
             progressTotal = shareProgressTotal,
             errorMessage = shareErrorMessage,
             containsTextNotes = hasTextNotes,
-            onFormatSelected = { choice ->
+            fileNamePresetTemplate = uiState.combineFileNamePreset,
+            folderName = folderTitle,
+            onFormatSelected = { choice, customFileName ->
                 if (totalPages > 100 && (choice == ShareFormatChoice.PDF || choice == ShareFormatChoice.WORD)) {
                     shareErrorMessage = "Selection exceeds 100-page limit ($totalPages pages). Please select fewer items."
                     return@UnifiedShareDialog
@@ -2741,23 +2816,36 @@ fun FolderDetailScreen(
                 shareProgressTotal = totalPages
                 coroutineScope.launch {
                     try {
-                        val combineManager = CombineManager(context)
-                        val title = uiState.folder?.name ?: "Coursework"
+                        val combineManager = CombineManager(context, canvasRepository, canvasAssetManager)
                         val file = when (choice) {
                             ShareFormatChoice.PDF -> {
-                                combineManager.combineToPdf(title, combineItems) { cur, tot ->
+                                val outputFileName = com.arinara.fotara.util.FileNamePresetHelper.buildFinalFileName(
+                                    customName = customFileName,
+                                    presetTemplate = uiState.combineFileNamePreset,
+                                    folderName = folderTitle,
+                                    itemCount = itemsToShare.size,
+                                    extension = ".pdf"
+                                )
+                                combineManager.combineToPdf(folderTitle, combineItems, outputFileName = outputFileName) { cur, tot ->
                                     shareProgressCurrent = cur
                                     shareProgressTotal = tot
                                 }
                             }
                             ShareFormatChoice.WORD -> {
-                                combineManager.combineToDocx(title, combineItems) { cur, tot ->
+                                val outputFileName = com.arinara.fotara.util.FileNamePresetHelper.buildFinalFileName(
+                                    customName = customFileName,
+                                    presetTemplate = uiState.combineFileNamePreset,
+                                    folderName = folderTitle,
+                                    itemCount = itemsToShare.size,
+                                    extension = ".docx"
+                                )
+                                combineManager.combineToDocx(folderTitle, combineItems, outputFileName = outputFileName) { cur, tot ->
                                     shareProgressCurrent = cur
                                     shareProgressTotal = tot
                                 }
                             }
                             ShareFormatChoice.ORIGINAL -> {
-                                ZipExporter.exportGridItemsToZip(context, title, itemsToShare)
+                                ZipExporter.exportGridItemsToZip(context, folderTitle, itemsToShare)
                             }
                         }
                         shareProcessing = false
@@ -3017,6 +3105,7 @@ fun FolderDetailScreen(
                 PdfViewerScreen(
                     documentNote = doc,
                     pages = pages,
+                    initialPageIndex = targetPageIndex ?: 0,
                     onBack = { inspectingDocument = null },
                     onShare = {
                         try {
@@ -3541,6 +3630,8 @@ private fun DetailDocumentCard(
     isSelected: Boolean,
     isHighlighted: Boolean = false,
     highlightAlpha: Float = 0f,
+    glowCorner: GlowCorner? = null,
+    glowAnchors: Set<GlowAnchor> = emptySet(),
     onCardClick: () -> Unit,
     onCardLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -3553,6 +3644,14 @@ private fun DetailDocumentCard(
         SimpleDateFormat("MMM d", Locale.US).format(Date(doc.addedAt))
     }
 
+    val effectiveAnchors = if (glowAnchors.isNotEmpty()) {
+        glowAnchors
+    } else if (glowCorner != null) {
+        setOf(glowCorner.toGlowAnchor())
+    } else {
+        emptySet()
+    }
+
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MidnightSurface),
@@ -3563,9 +3662,9 @@ private fun DetailDocumentCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .linkItCornerGlow(
-                isLinked = documentItem.isLinked,
-                corner = GlowCorner.BottomLeft,
+            .linkItGlow(
+                isLinked = documentItem.isLinked && effectiveAnchors.isNotEmpty(),
+                anchors = effectiveAnchors,
                 linkedDescription = "Linked document ${documentItem.documentNote.name}",
                 cornerRadiusDp = 16f
             )
@@ -3631,13 +3730,15 @@ private fun DetailDocumentCard(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "$pageCount p",
-                                color = TextPrimary,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                            if (isPdf) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.doc_card_page_short, pageCount),
+                                    color = TextPrimary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
 
@@ -3707,8 +3808,13 @@ private fun DetailDocumentCard(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val pageString = if (pageCount == 1) {
+                            stringResource(R.string.doc_card_single_page, pageCount)
+                        } else {
+                            stringResource(R.string.doc_card_multiple_pages, pageCount)
+                        }
                         Text(
-                            text = "$pageCount pages · $dateStr",
+                            text = if (isPdf) "$pageString · $dateStr" else dateStr,
                             color = TextMuted,
                             fontSize = 11.sp
                         )
@@ -3756,12 +3862,22 @@ internal fun DetailPhotoCard(
     isLinked: Boolean = false,
     isHighlighted: Boolean = false,
     highlightAlpha: Float = 0f,
+    glowCorner: GlowCorner? = null,
+    glowAnchors: Set<GlowAnchor> = emptySet(),
     onCardClick: () -> Unit,
     onCardLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val dateStr = remember(photo.addedAt) {
         SimpleDateFormat("MMM d", Locale.US).format(Date(photo.addedAt))
+    }
+
+    val effectiveAnchors = if (glowAnchors.isNotEmpty()) {
+        glowAnchors
+    } else if (glowCorner != null) {
+        setOf(glowCorner.toGlowAnchor())
+    } else {
+        emptySet()
     }
 
     Card(
@@ -3774,9 +3890,9 @@ internal fun DetailPhotoCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .linkItCornerGlow(
-                isLinked = isLinked,
-                corner = GlowCorner.BottomLeft,
+            .linkItGlow(
+                isLinked = isLinked && effectiveAnchors.isNotEmpty(),
+                anchors = effectiveAnchors,
                 linkedDescription = "Linked note",
                 cornerRadiusDp = 16f
             )
@@ -3904,6 +4020,8 @@ private fun DetailGroupCard(
     isSelected: Boolean,
     isHighlighted: Boolean = false,
     highlightAlpha: Float = 0f,
+    glowCorner: GlowCorner? = null,
+    glowAnchors: Set<GlowAnchor> = emptySet(),
     onCardClick: () -> Unit,
     onCardLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -3913,6 +4031,14 @@ private fun DetailGroupCard(
     val coverPhoto = groupItem.coverPhoto
     val dateStr = remember(group.createdAt) {
         SimpleDateFormat("MMM d", Locale.US).format(Date(group.createdAt))
+    }
+
+    val effectiveAnchors = if (glowAnchors.isNotEmpty()) {
+        glowAnchors
+    } else if (glowCorner != null) {
+        setOf(glowCorner.toGlowAnchor())
+    } else {
+        emptySet()
     }
 
     Card(
@@ -3925,9 +4051,9 @@ private fun DetailGroupCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .linkItCornerGlow(
-                isLinked = groupItem.isLinked,
-                corner = GlowCorner.BottomLeft,
+            .linkItGlow(
+                isLinked = groupItem.isLinked && effectiveAnchors.isNotEmpty(),
+                anchors = effectiveAnchors,
                 linkedDescription = "Linked group ${groupItem.group.name}",
                 cornerRadiusDp = 16f
             )

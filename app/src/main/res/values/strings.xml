@@ -14,5 +14,175 @@
     <string name="nav_settings">Settings</string>
     <string name="search_hint">Search notes, subjects, text...</string>
     <string name="menu_new_folder">New folder</string>
-    <string name="menu_capture_notes">Capture notes</string>
+
+    <!-- Notes Screen -->
+    <string name="notes_title">Notes</string>
+    <string name="notes_subtitle">Your activity, all in one place</string>
+    <string name="filter_all">All</string>
+    <string name="filter_photos">Photos</string>
+    <string name="filter_documents">Documents</string>
+    <string name="filter_text">Text</string>
+    <string name="filter_canvas">Canvas</string>
+    <string name="date_today">TODAY</string>
+    <string name="date_yesterday">YESTERDAY</string>
+    <string name="items_count">%1$d items</string>
+    <string name="item_count_singular">%1$d item</string>
+    <string name="yesterday_prefix">Yesterday • %1$s</string>
+    <string name="older_date_prefix">%1$s • %2$s</string>
+    <string name="empty_notes_title">No notes found</string>
+    <string name="empty_notes_subtitle">Your notes will appear here once created or imported</string>
+    <string name="empty_notes_filter_subtitle">No notes match the selected filter</string>
+    <string name="action_open">Open</string>
+    <string name="action_rename">Rename</string>
+    <string name="action_move">Move to Folder</string>
+    <string name="action_delete">Delete</string>
+    <string name="confirm_delete_title">Move to Trash?</string>
+    <string name="confirm_delete_message">Are you sure you want to move \"%1$s\" to Trash?</string>
+    <string name="confirm_delete_confirm">Move to Trash</string>
+    <string name="confirm_cancel">Cancel</string>
+    <string name="menu_new_photo_note">Capture Photo Note</string>
+    <string name="menu_new_text_note">New Text Note</string>
+    <string name="menu_new_canvas_note">New Canvas Note</string>
+    <string name="menu_import_document">Import Document</string>
+    <string name="create_note">Create Note</string>
+    <string name="search_notes_hint">Search notes, subjects, text...</string>
+    <string name="select_destination_folder">Select Destination Folder</string>
+    <string name="no_folders_available">Please create a folder first</string>
+
+    <!-- New Update Popup -->
+    <string name="update_popup_title">New Update %1$s</string>
+    <string name="update_popup_default_notes">• Bug fixes and performance improvements\n• Enhanced stability and UI responsiveness</string>
+    <string name="update_action_later">Later</string>
+    <string name="update_action_skip">Skip this version</string>
+    <string name="close">Close</string>
+
+    <!-- Viewer Info Section & Reading Mode -->
+    <string name="viewer_info_header">Info</string>
+    <string name="viewer_info_pinch_or_double_tap">Pinch or double-tap to zoom</string>
+    <string name="viewer_info_offline">100% Offline</string>
+    <string name="viewer_info_reading_mode_available">Zoom is available in reading mode</string>
+    <string name="viewer_info_zoomed">Zoomed: Pan enabled · Double-tap to reset</string>
+    <string name="viewer_action_reading_mode_enter">Enter reading mode</string>
+    <string name="viewer_action_reading_mode_exit">Exit reading mode</string>
+
+    <!-- Text Note Editor Strings -->
+    <string name="editor_info_counts">%1$d words • %2$d characters</string>
+    <string name="editor_title_new">New Text Note</string>
+    <string name="editor_title_edit">Edit Text Note</string>
+    <string name="editor_saving">Saving…</string>
+    <string name="editor_find_in_note">Find in note…</string>
+    <string name="editor_replace_with">Replace with…</string>
+    <string name="editor_matches_count">%1$d/%2$d</string>
+    <string name="editor_no_matches">0 matches</string>
+    <string name="editor_replace_one">Replace</string>
+    <string name="editor_replace_all">All</string>
+    <string name="editor_empty_preview">This note is empty. Switch to edit mode to start typing.</string>
+    <string name="editor_placeholder_title">Note Title…</string>
+    <string name="editor_placeholder_body">Start writing with markdown formatting (e.g. **bold**, *italic*, # heading, - list, - [ ] checklist)…</string>
+    <string name="editor_dialog_link_title">Insert or Edit Link</string>
+    <string name="editor_dialog_link_label">Link Text</string>
+    <string name="editor_dialog_link_url">Web URL</string>
+    <string name="editor_dialog_link_apply">Apply</string>
+    <string name="editor_dialog_link_cancel">Cancel</string>
+
+    <!-- Photo Edit -->
+    <string name="photo_edit_failed">Unable to edit photo. Original file preserved.</string>
+
+    <!-- Canvas Layers -->
+    <string name="canvas_default_layer_name">Layer %1$d</string>
+    <string name="canvas_rename_layer">Rename layer</string>
+
+    <!-- Canvas Selection & Eraser (Phase 18) -->
+    <string name="canvas_action_duplicate">Duplicate</string>
+    <string name="canvas_action_move_to_layer">Move to layer</string>
+    <string name="canvas_action_delete_selection">Delete</string>
+    <string name="canvas_tool_eraser">Eraser</string>
+    <string name="canvas_tool_select">Select</string>
+    <string name="canvas_eraser_size">Eraser Size</string>
+
+    <!-- Canvas Tools & Blending (Phase 19) -->
+    <string name="canvas_tool_pen">Pen</string>
+    <string name="canvas_tool_highlighter">Highlighter</string>
+    <string name="canvas_blend_mode">Blending</string>
+    <string name="canvas_blend_normal">Normal</string>
+    <string name="canvas_blend_multiply">Multiply</string>
+    <string name="canvas_blend_darken">Darken</string>
+    <string name="canvas_blend_screen">Screen</string>
+    <string name="canvas_blend_hint">Blends with content on the same layer</string>
+
+    <!-- Pull to Refresh (Phase 20) -->
+    <string name="pull_to_refresh_content_description">Pull to refresh</string>
+    <string name="refreshing_content_description">Refreshing content</string>
+
+    <!-- Add to Group (Phase 20) -->
+    <string name="add_to_group_title">Add to Group</string>
+    <string name="add_to_group_other_folder_caption">Groups in other folders move your notes to that folder.</string>
+    <string name="add_to_group_this_folder_header">This folder: %1$s</string>
+    <string name="add_to_group_no_groups">No existing note groups in this coursework notebook.</string>
+
+    <!-- Share As File Name (Phase 20) -->
+    <string name="share_file_name_label">File name (optional)</string>
+    <string name="share_file_name_helper">Applies to PDF and Word. Original Files keep their own names.</string>
+
+    <!-- Combined File Name Preset (Phase 20) -->
+    <string name="setting_combine_file_name_title">Combined file name</string>
+    <string name="setting_combine_file_name_dialog_title">Combined File Name</string>
+    <string name="setting_combine_file_name_dialog_desc">Edit the file name template used when combining notes into PDF or Word.</string>
+    <string name="setting_combine_file_name_preview_label">Preview: %1$s</string>
+    <string name="setting_combine_file_name_reset">Reset to default</string>
+    <string name="setting_combine_file_name_err_unknown_tokens">Invalid token(s) found: %1$s. Allowed tokens are {folder}, {date}, {time}, and {count}.</string>
+    <string name="setting_combine_file_name_err_empty">Preset must not resolve to an empty name.</string>
+    <string name="setting_combine_file_name_err_too_long">Preset must be 80 characters or fewer.</string>
+    <string name="setting_combine_file_name_save">Save</string>
+    <string name="setting_combine_file_name_cancel">Cancel</string>
+
+    <!-- Verification and Repair (Phase 22) -->
+    <string name="doc_card_single_page">%1$d page</string>
+    <string name="doc_card_multiple_pages">%1$d pages</string>
+    <string name="doc_card_page_short">%1$d p</string>
+    <string name="folder_menu_pin">Pin to Top</string>
+    <string name="folder_menu_unpin">Unpin from Top</string>
+    <string name="folder_menu_rename">Rename Folder</string>
+    <string name="folder_menu_select">Select</string>
+    <string name="folder_menu_lock">Lock Folder (PIN)</string>
+    <string name="folder_menu_unlock">Remove Folder Lock</string>
+    <string name="folder_menu_unlink">Unlink Folder</string>
+    <string name="folder_menu_trash">Move to Trash</string>
+    <string name="action_invert_selection">Invert Selection</string>
+
+    <!-- Settings Redesign & Profile (Phase 23) -->
+    <string name="profile_default_name">Fotara User</string>
+    <string name="profile_title">Profile</string>
+    <string name="profile_subtitle">Photo, border, banner, name, email</string>
+    <string name="settings_category_general">General</string>
+    <string name="settings_category_general_sub">Grid density, default sort order</string>
+    <string name="settings_category_appearance">Appearance</string>
+    <string name="settings_category_appearance_sub">Theme mode and display options</string>
+    <string name="settings_category_ocr">OCR &amp; Recognition</string>
+    <string name="settings_category_ocr_sub">On-device text extraction</string>
+    <string name="settings_category_notifications">Notifications &amp; Deadlines</string>
+    <string name="settings_category_notifications_sub">Reminders and test alert</string>
+    <string name="settings_category_storage">Storage &amp; Data Management</string>
+    <string name="settings_category_storage_sub">Usage, trash, backup, re-indexing</string>
+    <string name="settings_category_about">About &amp; Legal</string>
+    <string name="settings_category_about_sub">Version info and offline architecture</string>
+    <string name="profile_action_change_picture">Change profile picture</string>
+    <string name="profile_action_remove_picture">Remove picture</string>
+    <string name="profile_action_choose_border">Choose border</string>
+    <string name="profile_action_change_banner">Change banner</string>
+    <string name="profile_action_remove_banner">Remove banner</string>
+    <string name="profile_action_edit_name_email">Edit name and email</string>
+    <string name="profile_name_label">Name</string>
+    <string name="profile_email_label">Email (optional)</string>
+    <string name="profile_email_helper">Shown on your profile only. No account is connected.</string>
+    <string name="profile_crop_title_avatar">Edit picture</string>
+    <string name="profile_crop_title_picture">Edit picture</string>
+    <string name="profile_crop_title_banner">Edit banner</string>
+    <string name="profile_crop_save">Save</string>
+    <string name="profile_crop_cancel">Cancel</string>
+    <string name="profile_crop_reset">Reset</string>
+    <string name="profile_crop_hint">Drag to move. Pinch or drag corners to resize.</string>
+    <string name="profile_border_picker_title">Choose Profile Border</string>
+    <string name="profile_save_failed">Failed to save profile changes</string>
+    <string name="profile_load_failed">Failed to load selected image</string>
 </resources>

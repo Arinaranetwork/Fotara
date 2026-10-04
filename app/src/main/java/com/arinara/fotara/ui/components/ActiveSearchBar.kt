@@ -16,6 +16,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,9 +26,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,28 +43,52 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,41 +96,26 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.filled.Brush
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDefaults
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DateRangePicker
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberDateRangePickerState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import com.arinara.fotara.R
 import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.DateRange
 import com.arinara.fotara.data.model.DocumentNote
+import com.arinara.fotara.data.model.DocumentType
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
@@ -110,12 +123,16 @@ import com.arinara.fotara.data.model.SearchDateFilter
 import com.arinara.fotara.data.model.SearchSortOrder
 import com.arinara.fotara.data.model.TagColor
 import com.arinara.fotara.data.model.TextNote
-import com.arinara.fotara.theme.DockSlatePill
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
-import com.arinara.fotara.theme.MidnightCardOutline
-import com.arinara.fotara.theme.MidnightNavy
-import com.arinara.fotara.theme.MidnightSurface
+import com.arinara.fotara.theme.HomeCardBorder
+import com.arinara.fotara.theme.HomeCardSurface
+import com.arinara.fotara.theme.HomeMainButtonBlue
+import com.arinara.fotara.theme.HomeNearBlack
+import com.arinara.fotara.theme.HomeSearchBarBorder
+import com.arinara.fotara.theme.HomeSearchBarSurface
+import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
@@ -160,6 +177,16 @@ fun ActiveSearchBar(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
+    var showSortDropdown by remember { mutableStateOf(false) }
+    var showDateDropdown by remember { mutableStateOf(false) }
+    var showFilterDropdown by remember { mutableStateOf(false) }
+
+    var showSingleDayDialog by remember { mutableStateOf(false) }
+    var showCustomRangeDialog by remember { mutableStateOf(false) }
+
+    val rawOverlayPadding = LocalBottomOverlayPadding.current
+    val bottomOverlayPadding = if (rawOverlayPadding > 0.dp) rawOverlayPadding else 96.dp
+
     BackHandler {
         onDismiss()
     }
@@ -169,485 +196,7 @@ fun ActiveSearchBar(
         keyboardController?.show()
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MidnightNavy.copy(alpha = 0.96f))
-            .zIndex(24f)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .imePadding()
-        ) {
-            // Results & Recents Content Area (occupies upper region above docked search bar)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                if (query.trim().isEmpty() && selectedDateFilter == SearchDateFilter.ALL && selectedColorFilter == null && selectedSmartTag == null) {
-                    // Empty Query State: Recent Searches
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(20.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.History,
-                                    contentDescription = null,
-                                    tint = TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "RECENT SEARCHES",
-                                    style = TextStyle(
-                                        color = TextSecondary,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    )
-                                )
-                            }
-
-                            if (recentSearches.isNotEmpty()) {
-                                Text(
-                                    text = "Clear Recents",
-                                    style = TextStyle(
-                                        color = FolderTabCream,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    modifier = Modifier
-                                        .clickable { onClearRecentSearches() }
-                                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-
-                        if (recentSearches.isEmpty()) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "No recent searches yet.",
-                                style = TextStyle(
-                                    color = TextSecondary.copy(alpha = 0.7f),
-                                    fontSize = 14.sp
-                                )
-                            )
-                        } else {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                recentSearches.forEach { item ->
-                                    Surface(
-                                        color = DockSlatePill.copy(alpha = 0.45f),
-                                        shape = RoundedCornerShape(16.dp),
-                                        border = BorderStroke(0.8.dp, MidnightCardOutline),
-                                        modifier = Modifier.clickable {
-                                            onQueryChange(item)
-                                            onSearchSubmitted(item)
-                                        }
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 6.dp, end = 6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Search,
-                                                contentDescription = null,
-                                                tint = FolderTabCream,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = item,
-                                                style = TextStyle(
-                                                    color = FolderTabCream,
-                                                    fontSize = 13.sp,
-                                                    fontWeight = FontWeight.Medium
-                                                )
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            IconButton(
-                                                onClick = { onRemoveRecentSearch(item) },
-                                                modifier = Modifier.size(18.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Close,
-                                                    contentDescription = "Remove recent search",
-                                                    tint = TextSecondary,
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(28.dp))
-
-                        Text(
-                            text = "Tap any suggestion or type a keyword to search handwritten formulas, slide diagrams, and lecture notes indexed offline.",
-                            style = TextStyle(
-                                color = TextSecondary,
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp
-                            )
-                        )
-                    }
-                } else if (folderResults.isEmpty() && groupResults.isEmpty() && photoResults.isEmpty() && textNoteResults.isEmpty() && documentResults.isEmpty() && canvasNoteResults.isEmpty() && !isLoading) {
-                    // Zero Results Empty State
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = null,
-                            tint = TextSecondary.copy(alpha = 0.5f),
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = if (query.isNotBlank()) "No notes found matching \"$query\"" else "No notes found matching filters",
-                            style = TextStyle(
-                                color = TextPrimary,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = if (selectedDateFilter != SearchDateFilter.ALL) {
-                                "No coursework or notes added during the selected date period."
-                            } else {
-                                "Check spelling or search by general coursework topic or chapter."
-                            },
-                            style = TextStyle(
-                                color = TextSecondary,
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp
-                            ),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-
-                        val hasActiveFilters = selectedDateFilter != SearchDateFilter.ALL || selectedColorFilter != null || selectedSmartTag != null
-                        if (hasActiveFilters) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            androidx.compose.material3.Button(
-                                onClick = onClearFilters,
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = FolderBodyBlue),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = null,
-                                    tint = FolderTabCream,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Reset Filters", color = FolderTabCream, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                } else {
-                    // Populate Live Results
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        if (folderResults.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = "SUBJECT FOLDERS (${folderResults.size})",
-                                    style = TextStyle(
-                                        color = TextSecondary,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(folderResults, key = { "folder_${it.id}" }) { folder ->
-                                SearchFolderResultCard(
-                                    folder = folder,
-                                    onClick = { onFolderClick(folder.id) }
-                                )
-                            }
-                        }
-
-                        if (groupResults.isNotEmpty()) {
-                            item {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "PHOTO GROUPS (${groupResults.size})",
-                                    style = TextStyle(
-                                        color = TextSecondary,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(groupResults, key = { "group_${it.id}" }) { group ->
-                                SearchGroupResultCard(
-                                    group = group,
-                                    onClick = { onGroupClick(group) }
-                                )
-                            }
-                        }
-
-                        if (photoResults.isNotEmpty()) {
-                            item {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "OCR NOTES & PHOTOS (${photoResults.size})",
-                                    style = TextStyle(
-                                        color = TextSecondary,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(photoResults, key = { "photo_${it.id}" }) { photo ->
-                                SearchPhotoResultCard(
-                                    photo = photo,
-                                    query = query,
-                                    onClick = { onPhotoClick(photo) }
-                                )
-                            }
-                        }
-
-                        if (textNoteResults.isNotEmpty()) {
-                            item {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "TEXT NOTES (${textNoteResults.size})",
-                                    style = TextStyle(
-                                        color = TextSecondary,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(textNoteResults, key = { "text_note_${it.id}" }) { note ->
-                                SearchTextNoteResultCard(
-                                    note = note,
-                                    query = query,
-                                    onClick = { onTextNoteClick(note) }
-                                )
-                            }
-                        }
-
-                        if (documentResults.isNotEmpty()) {
-                            item {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "DOCUMENTS (${documentResults.size})",
-                                    style = TextStyle(
-                                        color = TextSecondary,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(documentResults, key = { "doc_${it.id}" }) { doc ->
-                                SearchDocumentResultCard(
-                                    document = doc,
-                                    query = query,
-                                    onClick = { onDocumentClick(doc) }
-                                )
-                            }
-                        }
-
-                        if (canvasNoteResults.isNotEmpty()) {
-                            item {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "CANVAS NOTES (${canvasNoteResults.size})",
-                                    style = TextStyle(
-                                        color = TextSecondary,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(canvasNoteResults, key = { "canvas_${it.id}" }) { canvas ->
-                                SearchCanvasResultCard(
-                                    canvasNote = canvas,
-                                    onClick = { onCanvasClick(canvas) }
-                                )
-                            }
-                        }
-
-                        item {
-                            Spacer(modifier = Modifier.height(32.dp))
-                        }
-                    }
-                }
-            }
-
-            // Horizontal Filter Controls Chip Row docked directly above floating search bar
-            SearchFilterChipRow(
-                selectedDateFilter = selectedDateFilter,
-                onSelectDateFilter = onSelectDateFilter,
-                selectedColorFilter = selectedColorFilter,
-                onSelectColorFilter = onSelectColorFilter,
-                smartTags = smartTags,
-                selectedSmartTag = selectedSmartTag,
-                onSelectSmartTag = onSelectSmartTag,
-                sortOrder = sortOrder,
-                onToggleSortOrder = onToggleSortOrder,
-                customDateRange = customDateRange,
-                onSelectCustomDateRange = onSelectCustomDateRange,
-                onClearFilters = onClearFilters
-            )
-
-            // Keyboard-Docked Floating Search Bar Container (docked directly above IME / keyboard)
-            Surface(
-                color = MidnightSurface,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(
-                        width = 1.dp,
-                        color = MidnightCardOutline,
-                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-                    ),
-                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                shadowElevation = 8.dp
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    // Indeterminate Video-Buffering Progress Bar (height: 2.5dp) on top edge of search dock
-                    VideoBufferingProgressBar(
-                        visible = isLoading,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(2.5.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Exit Search",
-                                tint = FolderTabCream
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 4.dp),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            if (query.isEmpty()) {
-                                Text(
-                                    text = "Search notes, subjects, text...",
-                                    style = TextStyle(
-                                        color = TextSecondary,
-                                        fontSize = 15.sp,
-                                        fontStyle = FontStyle.Normal
-                                    )
-                                )
-                            }
-                            BasicTextField(
-                                value = query,
-                                onValueChange = onQueryChange,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(focusRequester),
-                                textStyle = TextStyle(
-                                    color = TextPrimary,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                cursorBrush = SolidColor(FolderTabCream),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                keyboardActions = KeyboardActions(
-                                    onSearch = {
-                                        onSearchSubmitted(query)
-                                        keyboardController?.hide()
-                                    }
-                                )
-                            )
-                        }
-
-                        if (query.isNotEmpty()) {
-                            IconButton(
-                                onClick = { onQueryChange("") },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear search query",
-                                    tint = TextSecondary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SearchFilterChipRow(
-    selectedDateFilter: SearchDateFilter,
-    onSelectDateFilter: (SearchDateFilter) -> Unit,
-    selectedColorFilter: String?,
-    onSelectColorFilter: (String?) -> Unit,
-    smartTags: List<String> = emptyList(),
-    selectedSmartTag: String? = null,
-    onSelectSmartTag: (String?) -> Unit = {},
-    sortOrder: SearchSortOrder = SearchSortOrder.NEWEST_ADDED,
-    onToggleSortOrder: () -> Unit = {},
-    customDateRange: DateRange? = null,
-    onSelectCustomDateRange: (DateRange) -> Unit = {},
-    onClearFilters: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var showCustomRangeDialog by remember { mutableStateOf(false) }
-    var showSingleDayDialog by remember { mutableStateOf(false) }
-
+    // Single Day Picker Dialog
     if (showSingleDayDialog) {
         val singleDatePickerState = rememberDatePickerState()
         DatePickerDialog(
@@ -663,39 +212,43 @@ fun SearchFilterChipRow(
                         showSingleDayDialog = false
                     }
                 ) {
-                    Text("Apply", color = FolderTabCream)
+                    Text(stringResource(R.string.search_apply), color = HomeMainButtonBlue, fontFamily = ElmsSans)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showSingleDayDialog = false }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text(stringResource(R.string.search_cancel), color = TextSecondary, fontFamily = ElmsSans)
                 }
             },
             colors = DatePickerDefaults.colors(
-                containerColor = MidnightSurface
+                containerColor = HomeCardSurface
             )
         ) {
             DatePicker(
                 state = singleDatePickerState,
                 title = {
                     Text(
-                        text = "Select Single Day",
+                        text = stringResource(R.string.search_date_single_day_title),
                         modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
-                        color = TextPrimary
+                        color = TextPrimary,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold
                     )
                 },
                 headline = {
                     Text(
-                        text = "Filter notes added on specific day",
+                        text = stringResource(R.string.search_date_single_day_subtitle),
                         modifier = Modifier.padding(start = 24.dp, end = 12.dp, bottom = 12.dp),
                         color = TextSecondary,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans
                     )
                 }
             )
         }
     }
 
+    // Custom Date Range Picker Dialog
     if (showCustomRangeDialog) {
         val dateRangePickerState = rememberDateRangePickerState()
         DatePickerDialog(
@@ -712,345 +265,1036 @@ fun SearchFilterChipRow(
                         showCustomRangeDialog = false
                     }
                 ) {
-                    Text("Apply", color = FolderTabCream)
+                    Text(stringResource(R.string.search_apply), color = HomeMainButtonBlue, fontFamily = ElmsSans)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCustomRangeDialog = false }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text(stringResource(R.string.search_cancel), color = TextSecondary, fontFamily = ElmsSans)
                 }
             },
             colors = DatePickerDefaults.colors(
-                containerColor = MidnightSurface
+                containerColor = HomeCardSurface
             )
         ) {
             DateRangePicker(
                 state = dateRangePickerState,
                 title = {
                     Text(
-                        text = "Select Date Range",
+                        text = stringResource(R.string.search_date_range_title),
                         modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
-                        color = TextPrimary
+                        color = TextPrimary,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold
                     )
                 },
                 headline = {
                     Text(
-                        text = "Filter notes added between dates",
+                        text = stringResource(R.string.search_date_range_subtitle),
                         modifier = Modifier.padding(start = 24.dp, end = 12.dp, bottom = 12.dp),
                         color = TextSecondary,
-                        fontSize = 13.sp
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans
                     )
                 }
             )
         }
     }
 
-    val isAnyFilterActive = selectedDateFilter != SearchDateFilter.ALL || selectedColorFilter != null || selectedSmartTag != null
-
-    Row(
+    Box(
         modifier = modifier
-            .fillMaxWidth()
-            .background(MidnightNavy.copy(alpha = 0.95f))
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxSize()
+            .background(HomeNearBlack)
+            .zIndex(24f)
     ) {
-        // Sort Order Toggle Chip
-        Surface(
-            color = DockSlatePill.copy(alpha = 0.65f),
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, FolderTabCream.copy(alpha = 0.5f)),
-            modifier = Modifier.clickable { onToggleSortOrder() }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .imePadding()
         ) {
+            // 1. Header Row (Back arrow + Large "Search" title)
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.SwapVert,
-                    contentDescription = "Toggle Sort Order",
-                    tint = FolderTabCream,
-                    modifier = Modifier.size(13.dp)
-                )
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.search_nav_back),
+                        tint = TextPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = sortOrder.label,
+                    text = stringResource(R.string.search_title),
                     style = TextStyle(
-                        color = FolderTabCream,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 26.sp,
+                        color = TextPrimary
                     )
                 )
             }
-        }
 
-        if (isAnyFilterActive) {
-            Surface(
-                color = TagColor.CRIMSON.composeColor.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, TagColor.CRIMSON.composeColor.copy(alpha = 0.6f)),
-                modifier = Modifier.clickable { onClearFilters() }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Reset Filters",
-                        tint = TagColor.CRIMSON.composeColor,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Reset",
-                        style = TextStyle(
-                            color = TagColor.CRIMSON.composeColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
-            }
-        }
-
-        // Removable Active Date Filter Chip
-        if (selectedDateFilter != SearchDateFilter.ALL) {
-            Surface(
-                color = FolderTabCream.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, FolderTabCream),
-                modifier = Modifier.clickable { onSelectDateFilter(SearchDateFilter.ALL) }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        tint = FolderTabCream,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    val dateLabel = when (selectedDateFilter) {
-                        SearchDateFilter.SINGLE_DAY -> {
-                            if (customDateRange != null) {
-                                val sdf = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US)
-                                sdf.format(java.util.Date(customDateRange.startMs))
-                            } else "Single Day"
-                        }
-                        SearchDateFilter.CUSTOM_RANGE -> {
-                            if (customDateRange != null) {
-                                val sdf = java.text.SimpleDateFormat("MMM d", java.util.Locale.US)
-                                "${sdf.format(java.util.Date(customDateRange.startMs))} - ${sdf.format(java.util.Date(customDateRange.endMs))}"
-                            } else "Custom Range"
-                        }
-                        else -> selectedDateFilter.label
-                    }
-                    Text(
-                        text = dateLabel,
-                        style = TextStyle(
-                            color = FolderTabCream,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Remove Date Filter",
-                        tint = FolderTabCream,
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
-            }
-        }
-
-        // Removable Active Color Filter Chip
-        if (selectedColorFilter != null) {
-            val tag = TagColor.fromHex(selectedColorFilter)
-            Surface(
-                color = tag.composeColor.copy(alpha = 0.25f),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, tag.composeColor),
-                modifier = Modifier.clickable { onSelectColorFilter(null) }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(tag.composeColor)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = tag.displayName,
-                        style = TextStyle(
-                            color = tag.composeColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Remove Color Filter",
-                        tint = tag.composeColor,
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
-            }
-        }
-
-        // Removable Active Smart Tag Chip
-        if (selectedSmartTag != null) {
-            Surface(
-                color = TagAmber.copy(alpha = 0.25f),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, TagAmber),
-                modifier = Modifier.clickable { onSelectSmartTag(null) }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                ) {
-                    Text(
-                        text = selectedSmartTag,
-                        style = TextStyle(
-                            color = TagAmber,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Remove Smart Tag Filter",
-                        tint = TagAmber,
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
-            }
-        }
-
-        // Date Filter Chips
-        SearchDateFilter.entries.forEach { filter ->
-            val isSelected = selectedDateFilter == filter
-            Surface(
-                color = if (isSelected) FolderTabCream else DockSlatePill.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(
-                    1.dp,
-                    if (isSelected) FolderTabCream else MidnightCardOutline
-                ),
-                modifier = Modifier.clickable {
-                    when (filter) {
-                        SearchDateFilter.CUSTOM_RANGE -> showCustomRangeDialog = true
-                        SearchDateFilter.SINGLE_DAY -> showSingleDayDialog = true
-                        else -> onSelectDateFilter(filter)
-                    }
-                }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    if (filter != SearchDateFilter.ALL) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarToday,
-                            contentDescription = null,
-                            tint = if (isSelected) MidnightNavy else FolderTabCream,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
-                    Text(
-                        text = filter.label,
-                        style = TextStyle(
-                            color = if (isSelected) MidnightNavy else TextPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    )
-                }
-            }
-        }
-
-        // Color Filter Chips
-        TagColor.entries.forEach { tag ->
-            val isSelected = selectedColorFilter == tag.hex
-            Surface(
-                color = if (isSelected) tag.composeColor.copy(alpha = 0.35f) else DockSlatePill.copy(alpha = 0.35f),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(
-                    if (isSelected) 2.dp else 1.dp,
-                    if (isSelected) tag.composeColor else MidnightCardOutline
-                ),
-                modifier = Modifier.clickable {
-                    if (isSelected) onSelectColorFilter(null) else onSelectColorFilter(tag.hex)
-                }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(tag.composeColor, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = tag.name.lowercase().replaceFirstChar { it.uppercase() },
-                        style = TextStyle(
-                            color = if (isSelected) tag.composeColor else TextSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    )
-                }
-            }
-        }
-
-        // Smart Tag Chips
-        if (smartTags.isNotEmpty()) {
-            Box(
+            // 2. Controls Container (Surface card with 3 pills: Sort, Date, Filter)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, HomeCardBorder),
                 modifier = Modifier
-                    .height(18.dp)
-                    .width(1.dp)
-                    .background(MidnightCardOutline)
-            )
-
-            smartTags.forEach { tag ->
-                val isSelected = selectedSmartTag == tag
-                Surface(
-                    color = if (isSelected) TagAmber.copy(alpha = 0.35f) else DockSlatePill.copy(alpha = 0.35f),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(
-                        if (isSelected) 1.5.dp else 1.dp,
-                        if (isSelected) TagAmber else MidnightCardOutline
-                    ),
-                    modifier = Modifier.clickable {
-                        if (isSelected) onSelectSmartTag(null) else onSelectSmartTag(tag)
-                    }
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                    // Pill 1: Sort Pill (ALWAYS highlighted blue style)
+                    Box(modifier = Modifier.weight(1f)) {
+                        val sortLabel = if (sortOrder == SearchSortOrder.NEWEST_ADDED) {
+                            stringResource(R.string.search_sort_newest)
+                        } else {
+                            stringResource(R.string.search_sort_oldest)
+                        }
+
+                        Surface(
+                            color = HomeMainButtonBlue,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showSortDropdown = true }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                                    contentDescription = stringResource(R.string.search_sort_pill),
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = sortLabel,
+                                    style = TextStyle(
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color.White
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showSortDropdown,
+                            onDismissRequest = { showSortDropdown = false },
+                            modifier = Modifier
+                                .background(HomeCardSurface)
+                                .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = stringResource(R.string.search_sort_newest),
+                                        color = if (sortOrder == SearchSortOrder.NEWEST_ADDED) HomeMainButtonBlue else TextPrimary,
+                                        fontFamily = ElmsSans,
+                                        fontWeight = if (sortOrder == SearchSortOrder.NEWEST_ADDED) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 13.sp
+                                    )
+                                },
+                                onClick = {
+                                    if (sortOrder != SearchSortOrder.NEWEST_ADDED) {
+                                        onToggleSortOrder()
+                                    }
+                                    showSortDropdown = false
+                                },
+                                leadingIcon = {
+                                    if (sortOrder == SearchSortOrder.NEWEST_ADDED) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = HomeMainButtonBlue,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = stringResource(R.string.search_sort_oldest),
+                                        color = if (sortOrder == SearchSortOrder.OLDEST_ADDED) HomeMainButtonBlue else TextPrimary,
+                                        fontFamily = ElmsSans,
+                                        fontWeight = if (sortOrder == SearchSortOrder.OLDEST_ADDED) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 13.sp
+                                    )
+                                },
+                                onClick = {
+                                    if (sortOrder != SearchSortOrder.OLDEST_ADDED) {
+                                        onToggleSortOrder()
+                                    }
+                                    showSortDropdown = false
+                                },
+                                leadingIcon = {
+                                    if (sortOrder == SearchSortOrder.OLDEST_ADDED) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = HomeMainButtonBlue,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    // Pill 2: Date Pill (Neutral dark style by default, highlighted blue when non-default)
+                    val isDateActive = SearchScreenLogic.isDatePillHighlighted(selectedDateFilter)
+                    val dateLabel = SearchScreenLogic.formatDateFilterLabel(
+                        selectedDateFilter = selectedDateFilter,
+                        customDateRange = customDateRange,
+                        defaultAllLabel = stringResource(R.string.search_date_all)
+                    )
+
+                    Box(modifier = Modifier.weight(1.3f)) {
+                        Surface(
+                            color = if (isDateActive) HomeMainButtonBlue else HomeSearchBarSurface,
+                            shape = RoundedCornerShape(12.dp),
+                            border = if (isDateActive) null else BorderStroke(1.dp, HomeSearchBarBorder),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showDateDropdown = true }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarToday,
+                                    contentDescription = stringResource(R.string.search_date_pill),
+                                    tint = if (isDateActive) Color.White else TextSecondary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = dateLabel,
+                                    style = TextStyle(
+                                        fontFamily = ElmsSans,
+                                        fontWeight = if (isDateActive) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 12.sp,
+                                        color = if (isDateActive) Color.White else TextPrimary
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = if (isDateActive) Color.White else TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showDateDropdown,
+                            onDismissRequest = { showDateDropdown = false },
+                            modifier = Modifier
+                                .background(HomeCardSurface)
+                                .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                        ) {
+                            val dateOptions = listOf(
+                                SearchDateFilter.ALL to stringResource(R.string.search_date_all),
+                                SearchDateFilter.TODAY to SearchDateFilter.TODAY.label,
+                                SearchDateFilter.YESTERDAY to SearchDateFilter.YESTERDAY.label,
+                                SearchDateFilter.THIS_WEEK to SearchDateFilter.THIS_WEEK.label,
+                                SearchDateFilter.THIS_MONTH to SearchDateFilter.THIS_MONTH.label,
+                                SearchDateFilter.THIS_YEAR to SearchDateFilter.THIS_YEAR.label,
+                                SearchDateFilter.SINGLE_DAY to "Single Day...",
+                                SearchDateFilter.CUSTOM_RANGE to "Custom Range..."
+                            )
+
+                            dateOptions.forEach { (filter, label) ->
+                                val isSelected = selectedDateFilter == filter
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = label,
+                                            color = if (isSelected) HomeMainButtonBlue else TextPrimary,
+                                            fontFamily = ElmsSans,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            fontSize = 13.sp
+                                        )
+                                    },
+                                    onClick = {
+                                        showDateDropdown = false
+                                        when (filter) {
+                                            SearchDateFilter.SINGLE_DAY -> showSingleDayDialog = true
+                                            SearchDateFilter.CUSTOM_RANGE -> showCustomRangeDialog = true
+                                            else -> onSelectDateFilter(filter)
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = HomeMainButtonBlue,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Pill 3: Filter Pill (Neutral dark style by default, highlighted blue with count badge when active)
+                    val activeFilterCount = SearchScreenLogic.calculateActiveFilterCount(selectedColorFilter, selectedSmartTag)
+                    val isFilterActive = SearchScreenLogic.isFilterPillHighlighted(selectedColorFilter, selectedSmartTag)
+
+                    Box(modifier = Modifier.weight(1f)) {
+                        Surface(
+                            color = if (isFilterActive) HomeMainButtonBlue else HomeSearchBarSurface,
+                            shape = RoundedCornerShape(12.dp),
+                            border = if (isFilterActive) null else BorderStroke(1.dp, HomeSearchBarBorder),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showFilterDropdown = true }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = stringResource(R.string.search_filter_pill),
+                                    tint = if (isFilterActive) Color.White else TextSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.search_filter_pill),
+                                    style = TextStyle(
+                                        fontFamily = ElmsSans,
+                                        fontWeight = if (isFilterActive) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 12.sp,
+                                        color = if (isFilterActive) Color.White else TextPrimary
+                                    ),
+                                    maxLines = 1
+                                )
+                                if (activeFilterCount > 0) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$activeFilterCount",
+                                            style = TextStyle(
+                                                fontFamily = ElmsSans,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 10.sp,
+                                                color = HomeMainButtonBlue
+                                            )
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = if (isFilterActive) Color.White else TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showFilterDropdown,
+                            onDismissRequest = { showFilterDropdown = false },
+                            modifier = Modifier
+                                .background(HomeCardSurface)
+                                .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                                .padding(12.dp)
+                                .width(260.dp)
+                        ) {
+                            // Section: Color Tags
+                            Text(
+                                text = stringResource(R.string.search_filter_color_tags),
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = TextSecondary
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TagColor.entries.forEach { tag ->
+                                    val isSelected = selectedColorFilter == tag.hex
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(tag.composeColor)
+                                            .border(
+                                                width = if (isSelected) 2.5.dp else 1.dp,
+                                                color = if (isSelected) Color.White else Color.Transparent,
+                                                shape = CircleShape
+                                            )
+                                            .clickable {
+                                                if (isSelected) {
+                                                    onSelectColorFilter(null)
+                                                } else {
+                                                    onSelectColorFilter(tag.hex)
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Section: Smart Tags
+                            if (smartTags.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Text(
+                                    text = stringResource(R.string.search_filter_smart_tags),
+                                    style = TextStyle(
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = TextSecondary
+                                    )
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    smartTags.forEach { tag ->
+                                        val isSelected = selectedSmartTag == tag
+                                        Surface(
+                                            color = if (isSelected) TagAmber.copy(alpha = 0.35f) else HomeSearchBarSurface,
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(
+                                                1.dp,
+                                                if (isSelected) TagAmber else HomeSearchBarBorder
+                                            ),
+                                            modifier = Modifier.clickable {
+                                                if (isSelected) {
+                                                    onSelectSmartTag(null)
+                                                } else {
+                                                    onSelectSmartTag(tag)
+                                                }
+                                            }
+                                        ) {
+                                            Text(
+                                                text = "#$tag",
+                                                style = TextStyle(
+                                                    fontFamily = ElmsSans,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    fontSize = 12.sp,
+                                                    color = if (isSelected) TagAmber else TextPrimary
+                                                ),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Section: Clear Filters Action
+                            if (activeFilterCount > 0) {
+                                Spacer(modifier = Modifier.height(14.dp))
+                                HorizontalDivider(color = HomeCardBorder)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onClearFilters()
+                                            showFilterDropdown = false
+                                        }
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = null,
+                                        tint = TagColor.CRIMSON.composeColor,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = stringResource(R.string.search_filter_clear),
+                                        style = TextStyle(
+                                            fontFamily = ElmsSans,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = TagColor.CRIMSON.composeColor
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Search Input Field (Rounded card surface, magnifier, no scan icon, clear button when text present)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = HomeSearchBarSurface),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, HomeSearchBarBorder),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        Text(
-                            text = "#$tag",
-                            style = TextStyle(
-                                color = if (isSelected) TagAmber else TextSecondary,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        if (query.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.search_placeholder),
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Light,
+                                    fontSize = 15.sp,
+                                    color = TextSecondary
+                                )
+                            )
+                        }
+                        BasicTextField(
+                            value = query,
+                            onValueChange = onQueryChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
+                            textStyle = TextStyle(
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 15.sp,
+                                color = TextPrimary
+                            ),
+                            cursorBrush = SolidColor(HomeMainButtonBlue),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    onSearchSubmitted(query)
+                                    keyboardController?.hide()
+                                }
                             )
                         )
+                    }
+
+                    if (query.isNotEmpty()) {
+                        IconButton(
+                            onClick = { onQueryChange("") },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.search_clear_input),
+                                tint = TextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Indeterminate Video-Buffering Progress Bar
+            VideoBufferingProgressBar(
+                visible = isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .height(2.5.dp)
+            )
+
+            // 5. Scope Tabs Row (Hidden when scopes.size <= 1)
+            val scopes = SearchScreenLogic.defaultScopes
+            if (SearchScreenLogic.shouldShowScopeRow(scopes)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    scopes.forEach { scopeItem ->
+                        Surface(
+                            color = HomeSearchBarSurface,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, HomeSearchBarBorder)
+                        ) {
+                            Text(
+                                text = stringResource(scopeItem.labelResId),
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    fontSize = 13.sp,
+                                    color = TextPrimary
+                                ),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            val hasResults = folderResults.isNotEmpty() ||
+                groupResults.isNotEmpty() ||
+                photoResults.isNotEmpty() ||
+                textNoteResults.isNotEmpty() ||
+                documentResults.isNotEmpty() ||
+                canvasNoteResults.isNotEmpty()
+
+            // Main Content Region
+            if (query.trim().isEmpty() && !hasResults) {
+                // Idle / Empty Query State
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    // 4. Recent Searches Card (Shown only when query is empty AND there is at least one recent search)
+                    if (SearchScreenLogic.isRecentSearchesCardVisible(query, recentSearches)) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, HomeCardBorder),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.History,
+                                            contentDescription = null,
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = stringResource(R.string.search_recent_title),
+                                            style = TextStyle(
+                                                fontFamily = ElmsSans,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                color = TextPrimary
+                                            )
+                                        )
+                                    }
+
+                                    Text(
+                                        text = stringResource(R.string.search_recent_clear_all),
+                                        style = TextStyle(
+                                            fontFamily = ElmsSans,
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 13.sp,
+                                            color = HomeMainButtonBlue
+                                        ),
+                                        modifier = Modifier
+                                            .clickable { onClearRecentSearches() }
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    recentSearches.forEach { item ->
+                                        Surface(
+                                            color = HomeSearchBarSurface,
+                                            shape = RoundedCornerShape(20.dp),
+                                            border = BorderStroke(1.dp, HomeSearchBarBorder),
+                                            modifier = Modifier.clickable {
+                                                onQueryChange(item)
+                                                onSearchSubmitted(item)
+                                                keyboardController?.hide()
+                                            }
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(start = 10.dp, top = 6.dp, bottom = 6.dp, end = 6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Search,
+                                                    contentDescription = null,
+                                                    tint = TextSecondary,
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = item,
+                                                    style = TextStyle(
+                                                        fontFamily = ElmsSans,
+                                                        fontWeight = FontWeight.Medium,
+                                                        fontSize = 13.sp,
+                                                        color = TextPrimary
+                                                    ),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                IconButton(
+                                                    onClick = { onRemoveRecentSearch(item) },
+                                                    modifier = Modifier.size(18.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Close,
+                                                        contentDescription = stringResource(R.string.search_recent_remove_item),
+                                                        tint = TextSecondary,
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 6. Idle State (Anime illustration, bold title, muted paragraph)
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.search_illustration),
+                            contentDescription = stringResource(R.string.search_idle_illustration_desc),
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxWidth(0.65f)
+                                .aspectRatio(1.5f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = stringResource(R.string.search_idle_title),
+                            style = TextStyle(
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = TextPrimary
+                            ),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.search_idle_subtitle),
+                            style = TextStyle(
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp,
+                                color = HomeSubtitleGray
+                            ),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(bottomOverlayPadding + 16.dp))
+                }
+            } else if (!hasResults && !isLoading) {
+                // Zero Results State
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = TextSecondary.copy(alpha = 0.5f),
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    val emptyTitle = if (query.isNotBlank()) {
+                        stringResource(R.string.search_empty_matching_query, query)
+                    } else {
+                        stringResource(R.string.search_empty_matching_filters)
+                    }
+                    Text(
+                        text = emptyTitle,
+                        style = TextStyle(
+                            fontFamily = ElmsSans,
+                            color = TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val emptyHint = if (selectedDateFilter != SearchDateFilter.ALL) {
+                        stringResource(R.string.search_empty_date_hint)
+                    } else {
+                        stringResource(R.string.search_empty_general_hint)
+                    }
+                    Text(
+                        text = emptyHint,
+                        style = TextStyle(
+                            fontFamily = ElmsSans,
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        ),
+                        textAlign = TextAlign.Center
+                    )
+
+                    val hasActiveFilters = selectedDateFilter != SearchDateFilter.ALL || selectedColorFilter != null || selectedSmartTag != null
+                    if (hasActiveFilters) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = onClearFilters,
+                            colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.search_reset_filters),
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(bottomOverlayPadding))
+                }
+            } else {
+                // 7. Live Results List with Bottom Overlay Padding
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = bottomOverlayPadding + 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (folderResults.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.search_section_folders, folderResults.size),
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(folderResults, key = { "folder_${it.id}" }) { folder ->
+                            SearchFolderResultCard(
+                                folder = folder,
+                                onClick = { onFolderClick(folder.id) }
+                            )
+                        }
+                    }
+
+                    if (groupResults.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.search_section_groups, groupResults.size),
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(groupResults, key = { "group_${it.id}" }) { group ->
+                            SearchGroupResultCard(
+                                group = group,
+                                onClick = { onGroupClick(group) }
+                            )
+                        }
+                    }
+
+                    if (photoResults.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.search_section_photos, photoResults.size),
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(photoResults, key = { "photo_${it.id}" }) { photo ->
+                            SearchPhotoResultCard(
+                                photo = photo,
+                                query = query,
+                                onClick = { onPhotoClick(photo) }
+                            )
+                        }
+                    }
+
+                    if (textNoteResults.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.search_section_text_notes, textNoteResults.size),
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(textNoteResults, key = { "text_note_${it.id}" }) { note ->
+                            SearchTextNoteResultCard(
+                                note = note,
+                                query = query,
+                                onClick = { onTextNoteClick(note) }
+                            )
+                        }
+                    }
+
+                    if (documentResults.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.search_section_documents, documentResults.size),
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(documentResults, key = { "document_${it.id}" }) { doc ->
+                            SearchDocumentResultCard(
+                                document = doc,
+                                query = query,
+                                onClick = { onDocumentClick(doc) }
+                            )
+                        }
+                    }
+
+                    if (canvasNoteResults.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.search_section_canvas_notes, canvasNoteResults.size),
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(canvasNoteResults, key = { "canvas_${it.id}" }) { canvas ->
+                            SearchCanvasResultCard(
+                                canvasNote = canvas,
+                                onClick = { onCanvasClick(canvas) }
+                            )
+                        }
                     }
                 }
             }
@@ -1065,7 +1309,7 @@ fun VideoBufferingProgressBar(
 ) {
     Box(
         modifier = modifier
-            .background(MidnightCardOutline)
+            .background(HomeCardBorder)
     ) {
         AnimatedVisibility(
             visible = visible,
@@ -1073,7 +1317,6 @@ fun VideoBufferingProgressBar(
             exit = fadeOut(tween(200))
         ) {
             val infiniteTransition = rememberInfiniteTransition(label = "bufferingAnimation")
-            // Highlight position moving left to right
             val positionFraction by infiniteTransition.animateFloat(
                 initialValue = -0.3f,
                 targetValue = 1.3f,
@@ -1083,7 +1326,6 @@ fun VideoBufferingProgressBar(
                 ),
                 label = "positionFraction"
             )
-            // Variable highlight segment width (between 25% and 45%)
             val widthFraction by infiniteTransition.animateFloat(
                 initialValue = 0.25f,
                 targetValue = 0.45f,
@@ -1095,8 +1337,7 @@ fun VideoBufferingProgressBar(
             )
 
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
+                modifier = Modifier.fillMaxSize()
             ) {
                 Box(
                     modifier = Modifier
@@ -1106,9 +1347,9 @@ fun VideoBufferingProgressBar(
                         .background(
                             brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
                                 colors = listOf(
-                                    FolderBodyBlue.copy(alpha = 0.2f),
-                                    FolderTabCream,
-                                    FolderBodyBlue
+                                    HomeMainButtonBlue.copy(alpha = 0.2f),
+                                    Color.White,
+                                    HomeMainButtonBlue
                                 )
                             )
                         )
@@ -1125,9 +1366,9 @@ fun SearchFolderResultCard(
 ) {
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
         shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
+        border = BorderStroke(1.dp, HomeCardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1140,13 +1381,13 @@ fun SearchFolderResultCard(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(FolderBodyBlue),
+                    .background(HomeMainButtonBlue),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Folder,
                     contentDescription = null,
-                    tint = FolderTabCream,
+                    tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -1155,6 +1396,7 @@ fun SearchFolderResultCard(
                 Text(
                     text = folder.name,
                     style = TextStyle(
+                        fontFamily = ElmsSans,
                         color = TextPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
@@ -1166,25 +1408,26 @@ fun SearchFolderResultCard(
                     Text(
                         text = "${folder.photoCount} note photos",
                         style = TextStyle(
+                            fontFamily = ElmsSans,
                             color = TextSecondary,
                             fontSize = 12.sp
                         )
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "· ${formatAddedDate(folder.createdAt)}",
+                        text = "• ${formatAddedDate(folder.createdAt)}",
                         style = TextStyle(
+                            fontFamily = ElmsSans,
                             color = TextSecondary.copy(alpha = 0.75f),
                             fontSize = 11.sp
                         )
                     )
                 }
             }
-            // Tag color indicator
             val tagColor = try {
                 Color(android.graphics.Color.parseColor(folder.colorLabel))
             } catch (e: Exception) {
-                FolderTabCream
+                HomeMainButtonBlue
             }
             Box(
                 modifier = Modifier
@@ -1264,9 +1507,9 @@ fun SearchPhotoResultCard(
 ) {
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
         shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
+        border = BorderStroke(1.dp, HomeCardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1279,8 +1522,8 @@ fun SearchPhotoResultCard(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(DockSlatePill.copy(alpha = 0.5f))
-                    .border(0.8.dp, MidnightCardOutline, RoundedCornerShape(8.dp)),
+                    .background(HomeSearchBarSurface)
+                    .border(0.8.dp, HomeCardBorder, RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -1295,6 +1538,7 @@ fun SearchPhotoResultCard(
                 Text(
                     text = photo.caption ?: "Coursework Note #${photo.id}",
                     style = TextStyle(
+                        fontFamily = ElmsSans,
                         color = TextPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1305,7 +1549,8 @@ fun SearchPhotoResultCard(
                 Text(
                     text = formatAddedDate(photo.addedAt),
                     style = TextStyle(
-                        color = FolderTabCream.copy(alpha = 0.75f),
+                        fontFamily = ElmsSans,
+                        color = TextSecondary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -1335,9 +1580,9 @@ fun SearchPhotoResultCard(
                         Text(
                             text = buildHighlightedSearchSnippet(photo.ocrText, query, TagAmber, 80),
                             style = TextStyle(
+                                fontFamily = ElmsSans,
                                 color = TextSecondary,
                                 fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
                                 lineHeight = 16.sp
                             ),
                             maxLines = 2,
@@ -1358,9 +1603,9 @@ fun SearchGroupResultCard(
 ) {
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
         shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
+        border = BorderStroke(1.dp, HomeCardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1388,6 +1633,7 @@ fun SearchGroupResultCard(
                 Text(
                     text = group.name,
                     style = TextStyle(
+                        fontFamily = ElmsSans,
                         color = TextPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
@@ -1396,8 +1642,9 @@ fun SearchGroupResultCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Photo Group · ${formatAddedDate(group.addedAt)}",
+                    text = "Photo Group • ${formatAddedDate(group.addedAt)}",
                     style = TextStyle(
+                        fontFamily = ElmsSans,
                         color = TextSecondary,
                         fontSize = 12.sp
                     )
@@ -1430,9 +1677,9 @@ fun SearchTextNoteResultCard(
 ) {
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MidnightCardOutline),
+        border = BorderStroke(1.dp, HomeCardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1445,8 +1692,8 @@ fun SearchTextNoteResultCard(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(DockSlatePill.copy(alpha = 0.5f))
-                    .border(0.8.dp, MidnightCardOutline, RoundedCornerShape(8.dp)),
+                    .background(HomeSearchBarSurface)
+                    .border(0.8.dp, HomeCardBorder, RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -1461,6 +1708,7 @@ fun SearchTextNoteResultCard(
                 Text(
                     text = note.title.ifBlank { "Untitled Note" },
                     style = TextStyle(
+                        fontFamily = ElmsSans,
                         color = TextPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1471,7 +1719,8 @@ fun SearchTextNoteResultCard(
                 Text(
                     text = formatAddedDate(note.addedAt),
                     style = TextStyle(
-                        color = FolderTabCream.copy(alpha = 0.75f),
+                        fontFamily = ElmsSans,
+                        color = TextSecondary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -1481,6 +1730,7 @@ fun SearchTextNoteResultCard(
                     Text(
                         text = buildHighlightedSearchSnippet(TextNote.stripMarkdownFormatting(note.bodyMarkdown), query, TagAmber, 85),
                         style = TextStyle(
+                            fontFamily = ElmsSans,
                             color = TextSecondary,
                             fontSize = 12.sp,
                             lineHeight = 16.sp
@@ -1502,7 +1752,8 @@ fun SearchTextNoteResultCard(
                             text = tag.displayName,
                             color = tag.composeColor,
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = ElmsSans
                         )
                     }
                 }
@@ -1519,9 +1770,9 @@ fun SearchDocumentResultCard(
 ) {
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MidnightCardOutline),
+        border = BorderStroke(1.dp, HomeCardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1534,8 +1785,8 @@ fun SearchDocumentResultCard(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(FolderBodyBlue.copy(alpha = 0.35f))
-                    .border(0.8.dp, MidnightCardOutline, RoundedCornerShape(8.dp)),
+                    .background(HomeSearchBarSurface)
+                    .border(0.8.dp, HomeCardBorder, RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -1550,6 +1801,7 @@ fun SearchDocumentResultCard(
                 Text(
                     text = document.name,
                     style = TextStyle(
+                        fontFamily = ElmsSans,
                         color = TextPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1558,15 +1810,16 @@ fun SearchDocumentResultCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${document.docType.name} Document · ${formatAddedDate(document.addedAt)}",
+                    text = "${document.docType.name} Document • ${formatAddedDate(document.addedAt)}",
                     style = TextStyle(
+                        fontFamily = ElmsSans,
                         color = TextSecondary,
                         fontSize = 12.sp
                     )
                 )
                 if (!document.extractedText.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(6.dp))
-                    val isDocx = document.docType == com.arinara.fotara.data.model.DocumentType.DOCX
+                    val isDocx = document.docType == DocumentType.DOCX
                     val badgeColor = if (isDocx) FolderBodyBlue else TagAmber
                     val badgeLabel = if (isDocx) "DOCX" else "OCR"
                     Row(
@@ -1592,9 +1845,9 @@ fun SearchDocumentResultCard(
                         Text(
                             text = buildHighlightedSearchSnippet(document.extractedText, query, badgeColor, 80),
                             style = TextStyle(
+                                fontFamily = ElmsSans,
                                 color = TextSecondary,
                                 fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
                                 lineHeight = 16.sp
                             ),
                             maxLines = 2,
@@ -1615,9 +1868,9 @@ fun SearchCanvasResultCard(
 ) {
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MidnightCardOutline),
+        border = BorderStroke(1.dp, HomeCardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1631,7 +1884,7 @@ fun SearchCanvasResultCard(
                     .size(46.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(TagAmber.copy(alpha = 0.25f))
-                    .border(0.8.dp, MidnightCardOutline, RoundedCornerShape(8.dp)),
+                    .border(0.8.dp, HomeCardBorder, RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -1646,6 +1899,7 @@ fun SearchCanvasResultCard(
                 Text(
                     text = canvasNote.title,
                     style = TextStyle(
+                        fontFamily = ElmsSans,
                         color = TextPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -1654,8 +1908,9 @@ fun SearchCanvasResultCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Canvas Note · ${formatAddedDate(canvasNote.addedAt)}",
+                    text = "Canvas Note • ${formatAddedDate(canvasNote.addedAt)}",
                     style = TextStyle(
+                        fontFamily = ElmsSans,
                         color = TextSecondary,
                         fontSize = 12.sp
                     )

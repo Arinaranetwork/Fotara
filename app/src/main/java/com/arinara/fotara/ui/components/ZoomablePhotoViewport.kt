@@ -13,9 +13,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,6 +57,7 @@ fun ZoomableBox(
     maxScale: Float = 4.0f,
     doubleTapScale: Float = 2.5f,
     onZoomChanged: (Boolean) -> Unit = {},
+    onSettled: (Float) -> Unit = {},
     content: @Composable (scale: Float) -> Unit
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
@@ -113,45 +115,67 @@ fun ZoomableBox(
                                     startOffset.y + (targetOffset.y - startOffset.y) * fraction
                                 )
                             }
+                            if (targetScale <= 1.001f) {
+                                scale = 1f
+                                offset = Offset.Zero
+                            }
+                            onSettled(targetScale)
                         }
                     }
                 )
             }
-            // Pinch-to-zoom & direct 1:1 pan gesture detector
-            .pointerInput(scale) {
-                if (scale > 1.001f) {
-                    // Zoomed in: direct 1:1 pan & responsive pinch zoom; no animation latency
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        val newScale = (scale * zoom).coerceIn(1f, maxScale)
-                        if (newScale < 1.02f) {
-                            scale = 1f
-                            offset = Offset.Zero
-                        } else {
-                            scale = newScale
-                            val maxOffsetX = (size.width * (newScale - 1f)) / 2f
-                            val maxOffsetY = (size.height * (newScale - 1f)) / 2f
-                            val newOffsetX = (offset.x + pan.x).coerceIn(-maxOffsetX, maxOffsetX)
-                            val newOffsetY = (offset.y + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
-                            offset = Offset(newOffsetX, newOffsetY)
-                        }
-                    }
-                } else {
-                    // Not zoomed in (scale = 1.0f): ONLY detect two-finger pinch.
-                    // Single finger drag passes through freely to HorizontalPager for page navigation.
-                    awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
-                        do {
-                            val event = awaitPointerEvent()
-                            if (event.changes.size >= 2) {
-                                val zoom = event.calculateZoom()
-                                if (kotlin.math.abs(zoom - 1f) > 0.01f) {
-                                    val newScale = (scale * zoom).coerceIn(1f, maxScale)
+            // Continuous 1:1 pinch-to-zoom & pan gesture detector (never cancelled during pinch)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent()
+                        val canceled = event.changes.any { it.isConsumed }
+                        if (canceled) break
+
+                        val pressedCount = event.changes.count { it.pressed }
+                        if (pressedCount >= 2) {
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            val centroid = event.calculateCentroid(useCurrent = true)
+
+                            if (kotlin.math.abs(zoom - 1f) > 0.001f || pan != Offset.Zero) {
+                                val newScale = (scale * zoom).coerceIn(1f, maxScale)
+                                if (newScale <= 1.01f) {
+                                    scale = 1f
+                                    offset = Offset.Zero
+                                } else {
+                                    val centerX = size.width / 2f
+                                    val centerY = size.height / 2f
+                                    // Exact focal-shift anchoring: keep content under centroid stationary
+                                    val focalShiftX = (1f - zoom) * (centroid.x - centerX - offset.x)
+                                    val focalShiftY = (1f - zoom) * (centroid.y - centerY - offset.y)
+
+                                    val maxOffsetX = (size.width * (newScale - 1f)) / 2f
+                                    val maxOffsetY = (size.height * (newScale - 1f)) / 2f
+
                                     scale = newScale
-                                    event.changes.forEach { it.consume() }
+                                    offset = Offset(
+                                        (offset.x + pan.x + focalShiftX).coerceIn(-maxOffsetX, maxOffsetX),
+                                        (offset.y + pan.y + focalShiftY).coerceIn(-maxOffsetY, maxOffsetY)
+                                    )
                                 }
+                                event.changes.forEach { it.consume() }
                             }
-                        } while (event.changes.any { it.pressed })
-                    }
+                        } else if (pressedCount == 1 && scale > 1.01f) {
+                            val pan = event.calculatePan()
+                            if (pan != Offset.Zero) {
+                                val maxOffsetX = (size.width * (scale - 1f)) / 2f
+                                val maxOffsetY = (size.height * (scale - 1f)) / 2f
+                                offset = Offset(
+                                    (offset.x + pan.x).coerceIn(-maxOffsetX, maxOffsetX),
+                                    (offset.y + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
+                                )
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+                    onSettled(scale)
                 }
             },
         contentAlignment = Alignment.Center
@@ -159,12 +183,12 @@ fun ZoomableBox(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offset.x
                     translationY = offset.y
-                ),
+                },
             contentAlignment = Alignment.Center
         ) {
             content(scale)

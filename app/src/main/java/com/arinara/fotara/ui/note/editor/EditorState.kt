@@ -218,6 +218,18 @@ class EditorState(
         scheduleAutosave()
     }
 
+    fun toggleChecklistAtOffset(charOffset: Int): Boolean {
+        val before = bodyValue.text
+        executeAction { EditorActions.toggleChecklistAtOffset(it, charOffset) }
+        return bodyValue.text != before
+    }
+
+    fun toggleChecklistAtLine(lineIndex: Int): Boolean {
+        val before = bodyValue.text
+        executeAction { EditorActions.toggleChecklistAtLine(it, lineIndex) }
+        return bodyValue.text != before
+    }
+
     fun undo() {
         if (undoStack.isNotEmpty()) {
             redoStack.add(bodyValue)

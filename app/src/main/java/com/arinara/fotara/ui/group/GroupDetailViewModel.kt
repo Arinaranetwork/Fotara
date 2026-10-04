@@ -214,6 +214,8 @@ class GroupDetailViewModel(
                 photoRepository.updatePhoto(finalPhoto)
                 _uiState.update { it.copy(userMessage = "Photo rotated 90°") }
                 onUpdated?.invoke(finalPhoto)
+            } else {
+                _uiState.update { it.copy(userMessage = "Unable to edit photo. Original file preserved.") }
             }
         }
     }
@@ -236,6 +238,8 @@ class GroupDetailViewModel(
                 photoRepository.updatePhoto(finalPhoto)
                 _uiState.update { it.copy(userMessage = "Photo re-cropped and text re-indexed") }
                 onUpdated?.invoke(finalPhoto)
+            } else {
+                _uiState.update { it.copy(userMessage = "Unable to edit photo. Original file preserved.") }
             }
         }
     }

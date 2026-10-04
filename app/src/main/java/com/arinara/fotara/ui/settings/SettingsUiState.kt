@@ -7,10 +7,12 @@
 package com.arinara.fotara.ui.settings
 
 import com.arinara.fotara.data.model.StorageBreakdown
+import com.arinara.fotara.data.model.UserProfile
 import com.arinara.fotara.data.model.UserSettings
 
 data class SettingsUiState(
     val userSettings: UserSettings = UserSettings(),
+    val userProfile: UserProfile = UserProfile(),
     val storageBreakdown: StorageBreakdown = StorageBreakdown(),
     val isLoadingStorage: Boolean = false,
     val isRebuildingThumbnails: Boolean = false,

@@ -166,14 +166,14 @@ class StrokeProcessorTest {
         )
 
         assertEquals(2, result.size)
-        // First segment
-        assertEquals(4, result[0].points.size)
+        // First segment starts at 0 and ends on boundary between 30 and 40
+        assertTrue(result[0].points.size >= 4)
         assertEquals(0f, result[0].points.first().x, 0.01f)
-        assertEquals(30f, result[0].points.last().x, 0.01f)
+        assertTrue(result[0].points.last().x in 30f..40f)
 
-        // Second segment
-        assertEquals(4, result[1].points.size)
-        assertEquals(70f, result[1].points.first().x, 0.01f)
+        // Second segment starts on boundary between 60 and 70 and ends at 100
+        assertTrue(result[1].points.size >= 4)
+        assertTrue(result[1].points.first().x in 60f..70f)
         assertEquals(100f, result[1].points.last().x, 0.01f)
     }
 

@@ -145,7 +145,6 @@ object TextEditorOps {
         if (text.isEmpty()) return 0 to 0
         val clamped = offset.coerceIn(0, text.length)
 
-        // If offset is between words or on whitespace, don't expand
         if (clamped < text.length && text[clamped].isWhitespace() && (clamped == 0 || text[clamped - 1].isWhitespace())) {
             return clamped to clamped
         }
@@ -199,53 +198,68 @@ object TextEditorOps {
         val content: String
     )
 
+    private val CHECKBOX_PATTERN = Regex("""^([-*+]\s*\[[ xX]\]\s*)""")
+    private val BULLET_PATTERN = Regex("""^([-*+]\s+)""")
+    private val NUMBERED_PATTERN = Regex("""^(\d+\.\s*)""")
+    private val H3_PATTERN = Regex("""^(###\s*)""")
+    private val H2_PATTERN = Regex("""^(##\s*)""")
+    private val H1_PATTERN = Regex("""^(#\s*)""")
+    private val QUOTE_PATTERN = Regex("""^(>\s*)""")
+
     fun parseLine(index: Int, start: Int, end: Int, lineText: String): ParsedLine {
         val indent = lineText.takeWhile { it == ' ' || it == '\t' }
         val withoutIndent = lineText.substring(indent.length)
 
-        val (type, prefixStr, content) = when {
-            withoutIndent.startsWith("- [ ] ") || withoutIndent.startsWith("- [x] ") || withoutIndent.startsWith("- [X] ") -> {
-                val p = withoutIndent.substring(0, 6)
-                Triple(LineToolType.CHECKBOX, p, withoutIndent.substring(6))
-            }
-            withoutIndent.startsWith("* [ ] ") || withoutIndent.startsWith("* [x] ") || withoutIndent.startsWith("* [X] ") -> {
-                val p = withoutIndent.substring(0, 6)
-                Triple(LineToolType.CHECKBOX, p, withoutIndent.substring(6))
-            }
-            withoutIndent.startsWith("### ") -> Triple(LineToolType.H3, "### ", withoutIndent.substring(4))
-            withoutIndent.startsWith("## ") -> Triple(LineToolType.H2, "## ", withoutIndent.substring(3))
-            withoutIndent.startsWith("# ") -> Triple(LineToolType.H1, "# ", withoutIndent.substring(2))
-            withoutIndent.startsWith("> ") -> Triple(LineToolType.QUOTE, "> ", withoutIndent.substring(2))
-            withoutIndent.startsWith(">") -> Triple(LineToolType.QUOTE, ">", withoutIndent.substring(1))
-            withoutIndent.startsWith("- ") -> Triple(LineToolType.BULLET_LIST, "- ", withoutIndent.substring(2))
-            withoutIndent.startsWith("* ") -> Triple(LineToolType.BULLET_LIST, "* ", withoutIndent.substring(2))
-            Regex("""^\d+\.\s+""").containsMatchIn(withoutIndent) -> {
-                val match = Regex("""^\d+\.\s+""").find(withoutIndent)!!
-                Triple(LineToolType.NUMBERED_LIST, match.value, withoutIndent.substring(match.value.length))
-            }
-            else -> Triple(null, "", withoutIndent)
+        val chkMatch = CHECKBOX_PATTERN.find(withoutIndent)
+        if (chkMatch != null) {
+            val p = chkMatch.value
+            return ParsedLine(index, start, end, lineText, indent, LineToolType.CHECKBOX, p, withoutIndent.substring(p.length))
         }
 
-        return ParsedLine(
-            index = index,
-            originalStart = start,
-            originalEnd = end,
-            text = lineText,
-            indent = indent,
-            prefixType = type,
-            prefixString = prefixStr,
-            content = content
-        )
+        val h3Match = H3_PATTERN.find(withoutIndent)
+        if (h3Match != null) {
+            val p = h3Match.value
+            return ParsedLine(index, start, end, lineText, indent, LineToolType.H3, p, withoutIndent.substring(p.length))
+        }
+
+        val h2Match = H2_PATTERN.find(withoutIndent)
+        if (h2Match != null) {
+            val p = h2Match.value
+            return ParsedLine(index, start, end, lineText, indent, LineToolType.H2, p, withoutIndent.substring(p.length))
+        }
+
+        val h1Match = H1_PATTERN.find(withoutIndent)
+        if (h1Match != null) {
+            val p = h1Match.value
+            return ParsedLine(index, start, end, lineText, indent, LineToolType.H1, p, withoutIndent.substring(p.length))
+        }
+
+        val qMatch = QUOTE_PATTERN.find(withoutIndent)
+        if (qMatch != null) {
+            val p = qMatch.value
+            return ParsedLine(index, start, end, lineText, indent, LineToolType.QUOTE, p, withoutIndent.substring(p.length))
+        }
+
+        val bulletMatch = BULLET_PATTERN.find(withoutIndent)
+        if (bulletMatch != null) {
+            val p = bulletMatch.value
+            return ParsedLine(index, start, end, lineText, indent, LineToolType.BULLET_LIST, p, withoutIndent.substring(p.length))
+        }
+
+        val numMatch = NUMBERED_PATTERN.find(withoutIndent)
+        if (numMatch != null) {
+            val p = numMatch.value
+            return ParsedLine(index, start, end, lineText, indent, LineToolType.NUMBERED_LIST, p, withoutIndent.substring(p.length))
+        }
+
+        return ParsedLine(index, start, end, lineText, indent, null, "", withoutIndent)
     }
 
     private fun getTouchedLines(text: String, selStart: Int, selEnd: Int): List<ParsedLine> {
         val min = minOf(selStart, selEnd).coerceIn(0, text.length)
         val max = maxOf(selStart, selEnd).coerceIn(0, text.length)
 
-        // Find start line
         val firstLineStart = text.lastIndexOf('\n', (min - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
-
-        // Find end line
         val lastLineEnd = if (min == max) {
             text.indexOf('\n', max).let { if (it == -1) text.length else it }
         } else {
@@ -278,7 +292,6 @@ object TextEditorOps {
             return TextEditResult(text, selStart, selEnd)
         }
 
-        // Rule: If ALL touched lines already have this prefix type -> toggle off
         val allHaveTarget = touched.all { it.prefixType == targetType }
 
         val newLines = mutableListOf<String>()
@@ -286,10 +299,8 @@ object TextEditorOps {
 
         for (line in touched) {
             val transformed = if (allHaveTarget) {
-                // Toggle off: keep indent + content
                 line.indent + line.content
             } else {
-                // Apply target type: replace old prefix with new prefix
                 val newPrefix = when (targetType) {
                     LineToolType.H1 -> "# "
                     LineToolType.H2 -> "## "
@@ -304,7 +315,6 @@ object TextEditorOps {
             newLines.add(transformed)
         }
 
-        // Splice new lines into text
         val blockStart = touched.first().originalStart
         val blockEnd = touched.last().originalEnd
 
@@ -315,9 +325,8 @@ object TextEditorOps {
             sb.append(newLines[i])
         }
         sb.append(text.substring(blockEnd))
-        val newText = sb.toString()
+        var newText = sb.toString()
 
-        // Compute new caret position with 100% precision
         val isSingleLine = touched.size == 1
         val minSel = minOf(selStart, selEnd)
         val maxSel = maxOf(selStart, selEnd)
@@ -325,53 +334,53 @@ object TextEditorOps {
         if (isSingleLine) {
             val oldLine = touched.first()
             val newLine = newLines.first()
-
             val oldPrefixFullLen = oldLine.indent.length + oldLine.prefixString.length
-            val newPrefixFullLen = if (allHaveTarget) {
-                oldLine.indent.length
-            } else {
-                when (targetType) {
-                    LineToolType.H1 -> oldLine.indent.length + 2
-                    LineToolType.H2 -> oldLine.indent.length + 3
-                    LineToolType.H3 -> oldLine.indent.length + 4
-                    LineToolType.QUOTE -> oldLine.indent.length + 2
-                    LineToolType.BULLET_LIST -> oldLine.indent.length + 2
-                    LineToolType.NUMBERED_LIST -> oldLine.indent.length + (newLines.first().length - oldLine.content.length)
-                    LineToolType.CHECKBOX -> oldLine.indent.length + 6
-                }
-            }
+            val newPrefixFullLen = newLine.length - oldLine.content.length
 
             val caretOffsetInLine = minSel - oldLine.originalStart
 
+            // Caret invariant: Caret always lands strictly at the end of the new prefix or within content, never inside brackets/delimiters!
             val newCaretInLine = if (caretOffsetInLine <= oldPrefixFullLen) {
-                // Caret was at start or inside old prefix: place it strictly AFTER the new prefix!
                 newPrefixFullLen
             } else {
-                // Caret was inside content: shift by delta between new and old prefix
-                caretOffsetInLine - oldPrefixFullLen + newPrefixFullLen
-            }.coerceIn(0, newLine.length)
+                (caretOffsetInLine - oldPrefixFullLen + newPrefixFullLen).coerceIn(newPrefixFullLen, newLine.length)
+            }
 
-            val newCursor = oldLine.originalStart + newCaretInLine
+            var newCursor = oldLine.originalStart + newCaretInLine
+
+            if (targetType == LineToolType.NUMBERED_LIST || allHaveTarget) {
+                val (renumbered, adjustedCursor) = renumberNumberedLists(newText, newCursor)
+                newText = renumbered
+                newCursor = adjustedCursor
+            }
+
             return TextEditResult(newText, newCursor, newCursor)
         } else {
-            // Multi-line selection: adjust start and end
             val firstLine = touched.first()
-            val lastLine = touched.last()
-
             val firstOldPrefixLen = firstLine.indent.length + firstLine.prefixString.length
-            val firstNewPrefixLen = if (allHaveTarget) firstLine.indent.length else {
-                newLines.first().length - firstLine.content.length
-            }
+            val firstNewPrefixLen = newLines.first().length - firstLine.content.length
 
             val newMin = if (minSel <= firstLine.originalStart + firstOldPrefixLen) {
                 firstLine.originalStart + firstNewPrefixLen
             } else {
-                minSel - firstOldPrefixLen + firstNewPrefixLen
+                (minSel - firstOldPrefixLen + firstNewPrefixLen).coerceAtLeast(firstLine.originalStart + firstNewPrefixLen)
             }.coerceIn(0, newText.length)
 
-            // Total length change up to the last line
             val totalDelta = (newText.length - text.length)
             val newMax = (maxSel + totalDelta).coerceIn(newMin, newText.length)
+
+            if (targetType == LineToolType.NUMBERED_LIST || allHaveTarget) {
+                val (renumbered, adjustedMin) = renumberNumberedLists(newText, newMin)
+                val lenDiff = renumbered.length - newText.length
+                newText = renumbered
+                val finalMin = adjustedMin
+                val finalMax = (newMax + lenDiff).coerceIn(finalMin, newText.length)
+                return if (selStart <= selEnd) {
+                    TextEditResult(newText, finalMin, finalMax)
+                } else {
+                    TextEditResult(newText, finalMax, finalMin)
+                }
+            }
 
             return if (selStart <= selEnd) {
                 TextEditResult(newText, newMin, newMax)
@@ -387,16 +396,20 @@ object TextEditorOps {
         val touched = getTouchedLines(text, selStart, selEnd)
         if (touched.isEmpty()) return TextEditResult(text, selStart, selEnd)
 
-        val newLines = touched.map { "  " + it.text }
+        // Max 3 levels: 0, 2, 4, 6 spaces
+        val newLines = touched.map {
+            if (it.indent.length >= 6) it.text else "  " + it.text
+        }
         val blockStart = touched.first().originalStart
         val blockEnd = touched.last().originalEnd
 
         val joined = newLines.joinToString("\n")
         val newText = text.substring(0, blockStart) + joined + text.substring(blockEnd)
 
-        val shift = 2
-        val newSelStart = (selStart + shift).coerceIn(0, newText.length)
-        val newSelEnd = (selEnd + shift * touched.size).coerceIn(0, newText.length)
+        val firstAdded = newLines.first().length - touched.first().text.length
+        val newSelStart = (selStart + firstAdded).coerceIn(0, newText.length)
+        val totalDelta = newText.length - text.length
+        val newSelEnd = (selEnd + totalDelta).coerceIn(newSelStart, newText.length)
 
         return TextEditResult(newText, newSelStart, newSelEnd)
     }
@@ -442,55 +455,81 @@ object TextEditorOps {
         when (parsed.prefixType) {
             LineToolType.CHECKBOX -> {
                 if (parsed.content.isBlank()) {
-                    // Exit list on empty item: remove prefix from line
+                    // Enter on EMPTY item: Exits the list, turns line into plain paragraph
                     val newText = text.substring(0, lineStart) + parsed.indent + text.substring(lineEnd)
                     val newCursor = lineStart + parsed.indent.length
                     return TextEditResult(newText, newCursor, newCursor)
                 } else {
-                    // Continue checklist
+                    // Enter on item WITH text: splits or appends new unchecked checkbox item
+                    val prefixFullLen = parsed.indent.length + parsed.prefixString.length
+                    val cursorInLine = cursor - lineStart
+                    val splitPos = if (cursorInLine < prefixFullLen) prefixFullLen else cursorInLine
+                    val beforeCursor = lineText.substring(0, splitPos)
+                    val afterCursor = lineText.substring(splitPos)
+
                     val nextMarker = "\n${parsed.indent}- [ ] "
-                    val newText = text.substring(0, cursor) + nextMarker + text.substring(cursor)
-                    val newCursor = cursor + nextMarker.length
+                    val newText = text.substring(0, lineStart) + beforeCursor + nextMarker + afterCursor + text.substring(lineEnd)
+                    val newCursor = lineStart + beforeCursor.length + nextMarker.length
                     return TextEditResult(newText, newCursor, newCursor)
                 }
             }
             LineToolType.NUMBERED_LIST -> {
                 if (parsed.content.isBlank()) {
-                    // Exit list
+                    // Enter on EMPTY item: Exit list
                     val newText = text.substring(0, lineStart) + parsed.indent + text.substring(lineEnd)
                     val newCursor = lineStart + parsed.indent.length
-                    return TextEditResult(newText, newCursor, newCursor)
+                    val (renumbered, adjustedCursor) = renumberNumberedLists(newText, newCursor)
+                    return TextEditResult(renumbered, adjustedCursor, adjustedCursor)
                 } else {
-                    val num = Regex("""^\d+""").find(parsed.prefixString)?.value?.toIntOrNull() ?: 1
+                    val prefixFullLen = parsed.indent.length + parsed.prefixString.length
+                    val cursorInLine = cursor - lineStart
+                    val splitPos = if (cursorInLine < prefixFullLen) prefixFullLen else cursorInLine
+                    val beforeCursor = lineText.substring(0, splitPos)
+                    val afterCursor = lineText.substring(splitPos)
+
+                    val num = Regex("""^\d+""").find(parsed.prefixString.trim())?.value?.toIntOrNull() ?: 1
                     val nextMarker = "\n${parsed.indent}${num + 1}. "
-                    val newText = text.substring(0, cursor) + nextMarker + text.substring(cursor)
-                    val newCursor = cursor + nextMarker.length
-                    return TextEditResult(newText, newCursor, newCursor)
+                    val newText = text.substring(0, lineStart) + beforeCursor + nextMarker + afterCursor + text.substring(lineEnd)
+                    val newCursor = lineStart + beforeCursor.length + nextMarker.length
+                    val (renumbered, adjustedCursor) = renumberNumberedLists(newText, newCursor)
+                    return TextEditResult(renumbered, adjustedCursor, adjustedCursor)
                 }
             }
             LineToolType.BULLET_LIST -> {
                 if (parsed.content.isBlank()) {
-                    // Exit list
+                    // Enter on EMPTY item: Exit list
                     val newText = text.substring(0, lineStart) + parsed.indent + text.substring(lineEnd)
                     val newCursor = lineStart + parsed.indent.length
                     return TextEditResult(newText, newCursor, newCursor)
                 } else {
+                    val prefixFullLen = parsed.indent.length + parsed.prefixString.length
+                    val cursorInLine = cursor - lineStart
+                    val splitPos = if (cursorInLine < prefixFullLen) prefixFullLen else cursorInLine
+                    val beforeCursor = lineText.substring(0, splitPos)
+                    val afterCursor = lineText.substring(splitPos)
+
                     val nextMarker = "\n${parsed.indent}- "
-                    val newText = text.substring(0, cursor) + nextMarker + text.substring(cursor)
-                    val newCursor = cursor + nextMarker.length
+                    val newText = text.substring(0, lineStart) + beforeCursor + nextMarker + afterCursor + text.substring(lineEnd)
+                    val newCursor = lineStart + beforeCursor.length + nextMarker.length
                     return TextEditResult(newText, newCursor, newCursor)
                 }
             }
             LineToolType.QUOTE -> {
                 if (parsed.content.isBlank()) {
-                    // Exit quote
+                    // Enter on EMPTY item: Exit quote
                     val newText = text.substring(0, lineStart) + parsed.indent + text.substring(lineEnd)
                     val newCursor = lineStart + parsed.indent.length
                     return TextEditResult(newText, newCursor, newCursor)
                 } else {
+                    val prefixFullLen = parsed.indent.length + parsed.prefixString.length
+                    val cursorInLine = cursor - lineStart
+                    val splitPos = if (cursorInLine < prefixFullLen) prefixFullLen else cursorInLine
+                    val beforeCursor = lineText.substring(0, splitPos)
+                    val afterCursor = lineText.substring(splitPos)
+
                     val nextMarker = "\n${parsed.indent}> "
-                    val newText = text.substring(0, cursor) + nextMarker + text.substring(cursor)
-                    val newCursor = cursor + nextMarker.length
+                    val newText = text.substring(0, lineStart) + beforeCursor + nextMarker + afterCursor + text.substring(lineEnd)
+                    val newCursor = lineStart + beforeCursor.length + nextMarker.length
                     return TextEditResult(newText, newCursor, newCursor)
                 }
             }
@@ -507,25 +546,142 @@ object TextEditorOps {
         if (cursor == 0) return null
 
         val lineStart = text.lastIndexOf('\n', (cursor - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
-        val prefixSlice = text.substring(lineStart, cursor)
+        val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
+        val lineText = text.substring(lineStart, lineEnd)
+        val parsed = parseLine(0, lineStart, lineEnd, lineText)
 
-        // Check if cursor is right after a line prefix with nothing else before it
-        val matchesPrefix = prefixSlice.matches(Regex("""^\s*[-*+]\s*\[[ xX]\]\s*$""")) ||
-                prefixSlice.matches(Regex("""^\s*\d+\.\s*$""")) ||
-                prefixSlice.matches(Regex("""^\s*[-*+]\s*$""")) ||
-                prefixSlice.matches(Regex("""^\s*>\s*$""")) ||
-                prefixSlice.matches(Regex("""^\s*#{1,6}\s*$"""))
+        if (parsed.prefixType != null) {
+            val prefixFullLen = parsed.indent.length + parsed.prefixString.length
+            val cursorInLine = cursor - lineStart
 
-        if (matchesPrefix) {
-            // Delete entire prefix in one stroke, turning line into plain text
-            val newText = text.substring(0, lineStart) + text.substring(cursor)
-            return TextEditResult(newText, lineStart, lineStart)
+            // If cursor is right after prefix
+            if (cursorInLine == prefixFullLen) {
+                // If indent > 0, outdent first!
+                if (parsed.indent.length >= 2) {
+                    val newIndent = parsed.indent.substring(2)
+                    val newLine = newIndent + parsed.prefixString + parsed.content
+                    val newText = text.substring(0, lineStart) + newLine + text.substring(lineEnd)
+                    val newCursor = cursor - 2
+                    return TextEditResult(newText, newCursor, newCursor)
+                }
+
+                // Removes only the prefix, text stays as a paragraph
+                val newLine = parsed.indent + parsed.content
+                val newText = text.substring(0, lineStart) + newLine + text.substring(lineEnd)
+                val newCursor = lineStart + parsed.indent.length
+                val (renumbered, adjustedCursor) = if (parsed.prefixType == LineToolType.NUMBERED_LIST) {
+                    renumberNumberedLists(newText, newCursor)
+                } else {
+                    newText to newCursor
+                }
+                return TextEditResult(renumbered, adjustedCursor, adjustedCursor)
+            }
+        } else {
+            // Check if divider line
+            val trimmed = lineText.trim()
+            if (trimmed == "---" || trimmed == "***") {
+                val removeStart = if (lineStart > 0 && text[lineStart - 1] == '\n') lineStart - 1 else lineStart
+                val newText = text.substring(0, removeStart) + text.substring(lineEnd)
+                val newCursor = removeStart.coerceIn(0, newText.length)
+                return TextEditResult(newText, newCursor, newCursor)
+            }
         }
 
         return null
     }
 
-    // --- 6. Code Block ---
+    // --- 6. Typing Shortcuts at Line Start ---
+
+    fun handleTypingShortcut(text: String, selStart: Int, selEnd: Int): TextEditResult? {
+        val cursor = maxOf(selStart, selEnd).coerceIn(0, text.length)
+        val lineStart = text.lastIndexOf('\n', (cursor - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
+        val lineEnd = text.indexOf('\n', cursor).let { if (it == -1) text.length else it }
+        val minSel = minOf(selStart, selEnd)
+        if (minSel < lineStart) return null
+        val lineText = text.substring(lineStart, lineEnd)
+
+        val indent = lineText.takeWhile { it == ' ' || it == '\t' }
+        val withoutIndent = lineText.substring(indent.length)
+        val cursorInLine = cursor - lineStart - indent.length
+
+        if (cursorInLine <= 0) return null
+
+        val prefixTyped = withoutIndent.substring(0, cursorInLine)
+        val remainder = withoutIndent.substring(cursorInLine)
+
+        // Matching triggers: "- ", "* ", "1. ", "[] ", "# ", "## ", "### ", "> "
+        val (newPrefix, prefixLen) = when (prefixTyped) {
+            "- ", "* " -> "- " to 2
+            "1. " -> "1. " to 3
+            "[] " -> "- [ ] " to 6
+            "# " -> "# " to 2
+            "## " -> "## " to 3
+            "### " -> "### " to 4
+            "> " -> "> " to 2
+            else -> return null
+        }
+
+        val newLine = indent + newPrefix + remainder
+        val newText = text.substring(0, lineStart) + newLine + text.substring(lineEnd)
+        val newCursor = lineStart + indent.length + newPrefix.length
+        return TextEditResult(newText, newCursor, newCursor)
+    }
+
+    // --- 7. Numbered List Auto-Renumbering ---
+
+    fun renumberNumberedLists(text: String, caretOffset: Int = -1): Pair<String, Int> {
+        val lines = text.lines()
+        var adjustedCaret = caretOffset
+        val newLines = mutableListOf<String>()
+
+        var inNumberedRun = false
+        var currentIndent = ""
+        var expectedNumber = 1
+        var charOffset = 0
+
+        for (line in lines) {
+            val lineLen = line.length
+            val indent = line.takeWhile { it == ' ' || it == '\t' }
+            val withoutIndent = line.substring(indent.length)
+            val numMatch = NUMBERED_PATTERN.find(withoutIndent)
+
+            if (numMatch != null) {
+                if (!inNumberedRun || indent != currentIndent) {
+                    inNumberedRun = true
+                    currentIndent = indent
+                    expectedNumber = 1
+                }
+
+                val currentPrefix = numMatch.value
+                val newPrefix = "$expectedNumber. "
+                expectedNumber++
+
+                if (currentPrefix != newPrefix) {
+                    val content = withoutIndent.substring(currentPrefix.length)
+                    val newLine = indent + newPrefix + content
+                    val delta = newLine.length - line.length
+                    if (adjustedCaret >= charOffset + indent.length + currentPrefix.length) {
+                        adjustedCaret += delta
+                    }
+                    newLines.add(newLine)
+                } else {
+                    newLines.add(line)
+                }
+            } else {
+                inNumberedRun = false
+                currentIndent = ""
+                expectedNumber = 1
+                newLines.add(line)
+            }
+
+            charOffset += lineLen + 1
+        }
+
+        val resultText = newLines.joinToString("\n")
+        return resultText to adjustedCaret.coerceIn(0, resultText.length)
+    }
+
+    // --- 8. Code Block ---
 
     fun toggleCodeBlock(text: String, selStart: Int, selEnd: Int): TextEditResult {
         val min = minOf(selStart, selEnd).coerceIn(0, text.length)
@@ -547,7 +703,7 @@ object TextEditorOps {
         }
     }
 
-    // --- 7. Horizontal Rule ---
+    // --- 9. Horizontal Rule (Divider) ---
 
     fun insertHorizontalRule(text: String, selStart: Int, selEnd: Int): TextEditResult {
         val min = minOf(selStart, selEnd).coerceIn(0, text.length)
@@ -562,7 +718,7 @@ object TextEditorOps {
         return TextEditResult(newText, newCursor, newCursor)
     }
 
-    // --- 8. Link Insertion ---
+    // --- 10. Link Insertion ---
 
     fun insertOrEditLink(
         text: String,
@@ -597,10 +753,10 @@ object TextEditorOps {
         return TextEditResult(newText, newCursor, newCursor)
     }
 
-    // --- 9. Checkbox Toggle at Offset ---
+    // --- 11. Checkbox Toggle at Offset / Line ---
 
     fun toggleChecklistAtOffset(text: String, selStart: Int, selEnd: Int, charOffset: Int): TextEditResult {
-        if (charOffset !in text.indices) return TextEditResult(text, selStart, selEnd)
+        if (charOffset !in 0..text.length) return TextEditResult(text, selStart, selEnd)
 
         val lineStart = text.lastIndexOf('\n', (charOffset - 1).coerceAtLeast(0)).let { if (it == -1) 0 else it + 1 }
         val lineEnd = text.indexOf('\n', charOffset).let { if (it == -1) text.length else it }
@@ -648,7 +804,7 @@ object TextEditorOps {
         return TextEditResult(newText, selStart.coerceIn(0, newText.length), selEnd.coerceIn(0, newText.length))
     }
 
-    // --- 10. Active Toolbar States Detection ---
+    // --- 12. Active Toolbar States Detection ---
 
     fun getActiveToolbarStates(text: String, selStart: Int, selEnd: Int): ActiveEditorSyntax {
         if (text.isEmpty()) return ActiveEditorSyntax()
@@ -656,7 +812,6 @@ object TextEditorOps {
         val min = minOf(selStart, selEnd).coerceIn(0, text.length)
         val max = maxOf(selStart, selEnd).coerceIn(0, text.length)
 
-        // Parse line context
         val touched = getTouchedLines(text, min, max)
         val firstLine = touched.firstOrNull()
 
@@ -668,7 +823,6 @@ object TextEditorOps {
         val isNumbered = firstLine?.prefixType == LineToolType.NUMBERED_LIST
         val isCheck = firstLine?.prefixType == LineToolType.CHECKBOX
 
-        // Parse inline context around cursor or selection
         val doc = MarkdownParser.parse(text)
         val activeSpans = doc.activeTypesAt(min, max)
 

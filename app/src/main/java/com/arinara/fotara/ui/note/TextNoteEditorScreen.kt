@@ -11,6 +11,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,23 +31,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -64,32 +71,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arinara.fotara.R
 import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.data.repository.TextNoteRepository
+import com.arinara.fotara.ui.components.NoteDetailScheduleChip
 import com.arinara.fotara.ui.components.RichMarkdownColumn
+import com.arinara.fotara.ui.components.ScheduleNoteDialog
 import com.arinara.fotara.ui.note.editor.EditorActions
 import com.arinara.fotara.ui.note.editor.EditorToolbar
-import com.arinara.fotara.ui.note.editor.rememberEditorState
 import com.arinara.fotara.ui.note.editor.MarkdownVisualTransformation
-import androidx.compose.foundation.border
-import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.ui.platform.LocalContext
-import com.arinara.fotara.ui.components.NoteDetailScheduleChip
-import com.arinara.fotara.ui.components.ScheduleNoteDialog
+import com.arinara.fotara.ui.note.editor.rememberEditorState
 import com.arinara.fotara.util.NoteScheduleManager
-import com.arinara.fotara.util.ScheduleNoteType
 import com.arinara.fotara.util.ScheduleAlertType
+import com.arinara.fotara.util.ScheduleNoteType
 import kotlinx.coroutines.launch
 
 private val ScreenNavy = Color(0xFF03071E)
@@ -150,31 +155,26 @@ fun TextNoteEditorScreen(
             .navigationBarsPadding()
             .imePadding()
     ) {
-        // Top App Bar
+        // Top App Bar - Single line, centered, no subtitle clutter
         TopAppBar(
             title = {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (state.noteId == null) "New Text Note" else "Edit Text Note",
-                            color = TabCream,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (state.isSaving) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Saving…",
-                                color = AccentGold,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "${state.wordCount} words • ${state.charCount} characters",
-                        color = TabCream.copy(alpha = 0.6f),
-                        fontSize = 11.5.sp
+                        text = if (state.noteId == null) stringResource(R.string.editor_title_new) else stringResource(R.string.editor_title_edit),
+                        color = TabCream,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    if (state.isSaving) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.editor_saving),
+                            color = AccentGold,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             },
             navigationIcon = {
@@ -229,7 +229,7 @@ fun TextNoteEditorScreen(
                     )
                 }
 
-                // Overflow menu for note actions (Schedule, etc.)
+                // Overflow menu for note actions (Info section + Schedule)
                 Box {
                     var showOverflowMenu by remember { mutableStateOf(false) }
                     IconButton(onClick = { showOverflowMenu = true }) {
@@ -246,6 +246,36 @@ fun TextNoteEditorScreen(
                             .background(CardBg)
                             .border(1.dp, ToolbarBorder, RoundedCornerShape(8.dp))
                     ) {
+                        // Info Section matching Viewer Pattern
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.viewer_info_header),
+                                color = TextMuted.copy(alpha = 0.6f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.editor_info_counts, state.wordCount, state.charCount),
+                                color = TabCream,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(R.string.viewer_info_offline),
+                                color = TextMuted.copy(alpha = 0.8f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        HorizontalDivider(
+                            color = ToolbarBorder,
+                            thickness = 1.dp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+
                         DropdownMenuItem(
                             text = { Text("Schedule...", color = TabCream) },
                             leadingIcon = { Icon(Icons.Default.Alarm, null, tint = AccentGold) },
@@ -287,7 +317,7 @@ fun TextNoteEditorScreen(
                                 .padding(horizontal = 10.dp, vertical = 8.dp),
                             decorationBox = { inner ->
                                 if (state.searchQuery.isEmpty()) {
-                                    Text("Find in note…", color = TextMuted, fontSize = 13.5.sp)
+                                    Text(stringResource(R.string.editor_find_in_note), color = TextMuted, fontSize = 13.5.sp)
                                 }
                                 inner()
                             }
@@ -305,7 +335,7 @@ fun TextNoteEditorScreen(
                                 .padding(horizontal = 10.dp, vertical = 8.dp),
                             decorationBox = { inner ->
                                 if (state.replaceQuery.isEmpty()) {
-                                    Text("Replace with…", color = TextMuted, fontSize = 13.5.sp)
+                                    Text(stringResource(R.string.editor_replace_with), color = TextMuted, fontSize = 13.5.sp)
                                 }
                                 inner()
                             }
@@ -320,7 +350,7 @@ fun TextNoteEditorScreen(
                     ) {
                         Text(
                             text = if (state.searchQuery.isNotEmpty()) {
-                                if (state.searchMatchCount > 0) "${state.currentMatchIndex + 1}/${state.searchMatchCount}" else "0 matches"
+                                if (state.searchMatchCount > 0) stringResource(R.string.editor_matches_count, state.currentMatchIndex + 1, state.searchMatchCount) else stringResource(R.string.editor_no_matches)
                             } else "",
                             color = TextMuted,
                             fontSize = 11.5.sp
@@ -368,7 +398,7 @@ fun TextNoteEditorScreen(
                             onClick = { state.replaceCurrent() },
                             enabled = state.searchMatchCount > 0
                         ) {
-                            Text("Replace", color = AccentGold, fontSize = 12.sp)
+                            Text(stringResource(R.string.editor_replace_one), color = AccentGold, fontSize = 12.sp)
                         }
 
                         // Replace All
@@ -376,7 +406,7 @@ fun TextNoteEditorScreen(
                             onClick = { state.replaceAll() },
                             enabled = state.searchMatchCount > 0
                         ) {
-                            Text("All", color = AccentGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.editor_replace_all), color = AccentGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
 
                         // Close bar
@@ -418,13 +448,13 @@ fun TextNoteEditorScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 RichMarkdownColumn(
-                    markdown = state.bodyValue.text.ifBlank { "*This note is empty. Switch to edit mode to start typing.*" },
+                    markdown = state.bodyValue.text.ifBlank { stringResource(R.string.editor_empty_preview) },
                     primaryTextColor = TabCream,
                     accentColor = AccentGold,
                     cardBg = CardBg,
                     cardBorder = ToolbarBorder,
                     onToggleChecklistLine = { lineIndex ->
-                        state.executeAction { EditorActions.toggleChecklistAtLine(it, lineIndex) }
+                        state.toggleChecklistAtLine(lineIndex)
                     }
                 )
                 Spacer(modifier = Modifier.height(32.dp))
@@ -454,7 +484,7 @@ fun TextNoteEditorScreen(
                         Box(modifier = Modifier.fillMaxWidth()) {
                             if (state.title.isEmpty()) {
                                 Text(
-                                    text = "Note Title…",
+                                    text = stringResource(R.string.editor_placeholder_title),
                                     color = TextMuted,
                                     fontSize = 22.sp,
                                     fontWeight = FontWeight.Bold
@@ -492,64 +522,114 @@ fun TextNoteEditorScreen(
                     )
                 }
 
-                BasicTextField(
-                    value = state.bodyValue,
-                    onValueChange = { newBody ->
-                        val oldBody = state.bodyValue
-                        // Intercept Enter key for list continuation
-                        if (newBody.text.length == oldBody.text.length + 1 &&
-                            oldBody.selection.min in 0..oldBody.text.length &&
-                            newBody.text.getOrNull(oldBody.selection.min) == '\n'
-                        ) {
-                            val handled = EditorActions.handleEnterKey(oldBody)
-                            if (handled != null) {
-                                state.onBodyChange(handled)
-                            } else {
-                                state.onBodyChange(newBody)
-                            }
-                        } else if (newBody.text.length == oldBody.text.length - 1 &&
-                            oldBody.selection.min == oldBody.selection.max &&
-                            oldBody.selection.min > 0
-                        ) {
-                            val handled = EditorActions.handleBackspaceKey(oldBody)
-                            if (handled != null) {
-                                state.onBodyChange(handled)
-                            } else {
-                                state.onBodyChange(newBody)
-                            }
-                        } else {
-                            state.onBodyChange(newBody)
-                        }
-                    },
-                    visualTransformation = visualTransformation,
-                    textStyle = TextStyle(
-                        color = TabCream,
-                        fontSize = 15.5.sp,
-                        lineHeight = 23.sp,
-                        fontFamily = com.arinara.fotara.theme.ElmsSans
-                    ),
-                    cursorBrush = SolidColor(AccentGold),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Default
-                    ),
+                var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f, fill = false),
-                    decorationBox = { innerTextField ->
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            if (state.bodyValue.text.isEmpty()) {
-                                Text(
-                                    text = "Start writing with markdown formatting (e.g. **bold**, *italic*, # heading, - list, - [ ] checklist)…",
-                                    color = TextMuted.copy(alpha = 0.7f),
-                                    fontSize = 15.sp,
-                                    lineHeight = 22.sp
-                                )
+                        .weight(1f, fill = false)
+                        .pointerInput(state.bodyValue.text) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val up = waitForUpOrCancellation()
+                                if (up != null && !up.isConsumed) {
+                                    val layout = textLayoutResult
+                                    if (layout != null) {
+                                        val line = layout.getLineForVerticalPosition(up.position.y)
+                                        if (line in 0 until layout.lineCount) {
+                                            val lineStart = layout.getLineStart(line)
+                                            val clickOffset = layout.getOffsetForPosition(up.position)
+                                            if (clickOffset in lineStart..(lineStart + 2)) {
+                                                val origOffset = visualTransformation.lastOffsetMapping.transformedToOriginal(lineStart)
+                                                val toggled = state.toggleChecklistAtOffset(origOffset)
+                                                if (toggled) {
+                                                    up.consume()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            innerTextField()
                         }
-                    }
-                )
+                ) {
+                    BasicTextField(
+                        value = state.bodyValue,
+                        onValueChange = { newBody ->
+                            val oldBody = state.bodyValue
+                            val oldText = oldBody.text
+                            val newText = newBody.text
+                            val oldSel = oldBody.selection
+                            val newSel = newBody.selection
+
+                            val newlinesAdded = newText.count { it == '\n' } - oldText.count { it == '\n' }
+
+                            if (newlinesAdded > 1) {
+                                // Multi-line paste: keep lines intact and do not trigger Enter logic
+                                state.onBodyChange(newBody)
+                                return@BasicTextField
+                            }
+
+                            val isSingleEnter = newlinesAdded == 1 && (
+                                (newText.length == oldText.length + 1 && oldSel.min in 0..oldText.length && newText.getOrNull(oldSel.min) == '\n') ||
+                                (newSel.min > 0 && newText.getOrNull(newSel.min - 1) == '\n')
+                            )
+
+                            if (isSingleEnter) {
+                                val handled = EditorActions.handleEnterKey(oldBody)
+                                if (handled != null) {
+                                    state.onBodyChange(handled)
+                                    return@BasicTextField
+                                }
+                            }
+
+                            val isBackspace = newText.length < oldText.length && oldSel.collapsed && oldSel.min > 0
+                            if (isBackspace) {
+                                val handled = EditorActions.handleBackspaceKey(oldBody)
+                                if (handled != null) {
+                                    state.onBodyChange(handled)
+                                    return@BasicTextField
+                                }
+                            }
+
+                            if (newText.length == oldText.length + 1 && newSel.collapsed && newSel.min > 0 && newText[newSel.min - 1] == ' ') {
+                                val shortcutHandled = EditorActions.handleTypingShortcut(newBody)
+                                if (shortcutHandled != null) {
+                                    state.onBodyChange(shortcutHandled)
+                                    return@BasicTextField
+                                }
+                            }
+
+                            state.onBodyChange(newBody)
+                        },
+                        onTextLayout = { textLayoutResult = it },
+                        visualTransformation = visualTransformation,
+                        textStyle = TextStyle(
+                            color = TabCream,
+                            fontSize = 15.5.sp,
+                            lineHeight = 23.sp,
+                            fontFamily = com.arinara.fotara.theme.ElmsSans
+                        ),
+                        cursorBrush = SolidColor(AccentGold),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Default
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        decorationBox = { innerTextField ->
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                if (state.bodyValue.text.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.editor_placeholder_body),
+                                        color = TextMuted.copy(alpha = 0.7f),
+                                        fontSize = 15.sp,
+                                        lineHeight = 22.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -565,7 +645,7 @@ fun TextNoteEditorScreen(
             onDismissRequest = { state.showLinkDialog = false },
             title = {
                 Text(
-                    text = "Insert or Edit Link",
+                    text = stringResource(R.string.editor_dialog_link_title),
                     fontWeight = FontWeight.Bold,
                     color = TabCream
                 )
@@ -575,7 +655,7 @@ fun TextNoteEditorScreen(
                     OutlinedTextField(
                         value = state.linkDialogLabel,
                         onValueChange = { state.linkDialogLabel = it },
-                        label = { Text("Link Text", color = TextMuted) },
+                        label = { Text(stringResource(R.string.editor_dialog_link_label), color = TextMuted) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = AccentGold,
                             unfocusedBorderColor = ToolbarBorder,
@@ -589,7 +669,7 @@ fun TextNoteEditorScreen(
                     OutlinedTextField(
                         value = state.linkDialogUrl,
                         onValueChange = { state.linkDialogUrl = it },
-                        label = { Text("Web URL", color = TextMuted) },
+                        label = { Text(stringResource(R.string.editor_dialog_link_url), color = TextMuted) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = AccentGold,
                             unfocusedBorderColor = ToolbarBorder,
@@ -606,12 +686,12 @@ fun TextNoteEditorScreen(
                     onClick = { state.confirmLinkDialog() },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGold)
                 ) {
-                    Text("Apply", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.editor_dialog_link_apply), color = Color.Black, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { state.showLinkDialog = false }) {
-                    Text("Cancel", color = TabCream)
+                    Text(stringResource(R.string.editor_dialog_link_cancel), color = TabCream)
                 }
             },
             containerColor = CardBg,

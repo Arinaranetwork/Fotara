@@ -7,7 +7,9 @@
 package com.arinara.fotara.note
 
 import com.arinara.fotara.ui.note.editor.LineToolType
+import com.arinara.fotara.ui.note.editor.MarkdownOffsetMapping
 import com.arinara.fotara.ui.note.editor.TextEditorOps
+import com.arinara.fotara.ui.note.editor.TextMappingChunk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -342,5 +344,228 @@ class TextEditorOpsTest {
         val boldOffset = text.indexOf("bold") + 1
         val state3 = TextEditorOps.getActiveToolbarStates(text, boldOffset, boldOffset)
         assertTrue(state3.isBold)
+    }
+
+    // ==========================================
+    // 8. REGRESSION TESTS (Screenshot S1 - S4)
+    // ==========================================
+
+    @Test
+    fun testRegression_checkboxInserted_caretEndsStrictlyOutsideBrackets() {
+        // S1 Regression: Caret must end strictly after the brackets at offset 6, never inside "[ | ]"
+        val result = TextEditorOps.applyCheckbox("", 0, 0)
+        assertEquals("- [ ] ", result.text)
+        assertEquals(6, result.selectionStart)
+        assertEquals(6, result.selectionEnd)
+
+        // Typing text writes OUTSIDE brackets, resulting in valid markdown checklist
+        val typed = result.text + "teyss"
+        assertEquals("- [ ] teyss", typed)
+        val parsed = TextEditorOps.parseLine(0, 0, typed.length, typed)
+        assertEquals(LineToolType.CHECKBOX, parsed.prefixType)
+        assertEquals("teyss", parsed.content)
+    }
+
+    @Test
+    fun testRegression_enterOnCheckboxWithText_createsNewCheckboxBelow() {
+        // S2 Regression: Enter on an item WITH text creates a new unchecked item below
+        val input = "- [ ] First item"
+        val result = TextEditorOps.handleEnterKey(input, input.length, input.length)
+        assertNotNull(result)
+        assertEquals("- [ ] First item\n- [ ] ", result!!.text)
+        assertEquals("- [ ] First item\n- [ ] ".length, result.selectionStart)
+    }
+
+    @Test
+    fun testRegression_enterOnCheckedCheckboxWithText_createsUncheckedItem() {
+        val input = "- [x] Done item"
+        val result = TextEditorOps.handleEnterKey(input, input.length, input.length)
+        assertNotNull(result)
+        assertEquals("- [x] Done item\n- [ ] ", result!!.text)
+    }
+
+    @Test
+    fun testRegression_enterOnEmptyCheckbox_exitsListToPlainParagraph() {
+        // S2 Regression: Enter on an EMPTY item exits the list
+        val input = "- [ ] "
+        val result = TextEditorOps.handleEnterKey(input, input.length, input.length)
+        assertNotNull(result)
+        assertEquals("", result!!.text)
+        assertEquals(0, result.selectionStart)
+    }
+
+    @Test
+    fun testRegression_spaceNeverRemovesOrConvertsExistingPrefix() {
+        // S2 Regression: Space on an existing checklist never removes or alters prefix
+        val input = "- [ ] Item"
+        val shortcut = TextEditorOps.handleTypingShortcut(input, 6, 6)
+        assertEquals(null, shortcut)
+    }
+
+    // ==========================================
+    // 9. KEYBOARD TABLE PURE-FUNCTION TESTS
+    // ==========================================
+
+    @Test
+    fun testEnter_bulletWithText_createsNewBulletBelow() {
+        val input = "- Milk"
+        val result = TextEditorOps.handleEnterKey(input, input.length, input.length)
+        assertNotNull(result)
+        assertEquals("- Milk\n- ", result!!.text)
+        assertEquals("- Milk\n- ".length, result.selectionStart)
+    }
+
+    @Test
+    fun testEnter_emptyBullet_exitsList() {
+        val input = "- "
+        val result = TextEditorOps.handleEnterKey(input, input.length, input.length)
+        assertNotNull(result)
+        assertEquals("", result!!.text)
+    }
+
+    @Test
+    fun testEnter_quoteWithText_createsNewQuoteBelow() {
+        val input = "> Inspiring quote"
+        val result = TextEditorOps.handleEnterKey(input, input.length, input.length)
+        assertNotNull(result)
+        assertEquals("> Inspiring quote\n> ", result!!.text)
+    }
+
+    @Test
+    fun testEnter_emptyQuote_exitsQuote() {
+        val input = "> "
+        val result = TextEditorOps.handleEnterKey(input, input.length, input.length)
+        assertNotNull(result)
+        assertEquals("", result!!.text)
+    }
+
+    @Test
+    fun testEnter_numberedList_autoIncrements() {
+        val input = "1. Item one"
+        val result = TextEditorOps.handleEnterKey(input, input.length, input.length)
+        assertNotNull(result)
+        assertEquals("1. Item one\n2. ", result!!.text)
+    }
+
+    @Test
+    fun testEnter_emptyNumbered_exitsList() {
+        val input = "1. "
+        val result = TextEditorOps.handleEnterKey(input, input.length, input.length)
+        assertNotNull(result)
+        assertEquals("", result!!.text)
+    }
+
+    @Test
+    fun testEnter_middleOfText_splitsItemCleanly() {
+        val input = "- [ ] Buy milk today"
+        val splitOffset = "- [ ] Buy ".length
+        val result = TextEditorOps.handleEnterKey(input, splitOffset, splitOffset)
+        assertNotNull(result)
+        assertEquals("- [ ] Buy \n- [ ] milk today", result!!.text)
+        assertEquals("- [ ] Buy \n- [ ] ".length, result.selectionStart)
+    }
+
+    @Test
+    fun testBackspace_rightAfterPrefix_removesOnlyPrefix() {
+        val input = "- [ ] Buy groceries"
+        val result = TextEditorOps.handleBackspaceKey(input, 6, 6)
+        assertNotNull(result)
+        assertEquals("Buy groceries", result!!.text)
+        assertEquals(0, result.selectionStart)
+    }
+
+    @Test
+    fun testBackspace_indentedPrefix_outdentsFirst() {
+        val input = "  - [ ] Nested task"
+        val result = TextEditorOps.handleBackspaceKey(input, 8, 8)
+        assertNotNull(result)
+        assertEquals("- [ ] Nested task", result!!.text)
+        assertEquals(6, result.selectionStart)
+    }
+
+    @Test
+    fun testTypingShortcuts_atLineStart() {
+        val bullet = TextEditorOps.handleTypingShortcut("- ", 0, 2)
+        assertNotNull(bullet)
+        assertEquals("- ", bullet!!.text)
+
+        val starBullet = TextEditorOps.handleTypingShortcut("* ", 0, 2)
+        assertNotNull(starBullet)
+        assertEquals("- ", starBullet!!.text)
+
+        val checkbox = TextEditorOps.handleTypingShortcut("[] ", 0, 3)
+        assertNotNull(checkbox)
+        assertEquals("- [ ] ", checkbox!!.text)
+
+        val num = TextEditorOps.handleTypingShortcut("1. ", 0, 3)
+        assertNotNull(num)
+        assertEquals("1. ", num!!.text)
+
+        val h1 = TextEditorOps.handleTypingShortcut("# ", 0, 2)
+        assertNotNull(h1)
+        assertEquals("# ", h1!!.text)
+
+        val h2 = TextEditorOps.handleTypingShortcut("## ", 0, 3)
+        assertNotNull(h2)
+        assertEquals("## ", h2!!.text)
+
+        val h3 = TextEditorOps.handleTypingShortcut("### ", 0, 4)
+        assertNotNull(h3)
+        assertEquals("### ", h3!!.text)
+
+        val quote = TextEditorOps.handleTypingShortcut("> ", 0, 2)
+        assertNotNull(quote)
+        assertEquals("> ", quote!!.text)
+    }
+
+    @Test
+    fun testNumberedList_autoRenumbering_contiguousRun() {
+        val input = "1. First\n1. Second\n1. Third"
+        val (renumbered, _) = TextEditorOps.renumberNumberedLists(input)
+        assertEquals("1. First\n2. Second\n3. Third", renumbered)
+    }
+
+    @Test
+    fun testNumberedList_autoRenumbering_restartsAfterBreak() {
+        val input = "1. Item 1\n2. Item 2\n\n1. Item 1\n1. Item 2"
+        val (renumbered, _) = TextEditorOps.renumberNumberedLists(input)
+        assertEquals("1. Item 1\n2. Item 2\n\n1. Item 1\n2. Item 2", renumbered)
+    }
+
+    @Test
+    fun testIndent_boundedToMaxThreeLevels() {
+        val line = "- Item"
+        val ind1 = TextEditorOps.indent(line, 0, line.length)
+        assertEquals("  - Item", ind1.text)
+
+        val ind2 = TextEditorOps.indent(ind1.text, 0, ind1.text.length)
+        assertEquals("    - Item", ind2.text)
+
+        val ind3 = TextEditorOps.indent(ind2.text, 0, ind2.text.length)
+        assertEquals("      - Item", ind3.text)
+
+        // 4th indent should remain capped at 3 levels (6 spaces)
+        val ind4 = TextEditorOps.indent(ind3.text, 0, ind3.text.length)
+        assertEquals("      - Item", ind4.text)
+    }
+
+    @Test
+    fun testAtomicOffsetMapping_neverPutsCaretInsideBrackets() {
+        // Transformed "[ ] " (6 chars) -> "☐ " (2 chars) with isAtomicPrefix = true
+        val chunk = TextMappingChunk(0, 6, 0, 2, isAtomicPrefix = true)
+        val mapping = MarkdownOffsetMapping(6, 2, listOf(chunk))
+
+        // Any click on transformed index 1 (the checkbox box) maps to 6 (after the brackets)
+        assertEquals(6, mapping.transformedToOriginal(1))
+        // Click at index 0 maps to 0
+        assertEquals(0, mapping.transformedToOriginal(0))
+        // Click at index 2 maps to 6
+        assertEquals(6, mapping.transformedToOriginal(2))
+
+        // transformedToOriginal NEVER returns 1, 2, 3, 4, 5
+        for (t in 1..2) {
+            val o = mapping.transformedToOriginal(t)
+            assertTrue("Original offset must not be inside brackets: $o", o == 6)
+        }
     }
 }

@@ -89,6 +89,8 @@ sealed class PointerState {
     data class Transforming(
         val pointerId: Int,
         val handleId: Int, // 0..7 handles, 8 = rotate, -1 = body drag
+        val startScreenX: Float,
+        val startScreenY: Float,
         val lastScreenX: Float,
         val lastScreenY: Float
     ) : PointerState()
@@ -100,6 +102,10 @@ sealed class PointerAction {
     object FinishStroke : PointerAction()
     object CancelStroke : PointerAction()
     data class EraseAt(val screenX: Float, val screenY: Float) : PointerAction()
+    data class StartEraser(val screenX: Float, val screenY: Float) : PointerAction()
+    data class EraseSweep(val points: List<PointerPoint>) : PointerAction()
+    object FinishEraser : PointerAction()
+    object CancelEraser : PointerAction()
 
     data class PanZoomDelta(
         val deltaScreenX: Float,
@@ -113,12 +119,22 @@ sealed class PointerAction {
     data class LassoProgress(val polygon: List<Pair<Float, Float>>) : PointerAction()
     data class LassoComplete(val polygon: List<Pair<Float, Float>>) : PointerAction()
 
+    data class StartTransform(val handleId: Int, val screenX: Float, val screenY: Float) : PointerAction()
     data class TransformDelta(
         val handleId: Int,
         val deltaScreenX: Float,
-        val deltaScreenY: Float
+        val deltaScreenY: Float,
+        val totalDeltaX: Float = deltaScreenX,
+        val totalDeltaY: Float = deltaScreenY,
+        val currentScreenX: Float = 0f,
+        val currentScreenY: Float = 0f
     ) : PointerAction()
-    object FinishTransform : PointerAction()
+    data class FinishTransform(
+        val handleId: Int = -1,
+        val totalDeltaX: Float = 0f,
+        val totalDeltaY: Float = 0f
+    ) : PointerAction()
+    object CancelTransform : PointerAction()
 
     data class Fling(val velocityX: Float, val velocityY: Float) : PointerAction()
 }
@@ -136,6 +152,12 @@ class PointerStateMachine(
 
     var state: PointerState = PointerState.Idle
         private set
+
+    /**
+     * Hit-test hook for active selection handles and bounding box body.
+     * Returns handle index (0..7 for resize, 8 for rotation, -1 for body drag), or null for outside.
+     */
+    var onHitTestSelection: ((screenX: Float, screenY: Float) -> Int?)? = null
 
     // Active pointer tracking
     private val activePointers = mutableMapOf<Int, PointerPoint>()
@@ -183,32 +205,30 @@ class PointerStateMachine(
 
         when (val current = state) {
             is PointerState.Idle -> {
-                if (event.toolType == PointerToolType.STYLUS) {
-                    if (activeMode == ActiveMode.ERASE) {
-                        state = PointerState.Drawing(
-                            pointerId = event.pointerId,
-                            toolType = event.toolType,
-                            lastX = event.x,
-                            lastY = event.y
-                        )
-                        actions.add(PointerAction.EraseAt(event.x, event.y))
-                    } else if (activeMode == ActiveMode.DRAW) {
-                        state = PointerState.Drawing(
-                            pointerId = event.pointerId,
-                            toolType = event.toolType,
-                            lastX = event.x,
-                            lastY = event.y
-                        )
-                        actions.add(PointerAction.StartStroke(event.x, event.y, event.pressure))
-                    }
-                } else if (activePointers.size == 1) {
+                if (activePointers.size == 1) {
                     if (activeMode == ActiveMode.SELECT) {
-                        state = PointerState.Selecting(
-                            pointerId = event.pointerId,
-                            startX = event.x,
-                            startY = event.y,
-                            currentPoints = listOf(Pair(event.x, event.y))
-                        )
+                        // Check if an existing selection handle or body is hit
+                        val hitHandle = onHitTestSelection?.invoke(event.x, event.y)
+                        if (hitHandle != null) {
+                            state = PointerState.Transforming(
+                                pointerId = event.pointerId,
+                                handleId = hitHandle,
+                                startScreenX = event.x,
+                                startScreenY = event.y,
+                                lastScreenX = event.x,
+                                lastScreenY = event.y
+                            )
+                            actions.add(PointerAction.StartTransform(hitHandle, event.x, event.y))
+                            return actions
+                        } else {
+                            state = PointerState.Selecting(
+                                pointerId = event.pointerId,
+                                startX = event.x,
+                                startY = event.y,
+                                currentPoints = listOf(Pair(event.x, event.y))
+                            )
+                            return actions
+                        }
                     } else if (activeMode == ActiveMode.ERASE) {
                         state = PointerState.Drawing(
                             pointerId = event.pointerId,
@@ -216,7 +236,8 @@ class PointerStateMachine(
                             lastX = event.x,
                             lastY = event.y
                         )
-                        actions.add(PointerAction.EraseAt(event.x, event.y))
+                        actions.add(PointerAction.StartEraser(event.x, event.y))
+                        return actions
                     } else if (activeMode == ActiveMode.DRAW) {
                         if (stylusOnlyDrawing && event.toolType == PointerToolType.FINGER) {
                             // Finger pans 1:1 when stylus-only drawing is active
@@ -253,8 +274,10 @@ class PointerStateMachine(
                 }
             }
             is PointerState.Drawing -> {
-                // Second finger lands mid-stroke!
-                // Cancel in-progress stroke without committing and switch to PanZoom
+                // Second finger lands mid-gesture: cancel in-progress drawing/erasing without committing
+                if (activeMode == ActiveMode.ERASE) {
+                    actions.add(PointerAction.CancelEraser)
+                }
                 actions.add(PointerAction.CancelStroke)
 
                 val pointerIds = activePointers.keys.toList()
@@ -271,14 +294,36 @@ class PointerStateMachine(
                 )
             }
             is PointerState.Selecting -> {
-                // Second finger cancels selection drag
-                state = PointerState.Idle
+                // Second finger cancels in-progress lasso without selecting
+                val pointerIds = activePointers.keys.toList()
+                val p1 = activePointers[pointerIds[0]]!!
+                val p2 = activePointers[pointerIds[1]]!!
+                val dist = hypot(p1.x - p2.x, p1.y - p2.y)
+                state = PointerState.PanZoom(
+                    pointer1Id = pointerIds[0],
+                    pointer2Id = pointerIds[1],
+                    lastCenterX = (p1.x + p2.x) / 2f,
+                    lastCenterY = (p1.y + p2.y) / 2f,
+                    lastDistance = if (dist <= 0f) 1f else dist
+                )
+            }
+            is PointerState.Transforming -> {
+                // Second finger cancels in-progress transform without committing
+                actions.add(PointerAction.CancelTransform)
+                val pointerIds = activePointers.keys.toList()
+                val p1 = activePointers[pointerIds[0]]!!
+                val p2 = activePointers[pointerIds[1]]!!
+                val dist = hypot(p1.x - p2.x, p1.y - p2.y)
+                state = PointerState.PanZoom(
+                    pointer1Id = pointerIds[0],
+                    pointer2Id = pointerIds[1],
+                    lastCenterX = (p1.x + p2.x) / 2f,
+                    lastCenterY = (p1.y + p2.y) / 2f,
+                    lastDistance = if (dist <= 0f) 1f else dist
+                )
             }
             is PointerState.PanZoom -> {
                 // 3rd or 4th finger ignored safely
-            }
-            is PointerState.Transforming -> {
-                // Extra fingers ignored during handle transform
             }
         }
 
@@ -299,10 +344,12 @@ class PointerStateMachine(
             is PointerState.Drawing -> {
                 if (event.pointerId == current.pointerId) {
                     if (activeMode == ActiveMode.ERASE) {
+                        val sweep = mutableListOf<PointerPoint>()
                         for (hp in event.historicalPoints) {
-                            actions.add(PointerAction.EraseAt(hp.x, hp.y))
+                            sweep.add(hp)
                         }
-                        actions.add(PointerAction.EraseAt(event.x, event.y))
+                        sweep.add(PointerPoint(event.x, event.y, event.pressure))
+                        actions.add(PointerAction.EraseSweep(sweep))
                         state = current.copy(lastX = event.x, lastY = event.y)
                     } else {
                         val points = mutableListOf<PointerPoint>()
@@ -394,7 +441,19 @@ class PointerStateMachine(
                 if (event.pointerId == current.pointerId) {
                     val dx = event.x - current.lastScreenX
                     val dy = event.y - current.lastScreenY
-                    actions.add(PointerAction.TransformDelta(current.handleId, dx, dy))
+                    val totalDx = event.x - current.startScreenX
+                    val totalDy = event.y - current.startScreenY
+                    actions.add(
+                        PointerAction.TransformDelta(
+                            handleId = current.handleId,
+                            deltaScreenX = dx,
+                            deltaScreenY = dy,
+                            totalDeltaX = totalDx,
+                            totalDeltaY = totalDy,
+                            currentScreenX = event.x,
+                            currentScreenY = event.y
+                        )
+                    )
                     state = current.copy(lastScreenX = event.x, lastScreenY = event.y)
                 }
             }
@@ -427,7 +486,7 @@ class PointerStateMachine(
             is PointerState.Drawing -> {
                 if (event.pointerId == current.pointerId) {
                     if (activeMode == ActiveMode.ERASE) {
-                        actions.add(PointerAction.EraseAt(event.x, event.y))
+                        actions.add(PointerAction.FinishEraser)
                     } else {
                         actions.add(PointerAction.FinishStroke)
                     }
@@ -469,7 +528,15 @@ class PointerStateMachine(
             }
             is PointerState.Transforming -> {
                 if (event.pointerId == current.pointerId) {
-                    actions.add(PointerAction.FinishTransform)
+                    val totalDx = event.x - current.startScreenX
+                    val totalDy = event.y - current.startScreenY
+                    actions.add(
+                        PointerAction.FinishTransform(
+                            handleId = current.handleId,
+                            totalDeltaX = totalDx,
+                            totalDeltaY = totalDy
+                        )
+                    )
                     state = PointerState.Idle
                 }
             }
@@ -490,8 +557,13 @@ class PointerStateMachine(
         activePointers.clear()
 
         when (state) {
-            is PointerState.Drawing -> actions.add(PointerAction.CancelStroke)
-            is PointerState.Transforming -> actions.add(PointerAction.FinishTransform)
+            is PointerState.Drawing -> {
+                if (activeMode == ActiveMode.ERASE) {
+                    actions.add(PointerAction.CancelEraser)
+                }
+                actions.add(PointerAction.CancelStroke)
+            }
+            is PointerState.Transforming -> actions.add(PointerAction.CancelTransform)
             else -> {}
         }
 
@@ -506,6 +578,8 @@ class PointerStateMachine(
         state = PointerState.Transforming(
             pointerId = pointerId,
             handleId = handleId,
+            startScreenX = screenX,
+            startScreenY = screenY,
             lastScreenX = screenX,
             lastScreenY = screenY
         )

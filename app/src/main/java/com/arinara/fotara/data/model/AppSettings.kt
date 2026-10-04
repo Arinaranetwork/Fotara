@@ -89,7 +89,8 @@ data class UserSettings(
     val dueTomorrowRibbonEnabled: Boolean = true,
     val storageLocation: StorageLocation = StorageLocation.INTERNAL,
     val autoCheckUpdates: Boolean = true,
-    val optInCrashReporting: Boolean = false
+    val optInCrashReporting: Boolean = false,
+    val combineFileNamePreset: String = "{folder}_{date}"
 )
 
 data class ImportResult(

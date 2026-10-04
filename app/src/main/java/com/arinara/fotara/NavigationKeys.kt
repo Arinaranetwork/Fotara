@@ -21,7 +21,8 @@ data class FolderDetailNavKey(
     val targetGroupId: Long? = null,
     val targetDocumentId: Long? = null,
     val targetTextNoteId: Long? = null,
-    val targetCanvasId: Long? = null
+    val targetCanvasId: Long? = null,
+    val targetPageIndex: Int? = null
 ) : NavKey
 
 @Serializable

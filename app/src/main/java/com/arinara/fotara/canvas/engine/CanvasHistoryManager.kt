@@ -257,6 +257,35 @@ class AreaEraseCommand(
 }
 
 /**
+ * Atomically replaces a set of elements with new elements in a single undo step.
+ * Used for partial selection operations (split delete, split transform, split move-to-layer).
+ */
+class ReplaceElementsCommand(
+    private val before: List<CanvasElement>,
+    private val after: List<CanvasElement>,
+    override val description: String = "Replace Elements"
+) : CanvasCommand {
+
+    override fun apply(document: CanvasDocument): CanvasDocument {
+        val beforeIds = before.map { it.id }.toSet()
+        val remaining = document.elements.filter { it.id !in beforeIds }
+        return document.copy(
+            elements = remaining + after,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+
+    override fun undo(document: CanvasDocument): CanvasDocument {
+        val afterIds = after.map { it.id }.toSet()
+        val remaining = document.elements.filter { it.id !in afterIds }
+        return document.copy(
+            elements = remaining + before,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+}
+
+/**
  * Changes document background style.
  */
 class SetBackgroundStyleCommand(

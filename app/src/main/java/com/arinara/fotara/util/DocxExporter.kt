@@ -19,6 +19,7 @@ import java.util.zip.ZipOutputStream
 sealed class DocxContentItem {
     data class ImagePage(val imagePath: String, val caption: String? = null) : DocxContentItem()
     data class TextSection(val title: String, val text: String) : DocxContentItem()
+    data class FormattedMarkdownSection(val title: String, val markdown: String) : DocxContentItem()
 }
 
 class DocxExporter(private val context: Context) {
@@ -223,6 +224,9 @@ class DocxExporter(private val context: Context) {
                     }
                     sb.append("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n")
                 }
+                is DocxContentItem.FormattedMarkdownSection -> {
+                    appendFormattedMarkdownSection(sb, item.title, item.markdown)
+                }
             }
         }
 
@@ -257,6 +261,186 @@ class DocxExporter(private val context: Context) {
         }
 
         return emuWidth to emuHeight
+    }
+
+    private data class FormattedRun(
+        val text: String,
+        val isBold: Boolean = false,
+        val isItalic: Boolean = false,
+        val isCode: Boolean = false
+    )
+
+    private fun parseInlineMarkdown(input: String): List<FormattedRun> {
+        val linkCleaned = input.replace(Regex("""\[(.*?)\]\(.*?\)"""), "$1")
+        val pattern = Regex("""(\*\*\*.*?\*\*\*|\*\*.*?\*\*|\*.*?\*|`.*?`|[^`*]+)""")
+        val matches = pattern.findAll(linkCleaned)
+        val runs = mutableListOf<FormattedRun>()
+        for (m in matches) {
+            val s = m.value
+            when {
+                s.startsWith("***") && s.endsWith("***") && s.length >= 6 -> {
+                    runs.add(FormattedRun(s.substring(3, s.length - 3), isBold = true, isItalic = true))
+                }
+                s.startsWith("**") && s.endsWith("**") && s.length >= 4 -> {
+                    runs.add(FormattedRun(s.substring(2, s.length - 2), isBold = true))
+                }
+                s.startsWith("*") && s.endsWith("*") && s.length >= 2 -> {
+                    runs.add(FormattedRun(s.substring(1, s.length - 1), isItalic = true))
+                }
+                s.startsWith("`") && s.endsWith("`") && s.length >= 2 -> {
+                    runs.add(FormattedRun(s.substring(1, s.length - 1), isCode = true))
+                }
+                else -> {
+                    runs.add(FormattedRun(s))
+                }
+            }
+        }
+        return if (runs.isEmpty()) listOf(FormattedRun(linkCleaned)) else runs
+    }
+
+    private fun appendFormattedMarkdownSection(sb: StringBuilder, title: String, markdown: String) {
+        val secTitle = escapeXml(title)
+        sb.append("""
+        <w:p>
+            <w:r>
+                <w:rPr><w:b/><w:sz w:val="32"/></w:rPr>
+                <w:t>$secTitle</w:t>
+            </w:r>
+        </w:p>
+""")
+        var inCodeBlock = false
+        val lines = markdown.lines()
+
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("```")) {
+                inCodeBlock = !inCodeBlock
+                continue
+            }
+
+            if (inCodeBlock) {
+                val escaped = escapeXml(line)
+                sb.append("""
+        <w:p>
+            <w:pPr><w:ind w:left="360"/></w:pPr>
+            <w:r>
+                <w:rPr><w:rFonts w:ascii="Courier New"/><w:sz w:val="20"/></w:rPr>
+                <w:t xml:space="preserve">$escaped</w:t>
+            </w:r>
+        </w:p>
+""")
+                continue
+            }
+
+            if (trimmed.isBlank()) {
+                continue
+            }
+
+            when {
+                trimmed.startsWith("# ") -> {
+                    val text = escapeXml(trimmed.removePrefix("# ").trim())
+                    sb.append("""
+        <w:p>
+            <w:r>
+                <w:rPr><w:b/><w:sz w:val="28"/></w:rPr>
+                <w:t>$text</w:t>
+            </w:r>
+        </w:p>
+""")
+                }
+                trimmed.startsWith("## ") -> {
+                    val text = escapeXml(trimmed.removePrefix("## ").trim())
+                    sb.append("""
+        <w:p>
+            <w:r>
+                <w:rPr><w:b/><w:sz w:val="24"/></w:rPr>
+                <w:t>$text</w:t>
+            </w:r>
+        </w:p>
+""")
+                }
+                trimmed.startsWith("### ") -> {
+                    val text = escapeXml(trimmed.removePrefix("### ").trim())
+                    sb.append("""
+        <w:p>
+            <w:r>
+                <w:rPr><w:b/><w:sz w:val="22"/></w:rPr>
+                <w:t>$text</w:t>
+            </w:r>
+        </w:p>
+""")
+                }
+                trimmed.startsWith("> ") || trimmed.startsWith(">") -> {
+                    val quote = escapeXml(trimmed.removePrefix(">").trim())
+                    sb.append("""
+        <w:p>
+            <w:pPr><w:ind w:left="720"/></w:pPr>
+            <w:r>
+                <w:rPr><w:i/><w:color w:val="555555"/></w:rPr>
+                <w:t>"$quote"</w:t>
+            </w:r>
+        </w:p>
+""")
+                }
+                trimmed.startsWith("- [ ] ") || trimmed.startsWith("* [ ] ") -> {
+                    val itemText = trimmed.substring(6).trim()
+                    appendListItemWithRuns(sb, "[ ] ", itemText)
+                }
+                trimmed.startsWith("- [x] ") || trimmed.startsWith("- [X] ") ||
+                trimmed.startsWith("* [x] ") || trimmed.startsWith("* [X] ") -> {
+                    val itemText = trimmed.substring(6).trim()
+                    appendListItemWithRuns(sb, "[x] ", itemText)
+                }
+                trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
+                    val itemText = trimmed.substring(2).trim()
+                    appendListItemWithRuns(sb, "• ", itemText)
+                }
+                trimmed.matches(Regex("""^\d+\.\s+.*""")) -> {
+                    val dotIdx = trimmed.indexOf('.')
+                    val prefix = trimmed.substring(0, dotIdx + 1) + " "
+                    val itemText = trimmed.substring(dotIdx + 1).trim()
+                    appendListItemWithRuns(sb, prefix, itemText)
+                }
+                else -> {
+                    appendParagraphWithRuns(sb, trimmed)
+                }
+            }
+        }
+        sb.append("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n")
+    }
+
+    private fun appendListItemWithRuns(sb: StringBuilder, prefix: String, content: String) {
+        sb.append("""
+        <w:p>
+            <w:pPr><w:ind w:left="360"/></w:pPr>
+            <w:r><w:t xml:space="preserve">${escapeXml(prefix)}</w:t></w:r>
+""")
+        val runs = parseInlineMarkdown(content)
+        for (run in runs) {
+            val rPr = StringBuilder()
+            if (run.isBold) rPr.append("<w:b/>")
+            if (run.isItalic) rPr.append("<w:i/>")
+            if (run.isCode) rPr.append("<w:rFonts w:ascii=\"Courier New\"/><w:sz w:val=\"18\"/>")
+            val rPrXml = if (rPr.isNotEmpty()) "<w:rPr>$rPr</w:rPr>" else ""
+            sb.append("<w:r>$rPrXml<w:t xml:space=\"preserve\">${escapeXml(run.text)}</w:t></w:r>")
+        }
+        sb.append("\n        </w:p>\n")
+    }
+
+    private fun appendParagraphWithRuns(sb: StringBuilder, content: String) {
+        sb.append("""
+        <w:p>
+""")
+        val runs = parseInlineMarkdown(content)
+        for (run in runs) {
+            val rPr = StringBuilder()
+            if (run.isBold) rPr.append("<w:b/>")
+            if (run.isItalic) rPr.append("<w:i/>")
+            if (run.isCode) rPr.append("<w:rFonts w:ascii=\"Courier New\"/><w:sz w:val=\"18\"/>")
+            val rPrXml = if (rPr.isNotEmpty()) "<w:rPr>$rPr</w:rPr>" else ""
+            sb.append("<w:r>$rPrXml<w:t xml:space=\"preserve\">${escapeXml(run.text)}</w:t></w:r>")
+        }
+        sb.append("\n        </w:p>\n")
     }
 
     private fun escapeXml(text: String): String {

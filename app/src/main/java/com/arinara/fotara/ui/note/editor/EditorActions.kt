@@ -59,6 +59,11 @@ object EditorActions {
         return TextFieldValue(res.text, TextRange(res.selectionStart, res.selectionEnd))
     }
 
+    fun handleTypingShortcut(value: TextFieldValue): TextFieldValue? {
+        val res = TextEditorOps.handleTypingShortcut(value.text, value.selection.start, value.selection.end) ?: return null
+        return TextFieldValue(res.text, TextRange(res.selectionStart, res.selectionEnd))
+    }
+
     // --- Indent and Outdent ---
 
     fun indent(value: TextFieldValue): TextFieldValue =

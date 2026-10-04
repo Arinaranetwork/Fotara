@@ -13,10 +13,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -56,8 +56,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.res.stringResource
+import com.arinara.fotara.R
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -120,10 +125,11 @@ fun PdfViewerScreen(
     onBack: () -> Unit,
     onShare: () -> Unit,
     onSplitToImages: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    initialPageIndex: Int = 0
 ) {
     var showSplitConfirmDialog by remember { mutableStateOf(false) }
-    var showPageViewer by remember { mutableStateOf(false) }
+    var isReadingMode by rememberSaveable { mutableStateOf(false) }
     var pdfRenderer by remember { mutableStateOf<PdfPageRenderer?>(null) }
     var openErrorMessage by remember { mutableStateOf<String?>(null) }
     var currentScheduledAt by remember { mutableStateOf(documentNote.scheduledAt) }
@@ -157,11 +163,29 @@ fun PdfViewerScreen(
     val totalPages = pdfRenderer?.pageCount ?: pages.size
     val subtitleText = if (totalPages == 1) "1 page" else "$totalPages pages"
 
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initialPageIndex.coerceIn(0, (totalPages - 1).coerceAtLeast(0))
+    )
     val zoomState = remember { PdfViewportZoomState() }
 
-    BackHandler(enabled = zoomState.isZoomed) {
-        zoomState.reset()
+    LaunchedEffect(initialPageIndex) {
+        if (initialPageIndex > 0 && initialPageIndex < totalPages) {
+            listState.scrollToItem(initialPageIndex)
+        }
+    }
+
+    LaunchedEffect(zoomState.isZoomed) {
+        if (!zoomState.isZoomed) {
+            pdfRenderer?.evictHighResCache()
+        }
+    }
+
+    BackHandler(enabled = zoomState.isZoomed || isReadingMode) {
+        if (zoomState.isZoomed) {
+            coroutineScope.launch { zoomState.animateReset() }
+        } else if (isReadingMode) {
+            isReadingMode = false
+        }
     }
 
     Column(
@@ -173,7 +197,7 @@ fun PdfViewerScreen(
     ) {
         TopAppBar(
             title = {
-                Column {
+                Column(verticalArrangement = Arrangement.Center) {
                     Text(
                         text = documentNote.name,
                         color = TabCream,
@@ -181,16 +205,6 @@ fun PdfViewerScreen(
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = if (zoomState.isZoomed) {
-                            "Zoomed: Pan enabled · Double-tap to reset"
-                        } else {
-                            subtitleText
-                        },
-                        color = if (zoomState.isZoomed) AccentGold else TabCream.copy(alpha = 0.7f),
-                        fontSize = 12.sp,
-                        fontWeight = if (zoomState.isZoomed) FontWeight.SemiBold else FontWeight.Normal
                     )
                     if (currentScheduledAt != null) {
                         Spacer(modifier = Modifier.height(2.dp))
@@ -206,7 +220,9 @@ fun PdfViewerScreen(
             navigationIcon = {
                 IconButton(onClick = {
                     if (zoomState.isZoomed) {
-                        zoomState.reset()
+                        coroutineScope.launch { zoomState.animateReset() }
+                    } else if (isReadingMode) {
+                        isReadingMode = false
                     } else {
                         onBack()
                     }
@@ -219,15 +235,24 @@ fun PdfViewerScreen(
                 }
             },
             actions = {
-                // P2-A: FIRST (leftmost) action: Page View button
+                // Book icon: Reading mode toggle
                 IconButton(
-                    onClick = { showPageViewer = true },
+                    onClick = {
+                        isReadingMode = !isReadingMode
+                        if (!isReadingMode && zoomState.isZoomed) {
+                            coroutineScope.launch { zoomState.animateReset() }
+                        } else if (isReadingMode) {
+                            zoomState.reset()
+                        }
+                    },
                     enabled = pdfRenderer != null
                 ) {
                     Icon(
                         imageVector = Icons.Default.AutoStories,
-                        contentDescription = "Page view",
-                        tint = TabCream
+                        contentDescription = stringResource(
+                            if (isReadingMode) R.string.viewer_action_reading_mode_exit else R.string.viewer_action_reading_mode_enter
+                        ),
+                        tint = if (isReadingMode) AccentGold else TabCream
                     )
                 }
 
@@ -258,7 +283,7 @@ fun PdfViewerScreen(
                     )
                 }
 
-                // Overflow menu for Schedule...
+                // Overflow menu for Info & Schedule...
                 Box {
                     var showOverflowMenu by remember { mutableStateOf(false) }
                     IconButton(onClick = { showOverflowMenu = true }) {
@@ -275,6 +300,57 @@ fun PdfViewerScreen(
                             .background(CardBg)
                             .border(1.dp, BorderColor, RoundedCornerShape(8.dp))
                     ) {
+                        // Info Section
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.viewer_info_header),
+                                color = TabCream.copy(alpha = 0.5f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            if (zoomState.isZoomed) {
+                                Text(
+                                    text = stringResource(R.string.viewer_info_zoomed),
+                                    color = AccentGold,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            } else if (isReadingMode) {
+                                Text(
+                                    text = stringResource(R.string.viewer_info_pinch_or_double_tap),
+                                    color = TabCream.copy(alpha = 0.85f),
+                                    fontSize = 13.sp
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(R.string.viewer_info_offline),
+                                    color = TabCream.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.viewer_info_reading_mode_available),
+                                    color = TabCream.copy(alpha = 0.85f),
+                                    fontSize = 13.sp
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(R.string.viewer_info_offline),
+                                    color = TabCream.copy(alpha = 0.6f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        HorizontalDivider(
+                            color = BorderColor,
+                            thickness = 1.dp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+
                         DropdownMenuItem(
                             text = { Text("Schedule...", color = TabCream) },
                             leadingIcon = { Icon(Icons.Default.Alarm, null, tint = AccentGold) },
@@ -341,46 +417,67 @@ fun PdfViewerScreen(
                 val density = LocalDensity.current
                 val screenWidthPx = with(density) { (configuration.screenWidthDp.dp - 32.dp).roundToPx() }
 
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clipToBounds()
+                val zoomModifier = if (isReadingMode) {
+                    Modifier
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onDoubleTap = { tapOffset ->
-                                    val viewW = size.width.toFloat()
-                                    val viewH = size.height.toFloat()
-                                    zoomState.updateViewport(viewW, viewH)
-                                    zoomState.onDoubleTap(tapOffset.x, tapOffset.y)
+                                    coroutineScope.launch {
+                                        val viewW = size.width.toFloat()
+                                        val viewH = size.height.toFloat()
+                                        zoomState.updateViewport(viewW, viewH)
+                                        zoomState.animateDoubleTap(tapOffset.x, tapOffset.y)
+                                    }
                                 }
                             )
                         }
-                        .pointerInput(zoomState.scale) {
+                        .pointerInput(Unit) {
                             val viewW = size.width.toFloat()
                             val viewH = size.height.toFloat()
                             zoomState.updateViewport(viewW, viewH)
 
-                            if (zoomState.isZoomed) {
-                                detectTransformGestures { centroid, pan, zoom, _ ->
-                                    zoomState.onPinch(zoom, pan.x, pan.y, centroid.x, centroid.y)
-                                }
-                            } else {
-                                awaitEachGesture {
-                                    awaitFirstDown(requireUnconsumed = false)
-                                    do {
-                                        val event = awaitPointerEvent()
-                                        if (event.changes.size >= 2) {
-                                            val zoom = event.calculateZoom()
-                                            val pan = event.calculatePan()
-                                            if (zoom > 1.02f) {
-                                                zoomState.onPinch(zoom, pan.x, pan.y)
-                                                event.changes.forEach { it.consume() }
-                                            }
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val canceled = event.changes.any { it.isConsumed }
+                                    if (canceled) break
+
+                                    val pressedCount = event.changes.count { it.pressed }
+                                    if (pressedCount >= 2) {
+                                        val zoom = event.calculateZoom()
+                                        val pan = event.calculatePan()
+                                        val centroid = event.calculateCentroid(useCurrent = true)
+
+                                        if (kotlin.math.abs(zoom - 1f) > 0.001f || pan != Offset.Zero) {
+                                            zoomState.onPinch(
+                                                zoomChange = zoom,
+                                                panChangeX = pan.x,
+                                                panChangeY = pan.y,
+                                                centroidX = centroid.x,
+                                                centroidY = centroid.y
+                                            )
+                                            event.changes.forEach { it.consume() }
                                         }
-                                    } while (event.changes.any { it.pressed })
-                                }
+                                    } else if (pressedCount == 1 && zoomState.isZoomed) {
+                                        val pan = event.calculatePan()
+                                        if (pan != Offset.Zero) {
+                                            zoomState.onPan(pan.x, pan.y)
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    }
+                                } while (event.changes.any { it.pressed })
                             }
                         }
+                } else {
+                    Modifier
+                }
+
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clipToBounds()
+                        .then(zoomModifier)
                 ) {
                     LaunchedEffect(maxWidth, maxHeight) {
                         zoomState.updateViewport(
@@ -394,12 +491,12 @@ fun PdfViewerScreen(
                         userScrollEnabled = !zoomState.isZoomed,
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer(
-                                scaleX = zoomState.scale,
-                                scaleY = zoomState.scale,
-                                translationX = zoomState.panX,
+                            .graphicsLayer {
+                                scaleX = zoomState.scale
+                                scaleY = zoomState.scale
+                                translationX = zoomState.panX
                                 translationY = zoomState.panY
-                            ),
+                            },
                         contentPadding = PaddingValues(16.dp)
                     ) {
                         items(totalCount, key = { index -> "${documentNote.id}_page_$index" }) { pageIndex ->
@@ -410,7 +507,8 @@ fun PdfViewerScreen(
                                 renderer = renderer,
                                 targetWidthPx = screenWidthPx,
                                 placeholderUri = placeholderPage?.imageUri,
-                                isZoomed = zoomState.isZoomed
+                                isZoomed = zoomState.isZoomed,
+                                currentZoomScale = zoomState.scale
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                         }
@@ -418,23 +516,6 @@ fun PdfViewerScreen(
                 }
             }
         }
-    }
-
-    if (showPageViewer && pdfRenderer != null) {
-        val initialPage = listState.firstVisibleItemIndex.coerceIn(0, (totalPages - 1).coerceAtLeast(0))
-        PdfPageViewerDialog(
-            documentNote = documentNote,
-            pages = pages,
-            renderer = pdfRenderer!!,
-            initialPageIndex = initialPage,
-            onDismiss = { lastPageIndex ->
-                showPageViewer = false
-                coroutineScope.launch {
-                    listState.scrollToItem(lastPageIndex.coerceIn(0, (totalPages - 1).coerceAtLeast(0)))
-                }
-            },
-            onShare = onShare
-        )
     }
 
     if (showSplitConfirmDialog) {
@@ -521,7 +602,8 @@ private fun VirtualizedPdfPageView(
     renderer: PdfPageRenderer,
     targetWidthPx: Int,
     placeholderUri: String?,
-    isZoomed: Boolean = false
+    isZoomed: Boolean = false,
+    currentZoomScale: Float = 1.0f
 ) {
     val coroutineScope = rememberCoroutineScope()
     var baseBitmap by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
@@ -558,16 +640,16 @@ private fun VirtualizedPdfPageView(
         }
     }
 
-    // 2. High-resolution on-demand render when list is zoomed
-    LaunchedEffect(pageIndex, targetWidthPx, isZoomed, retryCount) {
-        if (isZoomed) {
+    // 2. High-resolution on-demand render when list is zoomed (scales dynamically with zoom up to 4.0x)
+    LaunchedEffect(pageIndex, targetWidthPx, isZoomed, currentZoomScale, retryCount) {
+        if (isZoomed && currentZoomScale > 1.05f) {
             delay(150) // Debounce rapid pinch operations
             val targetHeightPx = PdfLayoutMath.computeTargetSize(targetWidthPx, aspectRatio).heightPx
             val sharpRender = renderer.renderPage(
                 pageIndex = pageIndex,
                 destWidth = targetWidthPx,
                 destHeight = targetHeightPx,
-                renderScale = 2.0f
+                renderScale = currentZoomScale.coerceIn(1.0f, 4.0f)
             )
             if (sharpRender != null) {
                 highResBitmap = sharpRender

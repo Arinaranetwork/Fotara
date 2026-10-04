@@ -8,18 +8,23 @@ package com.arinara.fotara.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import com.arinara.fotara.data.model.DownsampleQuality
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.ImportResult
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoSource
+import com.arinara.fotara.data.model.ProfileBorders
 import com.arinara.fotara.data.model.SortOrder
 import com.arinara.fotara.data.model.StorageBreakdown
 import com.arinara.fotara.data.model.StorageLocation
 import com.arinara.fotara.data.model.Subfolder
 import com.arinara.fotara.data.model.ThemeMode
+import com.arinara.fotara.data.model.UserProfile
 import com.arinara.fotara.data.model.UserSettings
 import com.arinara.fotara.data.storage.PhotoStorageManager
+import com.arinara.fotara.util.ProfileImageUtils
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +38,14 @@ import org.json.JSONObject
 
 interface SettingsRepository {
     val settingsFlow: StateFlow<UserSettings>
+    val profileFlow: StateFlow<UserProfile>
+    suspend fun updateProfileName(name: String)
+    suspend fun updateProfileEmail(email: String)
+    suspend fun updateProfileBorder(borderId: String)
+    suspend fun saveProfileAvatar(bitmap: Bitmap): String?
+    suspend fun removeProfileAvatar()
+    suspend fun saveProfileBanner(bitmap: Bitmap): String?
+    suspend fun removeProfileBanner()
     suspend fun updateSortOrder(sortOrder: SortOrder)
     suspend fun updateGridDensity(density: Int)
     suspend fun updateThemeMode(themeMode: ThemeMode)
@@ -58,6 +71,7 @@ interface SettingsRepository {
     suspend fun clearRecentDestinations()
     suspend fun updateAutoCheckUpdates(enabled: Boolean)
     suspend fun updateOptInCrashReporting(enabled: Boolean)
+    suspend fun updateCombineFileNamePreset(preset: String)
 }
 
 class DefaultSettingsRepository(
@@ -72,8 +86,27 @@ class DefaultSettingsRepository(
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
+    private val profileDir: File by lazy {
+        File(context.filesDir, "profile").apply { if (!exists()) mkdirs() }
+    }
+
     private val _settingsFlow = MutableStateFlow(loadSettings())
     override val settingsFlow: StateFlow<UserSettings> = _settingsFlow.asStateFlow()
+
+    private val _profileFlow = MutableStateFlow(loadProfile())
+    override val profileFlow: StateFlow<UserProfile> = _profileFlow.asStateFlow()
+
+    private fun loadProfile(): UserProfile {
+        return UserProfile(
+            name = prefs.getString(KEY_PROFILE_NAME, "") ?: "",
+            email = prefs.getString(KEY_PROFILE_EMAIL, "") ?: "",
+            avatarPath = prefs.getString(KEY_PROFILE_AVATAR_PATH, null),
+            bannerPath = prefs.getString(KEY_PROFILE_BANNER_PATH, null),
+            borderId = prefs.getString(KEY_PROFILE_BORDER_ID, ProfileBorders.NONE_ID) ?: ProfileBorders.NONE_ID,
+            avatarUpdatedAt = prefs.getLong(KEY_PROFILE_AVATAR_UPDATED_AT, 0L),
+            bannerUpdatedAt = prefs.getLong(KEY_PROFILE_BANNER_UPDATED_AT, 0L)
+        )
+    }
 
     private fun loadSettings(): UserSettings {
         val rawTheme = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)
@@ -92,7 +125,8 @@ class DefaultSettingsRepository(
             dueTomorrowRibbonEnabled = prefs.getBoolean(KEY_DUE_TOMORROW_RIBBON, true),
             storageLocation = StorageLocation.fromName(prefs.getString(KEY_STORAGE_LOCATION, StorageLocation.INTERNAL.name)),
             autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK_UPDATES, true),
-            optInCrashReporting = prefs.getBoolean(KEY_OPT_IN_CRASH_REPORTING, false)
+            optInCrashReporting = prefs.getBoolean(KEY_OPT_IN_CRASH_REPORTING, false),
+            combineFileNamePreset = prefs.getString(KEY_COMBINE_NAME_PRESET, "{folder}_{date}") ?: "{folder}_{date}"
         )
     }
 
@@ -443,6 +477,112 @@ class DefaultSettingsRepository(
         _settingsFlow.value = _settingsFlow.value.copy(optInCrashReporting = enabled)
     }
 
+    override suspend fun updateCombineFileNamePreset(preset: String) = withContext(Dispatchers.IO) {
+        prefs.edit().putString(KEY_COMBINE_NAME_PRESET, preset).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(combineFileNamePreset = preset)
+    }
+
+    override suspend fun updateProfileName(name: String) = withContext(Dispatchers.IO) {
+        val trimmed = name.trim().take(30)
+        prefs.edit().putString(KEY_PROFILE_NAME, trimmed).apply()
+        _profileFlow.value = _profileFlow.value.copy(name = trimmed)
+    }
+
+    override suspend fun updateProfileEmail(email: String) = withContext(Dispatchers.IO) {
+        val trimmed = email.trim().take(60)
+        prefs.edit().putString(KEY_PROFILE_EMAIL, trimmed).apply()
+        _profileFlow.value = _profileFlow.value.copy(email = trimmed)
+    }
+
+    override suspend fun updateProfileBorder(borderId: String) = withContext(Dispatchers.IO) {
+        val resolvedId = if (borderId.isBlank()) ProfileBorders.NONE_ID else borderId
+        prefs.edit().putString(KEY_PROFILE_BORDER_ID, resolvedId).apply()
+        _profileFlow.value = _profileFlow.value.copy(borderId = resolvedId)
+    }
+
+    override suspend fun saveProfileAvatar(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
+        val targetFile = File(profileDir, "avatar.webp")
+        val success = ProfileImageUtils.saveWebpAtomically(
+            bitmap = bitmap,
+            targetFile = targetFile,
+            targetWidth = 512,
+            targetHeight = 512,
+            quality = 90
+        )
+        if (success) {
+            val path = targetFile.absolutePath
+            val now = System.currentTimeMillis()
+            prefs.edit()
+                .putString(KEY_PROFILE_AVATAR_PATH, path)
+                .putLong(KEY_PROFILE_AVATAR_UPDATED_AT, now)
+                .apply()
+            _profileFlow.value = _profileFlow.value.copy(
+                avatarPath = path,
+                avatarUpdatedAt = now
+            )
+            path
+        } else {
+            null
+        }
+    }
+
+    override suspend fun removeProfileAvatar() = withContext(Dispatchers.IO) {
+        val targetFile = File(profileDir, "avatar.webp")
+        if (targetFile.exists()) {
+            targetFile.delete()
+        }
+        val now = System.currentTimeMillis()
+        prefs.edit()
+            .remove(KEY_PROFILE_AVATAR_PATH)
+            .putLong(KEY_PROFILE_AVATAR_UPDATED_AT, now)
+            .apply()
+        _profileFlow.value = _profileFlow.value.copy(
+            avatarPath = null,
+            avatarUpdatedAt = now
+        )
+    }
+
+    override suspend fun saveProfileBanner(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
+        val targetFile = File(profileDir, "banner.webp")
+        val success = ProfileImageUtils.saveWebpAtomically(
+            bitmap = bitmap,
+            targetFile = targetFile,
+            targetWidth = 1080,
+            quality = 90
+        )
+        if (success) {
+            val path = targetFile.absolutePath
+            val now = System.currentTimeMillis()
+            prefs.edit()
+                .putString(KEY_PROFILE_BANNER_PATH, path)
+                .putLong(KEY_PROFILE_BANNER_UPDATED_AT, now)
+                .apply()
+            _profileFlow.value = _profileFlow.value.copy(
+                bannerPath = path,
+                bannerUpdatedAt = now
+            )
+            path
+        } else {
+            null
+        }
+    }
+
+    override suspend fun removeProfileBanner() = withContext(Dispatchers.IO) {
+        val targetFile = File(profileDir, "banner.webp")
+        if (targetFile.exists()) {
+            targetFile.delete()
+        }
+        val now = System.currentTimeMillis()
+        prefs.edit()
+            .remove(KEY_PROFILE_BANNER_PATH)
+            .putLong(KEY_PROFILE_BANNER_UPDATED_AT, now)
+            .apply()
+        _profileFlow.value = _profileFlow.value.copy(
+            bannerPath = null,
+            bannerUpdatedAt = now
+        )
+    }
+
     companion object {
         private const val PREFS_NAME = "fotara_settings"
         private const val KEY_SORT_ORDER = "key_sort_order"
@@ -459,5 +599,13 @@ class DefaultSettingsRepository(
         private const val KEY_RECENT_DESTINATIONS = "key_recent_destinations"
         private const val KEY_AUTO_CHECK_UPDATES = "key_auto_check_updates"
         private const val KEY_OPT_IN_CRASH_REPORTING = "key_opt_in_crash_reporting"
+        private const val KEY_COMBINE_NAME_PRESET = "key_combine_name_preset"
+        private const val KEY_PROFILE_NAME = "key_profile_name"
+        private const val KEY_PROFILE_EMAIL = "key_profile_email"
+        private const val KEY_PROFILE_AVATAR_PATH = "key_profile_avatar_path"
+        private const val KEY_PROFILE_AVATAR_UPDATED_AT = "key_profile_avatar_updated_at"
+        private const val KEY_PROFILE_BANNER_PATH = "key_profile_banner_path"
+        private const val KEY_PROFILE_BANNER_UPDATED_AT = "key_profile_banner_updated_at"
+        private const val KEY_PROFILE_BORDER_ID = "key_profile_border_id"
     }
 }

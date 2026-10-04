@@ -52,6 +52,7 @@ interface DocumentRepository {
     fun searchDocuments(query: String): Flow<List<DocumentNote>>
     fun getDocumentNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<DocumentNote>>
     fun getDocumentPages(documentNoteId: Long): Flow<List<DocumentPage>>
+    fun getAllDocumentPages(): Flow<Map<Long, List<DocumentPage>>>
     suspend fun getDocumentNoteById(id: Long): DocumentNote?
     suspend fun importPdf(
         uri: Uri,
@@ -397,6 +398,9 @@ class SqliteDocumentRepository(
 
     override fun getDocumentPages(documentNoteId: Long): Flow<List<DocumentPage>> =
         documentPagesFlow.map { it[documentNoteId] ?: emptyList() }
+
+    override fun getAllDocumentPages(): Flow<Map<Long, List<DocumentPage>>> =
+        documentPagesFlow
 
     override suspend fun getDocumentNoteById(id: Long): DocumentNote? = withContext(Dispatchers.IO) {
         documentNotesFlow.value.firstOrNull { it.id == id }

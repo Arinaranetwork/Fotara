@@ -55,12 +55,9 @@ import com.arinara.fotara.theme.HomeSearchBarSurface
 @Composable
 fun FloatingDock(
     onSearchClick: () -> Unit,
-    onCameraClick: () -> Unit,
     onNewFolderClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var showAddMenu by remember { mutableStateOf(false) }
-
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -100,79 +97,21 @@ fun FloatingDock(
             }
         }
 
-        // Circular '+' Button (~52-54dp, #2563EB)
-        Box {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(HomeAddButtonBlue)
-                    .clickable { showAddMenu = true },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add options",
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
-
-            // Upward-anchored popup menu
-            DropdownMenu(
-                expanded = showAddMenu,
-                onDismissRequest = { showAddMenu = false },
-                modifier = Modifier
-                    .background(HomeCardSurface)
-                    .border(1.dp, Color(0xFF1C2538), RoundedCornerShape(12.dp))
-            ) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = stringResource(R.string.menu_new_folder),
-                            color = Color.White,
-                            fontFamily = ElmsSans,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 15.sp
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Outlined.CreateNewFolder,
-                            contentDescription = null,
-                            tint = Color(0xFF60A5FA),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    onClick = {
-                        showAddMenu = false
-                        onNewFolderClick()
-                    }
-                )
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = stringResource(R.string.menu_capture_notes),
-                            color = Color.White,
-                            fontFamily = ElmsSans,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 15.sp
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.PhotoCamera,
-                            contentDescription = null,
-                            tint = Color(0xFF34D399),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    },
-                    onClick = {
-                        showAddMenu = false
-                        onCameraClick()
-                    }
-                )
-            }
+        // Circular '+' Button (~52-54dp, #2563EB) opens New Folder directly
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(HomeAddButtonBlue)
+                .clickable { onNewFolderClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = stringResource(R.string.menu_new_folder),
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
+            )
         }
     }
 }

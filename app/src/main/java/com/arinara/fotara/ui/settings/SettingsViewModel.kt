@@ -14,15 +14,21 @@ import com.arinara.fotara.data.model.SortOrder
 import com.arinara.fotara.data.model.StorageLocation
 import com.arinara.fotara.data.model.ThemeMode
 import com.arinara.fotara.data.repository.SettingsRepository
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    private val _eventChannel = Channel<String>(Channel.BUFFERED)
+    val eventFlow: Flow<String> = _eventChannel.receiveAsFlow()
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -31,6 +37,11 @@ class SettingsViewModel(
         viewModelScope.launch {
             settingsRepository.settingsFlow.collect { settings ->
                 _uiState.update { it.copy(userSettings = settings) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.profileFlow.collect { profile ->
+                _uiState.update { it.copy(userProfile = profile) }
             }
         }
         refreshStorageBreakdown()
@@ -102,6 +113,12 @@ class SettingsViewModel(
         }
     }
 
+    fun updateCombineFileNamePreset(preset: String) {
+        viewModelScope.launch {
+            settingsRepository.updateCombineFileNamePreset(preset)
+        }
+    }
+
     fun rebuildThumbnails() {
         if (_uiState.value.isRebuildingThumbnails) return
         viewModelScope.launch {
@@ -109,19 +126,23 @@ class SettingsViewModel(
             try {
                 val count = settingsRepository.rebuildThumbnails()
                 refreshStorageBreakdown()
+                val msg = "Thumbnails rebuilt successfully ($count notes updated)."
                 _uiState.update {
                     it.copy(
                         isRebuildingThumbnails = false,
-                        feedbackMessage = "Thumbnails rebuilt successfully ($count notes updated)."
+                        feedbackMessage = msg
                     )
                 }
+                _eventChannel.trySend(msg)
             } catch (e: Exception) {
+                val msg = "Failed to rebuild thumbnails: ${e.message}"
                 _uiState.update {
                     it.copy(
                         isRebuildingThumbnails = false,
-                        feedbackMessage = "Failed to rebuild thumbnails: ${e.message}"
+                        feedbackMessage = msg
                     )
                 }
+                _eventChannel.trySend(msg)
             }
         }
     }
@@ -132,19 +153,23 @@ class SettingsViewModel(
             _uiState.update { it.copy(isRebuildingSearchIndex = true) }
             try {
                 val count = settingsRepository.rebuildSearchIndex()
+                val msg = "Search index rebuilt successfully ($count items indexed)."
                 _uiState.update {
                     it.copy(
                         isRebuildingSearchIndex = false,
-                        feedbackMessage = "Search index rebuilt successfully ($count items indexed)."
+                        feedbackMessage = msg
                     )
                 }
+                _eventChannel.trySend(msg)
             } catch (e: Exception) {
+                val msg = "Failed to rebuild search index: ${e.message}"
                 _uiState.update {
                     it.copy(
                         isRebuildingSearchIndex = false,
-                        feedbackMessage = "Failed to rebuild search index: ${e.message}"
+                        feedbackMessage = msg
                     )
                 }
+                _eventChannel.trySend(msg)
             }
         }
     }
@@ -163,12 +188,14 @@ class SettingsViewModel(
                     )
                 }
             } catch (e: Exception) {
+                val msg = "Failed to export backup: ${e.message}"
                 _uiState.update {
                     it.copy(
                         isExportingBackup = false,
-                        feedbackMessage = "Failed to export backup: ${e.message}"
+                        feedbackMessage = msg
                     )
                 }
+                _eventChannel.trySend(msg)
             }
         }
     }
@@ -198,13 +225,16 @@ class SettingsViewModel(
                         feedbackMessage = result.message
                     )
                 }
+                _eventChannel.trySend(result.message)
             } catch (e: Exception) {
+                val msg = "Import failed: ${e.message}"
                 _uiState.update {
                     it.copy(
                         isImportingBackup = false,
-                        feedbackMessage = "Import failed: ${e.message}"
+                        feedbackMessage = msg
                     )
                 }
+                _eventChannel.trySend(msg)
             }
         }
     }
@@ -213,8 +243,74 @@ class SettingsViewModel(
         _uiState.update { it.copy(showLicensesDialog = visible) }
     }
 
+    fun updateProfileName(name: String) {
+        viewModelScope.launch {
+            settingsRepository.updateProfileName(name)
+        }
+    }
+
+    fun updateProfileEmail(email: String) {
+        viewModelScope.launch {
+            settingsRepository.updateProfileEmail(email)
+        }
+    }
+
+    fun updateProfileBorder(borderId: String) {
+        viewModelScope.launch {
+            settingsRepository.updateProfileBorder(borderId)
+        }
+    }
+
+    fun saveProfileAvatar(bitmap: android.graphics.Bitmap, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val path = settingsRepository.saveProfileAvatar(bitmap)
+            val success = path != null
+            if (!success) {
+                val msg = "Failed to save profile picture"
+                _eventChannel.trySend(msg)
+            }
+            onResult(success)
+        }
+    }
+
+    fun removeProfileAvatar() {
+        viewModelScope.launch {
+            settingsRepository.removeProfileAvatar()
+        }
+    }
+
+    fun saveProfileBanner(bitmap: android.graphics.Bitmap, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val path = settingsRepository.saveProfileBanner(bitmap)
+            val success = path != null
+            if (!success) {
+                val msg = "Failed to save banner"
+                _eventChannel.trySend(msg)
+            }
+            onResult(success)
+        }
+    }
+
+    fun removeProfileBanner() {
+        viewModelScope.launch {
+            settingsRepository.removeProfileBanner()
+        }
+    }
+
+    fun postErrorMessage(message: String) {
+        _eventChannel.trySend(message)
+    }
+
     fun clearFeedbackMessage() {
         _uiState.update { it.copy(feedbackMessage = null) }
+    }
+
+    fun consumeFeedbackMessage(): String? {
+        val msg = _uiState.value.feedbackMessage
+        if (msg != null) {
+            _uiState.update { it.copy(feedbackMessage = null) }
+        }
+        return msg
     }
 
     companion object {

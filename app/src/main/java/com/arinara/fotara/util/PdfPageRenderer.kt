@@ -44,6 +44,19 @@ class PdfPageRenderer(val file: File) : Closeable {
         }
     }
 
+    private val highResCacheKeys = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    fun evictHighResCache() {
+        val toEvict = synchronized(highResCacheKeys) {
+            val copy = highResCacheKeys.toList()
+            highResCacheKeys.clear()
+            copy
+        }
+        for (key in toEvict) {
+            pageBitmapCache.remove(key)
+        }
+    }
+
     val pageCount: Int
     private val aspectRatioCache: FloatArray
 
@@ -98,15 +111,22 @@ class PdfPageRenderer(val file: File) : Closeable {
 
         currentCoroutineContext().ensureActive()
 
-        // Single, unit-safe function computes target dimensions strictly preserving aspect ratio
-        val targetSize = PdfLayoutMath.computeTargetSize(
+        // Compute aspect-ratio-accurate dimensions
+        val baseSize = PdfLayoutMath.computeTargetSize(
             cardWidthPx = destWidth,
             aspectRatio = getPageAspectRatio(pageIndex),
-            zoomFactor = renderScale
+            zoomFactor = 1.0f
         )
-        val targetWidth = targetSize.widthPx
-        val targetHeight = targetSize.heightPx
+        // Memory-safe dimension budget calculation up to 4.0x
+        val (targetWidth, targetHeight) = PdfRenderBudget.calculateBoundedDimensions(
+            destWidth = baseSize.widthPx,
+            destHeight = baseSize.heightPx,
+            renderScale = renderScale
+        )
         val cacheKey = "${pageIndex}_${targetWidth}x${targetHeight}"
+        if (renderScale > 1.05f) {
+            highResCacheKeys.add(cacheKey)
+        }
 
         // Fast path: check bounded cache first without lock
         pageBitmapCache.get(cacheKey)?.let { cached ->

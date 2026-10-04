@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatIndentDecrease
 import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
@@ -38,7 +36,6 @@ import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.FormatStrikethrough
 import androidx.compose.material.icons.filled.HorizontalRule
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -72,7 +69,7 @@ fun EditorToolbar(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(start = 8.dp, end = 24.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Group 1: Undo & Redo
@@ -91,7 +88,7 @@ fun EditorToolbar(
 
             GroupDivider()
 
-            // Group 2: Inline Toggles [Bold, Italic, Strikethrough, Inline code]
+            // Group 2: Inline Formatting [Bold, Italic, Strikethrough, Inline Code]
             ToolbarActionItem(
                 icon = Icons.Default.FormatBold,
                 description = "Bold",
@@ -198,7 +195,7 @@ fun EditorToolbar(
 
             GroupDivider()
 
-            // Group 6: Utilities [Find, Clear formatting, Count]
+            // Group 6: Utilities [Find, Clear formatting, Schedule]
             ToolbarActionItem(
                 icon = Icons.Default.FindReplace,
                 description = "Find and Replace",
@@ -210,20 +207,6 @@ fun EditorToolbar(
                 description = "Clear Formatting",
                 onClick = { state.executeAction { EditorActions.clearFormatting(it) } }
             )
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 8.dp)
-                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "${state.wordCount}w • ${state.charCount}c",
-                    color = TextMuted,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
             ToolbarActionItem(
                 icon = Icons.Default.Alarm,
                 description = "Schedule Note",

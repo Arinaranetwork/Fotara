@@ -106,6 +106,46 @@ class UpdateManager(private val context: Context) {
         _statusNotice.value = null
     }
 
+    private val prefs by lazy {
+        context.getSharedPreferences("fotara_updates_prefs", Context.MODE_PRIVATE)
+    }
+
+    private val KEY_SKIPPED_VERSION = "skipped_update_version"
+
+    var isPopupDismissedForSession: Boolean = false
+
+    fun getSkippedVersion(): String? {
+        return prefs.getString(KEY_SKIPPED_VERSION, null)
+    }
+
+    fun setSkippedVersion(version: String) {
+        prefs.edit().putString(KEY_SKIPPED_VERSION, version).apply()
+    }
+
+    fun clearSkippedVersion() {
+        prefs.edit().remove(KEY_SKIPPED_VERSION).apply()
+    }
+
+    fun getCurrentVersionName(): String {
+        return try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            pInfo.versionName ?: "1.5.6 Beta"
+        } catch (_: Exception) {
+            "1.5.6 Beta"
+        }
+    }
+
+    fun cleanVersionString(raw: String): String = UpdateVersionUtils.cleanVersionString(raw)
+
+    fun shouldShowUpdatePopup(release: ReleaseInfo?): Boolean {
+        return UpdateVersionUtils.shouldShowUpdatePopup(
+            release = release,
+            currentVersion = getCurrentVersionName(),
+            skippedVersion = getSkippedVersion(),
+            isPopupDismissedForSession = isPopupDismissedForSession
+        )
+    }
+
     private var isCheckingInProgress = false
 
     suspend fun checkForUpdates(forceRefresh: Boolean = false): ReleaseInfo? = withContext(Dispatchers.IO) {
@@ -248,28 +288,8 @@ class UpdateManager(private val context: Context) {
         }
     }
 
-    fun isNewerVersion(remoteTag: String, currentTag: String): Boolean {
-        val cleanRemote = remoteTag
-            .replace("Fotara", "", ignoreCase = true)
-            .trim('_', '-', ' ', 'v', 'V')
-            .split("-", "_", " ")[0]
-        val cleanCurrent = currentTag
-            .replace("Fotara", "", ignoreCase = true)
-            .trim('_', '-', ' ', 'v', 'V')
-            .split("-", "_", " ")[0]
-
-        val remoteParts = cleanRemote.split(".").mapNotNull { it.toIntOrNull() }
-        val currentParts = cleanCurrent.split(".").mapNotNull { it.toIntOrNull() }
-
-        val maxLen = maxOf(remoteParts.size, currentParts.size)
-        for (i in 0 until maxLen) {
-            val r = remoteParts.getOrElse(i) { 0 }
-            val c = currentParts.getOrElse(i) { 0 }
-            if (r > c) return true
-            if (r < c) return false
-        }
-        return false
-    }
+    fun isNewerVersion(remoteTag: String, currentTag: String): Boolean =
+        UpdateVersionUtils.isNewerVersion(remoteTag, currentTag)
 
     private fun openConnectionWithRedirects(initialUrl: String, maxRedirects: Int = 5): HttpURLConnection {
         var currentUrl = initialUrl

@@ -53,9 +53,12 @@ import com.arinara.fotara.theme.MidnightSurface
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.ui.components.CardScheduleBadge
+import com.arinara.fotara.ui.components.GlowAnchor
 import com.arinara.fotara.ui.components.GlowCorner
 import com.arinara.fotara.ui.components.ScheduleBadge
 import com.arinara.fotara.ui.components.linkItCornerGlow
+import com.arinara.fotara.ui.components.linkItGlow
+import com.arinara.fotara.ui.components.toGlowAnchor
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -68,6 +71,8 @@ fun DetailCanvasCard(
     isSelected: Boolean,
     isHighlighted: Boolean = false,
     highlightAlpha: Float = 0f,
+    glowCorner: GlowCorner? = null,
+    glowAnchors: Set<GlowAnchor> = emptySet(),
     onCardClick: () -> Unit,
     onCardLongClick: () -> Unit
 ) {
@@ -76,14 +81,22 @@ fun DetailCanvasCard(
         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { null }
     }
 
+    val effectiveAnchors = if (glowAnchors.isNotEmpty()) {
+        glowAnchors
+    } else if (glowCorner != null) {
+        setOf(glowCorner.toGlowAnchor())
+    } else {
+        emptySet()
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.85f)
             .clip(RoundedCornerShape(14.dp))
-            .linkItCornerGlow(
-                isLinked = canvasItem.isLinked,
-                corner = GlowCorner.BottomLeft,
+            .linkItGlow(
+                isLinked = canvasItem.isLinked && effectiveAnchors.isNotEmpty(),
+                anchors = effectiveAnchors,
                 linkedDescription = "Linked canvas ${note.title}",
                 cornerRadiusDp = 14f
             )

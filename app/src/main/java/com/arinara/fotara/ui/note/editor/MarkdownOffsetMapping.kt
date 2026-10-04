@@ -10,19 +10,22 @@ import androidx.compose.ui.text.input.OffsetMapping
 
 /**
  * Represents a mapped region between original markdown text and transformed display text.
+ * [isAtomicPrefix] indicates an atomic block sprite (e.g. checkbox "[ ]", bullet "•", divider)
+ * which must never allow caret placement inside the prefix boundaries.
  */
 data class TextMappingChunk(
     val oStart: Int,
     val oEnd: Int,
     val tStart: Int,
-    val tEnd: Int
+    val tEnd: Int,
+    val isAtomicPrefix: Boolean = false
 )
 
 /**
  * Robust, bidirectional, monotonically non-decreasing [OffsetMapping] supporting:
- * 1. 1:1 identity passages (e.g. active editing lines)
+ * 1. 1:1 identity passages
  * 2. Hidden syntax markers (tLen = 0)
- * 3. Replaced syntax sprites (e.g. "- [ ] " -> "☐ ")
+ * 3. Replaced syntax sprites (e.g. "- [ ] " -> "☐ ") with atomic boundaries
  *
  * Guarantees monotonic ordering and strict bounds checking to prevent caret jumping or crashes.
  */
@@ -55,6 +58,9 @@ class MarkdownOffsetMapping(
 
         for (chunk in chunks) {
             if (clamped in chunk.oStart..chunk.oEnd) {
+                if (chunk.isAtomicPrefix) {
+                    return if (clamped == chunk.oStart) chunk.tStart else chunk.tEnd
+                }
                 val oLen = chunk.oEnd - chunk.oStart
                 val tLen = chunk.tEnd - chunk.tStart
                 return if (oLen <= 0) {
@@ -73,16 +79,23 @@ class MarkdownOffsetMapping(
         val clamped = offset.coerceIn(0, transformedLength)
         if (chunks.isEmpty()) return 0
 
-        // Prefer visible chunk (tLen > 0) containing clamped offset
+        // Prefer visible chunk containing clamped offset
         val visibleChunk = chunks.firstOrNull { it.tEnd > it.tStart && clamped in it.tStart..it.tEnd }
         if (visibleChunk != null) {
+            if (visibleChunk.isAtomicPrefix) {
+                return if (clamped == visibleChunk.tStart) visibleChunk.oStart else visibleChunk.oEnd
+            }
             val oLen = visibleChunk.oEnd - visibleChunk.oStart
             val tLen = visibleChunk.tEnd - visibleChunk.tStart
-            val progress = (clamped - visibleChunk.tStart).toLong() * oLen / tLen
-            return (visibleChunk.oStart + progress).toInt().coerceIn(visibleChunk.oStart, visibleChunk.oEnd).coerceIn(0, originalLength)
+            return if (tLen <= 0) {
+                visibleChunk.oStart.coerceIn(0, originalLength)
+            } else {
+                val progress = (clamped - visibleChunk.tStart).toLong() * oLen / tLen
+                (visibleChunk.oStart + progress).toInt().coerceIn(visibleChunk.oStart, visibleChunk.oEnd).coerceIn(0, originalLength)
+            }
         }
 
-        // Fallback for chunks with tLen == 0 (e.g. pure hidden text)
+        // Fallback for chunks with tLen == 0 (hidden text)
         for (chunk in chunks) {
             if (clamped in chunk.tStart..chunk.tEnd) {
                 return chunk.oStart.coerceIn(0, originalLength)

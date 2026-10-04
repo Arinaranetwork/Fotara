@@ -63,8 +63,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.res.stringResource
+import com.arinara.fotara.R
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -258,7 +261,8 @@ fun PhotoViewerDialog(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(horizontal = 6.dp)
+                                .padding(horizontal = 6.dp),
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Text(
                                 text = if (photos.size > 1) {
@@ -272,19 +276,8 @@ fun PhotoViewerDialog(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Text(
-                                text = if (isCurrentPhotoZoomed) {
-                                    "Zoomed: Pan enabled · Double-tap to reset"
-                                } else if (photos.size > 1) {
-                                    "Swipe next/prev · Pinch or double-tap to zoom"
-                                } else {
-                                    "Pinch or double-tap to zoom · 100% Offline"
-                                },
-                                color = if (isCurrentPhotoZoomed) TagAmber else TextSecondary,
-                                fontSize = 11.sp
-                            )
                             if (currentPhoto.scheduledAt != null) {
-                                Spacer(modifier = Modifier.height(3.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 NoteDetailScheduleChip(
                                     scheduledAt = currentPhoto.scheduledAt,
                                     alertType = currentPhoto.alertType,
@@ -394,6 +387,36 @@ fun PhotoViewerDialog(
                                     .background(MidnightSurface)
                                     .border(1.dp, MidnightCardOutline, RoundedCornerShape(8.dp))
                             ) {
+                                // Info Section
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.viewer_info_header),
+                                        color = TextSecondary.copy(alpha = 0.6f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.8.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.viewer_info_pinch_or_double_tap),
+                                        color = TextSecondary,
+                                        fontSize = 13.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = stringResource(R.string.viewer_info_offline),
+                                        color = TextSecondary.copy(alpha = 0.8f),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                HorizontalDivider(
+                                    color = MidnightCardOutline,
+                                    thickness = 1.dp,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+
                                 DropdownMenuItem(
                                     text = { Text("Schedule...", color = TextPrimary) },
                                     leadingIcon = { Icon(Icons.Default.Alarm, null, tint = FolderTabCream) },

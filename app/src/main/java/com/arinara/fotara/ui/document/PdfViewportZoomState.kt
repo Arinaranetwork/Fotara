@@ -6,6 +6,9 @@
 
 package com.arinara.fotara.ui.document
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.setValue
@@ -14,8 +17,8 @@ import androidx.compose.runtime.setValue
  * State holder managing viewport-level zoom, two-axis panning, focal point tracking,
  * and boundary clamping for the whole document viewer.
  *
- * Designed to feel identical to the photo viewer: free two-axis pan, double-tap to zoom/reset,
- * natural pinch around changing touch centroids, and native vertical scroll pass-through at 1.0x.
+ * Implements 1:1 instantaneous gesture tracking with fingers down, exact focal-point
+ * anchoring, and smooth 250ms easing animations for double-tap zoom and reset.
  */
 class PdfViewportZoomState(
     val minScale: Float = 1.0f,
@@ -30,7 +33,7 @@ class PdfViewportZoomState(
     var viewportHeight by mutableFloatStateOf(0.0f)
 
     val isZoomed: Boolean
-        get() = scale > 1.02f
+        get() = scale > 1.01f
 
     val maxPanX: Float
         get() = calculateMaxPan(scale, viewportWidth)
@@ -52,7 +55,8 @@ class PdfViewportZoomState(
     }
 
     /**
-     * Handles continuous pinch gestures with focal point compensation.
+     * Handles continuous pinch gestures with exact focal point compensation.
+     * Scale and pan follow the fingers 1:1 on every frame, anchored at the touch centroid.
      */
     fun onPinch(
         zoomChange: Float,
@@ -63,7 +67,7 @@ class PdfViewportZoomState(
     ) {
         val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
 
-        if (newScale <= 1.02f) {
+        if (newScale <= 1.01f) {
             reset()
             return
         }
@@ -71,9 +75,11 @@ class PdfViewportZoomState(
         val newMaxX = calculateMaxPan(newScale, viewportWidth)
         val newMaxY = calculateMaxPan(newScale, viewportHeight)
 
-        // Adjust pan to keep content under centroid stationary during scale changes
-        val focalShiftX = if (viewportWidth > 0f) (centroidX - viewportWidth / 2f) * (1f - zoomChange) else 0f
-        val focalShiftY = if (viewportHeight > 0f) (centroidY - viewportHeight / 2f) * (1f - zoomChange) else 0f
+        // Exact focal-shift anchoring: keep content under centroid stationary
+        val centerX = viewportWidth / 2f
+        val centerY = viewportHeight / 2f
+        val focalShiftX = if (viewportWidth > 0f) (1f - zoomChange) * (centroidX - centerX - panX) else 0f
+        val focalShiftY = if (viewportHeight > 0f) (1f - zoomChange) * (centroidY - centerY - panY) else 0f
 
         panX = (panX + panChangeX + focalShiftX).coerceIn(-newMaxX, newMaxX)
         panY = (panY + panChangeY + focalShiftY).coerceIn(-newMaxY, newMaxY)
@@ -92,7 +98,76 @@ class PdfViewportZoomState(
     }
 
     /**
-     * Toggles between 1.0x and doubleTapScale (2.5x) centered around the tap point.
+     * Smoothly animates zoom level between 1.0x and doubleTapScale (2.5x) centered around the tap point.
+     */
+    suspend fun animateDoubleTap(tapX: Float, tapY: Float) {
+        val startScale = scale
+        val startPanX = panX
+        val startPanY = panY
+
+        val targetScale: Float
+        val targetPanX: Float
+        val targetPanY: Float
+
+        if (isZoomed) {
+            targetScale = minScale
+            targetPanX = 0f
+            targetPanY = 0f
+        } else {
+            targetScale = doubleTapScale
+            val newMaxX = calculateMaxPan(doubleTapScale, viewportWidth)
+            val newMaxY = calculateMaxPan(doubleTapScale, viewportHeight)
+
+            val centerX = viewportWidth / 2f
+            val centerY = viewportHeight / 2f
+            val tPanX = if (viewportWidth > 0f) (centerX - tapX) * (doubleTapScale - 1f) else 0f
+            val tPanY = if (viewportHeight > 0f) (centerY - tapY) * (doubleTapScale - 1f) else 0f
+
+            targetPanX = tPanX.coerceIn(-newMaxX, newMaxX)
+            targetPanY = tPanY.coerceIn(-newMaxY, newMaxY)
+        }
+
+        val anim = Animatable(0f)
+        anim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+        ) {
+            val fraction = this.value
+            scale = startScale + (targetScale - startScale) * fraction
+            panX = startPanX + (targetPanX - startPanX) * fraction
+            panY = startPanY + (targetPanY - startPanY) * fraction
+        }
+        if (targetScale <= 1.01f) {
+            reset()
+        }
+    }
+
+    /**
+     * Smoothly animates scale and pan back to 1.0x default fit.
+     */
+    suspend fun animateReset() {
+        if (!isZoomed) {
+            reset()
+            return
+        }
+        val startScale = scale
+        val startPanX = panX
+        val startPanY = panY
+        val anim = Animatable(0f)
+        anim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
+        ) {
+            val fraction = this.value
+            scale = startScale + (minScale - startScale) * fraction
+            panX = startPanX + (0f - startPanX) * fraction
+            panY = startPanY + (0f - startPanY) * fraction
+        }
+        reset()
+    }
+
+    /**
+     * Synchronous double-tap toggle (non-animated fallback).
      */
     fun onDoubleTap(tapX: Float, tapY: Float) {
         if (isZoomed) {
@@ -102,8 +177,10 @@ class PdfViewportZoomState(
             val newMaxX = calculateMaxPan(doubleTapScale, viewportWidth)
             val newMaxY = calculateMaxPan(doubleTapScale, viewportHeight)
 
-            val targetPanX = if (viewportWidth > 0f) (viewportWidth / 2f - tapX) * (doubleTapScale - 1f) else 0f
-            val targetPanY = if (viewportHeight > 0f) (viewportHeight / 2f - tapY) * (doubleTapScale - 1f) else 0f
+            val centerX = viewportWidth / 2f
+            val centerY = viewportHeight / 2f
+            val targetPanX = if (viewportWidth > 0f) (centerX - tapX) * (doubleTapScale - 1f) else 0f
+            val targetPanY = if (viewportHeight > 0f) (centerY - tapY) * (doubleTapScale - 1f) else 0f
 
             panX = targetPanX.coerceIn(-newMaxX, newMaxX)
             panY = targetPanY.coerceIn(-newMaxY, newMaxY)
@@ -111,7 +188,7 @@ class PdfViewportZoomState(
     }
 
     /**
-     * Resets scale and pan offsets to 1.0x.
+     * Resets scale and pan offsets to 1.0x immediately.
      */
     fun reset() {
         scale = minScale

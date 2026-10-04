@@ -67,6 +67,7 @@ interface PhotoRepository {
     suspend fun emptyTrash()
     suspend fun purgeOldTrashedItems(retentionDays: Int = 30)
     suspend fun getAllActivePhotos(): List<Photo>
+    fun getAllActivePhotosFlow(): Flow<List<Photo>>
     suspend fun rebuildSearchIndex(): Int
     suspend fun rotatePhotoClockwise(id: Long): Photo?
     suspend fun cropPhoto(id: Long, left: Float, top: Float, right: Float, bottom: Float): Photo?
@@ -441,9 +442,25 @@ class SqlitePhotoRepository(
 
     override suspend fun addPhotosToGroup(groupId: Long, photoIds: List<Long>) = withContext(Dispatchers.IO) {
         if (photoIds.isEmpty()) return@withContext
+        val targetGroup = getGroupById(groupId) ?: return@withContext
         val db = dbHelper.getSafeWritableDatabase()
         val inClause = photoIds.joinToString(",") { it.toString() }
-        db.execSQL("UPDATE photos SET group_id = $groupId WHERE id IN ($inClause)")
+        db.beginTransaction()
+        try {
+            val values = ContentValues().apply {
+                put("group_id", groupId)
+                put("folder_id", targetGroup.folderId)
+                if (targetGroup.subfolderId != null) {
+                    put("subfolder_id", targetGroup.subfolderId)
+                } else {
+                    putNull("subfolder_id")
+                }
+            }
+            db.update("photos", values, "id IN ($inClause)", null)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
         refreshSync()
         folderRepository.refresh()
     }
@@ -963,6 +980,8 @@ class SqlitePhotoRepository(
     override suspend fun getAllActivePhotos(): List<Photo> = withContext(Dispatchers.IO) {
         photosFlow.value
     }
+
+    override fun getAllActivePhotosFlow(): Flow<List<Photo>> = photosFlow.asStateFlow()
 
     override suspend fun rebuildSearchIndex(): Int = withContext(Dispatchers.IO) {
         val db = dbHelper.getSafeWritableDatabase()

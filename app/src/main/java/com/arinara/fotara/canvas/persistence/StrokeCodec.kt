@@ -7,6 +7,7 @@
 package com.arinara.fotara.canvas.persistence
 
 import com.arinara.fotara.canvas.engine.StrokeProcessor
+import com.arinara.fotara.canvas.model.StrokeBlendMode
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokePoint
 import com.arinara.fotara.canvas.model.StrokeToolType
@@ -29,17 +30,19 @@ import kotlin.math.roundToInt
 object StrokeCodec {
 
     const val FORMAT_VERSION_V1: Byte = 0x01
+    const val FORMAT_VERSION_V2: Byte = 0x02
     private const val QUANTIZATION_SCALE = 20.0f // 0.05px sub-pixel accuracy
     private const val MAX_SAFE_POINTS = 100_000
 
     /**
-     * Serializes a StrokeElement into a compact binary chunk.
+     * Serializes a StrokeElement into a compact binary chunk using FORMAT_VERSION_V2.
      */
     fun encode(stroke: StrokeElement): ByteArray {
         val baos = ByteArrayOutputStream()
         DataOutputStream(baos).use { out ->
-            out.writeByte(FORMAT_VERSION_V1.toInt())
+            out.writeByte(FORMAT_VERSION_V2.toInt())
             out.writeByte(stroke.toolType.ordinal)
+            out.writeByte(stroke.blendMode.ordinal)
             out.writeLong(stroke.color)
             out.writeFloat(stroke.width)
             out.writeInt(stroke.zIndex)
@@ -78,6 +81,7 @@ object StrokeCodec {
 
     /**
      * Deserializes a binary chunk into a StrokeElement.
+     * Supports both FORMAT_VERSION_V1 (decoded as NORMAL blend mode) and FORMAT_VERSION_V2.
      * Guaranteed to never throw: returns null on truncation or corruption.
      */
     fun decode(
@@ -93,7 +97,7 @@ object StrokeCodec {
             val bais = ByteArrayInputStream(bytes)
             DataInputStream(bais).use { input ->
                 val version = input.readByte()
-                if (version != FORMAT_VERSION_V1) {
+                if (version != FORMAT_VERSION_V1 && version != FORMAT_VERSION_V2) {
                     return null
                 }
 
@@ -102,6 +106,17 @@ object StrokeCodec {
                     StrokeToolType.values()[toolOrdinal]
                 } else {
                     StrokeToolType.PEN
+                }
+
+                val blendMode = if (version == FORMAT_VERSION_V2) {
+                    val blendOrdinal = input.readByte().toInt()
+                    if (blendOrdinal in StrokeBlendMode.values().indices) {
+                        StrokeBlendMode.values()[blendOrdinal]
+                    } else {
+                        StrokeBlendMode.NORMAL
+                    }
+                } else {
+                    StrokeBlendMode.NORMAL
                 }
 
                 val color = input.readLong()
@@ -148,6 +163,7 @@ object StrokeCodec {
                     color = color,
                     width = width,
                     toolType = toolType,
+                    blendMode = blendMode,
                     bounds = bounds,
                     zIndex = zIndex
                 )

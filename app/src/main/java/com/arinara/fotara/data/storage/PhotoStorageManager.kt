@@ -258,23 +258,58 @@ class PhotoStorageManager(private val context: Context) {
         val matrix = Matrix().apply { postRotate(90f) }
         val rotated = Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
 
-        FileOutputStream(photoFile).use { out ->
-            rotated.compress(Bitmap.CompressFormat.JPEG, 92, out)
+        // Write safely to temporary file in the same directory, then atomically replace
+        val tempFile = File(photoFile.parentFile, "${photoFile.name}.tmp_${System.currentTimeMillis()}")
+        try {
+            FileOutputStream(tempFile).use { out ->
+                rotated.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                out.flush()
+            }
+
+            val replaced = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                try {
+                    java.nio.file.Files.move(
+                        tempFile.toPath(),
+                        photoFile.toPath(),
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                    )
+                    true
+                } catch (_: Exception) {
+                    tempFile.renameTo(photoFile)
+                }
+            } else {
+                tempFile.renameTo(photoFile)
+            }
+
+            if (!replaced) {
+                tempFile.delete()
+                throw java.io.IOException("Failed to atomically replace photo file")
+            }
+        } catch (e: Exception) {
+            if (tempFile.exists()) tempFile.delete()
+            if (rotated != original) rotated.recycle()
+            original.recycle()
+            throw e
         }
 
+        // Regenerate thumbnail ONLY after successful write
         val thumbFile = if (!thumbnailPath.isNullOrBlank()) {
             File(thumbnailPath)
         } else {
             File(thumbsDir, "thumb_${photoFile.nameWithoutExtension}.jpg")
         }
         val thumbBitmap = generateThumbnail(rotated, maxDimension = 360)
-        FileOutputStream(thumbFile).use { out ->
-            thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+        try {
+            FileOutputStream(thumbFile).use { out ->
+                thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                out.flush()
+            }
+        } finally {
+            if (thumbBitmap != rotated) thumbBitmap.recycle()
+            if (rotated != original) rotated.recycle()
+            original.recycle()
         }
-
-        if (thumbBitmap != rotated) thumbBitmap.recycle()
-        if (rotated != original) rotated.recycle()
-        original.recycle()
 
         SavedPhotoFile(
             filePath = photoFile.absolutePath,
@@ -307,23 +342,58 @@ class PhotoStorageManager(private val context: Context) {
 
         val cropped = Bitmap.createBitmap(original, l, t, cropWidth, cropHeight)
 
-        FileOutputStream(photoFile).use { out ->
-            cropped.compress(Bitmap.CompressFormat.JPEG, 92, out)
+        // Write safely to temporary file in the same directory, then atomically replace
+        val tempFile = File(photoFile.parentFile, "${photoFile.name}.tmp_${System.currentTimeMillis()}")
+        try {
+            FileOutputStream(tempFile).use { out ->
+                cropped.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                out.flush()
+            }
+
+            val replaced = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                try {
+                    java.nio.file.Files.move(
+                        tempFile.toPath(),
+                        photoFile.toPath(),
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                    )
+                    true
+                } catch (_: Exception) {
+                    tempFile.renameTo(photoFile)
+                }
+            } else {
+                tempFile.renameTo(photoFile)
+            }
+
+            if (!replaced) {
+                tempFile.delete()
+                throw java.io.IOException("Failed to atomically replace cropped photo file")
+            }
+        } catch (e: Exception) {
+            if (tempFile.exists()) tempFile.delete()
+            if (cropped != original) cropped.recycle()
+            original.recycle()
+            throw e
         }
 
+        // Regenerate thumbnail ONLY after successful write
         val thumbFile = if (!thumbnailPath.isNullOrBlank()) {
             File(thumbnailPath)
         } else {
             File(thumbsDir, "thumb_${photoFile.nameWithoutExtension}.jpg")
         }
         val thumbBitmap = generateThumbnail(cropped, maxDimension = 360)
-        FileOutputStream(thumbFile).use { out ->
-            thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+        try {
+            FileOutputStream(thumbFile).use { out ->
+                thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                out.flush()
+            }
+        } finally {
+            if (thumbBitmap != cropped) thumbBitmap.recycle()
+            if (cropped != original) cropped.recycle()
+            original.recycle()
         }
-
-        if (thumbBitmap != cropped) thumbBitmap.recycle()
-        if (cropped != original) cropped.recycle()
-        original.recycle()
 
         SavedPhotoFile(
             filePath = photoFile.absolutePath,

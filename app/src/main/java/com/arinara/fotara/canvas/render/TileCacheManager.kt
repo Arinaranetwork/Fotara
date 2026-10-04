@@ -11,17 +11,21 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import com.arinara.fotara.canvas.engine.CanvasRect
 import com.arinara.fotara.canvas.engine.QuadTreeSpatialIndex
+import com.arinara.fotara.canvas.engine.StrokePathBuilder
 import com.arinara.fotara.canvas.engine.ViewportState
 import com.arinara.fotara.canvas.engine.ViewportTransform
 import com.arinara.fotara.canvas.model.CanvasDocument
 import com.arinara.fotara.canvas.model.CanvasElement
 import com.arinara.fotara.canvas.model.CanvasLayer
 import com.arinara.fotara.canvas.model.ImageElement
+import com.arinara.fotara.canvas.model.StrokeBlendMode
 import com.arinara.fotara.canvas.model.StrokeElement
+import com.arinara.fotara.canvas.model.StrokeToolType
 import com.arinara.fotara.canvas.persistence.CanvasAssetManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -194,57 +198,34 @@ class TileCacheManager(
         // Query spatial index for elements intersecting this tile
         val intersectingElements = spatialIndex.query(worldBounds)
 
-        // Render layers in order respecting visibility and opacity
-        val layerMap = documentSnapshot.layers.associateBy { it.id }
-
-        // Render strokes and images
+        // Render layers in order respecting visibility, opacity, and blend modes
+        val sortedLayers = documentSnapshot.layers.sortedBy { it.order }
         val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
         }
+        val tilePath = Path()
+        val layerCompositePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val imageSrcRect = Rect()
+        val imageDstRectF = RectF()
 
-        for (element in intersectingElements) {
-            val layer = layerMap[element.layerId] ?: continue
+        for (layer in sortedLayers) {
             if (!layer.isVisible) continue
+            val layerElements = intersectingElements.filter { it.layerId == layer.id }.sortedWith(compareBy<CanvasElement> { it.zIndex }.thenBy { it.id })
+            if (layerElements.isEmpty()) continue
 
-            when (element) {
-                is StrokeElement -> {
-                    strokePaint.color = element.color.toInt()
-                    strokePaint.strokeWidth = element.width
-                    strokePaint.alpha = (255 * layer.opacity).toInt().coerceIn(0, 255)
-
-                    val pts = element.points
-                    if (pts.size >= 2) {
-                        for (i in 0 until (pts.size - 1)) {
-                            canvas.drawLine(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, strokePaint)
-                        }
-                    } else if (pts.size == 1) {
-                        canvas.drawPoint(pts[0].x, pts[0].y, strokePaint)
-                    }
+            val isIsolated = CanvasRenderer.shouldIsolateLayer(layerElements)
+            if (isIsolated) {
+                layerCompositePaint.alpha = (255 * layer.opacity).toInt().coerceIn(0, 255)
+                canvas.saveLayer(null, layerCompositePaint)
+                for (element in layerElements) {
+                    renderElementToTile(canvas, element, 1.0f, true, strokePaint, tilePath, imagePaint, imageSrcRect, imageDstRectF)
                 }
-                is ImageElement -> {
-                    val file = assetManager?.getAssetFile(element.assetId)
-                    if (file != null && file.exists()) {
-                        try {
-                            val imgBmp = BitmapFactory.decodeFile(file.absolutePath)
-                            if (imgBmp != null) {
-                                canvas.save()
-                                canvas.translate(element.x, element.y)
-                                if (element.rotationDegrees != 0f) {
-                                    canvas.rotate(element.rotationDegrees, element.width / 2f, element.height / 2f)
-                                }
-                                val src = Rect(0, 0, imgBmp.width, imgBmp.height)
-                                val dst = RectF(0f, 0f, element.width, element.height)
-                                val imgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                    alpha = (255 * layer.opacity).toInt().coerceIn(0, 255)
-                                }
-                                canvas.drawBitmap(imgBmp, src, dst, imgPaint)
-                                canvas.restore()
-                                imgBmp.recycle()
-                            }
-                        } catch (_: Exception) {}
-                    }
+                canvas.restore()
+            } else {
+                for (element in layerElements) {
+                    renderElementToTile(canvas, element, layer.opacity, false, strokePaint, tilePath, imagePaint, imageSrcRect, imageDstRectF)
                 }
             }
         }
@@ -260,6 +241,64 @@ class TileCacheManager(
 
         synchronized(this@TileCacheManager) {
             putTile(key, cachedTile)
+        }
+    }
+
+    private fun renderElementToTile(
+        canvas: Canvas,
+        element: CanvasElement,
+        layerOpacity: Float,
+        isIsolated: Boolean,
+        strokePaint: Paint,
+        tilePath: Path,
+        imagePaint: Paint,
+        imageSrcRect: Rect,
+        imageDstRectF: RectF
+    ) {
+        when (element) {
+            is StrokeElement -> {
+                strokePaint.color = element.color.toInt()
+                strokePaint.strokeWidth = element.width
+                strokePaint.alpha = CanvasRenderer.computeStrokeAlpha(element.toolType, layerOpacity)
+                if (isIsolated) {
+                    CanvasRenderer.applyBlendMode(strokePaint, element.blendMode)
+                } else {
+                    CanvasRenderer.applyBlendMode(strokePaint, StrokeBlendMode.NORMAL)
+                }
+
+                val pts = element.points
+                if (pts.size >= 2) {
+                    strokePaint.style = Paint.Style.STROKE
+                    tilePath.reset()
+                    StrokePathBuilder.buildStrokePath(tilePath, pts)
+                    canvas.drawPath(tilePath, strokePaint)
+                } else if (pts.size == 1) {
+                    strokePaint.style = Paint.Style.FILL
+                    canvas.drawCircle(pts[0].x, pts[0].y, element.width / 2f, strokePaint)
+                    strokePaint.style = Paint.Style.STROKE
+                }
+            }
+            is ImageElement -> {
+                val file = assetManager?.getAssetFile(element.assetId)
+                if (file != null && file.exists()) {
+                    try {
+                        val imgBmp = BitmapFactory.decodeFile(file.absolutePath)
+                        if (imgBmp != null) {
+                            canvas.save()
+                            canvas.translate(element.x, element.y)
+                            if (element.rotationDegrees != 0f) {
+                                canvas.rotate(element.rotationDegrees, element.width / 2f, element.height / 2f)
+                            }
+                            imageSrcRect.set(0, 0, imgBmp.width, imgBmp.height)
+                            imageDstRectF.set(0f, 0f, element.width, element.height)
+                            imagePaint.alpha = (255 * layerOpacity).toInt().coerceIn(0, 255)
+                            canvas.drawBitmap(imgBmp, imageSrcRect, imageDstRectF, imagePaint)
+                            canvas.restore()
+                            imgBmp.recycle()
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
         }
     }
 

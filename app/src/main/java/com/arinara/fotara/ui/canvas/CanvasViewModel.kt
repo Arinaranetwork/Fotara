@@ -41,8 +41,11 @@ import com.arinara.fotara.canvas.model.CanvasDocument
 import com.arinara.fotara.canvas.model.CanvasDocumentOperations
 import com.arinara.fotara.canvas.model.CanvasElement
 import com.arinara.fotara.canvas.model.CanvasLayer
+import com.arinara.fotara.canvas.model.CanvasSelection
 import com.arinara.fotara.canvas.model.ImageElement
+import com.arinara.fotara.canvas.model.SelectedElementReference
 import com.arinara.fotara.canvas.model.StrokeElement
+import com.arinara.fotara.canvas.model.StrokeInsideSegment
 import com.arinara.fotara.canvas.model.StrokeToolType
 import com.arinara.fotara.canvas.persistence.CanvasAssetInfo
 import com.arinara.fotara.canvas.persistence.CanvasAssetManager
@@ -206,6 +209,7 @@ class CanvasViewModel(
                         canRedo = historyManager.canRedo
                     )
                 }
+                toolController.activeLayerId = primaryLayerId
             } else {
                 _uiState.update { it.copy(saveState = SaveState.ERROR, userMessage = "Failed to load canvas document.") }
             }
@@ -236,6 +240,7 @@ class CanvasViewModel(
                     showExperimentalNotice = true // One-time Alpha notice
                 )
             }
+            toolController.activeLayerId = initialDoc.getPrimaryLayerId()
         }
     }
 
@@ -340,11 +345,13 @@ class CanvasViewModel(
     fun undo() {
         val currentDoc = _uiState.value.document
         val undoneDoc = historyManager.undo(currentDoc) ?: return
+        toolController.clearSelection()
         spatialIndex.rebuild(undoneDoc.elements)
         tileCacheManager.invalidateAll()
         _uiState.update {
             it.copy(
                 document = undoneDoc,
+                toolState = toolController.toolState,
                 canUndo = historyManager.canUndo,
                 canRedo = historyManager.canRedo,
                 saveState = SaveState.SAVING
@@ -356,11 +363,13 @@ class CanvasViewModel(
     fun redo() {
         val currentDoc = _uiState.value.document
         val redoneDoc = historyManager.redo(currentDoc) ?: return
+        toolController.clearSelection()
         spatialIndex.rebuild(redoneDoc.elements)
         tileCacheManager.invalidateAll()
         _uiState.update {
             it.copy(
                 document = redoneDoc,
+                toolState = toolController.toolState,
                 canUndo = historyManager.canUndo,
                 canRedo = historyManager.canRedo,
                 saveState = SaveState.SAVING
@@ -438,31 +447,39 @@ class CanvasViewModel(
     // Z3 & Z4: Tools, Colors, and Dock Controls
     // ==========================================
     fun setTool(tool: CanvasToolType) {
-        val current = toolController.toolState.activeTool
-        val toggleOptions = if (current == tool) !_uiState.value.showToolOptions else false
-
         toolController.toolState = toolController.toolState.copy(activeTool = tool)
         pointerStateMachine.activeMode = when (tool) {
             CanvasToolType.SELECT -> com.arinara.fotara.canvas.gesture.ActiveMode.SELECT
-            CanvasToolType.ERASER_STROKE, CanvasToolType.ERASER_AREA -> com.arinara.fotara.canvas.gesture.ActiveMode.ERASE
+            CanvasToolType.ERASER -> com.arinara.fotara.canvas.gesture.ActiveMode.ERASE
             else -> com.arinara.fotara.canvas.gesture.ActiveMode.DRAW
         }
 
         _uiState.update {
             it.copy(
                 toolState = toolController.toolState,
-                showToolOptions = toggleOptions
+                showToolOptions = false
             )
         }
     }
 
-    fun toggleEraserMode() {
-        val next = if (toolController.toolState.activeTool == CanvasToolType.ERASER_STROKE) {
-            CanvasToolType.ERASER_AREA
-        } else {
-            CanvasToolType.ERASER_STROKE
-        }
-        setTool(next)
+    fun showPenOptions() {
+        setTool(CanvasToolType.PEN)
+        _uiState.update { it.copy(showToolOptions = true) }
+    }
+
+    fun showHighlighterOptions() {
+        setTool(CanvasToolType.HIGHLIGHTER)
+        _uiState.update { it.copy(showToolOptions = true) }
+    }
+
+    fun showEraserOptions() {
+        setTool(CanvasToolType.ERASER)
+        _uiState.update { it.copy(showToolOptions = true) }
+    }
+
+    fun setHighlighterBlendMode(mode: com.arinara.fotara.canvas.model.StrokeBlendMode) {
+        toolController.setHighlighterBlendMode(mode)
+        _uiState.update { it.copy(toolState = toolController.toolState) }
     }
 
     fun toggleBottomDock() {
@@ -518,6 +535,14 @@ class CanvasViewModel(
     // ==========================================
     // Z5: Layers Management (Pure Commands)
     // ==========================================
+    fun addDefaultLayer() {
+        val currentDoc = _uiState.value.document
+        val defaultName = com.arinara.fotara.canvas.model.CanvasLayerNaming.generateNextDefaultLayerName(
+            currentDoc.layers.map { it.name }
+        )
+        addLayer(defaultName)
+    }
+
     fun addLayer(layerName: String) {
         val currentDoc = _uiState.value.document
         if (currentDoc.layers.size >= CanvasConfig.MAX_LAYERS) {
@@ -688,186 +713,109 @@ class CanvasViewModel(
     }
 
     fun setActiveLayer(layerId: String) {
+        toolController.activeLayerId = layerId
         _uiState.update { it.copy(activeLayerId = layerId) }
     }
 
     // ==========================================
     // Z8: Contextual Object Actions
     // ==========================================
+    fun updateSelection(selection: CanvasSelection) {
+        toolController.selection = selection
+        _uiState.update {
+            it.copy(toolState = toolController.toolState)
+        }
+    }
+
+    fun setSelectedElementIds(ids: Set<String>) {
+        val currentDoc = _uiState.value.document
+        val refs = ids.associateWith { id ->
+            SelectedElementReference.Whole(id)
+        }
+
+        val elements = refs.keys.mapNotNull { id -> currentDoc.elements.find { it.id == id } }
+        val selBounds = if (elements.isEmpty()) {
+            CanvasRect.Empty
+        } else {
+            elements.map { it.bounds }.reduce { acc, rect -> acc.union(rect) }
+        }
+        updateSelection(CanvasSelection(references = refs, bounds = selBounds))
+    }
+
     fun duplicateSelectedElements() {
         val state = _uiState.value
-        val selectedIds = state.toolState.selectedElementIds
-        if (selectedIds.isEmpty()) return
+        if (toolController.selection.isEmpty) return
 
-        val toDuplicate = state.document.elements.filter { it.id in selectedIds }
-        if (toDuplicate.isEmpty()) return
-
-        val maxZ = (state.document.elements.maxOfOrNull { it.zIndex } ?: 0) + 1
-        val duplicated = toDuplicate.mapIndexed { idx, el ->
-            when (el) {
-                is StrokeElement -> el.copy(
-                    id = UUID.randomUUID().toString(),
-                    zIndex = maxZ + idx
-                ).translated(24f, 24f)
-                is ImageElement -> el.copy(
-                    id = UUID.randomUUID().toString(),
-                    zIndex = maxZ + idx
-                ).translated(24f, 24f)
-            }
-        }
-
-        val updated = historyManager.execute(
-            AddElementsCommand(duplicated, description = "Duplicate Elements"),
-            state.document
+        val (updatedDoc, dirtyBounds) = toolController.duplicateSelection(
+            document = state.document,
+            historyManager = historyManager
         )
-
-        val newSelectedIds = duplicated.map { it.id }.toSet()
-        toolController.toolState = toolController.toolState.copy(selectedElementIds = newSelectedIds)
-
-        spatialIndex.rebuild(updated.elements)
-        tileCacheManager.invalidateAll()
-        _uiState.update {
-            it.copy(
-                document = updated,
-                toolState = toolController.toolState,
-                canUndo = historyManager.canUndo,
-                canRedo = historyManager.canRedo
-            )
+        if (dirtyBounds != null) {
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(dirtyBounds)
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    toolState = toolController.toolState,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
         }
-        triggerDebouncedAutosave()
     }
 
     fun deleteSelectedElements() {
         val state = _uiState.value
-        val selectedIds = state.toolState.selectedElementIds
-        if (selectedIds.isEmpty()) return
+        if (toolController.selection.isEmpty) return
 
-        val toDelete = state.document.elements.filter { it.id in selectedIds }
-        if (toDelete.isEmpty()) return
-
-        val updated = historyManager.execute(
-            RemoveElementsCommand(toDelete, description = "Delete Elements"),
-            state.document
+        val (updatedDoc, dirtyBounds) = toolController.deleteSelection(
+            document = state.document,
+            historyManager = historyManager
         )
-
-        toolController.toolState = toolController.toolState.copy(selectedElementIds = emptySet())
-        spatialIndex.rebuild(updated.elements)
-        tileCacheManager.invalidateAll()
-        _uiState.update {
-            it.copy(
-                document = updated,
-                toolState = toolController.toolState,
-                canUndo = historyManager.canUndo,
-                canRedo = historyManager.canRedo
-            )
+        if (dirtyBounds != null) {
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(dirtyBounds)
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    toolState = toolController.toolState,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
         }
-        triggerDebouncedAutosave()
-    }
-
-    fun bringForwardSelection() {
-        val state = _uiState.value
-        val selectedIds = state.toolState.selectedElementIds
-        if (selectedIds.isEmpty()) return
-
-        val selected = state.document.elements.filter { it.id in selectedIds }
-        val otherElements = state.document.elements.filter { it.id !in selectedIds }
-        val currentMaxZ = selected.maxOfOrNull { it.zIndex } ?: 0
-        val nextAbove = otherElements.filter { it.zIndex >= currentMaxZ }.minByOrNull { it.zIndex }
-
-        val delta = if (nextAbove != null) {
-            (nextAbove.zIndex + 1) - currentMaxZ
-        } else {
-            1
-        }
-
-        val modified = selected.map { it.withZIndex(it.zIndex + delta) }
-
-        val updated = historyManager.execute(
-            TransformElementsCommand(before = selected, after = modified, description = "Bring Forward"),
-            state.document
-        )
-        spatialIndex.rebuild(updated.elements)
-        tileCacheManager.invalidateAll()
-        _uiState.update {
-            it.copy(
-                document = updated,
-                canUndo = historyManager.canUndo,
-                canRedo = historyManager.canRedo
-            )
-        }
-        triggerDebouncedAutosave()
-    }
-
-    fun sendBackwardSelection() {
-        val state = _uiState.value
-        val selectedIds = state.toolState.selectedElementIds
-        if (selectedIds.isEmpty()) return
-
-        val selected = state.document.elements.filter { it.id in selectedIds }
-        val otherElements = state.document.elements.filter { it.id !in selectedIds }
-        val currentMinZ = selected.minOfOrNull { it.zIndex } ?: 0
-        val nextBelow = otherElements.filter { it.zIndex <= currentMinZ }.maxByOrNull { it.zIndex }
-
-        val targetZ = if (nextBelow != null) {
-            (nextBelow.zIndex - 1).coerceAtLeast(0)
-        } else {
-            (currentMinZ - 1).coerceAtLeast(0)
-        }
-        val delta = targetZ - currentMinZ
-
-        val modified = selected.map { it.withZIndex((it.zIndex + delta).coerceAtLeast(0)) }
-
-        val updated = historyManager.execute(
-            TransformElementsCommand(before = selected, after = modified, description = "Send Backward"),
-            state.document
-        )
-        spatialIndex.rebuild(updated.elements)
-        tileCacheManager.invalidateAll()
-        _uiState.update {
-            it.copy(
-                document = updated,
-                canUndo = historyManager.canUndo,
-                canRedo = historyManager.canRedo
-            )
-        }
-        triggerDebouncedAutosave()
     }
 
     fun moveSelectionToLayer(targetLayerId: String) {
         val state = _uiState.value
-        val selectedIds = state.toolState.selectedElementIds
-        if (selectedIds.isEmpty()) return
+        if (toolController.selection.isEmpty) return
 
-        val activeLayer = state.activeLayerId
-        val updated = historyManager.execute(
-            MoveElementsToLayerCommand(
-                elementIds = selectedIds,
-                fromLayerId = activeLayer,
-                toLayerId = targetLayerId
-            ),
-            state.document
+        val (updatedDoc, dirtyBounds) = toolController.moveSelectionToLayer(
+            targetLayerId = targetLayerId,
+            document = state.document,
+            historyManager = historyManager
         )
-        spatialIndex.rebuild(updated.elements)
-        tileCacheManager.invalidateAll()
-        _uiState.update {
-            it.copy(
-                document = updated,
-                canUndo = historyManager.canUndo,
-                canRedo = historyManager.canRedo
-            )
+        if (dirtyBounds != null) {
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(dirtyBounds)
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    toolState = toolController.toolState,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
         }
-        triggerDebouncedAutosave()
     }
 
     fun onElementsChanged(newDoc: CanvasDocument) {
         spatialIndex.rebuild(newDoc.elements)
         tileCacheManager.invalidateAll()
         _uiState.update { it.copy(document = newDoc) }
-    }
-
-    fun setSelectedElementIds(ids: Set<String>) {
-        toolController.toolState = toolController.toolState.copy(selectedElementIds = ids)
-        _uiState.update { it.copy(toolState = toolController.toolState) }
     }
 
     // ==========================================
@@ -881,10 +829,6 @@ class CanvasViewModel(
     ) {
         val canvasId = _uiState.value.canvasId ?: return
         val currentDoc = _uiState.value.document
-        if (currentDoc.layers.size >= CanvasConfig.MAX_LAYERS) {
-            _uiState.update { it.copy(userMessage = "Maximum layer limit reached (${CanvasConfig.MAX_LAYERS} layers).") }
-            return
-        }
         if (currentDoc.elements.size >= CanvasConfig.MAX_TOTAL_ELEMENTS) {
             _uiState.update { it.copy(userMessage = "Maximum element limit reached (${CanvasConfig.MAX_TOTAL_ELEMENTS} elements).") }
             return
@@ -899,7 +843,7 @@ class CanvasViewModel(
                 return@launch
             }
 
-            insertAssetAsNewLayer(assetInfo, viewport, screenWidth, screenHeight, "Image")
+            insertAssetOnActiveLayer(assetInfo, viewport, screenWidth, screenHeight)
         }
     }
 
@@ -929,15 +873,6 @@ class CanvasViewModel(
     ) {
         val canvasId = _uiState.value.canvasId ?: return
         val currentDoc = _uiState.value.document
-        if (currentDoc.layers.size >= CanvasConfig.MAX_LAYERS) {
-            _uiState.update {
-                it.copy(
-                    userMessage = "Maximum layer limit reached (${CanvasConfig.MAX_LAYERS} layers).",
-                    showExistingNotesDialog = false
-                )
-            }
-            return
-        }
         if (currentDoc.elements.size >= CanvasConfig.MAX_TOTAL_ELEMENTS) {
             _uiState.update {
                 it.copy(
@@ -966,26 +901,20 @@ class CanvasViewModel(
                 return@launch
             }
 
-            val layerLabel = photo.title.ifBlank { "Note Photo" }
-            insertAssetAsNewLayer(assetInfo, viewport, screenWidth, screenHeight, layerLabel)
+            insertAssetOnActiveLayer(assetInfo, viewport, screenWidth, screenHeight)
         }
     }
 
-    private fun insertAssetAsNewLayer(
+    private fun insertAssetOnActiveLayer(
         assetInfo: CanvasAssetInfo,
         viewport: ViewportState,
         screenWidth: Float,
-        screenHeight: Float,
-        layerPrefix: String
+        screenHeight: Float
     ) {
         val currentDoc = _uiState.value.document
-        val nextOrder = (currentDoc.layers.maxOfOrNull { it.order } ?: 0) + 1
-        val newLayerId = "layer_${UUID.randomUUID()}"
-        val newLayer = CanvasLayer(
-            id = newLayerId,
-            name = "$layerPrefix ${nextOrder + 1}",
-            order = nextOrder
-        )
+        val targetLayerId = _uiState.value.activeLayerId.ifEmpty {
+            currentDoc.getPrimaryLayerId()
+        }
 
         // Center image in current visible viewport
         val (centerX, centerY) = ViewportTransform.screenToWorld(
@@ -994,12 +923,35 @@ class CanvasViewModel(
             viewport
         )
 
-        val displayWidth = minOf(assetInfo.width.toFloat(), 600f)
-        val displayHeight = (assetInfo.height.toFloat() / assetInfo.width.toFloat()) * displayWidth
+        val zoom = if (viewport.scale > 0f) viewport.scale else 1f
+        val visibleWidthWorld = screenWidth / zoom
+        val visibleHeightWorld = screenHeight / zoom
+
+        // Longest side is about 60% of visible area (never larger than canvas extent)
+        val targetLongestSide = (0.6f * minOf(visibleWidthWorld, visibleHeightWorld))
+            .coerceIn(48f, CanvasConfig.CANVAS_EXTENT_WIDTH)
+
+        val assetW = assetInfo.width.toFloat()
+        val assetH = assetInfo.height.toFloat()
+
+        val displayWidth: Float
+        val displayHeight: Float
+        if (assetW >= assetH && assetW > 0f) {
+            displayWidth = targetLongestSide
+            displayHeight = targetLongestSide * (assetH / assetW)
+        } else if (assetH > 0f) {
+            displayHeight = targetLongestSide
+            displayWidth = targetLongestSide * (assetW / assetH)
+        } else {
+            displayWidth = targetLongestSide
+            displayHeight = targetLongestSide
+        }
+
+        val nextZ = CanvasToolController.nextZIndexForLayer(currentDoc, targetLayerId)
 
         val imageElement = ImageElement(
             id = UUID.randomUUID().toString(),
-            layerId = newLayerId,
+            layerId = targetLayerId,
             assetId = assetInfo.assetId,
             x = centerX - displayWidth / 2f,
             y = centerY - displayHeight / 2f,
@@ -1011,26 +963,32 @@ class CanvasViewModel(
                 right = centerX + displayWidth / 2f,
                 bottom = centerY + displayHeight / 2f
             ),
-            zIndex = (currentDoc.elements.maxOfOrNull { it.zIndex } ?: 0) + 1
+            zIndex = nextZ
         )
 
         val updated = historyManager.execute(
-            AddLayerAndElementsCommand(newLayer, listOf(imageElement), description = "Add Image Layer"),
+            AddElementsCommand(listOf(imageElement), description = "Insert Image"),
             currentDoc
         )
 
         spatialIndex.rebuild(updated.elements)
         tileCacheManager.invalidateAll()
 
+        val imgRef = SelectedElementReference.Whole(imageElement.id)
+        val sel = CanvasSelection(
+            references = mapOf(imageElement.id to imgRef),
+            bounds = imageElement.bounds,
+            rotationDegrees = imageElement.rotationDegrees
+        )
+        toolController.selection = sel
         toolController.toolState = toolController.toolState.copy(
-            activeTool = CanvasToolType.SELECT,
-            selectedElementIds = setOf(imageElement.id)
+            activeTool = CanvasToolType.SELECT
         )
 
         _uiState.update {
             it.copy(
                 document = updated,
-                activeLayerId = newLayerId,
+                activeLayerId = targetLayerId,
                 toolState = toolController.toolState,
                 canUndo = historyManager.canUndo,
                 canRedo = historyManager.canRedo

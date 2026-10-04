@@ -123,4 +123,20 @@ class PdfViewportZoomStateTest {
         assertEquals(0.0f, state.panY, 0.001f)
         assertFalse(state.isZoomed)
     }
+
+    @Test
+    fun testExitReadingModeReset() {
+        val state = PdfViewportZoomState()
+        state.updateViewport(1000f, 2000f)
+        state.onPinch(zoomChange = 2.5f)
+        state.onPan(dx = 150f, dy = 200f)
+        assertTrue(state.isZoomed)
+
+        // Reset resets zoom scale and pan back to default 1.0x
+        state.reset()
+        assertEquals(1.0f, state.scale, 0.001f)
+        assertEquals(0.0f, state.panX, 0.001f)
+        assertEquals(0.0f, state.panY, 0.001f)
+        assertFalse(state.isZoomed)
+    }
 }
