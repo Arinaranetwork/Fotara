@@ -94,9 +94,9 @@ fun UpdateScreen(
     val currentVersion = remember(context) {
         try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            pInfo.versionName ?: "1.5.4 Beta"
+            pInfo.versionName ?: "1.5.10 Beta"
         } catch (_: Exception) {
-            "1.5.4 Beta"
+            "1.5.10 Beta"
         }
     }
 

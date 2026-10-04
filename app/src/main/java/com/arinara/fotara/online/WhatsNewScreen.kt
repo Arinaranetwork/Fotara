@@ -140,15 +140,17 @@ private fun parseReleaseNotes(rawText: String): List<ParsedSection> {
     if (sections.isEmpty()) {
         sections.add(
             ParsedSection(
-                title = "What's New in Fotara",
+                title = "What's New in Fotara 1.5.10",
                 type = NoteSectionType.WHATS_NEW,
                 items = listOf(
-                    "High-contrast Amber LinkIt indicators across folders and detail views",
-                    "Dedicated multi-select bottom contextual action dock",
-                    "Offline-first persistent feedback queue with automatic sync",
-                    "Integrated folder and subfolder suggestions in the camera triage modal",
-                    "Real 90-degree image rotation in capture review",
-                    "Dynamic package versioning and in-app updates with download tracking"
+                    "Bulletproof profile picture and banner PNG cropping with lossless transparency",
+                    "Universal URI stream safety supporting file:// and content:// schemes",
+                    "Clean profile sheet navigation with immediate return on selection",
+                    "Expanded in-app update notification modal with native Rich Markdown rendering",
+                    "LinkIt cluster glow converging on shared centers for 3-4 card groups",
+                    "Aspect-locked fullscreen crop editor with pinch-to-zoom and corner drag handles",
+                    "Direct GPU hardware-accelerated drawing canvas with 120 FPS fidelity",
+                    "Universal study note scheduling with notification and alarm alerts"
                 )
             )
         )
@@ -172,16 +174,16 @@ fun WhatsNewScreen(
         }
     }
 
-    val versionText = release?.version ?: "Fotara v1.5.4 Beta"
+    val versionText = release?.version ?: "Fotara v1.5.10 Beta"
     val defaultNotes = """
         ## What's New
-        - Direct Hardware-Accelerated Canvas Rendering: Switched canvas rendering to direct hardware-accelerated vector and image drawing, completely eliminating missing tile cutouts and dark grid boxes during pinch-to-zoom and stroke drawing.
-        - Black Box & Dot Stippling Fix: Fixed solid black rectangular boxes appearing when drawing dots or rapid strokes by removing RGB_565 degradation and rendering single-point strokes with solid fill.
-        - Multi-Zoom Vector Fidelity: Vector strokes and imported whiteboard/scan images now maintain crisp sub-pixel precision across extreme zoom ranges (up to 500%) with zero tile seams or blurriness.
-        - Section-Oriented Settings Hierarchy: Reorganized settings into 6 main section rounded cards on root (General, Appearance, OCR & Recognition, Notifications & Deadlines, Storage & Data Management, About & Legal) with clean, un-carded detail lists inside each opened category.
-        - Full-Height Home Viewport: Restored natural vertical application area on Home screen without duplicate WindowInsets or excessive spacers, with the folder grid scrolling cleanly above the bottom floating dock and navigation bar.
-        - Responsive Photo Viewer Header: Reorganized inspector toolbar into a clean title and action row paired with a full-width horizontal status row, ensuring helper text and schedule badges never wrap vertically on narrow phone widths.
-        - Search Result Auto-Scroll & Exposure Highlight: Tapping any search result (Photos, Groups, PDF documents, Word DOCX, Text Notes, Canvas) navigates directly to the target folder and subfolder, auto-scrolls until the item is visible, and applies a subtle 2-second brightness/exposure flash before fading out cleanly.
+        - Bulletproof Profile Picture & Banner PNG Crop: Resolved failures when cropping and saving PNG profile pictures and banners by migrating crop extraction directly into memory from the loaded preview bitmap using normalized coordinates. Eliminates native Skia region decoder failures, closed input streams, and boundary calculation errors across all Android versions.
+        - Full Transparency Preservation: Full 32-bit ARGB_8888 alpha transparency is preserved losslessly for avatars (512x512) and banners (up to 1080px wide).
+        - Universal URI Stream Safety: Safely handles both file:// (via direct filesystem stream) and content:// (via ContentResolver) schemes across all Android versions without SecurityException or stream reset issues.
+        - Clean Profile Sheet Navigation: Automatically dismisses the profile edit bottom sheet upon selecting an action, ensuring the user immediately returns to the updated profile screen.
+        - Expanded In-App Update Modal: Upgraded update popup modal with an expanded vertical viewport (up to 440dp height) and native Rich Markdown rendering for headings, bold text, bullet lists, and release note formatting.
+        - LinkIt Converging Cluster Glow: For linked groups of 3 or 4 cards arranged in a 2x2 grid cluster (including L-shaped triads), corner glows now converge toward the shared central intersection point with cardinal side glows suppressed within qualifying blocks.
+        - Dedicated Aspect-Locked Crop Editor: Fullscreen interactive crop editor supporting 1:1 circular guide for profile pictures and exact layout-matched aspect ratio for banners with four accessible corner handles, pinch zoom, and pan clamping.
     """.trimIndent()
 
     val rawNotes = release?.releaseNotes?.ifBlank { defaultNotes } ?: defaultNotes

@@ -38,6 +38,9 @@ Phase 25 - ProfilePngSupportAndUpdateModalPolish [Completed]
 - [x] Task 2: Picker URI staging to local cache file for robust multi-read and seekable BitmapRegionDecoder access - Phase 25
 - [x] Task 3: Overhaul NewUpdateDialog with expanded height and Rich Markdown rendering for headings and formatted text - Phase 25
 - [x] Task 4: In-memory normalized direct crop in ProfileCropScreen and safe openStream across file/content URIs (Fotara 1.5.10 Beta) - Phase 25
+- [x] Task 5: Update WhatsNewScreen and version fallbacks for 1.5.10 Beta - Phase 25
+
+
 
 
 - [x] Task 1: LinkIt cluster glow for groups of 3 or 4 converging on center point (pure anchor function & renderer) - Phase 24
