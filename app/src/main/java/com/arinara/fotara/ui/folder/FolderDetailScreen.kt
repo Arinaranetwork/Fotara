@@ -26,9 +26,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import coil.request.ImageRequest
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -326,7 +332,7 @@ fun FolderDetailScreen(
     val gridState = rememberLazyGridState()
     val highlightAlpha = remember { Animatable(0f) }
 
-    LaunchedEffect(uiState.highlightedPhotoId, uiState.photos, uiState.gridItems) {
+    LaunchedEffect(uiState.highlightedPhotoId) {
         val targetId = uiState.highlightedPhotoId ?: return@LaunchedEffect
         if (uiState.photos.isEmpty()) return@LaunchedEffect
 
@@ -379,7 +385,7 @@ fun FolderDetailScreen(
         }
     }
 
-    LaunchedEffect(uiState.highlightedGroupId, uiState.gridItems) {
+    LaunchedEffect(uiState.highlightedGroupId) {
         val targetGroupId = uiState.highlightedGroupId ?: return@LaunchedEffect
         if (uiState.gridItems.isEmpty()) return@LaunchedEffect
 
@@ -401,7 +407,7 @@ fun FolderDetailScreen(
         }
     }
 
-    LaunchedEffect(uiState.highlightedDocumentId, uiState.gridItems) {
+    LaunchedEffect(uiState.highlightedDocumentId) {
         val targetId = uiState.highlightedDocumentId ?: return@LaunchedEffect
         if (uiState.gridItems.isEmpty()) return@LaunchedEffect
 
@@ -427,7 +433,7 @@ fun FolderDetailScreen(
         }
     }
 
-    LaunchedEffect(uiState.highlightedTextNoteId, uiState.gridItems) {
+    LaunchedEffect(uiState.highlightedTextNoteId) {
         val targetId = uiState.highlightedTextNoteId ?: return@LaunchedEffect
         if (uiState.gridItems.isEmpty()) return@LaunchedEffect
 
@@ -449,7 +455,7 @@ fun FolderDetailScreen(
         }
     }
 
-    LaunchedEffect(uiState.highlightedCanvasId, uiState.gridItems) {
+    LaunchedEffect(uiState.highlightedCanvasId) {
         val targetId = uiState.highlightedCanvasId ?: return@LaunchedEffect
         if (uiState.gridItems.isEmpty()) return@LaunchedEffect
 
@@ -558,7 +564,7 @@ fun FolderDetailScreen(
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = HomeNearBlack)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
                 )
             } else if (uiState.isBatchSelectMode) {
                 // Contextual Action Bar for Multi-Select (Rename, Group [2+ photos], Move, Color, Delete)
@@ -597,7 +603,7 @@ fun FolderDetailScreen(
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = HomeNearBlack)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
                 )
             } else {
                 TopAppBar(
@@ -780,235 +786,15 @@ fun FolderDetailScreen(
                 )
             }
         },
-        bottomBar = {
-            if (uiState.isBatchSelectMode && uiState.totalSelectionCount > 0) {
-                Surface(
-                    color = MidnightSurface,
-                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    LazyRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // 1. Link items (2..4 selected)
-                        if (uiState.totalSelectionCount in 2..4) {
-                            item {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .clickable { viewModel.createLinkGroup() }
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Link,
-                                        contentDescription = "Link Items",
-                                        tint = Color(0xFFF77F00),
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Text(
-                                        text = "Link",
-                                        color = Color(0xFFF77F00),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        // 2. Group notes (2+ photos, no groups)
-                        if (uiState.selectedPhotoIds.size >= 2 && uiState.selectedGroupIds.isEmpty()) {
-                            item {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .clickable { showCreateGroupDialog = true }
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Layers,
-                                        contentDescription = "Group",
-                                        tint = FolderTabCream,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Text("Group", color = FolderTabCream, fontSize = 11.sp)
-                                }
-                            }
-                        }
-
-                        // 3. Merge groups (2+ groups, no standalone photos)
-                        if (uiState.selectedGroupIds.size >= 2 && uiState.selectedPhotoIds.isEmpty()) {
-                            item {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .clickable { showMergeGroupsDialog = true }
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.MergeType,
-                                        contentDescription = "Merge",
-                                        tint = FolderTabCream,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Text("Merge", color = FolderTabCream, fontSize = 11.sp)
-                                }
-                            }
-                        }
-
-                        // 4. Add to group (1+ photos, no groups)
-                        if (uiState.selectedPhotoIds.isNotEmpty() && uiState.selectedGroupIds.isEmpty()) {
-                            item {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .clickable { showAddToGroupDialog = true }
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.GroupAdd,
-                                        contentDescription = "Add to Group",
-                                        tint = FolderTabCream,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Text("Add to Grp", color = FolderTabCream, fontSize = 11.sp)
-                                }
-                            }
-                        }
-
-                        // 5. Rename (1 item or batch)
-                        item {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable {
-                                        if (uiState.totalSelectionCount == 1 && uiState.selectedPhotoIds.size == 1) {
-                                            val singlePhoto = uiState.photos.firstOrNull { it.id == uiState.selectedPhotoIds.first() }
-                                            singlePhoto?.let { photoToRename = it }
-                                        } else if (uiState.totalSelectionCount == 1 && uiState.selectedGroupIds.size == 1) {
-                                            val singleGroup = uiState.groups.firstOrNull { it.id == uiState.selectedGroupIds.first() }
-                                            singleGroup?.let { groupToRename = it }
-                                        } else if (uiState.totalSelectionCount == 1 && uiState.selectedDocumentIds.size == 1) {
-                                            val singleDoc = uiState.documents.firstOrNull { it.id == uiState.selectedDocumentIds.first() }
-                                            singleDoc?.let { documentToRename = it }
-                                        } else if (uiState.totalSelectionCount == 1 && uiState.selectedTextNoteIds.size == 1) {
-                                            val singleNote = uiState.textNotes.firstOrNull { it.id == uiState.selectedTextNoteIds.first() }
-                                            singleNote?.let { textNoteToRename = it }
-                                        } else {
-                                            showBatchRenameDialog = true
-                                        }
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Rename",
-                                    tint = FolderTabCream,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Text("Rename", color = FolderTabCream, fontSize = 11.sp)
-                            }
-                        }
-
-                        // 6. Share As
-                        item {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable {
-                                        val selected = uiState.gridItems.filter { item ->
-                                            when (item) {
-                                                is FolderGridItem.StandalonePhoto -> item.photo.id in uiState.selectedPhotoIds
-                                                is FolderGridItem.Group -> item.group.id in uiState.selectedGroupIds
-                                                is FolderGridItem.Document -> item.documentNote.id in uiState.selectedDocumentIds
-                                                is FolderGridItem.TextNoteItem -> item.textNote.id in uiState.selectedTextNoteIds
-                                                is FolderGridItem.CanvasNoteItem -> item.canvasNote.id in uiState.selectedCanvasNoteIds
-                                            }
-                                        }
-                                        shareTargetItems = selected
-                                        showUnifiedShareDialog = true
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Share,
-                                    contentDescription = "Share",
-                                    tint = FolderTabCream,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Text("Share As", color = FolderTabCream, fontSize = 11.sp)
-                            }
-                        }
-
-                        // 7. Move
-                        item {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable { showMovePhotosDialog = true }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                                    contentDescription = "Move",
-                                    tint = FolderTabCream,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Text("Move", color = FolderTabCream, fontSize = 11.sp)
-                            }
-                        }
-
-                        // 8. Color
-                        item {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable { showBatchColorDialog = true }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ColorLens,
-                                    contentDescription = "Color",
-                                    tint = FolderTabCream,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Text("Color", color = FolderTabCream, fontSize = 11.sp)
-                            }
-                        }
-
-                        // 9. Delete
-                        item {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable { showPhotoBulkDeleteConfirm = true }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete",
-                                    tint = TagCrimson,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Text("Delete", color = TagCrimson, fontSize = 11.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        },
+        bottomBar = {},
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
+            ) {
             // Horizontal Subfolder Navigation Tabs
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -1050,7 +836,7 @@ fun FolderDetailScreen(
                 // Subfolder tabs with unified single long-press context menu & multi-select styling
                 items(uiState.subfolders, key = { it.id }) { sub ->
                     val isFilterSelected = uiState.selectedSubfolderId == sub.id
-                    val isMultiSelected = uiState.selectedSubfolderIds.contains(sub.id)
+                    val isMultiSelected = viewModel.selectedSubfolderMap[sub.id] == true
                     var showSubMenu by remember { mutableStateOf(false) }
 
                     Box {
@@ -1268,146 +1054,196 @@ fun FolderDetailScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     LazyVerticalGrid(
-                    columns = GridCells.Fixed(photoColumns),
-                    state = gridState,
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(uiState.gridItems, key = { it.key }) { gridItem ->
-                        when (gridItem) {
-                            is FolderGridItem.StandalonePhoto -> {
-                                val photo = gridItem.photo
-                                val isTarget = uiState.highlightedPhotoId == photo.id
-                                DetailPhotoCard(
-                                    photo = photo,
-                                    isBatchMode = uiState.isBatchSelectMode,
-                                    isSelected = uiState.selectedPhotoIds.contains(photo.id),
-                                    isLinked = gridItem.isLinked,
-                                    isHighlighted = isTarget && highlightAlpha.value > 0f,
-                                    highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
-                                    glowAnchors = gridGlowAnchors[photo.id] ?: emptySet(),
-                                    onCardClick = {
-                                        if (uiState.isBatchSelectMode) {
-                                            viewModel.togglePhotoSelection(photo.id)
-                                        } else {
-                                            inspectingPhoto = photo
-                                        }
-                                    },
-                                    onCardLongClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        quickActionPhoto = photo
-                                    }
-                                )
-                            }
-                            is FolderGridItem.Group -> {
-                                val isTarget = uiState.highlightedGroupId == gridItem.group.id
-                                DetailGroupCard(
-                                    groupItem = gridItem,
-                                    isBatchMode = uiState.isBatchSelectMode,
-                                    isSelected = uiState.selectedGroupIds.contains(gridItem.group.id),
-                                    isHighlighted = isTarget && highlightAlpha.value > 0f,
-                                    highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
-                                    glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
-                                    onCardClick = {
-                                        if (uiState.isBatchSelectMode) {
-                                            viewModel.toggleGroupSelection(gridItem.group.id)
-                                        } else {
-                                            if (onOpenGroup != null) {
-                                                onOpenGroup(gridItem.group.folderId, gridItem.group.id, null)
+                        columns = GridCells.Fixed(photoColumns),
+                        state = gridState,
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(items = uiState.gridItems, key = { it.key }, contentType = { it::class.java.simpleName }) { gridItem ->
+                            when (gridItem) {
+                                is FolderGridItem.StandalonePhoto -> {
+                                    val photo = gridItem.photo
+                                    val isTarget = uiState.highlightedPhotoId == photo.id
+                                    DetailPhotoCard(
+                                        photo = photo,
+                                        isBatchMode = uiState.isBatchSelectMode,
+                                        isSelected = viewModel.selectedPhotoMap[photo.id] == true,
+                                        isLinked = gridItem.isLinked,
+                                        isHighlighted = isTarget && highlightAlpha.value > 0f,
+                                        highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                        glowAnchors = gridGlowAnchors[photo.id] ?: emptySet(),
+                                        onCardClick = {
+                                            if (uiState.isBatchSelectMode) {
+                                                viewModel.togglePhotoSelection(photo.id)
                                             } else {
-                                                inspectingGroup = gridItem
+                                                inspectingPhoto = photo
                                             }
+                                        },
+                                        onCardLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            quickActionPhoto = photo
                                         }
-                                    },
-                                    onCardLongClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        groupActionTarget = gridItem
-                                    }
-                                )
-                            }
-                            is FolderGridItem.Document -> {
-                                val doc = gridItem.documentNote
-                                val isTarget = uiState.highlightedDocumentId == doc.id
-                                DetailDocumentCard(
-                                    documentItem = gridItem,
-                                    isBatchMode = uiState.isBatchSelectMode,
-                                    isSelected = uiState.selectedDocumentIds.contains(doc.id),
-                                    isHighlighted = isTarget && highlightAlpha.value > 0f,
-                                    highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
-                                    glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
-                                    onCardClick = {
-                                        if (uiState.isBatchSelectMode) {
-                                            viewModel.toggleDocumentSelection(doc.id)
-                                        } else {
-                                            if (doc.docType == DocumentType.PDF) {
-                                                inspectingDocument = doc
+                                    )
+                                }
+                                is FolderGridItem.Group -> {
+                                    val isTarget = uiState.highlightedGroupId == gridItem.group.id
+                                    DetailGroupCard(
+                                        groupItem = gridItem,
+                                        isBatchMode = uiState.isBatchSelectMode,
+                                        isSelected = viewModel.selectedGroupMap[gridItem.group.id] == true,
+                                        isHighlighted = isTarget && highlightAlpha.value > 0f,
+                                        highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                        glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
+                                        onCardClick = {
+                                            if (uiState.isBatchSelectMode) {
+                                                viewModel.toggleGroupSelection(gridItem.group.id)
                                             } else {
-                                                if (onOpenDocx != null) {
-                                                    onOpenDocx(doc.id)
+                                                if (onOpenGroup != null) {
+                                                    onOpenGroup(gridItem.group.folderId, gridItem.group.id, null)
                                                 } else {
-                                                    inspectingDocx = doc
+                                                    inspectingGroup = gridItem
                                                 }
                                             }
+                                        },
+                                        onCardLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            groupActionTarget = gridItem
                                         }
-                                    },
-                                    onCardLongClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        documentActionTarget = gridItem
-                                    }
-                                )
-                            }
-                            is FolderGridItem.TextNoteItem -> {
-                                val textNote = gridItem.textNote
-                                val isTarget = uiState.highlightedTextNoteId == textNote.id
-                                DetailTextNoteCard(
-                                    noteItem = gridItem,
-                                    isBatchMode = uiState.isBatchSelectMode,
-                                    isSelected = uiState.selectedTextNoteIds.contains(textNote.id),
-                                    isHighlighted = isTarget && highlightAlpha.value > 0f,
-                                    highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
-                                    glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
-                                    onCardClick = {
-                                        if (uiState.isBatchSelectMode) {
-                                            viewModel.toggleTextNoteSelection(textNote.id)
-                                        } else {
-                                            onOpenTextNote?.invoke(textNote.id, textNote.folderId, textNote.subfolderId)
+                                    )
+                                }
+                                is FolderGridItem.Document -> {
+                                    val doc = gridItem.documentNote
+                                    val isTarget = uiState.highlightedDocumentId == doc.id
+                                    DetailDocumentCard(
+                                        documentItem = gridItem,
+                                        isBatchMode = uiState.isBatchSelectMode,
+                                        isSelected = viewModel.selectedDocumentMap[doc.id] == true,
+                                        isHighlighted = isTarget && highlightAlpha.value > 0f,
+                                        highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                        glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
+                                        onCardClick = {
+                                            if (uiState.isBatchSelectMode) {
+                                                viewModel.toggleDocumentSelection(doc.id)
+                                            } else {
+                                                if (doc.docType == DocumentType.PDF) {
+                                                    inspectingDocument = doc
+                                                } else {
+                                                    if (onOpenDocx != null) {
+                                                        onOpenDocx(doc.id)
+                                                    } else {
+                                                        inspectingDocx = doc
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        onCardLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            documentActionTarget = gridItem
                                         }
-                                    },
-                                    onCardLongClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        textNoteActionTarget = gridItem
-                                    }
-                                )
-                            }
-                            is FolderGridItem.CanvasNoteItem -> {
-                                val canvasNote = gridItem.canvasNote
-                                val isTarget = uiState.highlightedCanvasId == canvasNote.id
-                                DetailCanvasCard(
-                                    canvasItem = gridItem,
-                                    isBatchMode = uiState.isBatchSelectMode,
-                                    isSelected = uiState.selectedCanvasNoteIds.contains(canvasNote.id),
-                                    isHighlighted = isTarget && highlightAlpha.value > 0f,
-                                    highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
-                                    glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
-                                    onCardClick = {
-                                        if (uiState.isBatchSelectMode) {
-                                            viewModel.toggleCanvasNoteSelection(canvasNote.id)
-                                        } else {
-                                            onOpenCanvasNote?.invoke(canvasNote.id, canvasNote.folderId, canvasNote.subfolderId)
+                                    )
+                                }
+                                is FolderGridItem.TextNoteItem -> {
+                                    val textNote = gridItem.textNote
+                                    val isTarget = uiState.highlightedTextNoteId == textNote.id
+                                    DetailTextNoteCard(
+                                        noteItem = gridItem,
+                                        isBatchMode = uiState.isBatchSelectMode,
+                                        isSelected = viewModel.selectedTextNoteMap[textNote.id] == true,
+                                        isHighlighted = isTarget && highlightAlpha.value > 0f,
+                                        highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                        glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
+                                        onCardClick = {
+                                            if (uiState.isBatchSelectMode) {
+                                                viewModel.toggleTextNoteSelection(textNote.id)
+                                            } else {
+                                                onOpenTextNote?.invoke(textNote.id, textNote.folderId, textNote.subfolderId)
+                                            }
+                                        },
+                                        onCardLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            textNoteActionTarget = gridItem
                                         }
-                                    },
-                                    onCardLongClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        canvasNoteActionTarget = gridItem
-                                    }
-                                )
+                                    )
+                                }
+                                is FolderGridItem.CanvasNoteItem -> {
+                                    val canvasNote = gridItem.canvasNote
+                                    val isTarget = uiState.highlightedCanvasId == canvasNote.id
+                                    DetailCanvasCard(
+                                        canvasItem = gridItem,
+                                        isBatchMode = uiState.isBatchSelectMode,
+                                        isSelected = viewModel.selectedCanvasNoteMap[canvasNote.id] == true,
+                                        isHighlighted = isTarget && highlightAlpha.value > 0f,
+                                        highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
+                                        glowAnchors = gridGlowAnchors[gridItem.itemId] ?: emptySet(),
+                                        onCardClick = {
+                                            if (uiState.isBatchSelectMode) {
+                                                viewModel.toggleCanvasNoteSelection(canvasNote.id)
+                                            } else {
+                                                onOpenCanvasNote?.invoke(canvasNote.id, canvasNote.folderId, canvasNote.subfolderId)
+                                            }
+                                        },
+                                        onCardLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            canvasNoteActionTarget = gridItem
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+
+        // Batch Selection Action Dock Overlay
+        AnimatedVisibility(
+            visible = uiState.isBatchSelectMode && uiState.totalSelectionCount > 0,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            BatchSelectActionDock(
+                uiState = uiState,
+                onLinkClick = { viewModel.createLinkGroup() },
+                onCreateGroupClick = { showCreateGroupDialog = true },
+                onMergeGroupsClick = { showMergeGroupsDialog = true },
+                onAddToGroupClick = { showAddToGroupDialog = true },
+                onRenameClick = {
+                    if (uiState.totalSelectionCount == 1 && uiState.selectedPhotoIds.size == 1) {
+                        val singlePhoto = uiState.photos.firstOrNull { it.id == uiState.selectedPhotoIds.first() }
+                        singlePhoto?.let { photoToRename = it }
+                    } else if (uiState.totalSelectionCount == 1 && uiState.selectedGroupIds.size == 1) {
+                        val singleGroup = uiState.groups.firstOrNull { it.id == uiState.selectedGroupIds.first() }
+                        singleGroup?.let { groupToRename = it }
+                    } else if (uiState.totalSelectionCount == 1 && uiState.selectedDocumentIds.size == 1) {
+                        val singleDoc = uiState.documents.firstOrNull { it.id == uiState.selectedDocumentIds.first() }
+                        singleDoc?.let { documentToRename = it }
+                    } else if (uiState.totalSelectionCount == 1 && uiState.selectedTextNoteIds.size == 1) {
+                        val singleNote = uiState.textNotes.firstOrNull { it.id == uiState.selectedTextNoteIds.first() }
+                        singleNote?.let { textNoteToRename = it }
+                    } else {
+                        showBatchRenameDialog = true
+                    }
+                },
+                onShareClick = {
+                    val selected = uiState.gridItems.filter { item ->
+                        when (item) {
+                            is FolderGridItem.StandalonePhoto -> item.photo.id in uiState.selectedPhotoIds
+                            is FolderGridItem.Group -> item.group.id in uiState.selectedGroupIds
+                            is FolderGridItem.Document -> item.documentNote.id in uiState.selectedDocumentIds
+                            is FolderGridItem.TextNoteItem -> item.textNote.id in uiState.selectedTextNoteIds
+                            is FolderGridItem.CanvasNoteItem -> item.canvasNote.id in uiState.selectedCanvasNoteIds
+                        }
+                    }
+                    shareTargetItems = selected
+                    showUnifiedShareDialog = true
+                },
+                onMoveClick = { showMovePhotosDialog = true },
+                onColorClick = { showBatchColorDialog = true },
+                onDeleteClick = { showPhotoBulkDeleteConfirm = true }
+            )
         }
     }
 }
@@ -3691,8 +3527,17 @@ private fun DetailDocumentCard(
                 ) {
                     val coverImagePath = firstPage?.imageUri
                     if (!coverImagePath.isNullOrBlank()) {
+                        val context = LocalContext.current
+                        val imageRequest = remember(coverImagePath) {
+                            ImageRequest.Builder(context)
+                                .data(File(coverImagePath))
+                                .crossfade(false)
+                                .memoryCacheKey(coverImagePath)
+                                .diskCacheKey(coverImagePath)
+                                .build()
+                        }
                         AsyncImage(
-                            model = File(coverImagePath),
+                            model = imageRequest,
                             contentDescription = doc.name,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -3919,12 +3764,22 @@ internal fun DetailPhotoCard(
                 ) {
                     val imageModel = photo.thumbnailUri ?: photo.fileUri
                     if (imageModel.isNotBlank()) {
-                        AsyncImage(
-                            model = if (imageModel.startsWith("content://") || imageModel.startsWith("file://")) {
+                        val context = LocalContext.current
+                        val imageRequest = remember(imageModel) {
+                            val data = if (imageModel.startsWith("content://") || imageModel.startsWith("file://")) {
                                 imageModel
                             } else {
                                 File(imageModel)
-                            },
+                            }
+                            ImageRequest.Builder(context)
+                                .data(data)
+                                .crossfade(false)
+                                .memoryCacheKey(imageModel)
+                                .diskCacheKey(imageModel)
+                                .build()
+                        }
+                        AsyncImage(
+                            model = imageRequest,
                             contentDescription = photo.caption ?: "Photo note",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -4080,12 +3935,22 @@ private fun DetailGroupCard(
                 ) {
                     val imageModel = coverPhoto?.thumbnailUri ?: coverPhoto?.fileUri
                     if (!imageModel.isNullOrBlank()) {
-                        AsyncImage(
-                            model = if (imageModel.startsWith("content://") || imageModel.startsWith("file://")) {
+                        val context = LocalContext.current
+                        val imageRequest = remember(imageModel) {
+                            val data = if (imageModel.startsWith("content://") || imageModel.startsWith("file://")) {
                                 imageModel
                             } else {
                                 File(imageModel)
-                            },
+                            }
+                            ImageRequest.Builder(context)
+                                .data(data)
+                                .crossfade(false)
+                                .memoryCacheKey(imageModel)
+                                .diskCacheKey(imageModel)
+                                .build()
+                        }
+                        AsyncImage(
+                            model = imageRequest,
                             contentDescription = group.name,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -4697,3 +4562,210 @@ private fun DestinationPickerDialog(
         }
     )
 }
+
+@Composable
+private fun BatchSelectActionDock(
+    uiState: FolderDetailUiState,
+    onLinkClick: () -> Unit,
+    onCreateGroupClick: () -> Unit,
+    onMergeGroupsClick: () -> Unit,
+    onAddToGroupClick: () -> Unit,
+    onRenameClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onMoveClick: () -> Unit,
+    onColorClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = MidnightSurface,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 1. Link items (2..4 selected)
+            if (uiState.totalSelectionCount in 2..4) {
+                item {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable { onLinkClick() }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Link,
+                            contentDescription = "Link Items",
+                            tint = Color(0xFFF77F00),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "Link",
+                            color = Color(0xFFF77F00),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // 2. Group notes (2+ photos, no groups)
+            if (uiState.selectedPhotoIds.size >= 2 && uiState.selectedGroupIds.isEmpty()) {
+                item {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable { onCreateGroupClick() }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Layers,
+                            contentDescription = "Group",
+                            tint = FolderTabCream,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text("Group", color = FolderTabCream, fontSize = 11.sp)
+                    }
+                }
+            }
+
+            // 3. Merge groups (2+ groups, no standalone photos)
+            if (uiState.selectedGroupIds.size >= 2 && uiState.selectedPhotoIds.isEmpty()) {
+                item {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable { onMergeGroupsClick() }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.MergeType,
+                            contentDescription = "Merge",
+                            tint = FolderTabCream,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text("Merge", color = FolderTabCream, fontSize = 11.sp)
+                    }
+                }
+            }
+
+            // 4. Add to group (1+ photos, no groups)
+            if (uiState.selectedPhotoIds.isNotEmpty() && uiState.selectedGroupIds.isEmpty()) {
+                item {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable { onAddToGroupClick() }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.GroupAdd,
+                            contentDescription = "Add to Group",
+                            tint = FolderTabCream,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text("Add to Grp", color = FolderTabCream, fontSize = 11.sp)
+                    }
+                }
+            }
+
+            // 5. Rename (1 item or batch)
+            item {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable { onRenameClick() }
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Rename",
+                        tint = FolderTabCream,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text("Rename", color = FolderTabCream, fontSize = 11.sp)
+                }
+            }
+
+            // 6. Share As
+            item {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable { onShareClick() }
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share",
+                        tint = FolderTabCream,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text("Share As", color = FolderTabCream, fontSize = 11.sp)
+                }
+            }
+
+            // 7. Move
+            item {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable { onMoveClick() }
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                        contentDescription = "Move",
+                        tint = FolderTabCream,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text("Move", color = FolderTabCream, fontSize = 11.sp)
+                }
+            }
+
+            // 8. Color
+            item {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable { onColorClick() }
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ColorLens,
+                        contentDescription = "Color",
+                        tint = FolderTabCream,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text("Color", color = FolderTabCream, fontSize = 11.sp)
+                }
+            }
+
+            // 9. Delete
+            item {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable { onDeleteClick() }
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = TagCrimson,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text("Delete", color = TagCrimson, fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+

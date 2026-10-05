@@ -6,6 +6,9 @@
 
 package com.arinara.fotara.data.model
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class Folder(
     val id: Long = 0,
     val name: String,

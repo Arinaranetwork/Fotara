@@ -39,3 +39,6 @@ Released: 2026-10-04   Status: Released
 - **Toolbar Reachability on 360dp Displays**: Added generous end-padding and optimized touch targets so all 17 toolbar actions, including Undo, Redo, Find & Replace, and Schedule, are completely accessible without edge-swipe interference.
 - **Indent & Outdent Button Availability**: The indent and outdent tools are now dynamically enabled only when touching list items and strictly bounded between levels 0 and 3.
 - **One-Shot Notification Replay**: Hardened one-shot notification consumption to prevent repeating snackbar replays upon returning to Settings.
+
+## Notes
+- Version 1.6.1 was never released; all planned quality enhancements and fixes were promoted to Release 1.7.0.

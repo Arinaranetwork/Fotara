@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableStateMapOf
 import java.io.File
 
 class FolderDetailViewModel(
@@ -64,6 +65,22 @@ class FolderDetailViewModel(
     val canvasNoteRepository: CanvasNoteRepository? = null,
     val workspaceRepository: com.arinara.fotara.data.repository.WorkspaceRepository? = null
 ) : ViewModel() {
+
+    val selectedPhotoMap = mutableStateMapOf<Long, Boolean>()
+    val selectedGroupMap = mutableStateMapOf<Long, Boolean>()
+    val selectedDocumentMap = mutableStateMapOf<Long, Boolean>()
+    val selectedTextNoteMap = mutableStateMapOf<Long, Boolean>()
+    val selectedCanvasNoteMap = mutableStateMapOf<Long, Boolean>()
+    val selectedSubfolderMap = mutableStateMapOf<Long, Boolean>()
+
+    private fun clearAllSelectionMaps() {
+        selectedPhotoMap.clear()
+        selectedGroupMap.clear()
+        selectedDocumentMap.clear()
+        selectedTextNoteMap.clear()
+        selectedCanvasNoteMap.clear()
+        selectedSubfolderMap.clear()
+    }
 
     private val _uiState = MutableStateFlow(
         FolderDetailUiState(
@@ -440,12 +457,14 @@ class FolderDetailViewModel(
     fun toggleBatchSelectMode() {
         _uiState.update {
             val newMode = !it.isBatchSelectMode
+            clearAllSelectionMaps()
             it.copy(
                 isBatchSelectMode = newMode,
                 selectedPhotoIds = emptySet(),
                 selectedGroupIds = emptySet(),
                 selectedDocumentIds = emptySet(),
                 selectedTextNoteIds = emptySet(),
+                selectedCanvasNoteIds = emptySet(),
                 isSubfolderMultiSelectMode = if (newMode) false else it.isSubfolderMultiSelectMode,
                 selectedSubfolderIds = if (newMode) emptySet() else it.selectedSubfolderIds
             )
@@ -453,25 +472,48 @@ class FolderDetailViewModel(
     }
 
     fun exitBatchSelectMode() {
+        selectedPhotoMap.clear()
+        selectedGroupMap.clear()
+        selectedDocumentMap.clear()
+        selectedTextNoteMap.clear()
+        selectedCanvasNoteMap.clear()
         _uiState.update {
             it.copy(
                 isBatchSelectMode = false,
                 selectedPhotoIds = emptySet(),
                 selectedGroupIds = emptySet(),
                 selectedDocumentIds = emptySet(),
-                selectedTextNoteIds = emptySet()
+                selectedTextNoteIds = emptySet(),
+                selectedCanvasNoteIds = emptySet()
             )
         }
     }
 
     fun selectAllPhotos() {
         _uiState.update {
+            val photoIds = it.photos.filter { p -> p.groupId == null }.map { p -> p.id }.toSet()
+            val groupIds = it.groups.map { g -> g.id }.toSet()
+            val docIds = it.documents.map { d -> d.id }.toSet()
+            val textIds = it.textNotes.map { tn -> tn.id }.toSet()
+            val canvasIds = it.canvasNotes.map { cn -> cn.id }.toSet()
+
+            selectedPhotoMap.clear()
+            photoIds.forEach { id -> selectedPhotoMap[id] = true }
+            selectedGroupMap.clear()
+            groupIds.forEach { id -> selectedGroupMap[id] = true }
+            selectedDocumentMap.clear()
+            docIds.forEach { id -> selectedDocumentMap[id] = true }
+            selectedTextNoteMap.clear()
+            textIds.forEach { id -> selectedTextNoteMap[id] = true }
+            selectedCanvasNoteMap.clear()
+            canvasIds.forEach { id -> selectedCanvasNoteMap[id] = true }
+
             it.copy(
-                selectedPhotoIds = it.photos.filter { p -> p.groupId == null }.map { p -> p.id }.toSet(),
-                selectedGroupIds = it.groups.map { g -> g.id }.toSet(),
-                selectedDocumentIds = it.documents.map { d -> d.id }.toSet(),
-                selectedTextNoteIds = it.textNotes.map { tn -> tn.id }.toSet(),
-                selectedCanvasNoteIds = it.canvasNotes.map { cn -> cn.id }.toSet()
+                selectedPhotoIds = photoIds,
+                selectedGroupIds = groupIds,
+                selectedDocumentIds = docIds,
+                selectedTextNoteIds = textIds,
+                selectedCanvasNoteIds = canvasIds
             )
         }
     }
@@ -484,30 +526,58 @@ class FolderDetailViewModel(
             val allTextNoteIds = current.textNotes.map { tn -> tn.id }.toSet()
             val allCanvasNoteIds = current.canvasNotes.map { cn -> cn.id }.toSet()
 
+            val newPhotoIds = allEligiblePhotoIds - current.selectedPhotoIds
+            val newGroupIds = allGroupIds - current.selectedGroupIds
+            val newDocIds = allDocumentIds - current.selectedDocumentIds
+            val newTextIds = allTextNoteIds - current.selectedTextNoteIds
+            val newCanvasIds = allCanvasNoteIds - current.selectedCanvasNoteIds
+
+            selectedPhotoMap.clear()
+            newPhotoIds.forEach { id -> selectedPhotoMap[id] = true }
+            selectedGroupMap.clear()
+            newGroupIds.forEach { id -> selectedGroupMap[id] = true }
+            selectedDocumentMap.clear()
+            newDocIds.forEach { id -> selectedDocumentMap[id] = true }
+            selectedTextNoteMap.clear()
+            newTextIds.forEach { id -> selectedTextNoteMap[id] = true }
+            selectedCanvasNoteMap.clear()
+            newCanvasIds.forEach { id -> selectedCanvasNoteMap[id] = true }
+
             current.copy(
-                selectedPhotoIds = allEligiblePhotoIds - current.selectedPhotoIds,
-                selectedGroupIds = allGroupIds - current.selectedGroupIds,
-                selectedDocumentIds = allDocumentIds - current.selectedDocumentIds,
-                selectedTextNoteIds = allTextNoteIds - current.selectedTextNoteIds,
-                selectedCanvasNoteIds = allCanvasNoteIds - current.selectedCanvasNoteIds
+                selectedPhotoIds = newPhotoIds,
+                selectedGroupIds = newGroupIds,
+                selectedDocumentIds = newDocIds,
+                selectedTextNoteIds = newTextIds,
+                selectedCanvasNoteIds = newCanvasIds
             )
         }
     }
 
     fun selectAllSubfolders() {
         _uiState.update { current ->
-            current.copy(selectedSubfolderIds = current.subfolders.map { it.id }.toSet())
+            val allIds = current.subfolders.map { it.id }.toSet()
+            selectedSubfolderMap.clear()
+            allIds.forEach { id -> selectedSubfolderMap[id] = true }
+            current.copy(selectedSubfolderIds = allIds)
         }
     }
 
     fun invertSubfolderSelection() {
         _uiState.update { current ->
             val allSubfolderIds = current.subfolders.map { it.id }.toSet()
-            current.copy(selectedSubfolderIds = allSubfolderIds - current.selectedSubfolderIds)
+            val newIds = allSubfolderIds - current.selectedSubfolderIds
+            selectedSubfolderMap.clear()
+            newIds.forEach { id -> selectedSubfolderMap[id] = true }
+            current.copy(selectedSubfolderIds = newIds)
         }
     }
 
     fun togglePhotoSelection(photoId: Long) {
+        if (selectedPhotoMap[photoId] == true) {
+            selectedPhotoMap.remove(photoId)
+        } else {
+            selectedPhotoMap[photoId] = true
+        }
         _uiState.update { current ->
             val set = current.selectedPhotoIds.toMutableSet()
             if (set.contains(photoId)) set.remove(photoId) else set.add(photoId)
@@ -516,6 +586,11 @@ class FolderDetailViewModel(
     }
 
     fun toggleGroupSelection(groupId: Long) {
+        if (selectedGroupMap[groupId] == true) {
+            selectedGroupMap.remove(groupId)
+        } else {
+            selectedGroupMap[groupId] = true
+        }
         _uiState.update { current ->
             val set = current.selectedGroupIds.toMutableSet()
             if (set.contains(groupId)) set.remove(groupId) else set.add(groupId)
@@ -524,6 +599,11 @@ class FolderDetailViewModel(
     }
 
     fun toggleDocumentSelection(docId: Long) {
+        if (selectedDocumentMap[docId] == true) {
+            selectedDocumentMap.remove(docId)
+        } else {
+            selectedDocumentMap[docId] = true
+        }
         _uiState.update { current ->
             val set = current.selectedDocumentIds.toMutableSet()
             if (set.contains(docId)) set.remove(docId) else set.add(docId)
@@ -532,6 +612,11 @@ class FolderDetailViewModel(
     }
 
     fun toggleTextNoteSelection(textNoteId: Long) {
+        if (selectedTextNoteMap[textNoteId] == true) {
+            selectedTextNoteMap.remove(textNoteId)
+        } else {
+            selectedTextNoteMap[textNoteId] = true
+        }
         _uiState.update { current ->
             val set = current.selectedTextNoteIds.toMutableSet()
             if (set.contains(textNoteId)) set.remove(textNoteId) else set.add(textNoteId)
@@ -540,6 +625,8 @@ class FolderDetailViewModel(
     }
 
     fun startBatchSelection(photoId: Long) {
+        clearAllSelectionMaps()
+        selectedPhotoMap[photoId] = true
         _uiState.update {
             it.copy(
                 isBatchSelectMode = true,
@@ -547,6 +634,7 @@ class FolderDetailViewModel(
                 selectedGroupIds = emptySet(),
                 selectedDocumentIds = emptySet(),
                 selectedTextNoteIds = emptySet(),
+                selectedCanvasNoteIds = emptySet(),
                 isSubfolderMultiSelectMode = false,
                 selectedSubfolderIds = emptySet()
             )
@@ -554,6 +642,8 @@ class FolderDetailViewModel(
     }
 
     fun startBatchSelectionWithGroup(groupId: Long) {
+        clearAllSelectionMaps()
+        selectedGroupMap[groupId] = true
         _uiState.update {
             it.copy(
                 isBatchSelectMode = true,
@@ -561,6 +651,7 @@ class FolderDetailViewModel(
                 selectedPhotoIds = emptySet(),
                 selectedDocumentIds = emptySet(),
                 selectedTextNoteIds = emptySet(),
+                selectedCanvasNoteIds = emptySet(),
                 isSubfolderMultiSelectMode = false,
                 selectedSubfolderIds = emptySet()
             )
@@ -568,6 +659,8 @@ class FolderDetailViewModel(
     }
 
     fun startBatchSelectionWithDocument(docId: Long) {
+        clearAllSelectionMaps()
+        selectedDocumentMap[docId] = true
         _uiState.update {
             it.copy(
                 isBatchSelectMode = true,
@@ -575,6 +668,7 @@ class FolderDetailViewModel(
                 selectedPhotoIds = emptySet(),
                 selectedGroupIds = emptySet(),
                 selectedTextNoteIds = emptySet(),
+                selectedCanvasNoteIds = emptySet(),
                 isSubfolderMultiSelectMode = false,
                 selectedSubfolderIds = emptySet()
             )
@@ -582,6 +676,8 @@ class FolderDetailViewModel(
     }
 
     fun startBatchSelectionWithTextNote(textNoteId: Long) {
+        clearAllSelectionMaps()
+        selectedTextNoteMap[textNoteId] = true
         _uiState.update {
             it.copy(
                 isBatchSelectMode = true,
@@ -597,6 +693,11 @@ class FolderDetailViewModel(
     }
 
     fun toggleCanvasNoteSelection(canvasId: Long) {
+        if (selectedCanvasNoteMap[canvasId] == true) {
+            selectedCanvasNoteMap.remove(canvasId)
+        } else {
+            selectedCanvasNoteMap[canvasId] = true
+        }
         _uiState.update { current ->
             val set = current.selectedCanvasNoteIds.toMutableSet()
             if (set.contains(canvasId)) set.remove(canvasId) else set.add(canvasId)
@@ -605,6 +706,8 @@ class FolderDetailViewModel(
     }
 
     fun startBatchSelectionWithCanvasNote(canvasId: Long) {
+        clearAllSelectionMaps()
+        selectedCanvasNoteMap[canvasId] = true
         _uiState.update {
             it.copy(
                 isBatchSelectMode = true,
@@ -763,6 +866,8 @@ class FolderDetailViewModel(
     }
 
     fun startSubfolderMultiSelect(subfolderId: Long) {
+        clearAllSelectionMaps()
+        selectedSubfolderMap[subfolderId] = true
         _uiState.update {
             it.copy(
                 isSubfolderMultiSelectMode = true,
@@ -770,12 +875,19 @@ class FolderDetailViewModel(
                 isBatchSelectMode = false,
                 selectedPhotoIds = emptySet(),
                 selectedGroupIds = emptySet(),
-                selectedDocumentIds = emptySet()
+                selectedDocumentIds = emptySet(),
+                selectedTextNoteIds = emptySet(),
+                selectedCanvasNoteIds = emptySet()
             )
         }
     }
 
     fun toggleSubfolderSelection(subfolderId: Long) {
+        if (selectedSubfolderMap[subfolderId] == true) {
+            selectedSubfolderMap.remove(subfolderId)
+        } else {
+            selectedSubfolderMap[subfolderId] = true
+        }
         _uiState.update { current ->
             val set = current.selectedSubfolderIds.toMutableSet()
             if (set.contains(subfolderId)) set.remove(subfolderId) else set.add(subfolderId)
@@ -784,6 +896,7 @@ class FolderDetailViewModel(
     }
 
     fun exitSubfolderMultiSelect() {
+        selectedSubfolderMap.clear()
         _uiState.update {
             it.copy(
                 isSubfolderMultiSelectMode = false,
@@ -814,6 +927,7 @@ class FolderDetailViewModel(
     fun deleteSelectedSubfolders() {
         val ids = _uiState.value.selectedSubfolderIds.toList()
         if (ids.isEmpty()) return
+        selectedSubfolderMap.clear()
         viewModelScope.launch {
             val result = folderRepository.deleteSubfolders(ids)
             _uiState.update {

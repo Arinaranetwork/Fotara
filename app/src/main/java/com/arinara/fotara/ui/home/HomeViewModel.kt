@@ -27,6 +27,7 @@ import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.data.repository.CanvasNoteRepository
 import com.arinara.fotara.util.DateRangeCalculator
 import com.arinara.fotara.util.DeadlineNotificationManager
+import androidx.compose.runtime.mutableStateMapOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -70,6 +71,7 @@ class HomeViewModel(
         get() = workspaceRepository?.selectedWorkspaceId ?: _fallbackSelectedWorkspaceId.asStateFlow()
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    val selectedFolderMap = mutableStateMapOf<Long, Boolean>()
 
     private var allFoldersCache: List<Folder> = emptyList()
     private var searchDebounceJob: Job? = null
@@ -742,6 +744,10 @@ class HomeViewModel(
     // --- Multi-Select & Bulk Delete ---
 
     fun enterMultiSelectMode(initialFolderId: Long? = null) {
+        selectedFolderMap.clear()
+        if (initialFolderId != null) {
+            selectedFolderMap[initialFolderId] = true
+        }
         _uiState.update {
             it.copy(
                 isMultiSelectMode = true,
@@ -751,34 +757,42 @@ class HomeViewModel(
     }
 
     fun toggleFolderSelection(folderId: Long) {
-        _uiState.update { current ->
-            val updated = current.selectedFolderIds.toMutableSet()
-            if (updated.contains(folderId)) {
-                updated.remove(folderId)
-            } else {
-                updated.add(folderId)
-            }
-            if (updated.isEmpty()) {
-                current.copy(isMultiSelectMode = false, selectedFolderIds = emptySet())
-            } else {
-                current.copy(selectedFolderIds = updated)
-            }
+        val currentlySelected = selectedFolderMap[folderId] == true
+        if (currentlySelected) {
+            selectedFolderMap.remove(folderId)
+        } else {
+            selectedFolderMap[folderId] = true
+        }
+        val updated = selectedFolderMap.keys.toSet()
+        if (updated.isEmpty()) {
+            _uiState.update { it.copy(isMultiSelectMode = false, selectedFolderIds = emptySet()) }
+        } else {
+            _uiState.update { it.copy(isMultiSelectMode = true, selectedFolderIds = updated) }
         }
     }
 
     fun selectAllFolders() {
         val allIds = _uiState.value.folders.map { it.id }.toSet()
-        _uiState.update { it.copy(selectedFolderIds = allIds) }
+        selectedFolderMap.clear()
+        allIds.forEach { selectedFolderMap[it] = true }
+        _uiState.update { it.copy(isMultiSelectMode = allIds.isNotEmpty(), selectedFolderIds = allIds) }
     }
 
     fun invertFolderSelection() {
         val allIds = _uiState.value.folders.map { it.id }.toSet()
-        _uiState.update { current ->
-            current.copy(selectedFolderIds = allIds - current.selectedFolderIds)
+        val currentSelected = selectedFolderMap.keys.toSet()
+        val inverted = allIds - currentSelected
+        selectedFolderMap.clear()
+        inverted.forEach { selectedFolderMap[it] = true }
+        if (inverted.isEmpty()) {
+            _uiState.update { it.copy(isMultiSelectMode = false, selectedFolderIds = emptySet()) }
+        } else {
+            _uiState.update { it.copy(isMultiSelectMode = true, selectedFolderIds = inverted) }
         }
     }
 
     fun exitMultiSelectMode() {
+        selectedFolderMap.clear()
         _uiState.update {
             it.copy(
                 isMultiSelectMode = false,
@@ -824,6 +838,7 @@ class HomeViewModel(
                 val result = folderRepository.deleteFolders(selectedIds)
                 val formattedMb = "%.1f MB".format(result.totalSizeBytes / (1024f * 1024f))
 
+                selectedFolderMap.clear()
                 _uiState.update {
                     it.copy(
                         isMultiSelectMode = false,
@@ -987,6 +1002,7 @@ class HomeViewModel(
         } else {
             _fallbackSelectedWorkspaceId.value = workspaceId
         }
+        selectedFolderMap.clear()
         _uiState.update { current ->
             current.copy(
                 selectedWorkspaceId = workspaceId,

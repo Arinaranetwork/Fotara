@@ -1,8 +1,8 @@
 # Progress - Fotara
-Last Updated: 2026-10-04
+Last Updated: 2026-10-05
 
 ## Current Phase
-Phase 30 - PdfOcrAndRelease160 [Completed]
+Phase 31 - QualityImprovementsAndBugfix [In Progress]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -37,8 +37,11 @@ Phase 30 - PdfOcrAndRelease160 [Completed]
 | 28    | WorkspacesPart2                   | Completed   |
 | 29    | UIUXConsistency                   | Completed   |
 | 30    | PdfOcrAndRelease160               | Completed   |
+| 31    | QualityImprovementsAndBugfix      | In Progress |
 
 ## Completed
+- [x] Task 6: Selection Mode Jumping & Blinking Fix (Home & Folder Detail zero-shift overlays, item snapshot tracking, thumbnail caching) - Phase 31
+- [x] Task 7: Release Name 1.7.0 Documentation & Transition (Changelog_1.7.md, Progress.md, WhatsNew metadata note) - Phase 31
 - [x] Task 0: Verify earlier batches (Batches 2A, 2B, 3, 4B) with file evidence - Phase 30
 - [x] Task 1: PDF content OCR for search (reliable page OCR, NULL vs empty string, throttled backfill, incremental FTS, zero UI display) - Phase 30
 - [x] Task 2: Built-in update banner with channel pills (UpdateBanner, ChannelPill, UpdateVersionUtils Stable vs Beta) - Phase 30

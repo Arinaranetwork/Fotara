@@ -95,7 +95,8 @@ import androidx.compose.runtime.setValue
 import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
@@ -332,111 +333,14 @@ fun HomeScreen(
             },
             containerColor = HomeNearBlack,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            if (uiState.isMultiSelectMode) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = "${uiState.selectedFolderIds.size} Selected",
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontFamily = ElmsSans,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(
-                            onClick = { viewModel.exitMultiSelectMode() },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Exit Multi-Select",
-                                tint = Color.White
-                            )
-                        }
-                    },
-                    actions = {
-                        if (uiState.selectedFolderIds.size in 2..4) {
-                            IconButton(
-                                onClick = { viewModel.linkSelectedFolders() },
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Link,
-                                    contentDescription = "Link Folders",
-                                    tint = Color.White
-                                )
-                            }
-                        }
-                        if (uiState.selectedFolderIds.isNotEmpty()) {
-                            IconButton(
-                                onClick = { showBatchRenameDialog = true },
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Rename Selected Folders",
-                                    tint = Color.White
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    val selected = uiState.folders.filter { it.id in uiState.selectedFolderIds }
-                                    viewModel.openMoveFoldersDialog(selected)
-                                },
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                                    contentDescription = stringResource(R.string.folder_menu_move_to_workspace),
-                                    tint = Color.White
-                                )
-                            }
-                        }
-                        IconButton(
-                            onClick = { viewModel.selectAllFolders() },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SelectAll,
-                                contentDescription = "Select All",
-                                tint = Color.White
-                            )
-                        }
-                        IconButton(
-                            onClick = { viewModel.invertFolderSelection() },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FlipToBack,
-                                contentDescription = stringResource(R.string.action_invert_selection),
-                                tint = Color.White
-                            )
-                        }
-                        IconButton(
-                            onClick = { viewModel.requestBulkDelete() },
-                            enabled = uiState.selectedFolderIds.isNotEmpty(),
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete Selected Folders",
-                                tint = if (uiState.selectedFolderIds.isNotEmpty()) TagCrimson else Color(0xFF64748B)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = HomeCardSurface)
-                )
-            }
-        },
+        topBar = {},
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(HomeNearBlack)
-                .padding(top = if (uiState.isMultiSelectMode) innerPadding.calculateTopPadding() else 0.dp)
+                .padding(top = 0.dp)
         ) {
             // Tab Contents
             when (selectedNavTab) {
@@ -504,142 +408,254 @@ fun HomeScreen(
                             .fillMaxSize()
                             .windowInsetsPadding(WindowInsets.statusBars)
                     ) {
-                        // Header section: Brand & Top-right circular buttons (hidden during multi-select)
-                        if (!uiState.isMultiSelectMode) {
-                            ScreenHeader(
-                                title = "Fotara",
-                                tagline = stringResource(R.string.home_tagline),
-                                actions = {
-                                    // 1: Magnifier search trigger
-                                    ScreenHeaderActionButton(
-                                        onClick = { viewModel.activateSearch() },
-                                        icon = Icons.Default.Search,
-                                        contentDescription = "Search"
-                                    )
-
-                                    // 2: Vertical dots menu trigger
-                                    Box(
-                                        modifier = Modifier.size(ScreenHeaderDefaults.ActionButtonSize),
-                                        contentAlignment = Alignment.Center
-                                    ) {
+                        // Invariant Header Slot (94dp): ScreenHeader and Multi-Select action header overlay
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(94.dp)
+                        ) {
+                            // Normal Header (Brand & actions)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        alpha = if (uiState.isMultiSelectMode) 0f else 1f
+                                    }
+                            ) {
+                                ScreenHeader(
+                                    title = "Fotara",
+                                    tagline = stringResource(R.string.home_tagline),
+                                    actions = {
+                                        // 1: Magnifier search trigger
                                         ScreenHeaderActionButton(
-                                            onClick = { showHomeOverflowMenu = true },
-                                            icon = Icons.Default.MoreVert,
-                                            contentDescription = "Options"
+                                            onClick = { if (!uiState.isMultiSelectMode) viewModel.activateSearch() },
+                                            icon = Icons.Default.Search,
+                                            contentDescription = "Search"
                                         )
 
-                                        DropdownMenu(
-                                            expanded = showHomeOverflowMenu,
-                                            onDismissRequest = { showHomeOverflowMenu = false },
-                                            modifier = Modifier
-                                                .background(HomeCardSurface)
-                                                .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                                        // 2: Vertical dots menu trigger
+                                        Box(
+                                            modifier = Modifier.size(ScreenHeaderDefaults.ActionButtonSize),
+                                            contentAlignment = Alignment.Center
                                         ) {
-                                            DropdownMenuItem(
-                                                text = { Text("Select Folders", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.SelectAll,
-                                                        contentDescription = null,
-                                                        tint = Color(0xFF60A5FA)
-                                                    )
-                                                },
-                                                onClick = {
-                                                    showHomeOverflowMenu = false
-                                                    viewModel.enterMultiSelectMode(null)
-                                                }
+                                            ScreenHeaderActionButton(
+                                                onClick = { if (!uiState.isMultiSelectMode) showHomeOverflowMenu = true },
+                                                icon = Icons.Default.MoreVert,
+                                                contentDescription = "Options"
                                             )
-                                            HorizontalDivider(color = HomeCardBorder)
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.menu_add_workspace), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Add,
-                                                        contentDescription = null,
-                                                        tint = Color(0xFF60A5FA)
-                                                    )
-                                                },
-                                                onClick = {
-                                                    showHomeOverflowMenu = false
-                                                    viewModel.openAddWorkspaceDialog()
-                                                }
-                                            )
-                                            HorizontalDivider(color = HomeCardBorder)
-                                            DropdownMenuItem(
-                                                text = { Text("What's New", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.NewReleases,
-                                                        contentDescription = null,
-                                                        tint = TagAmber
-                                                    )
-                                                },
-                                                onClick = {
-                                                    showHomeOverflowMenu = false
-                                                    onOpenWhatsNew()
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Check for Updates", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.SystemUpdate,
-                                                        contentDescription = null,
-                                                        tint = Color.White
-                                                    )
-                                                },
-                                                onClick = {
-                                                    showHomeOverflowMenu = false
-                                                    onOpenUpdates()
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Send Feedback", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Feedback,
-                                                        contentDescription = null,
-                                                        tint = Color.White
-                                                    )
-                                                },
-                                                onClick = {
-                                                    showHomeOverflowMenu = false
-                                                    showFeedbackDialog = true
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Support Fotara", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.VolunteerActivism,
-                                                        contentDescription = null,
-                                                        tint = TagCrimson
-                                                    )
-                                                },
-                                                onClick = {
-                                                    showHomeOverflowMenu = false
-                                                    onOpenSupport()
-                                                }
-                                            )
-                                            HorizontalDivider(color = HomeCardBorder)
-                                            DropdownMenuItem(
-                                                text = { Text("Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                leadingIcon = {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Delete,
-                                                        contentDescription = null,
-                                                        tint = TagCrimson
-                                                    )
-                                                },
-                                                onClick = {
-                                                    showHomeOverflowMenu = false
-                                                    onOpenTrash()
-                                                }
+
+                                            DropdownMenu(
+                                                expanded = showHomeOverflowMenu && !uiState.isMultiSelectMode,
+                                                onDismissRequest = { showHomeOverflowMenu = false },
+                                                modifier = Modifier
+                                                    .background(HomeCardSurface)
+                                                    .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Select Folders", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.SelectAll,
+                                                            contentDescription = null,
+                                                            tint = Color(0xFF60A5FA)
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        viewModel.enterMultiSelectMode(null)
+                                                    }
+                                                )
+                                                HorizontalDivider(color = HomeCardBorder)
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.menu_add_workspace), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Add,
+                                                            contentDescription = null,
+                                                            tint = Color(0xFF60A5FA)
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        viewModel.openAddWorkspaceDialog()
+                                                    }
+                                                )
+                                                HorizontalDivider(color = HomeCardBorder)
+                                                DropdownMenuItem(
+                                                    text = { Text("What's New", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.NewReleases,
+                                                            contentDescription = null,
+                                                            tint = TagAmber
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        onOpenWhatsNew()
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Check for Updates", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.SystemUpdate,
+                                                            contentDescription = null,
+                                                            tint = Color.White
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        onOpenUpdates()
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Send Feedback", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Feedback,
+                                                            contentDescription = null,
+                                                            tint = Color.White
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        showFeedbackDialog = true
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Support Fotara", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.VolunteerActivism,
+                                                            contentDescription = null,
+                                                            tint = TagCrimson
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        onOpenSupport()
+                                                    }
+                                                )
+                                                HorizontalDivider(color = HomeCardBorder)
+                                                DropdownMenuItem(
+                                                    text = { Text("Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Delete,
+                                                            contentDescription = null,
+                                                            tint = TagCrimson
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        onOpenTrash()
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+
+                            // Multi-Select Action Bar Overlay
+                            if (uiState.isMultiSelectMode) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = { viewModel.exitMultiSelectMode() },
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Exit Multi-Select",
+                                            tint = Color.White
+                                        )
+                                    }
+                                    Text(
+                                        text = "${uiState.selectedFolderIds.size} Selected",
+                                        color = Color.White,
+                                        fontSize = 18.sp,
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(start = 6.dp)
+                                    )
+                                    if (uiState.selectedFolderIds.size in 2..4) {
+                                        IconButton(
+                                            onClick = { viewModel.linkSelectedFolders() },
+                                            modifier = Modifier.size(40.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Link,
+                                                contentDescription = "Link Folders",
+                                                tint = Color.White
                                             )
                                         }
                                     }
+                                    if (uiState.selectedFolderIds.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = { showBatchRenameDialog = true },
+                                            modifier = Modifier.size(40.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Rename Selected Folders",
+                                                tint = Color.White
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                val selected = uiState.folders.filter { it.id in uiState.selectedFolderIds }
+                                                viewModel.openMoveFoldersDialog(selected)
+                                            },
+                                            modifier = Modifier.size(40.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                                                contentDescription = stringResource(R.string.folder_menu_move_to_workspace),
+                                                tint = Color.White
+                                            )
+                                        }
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.selectAllFolders() },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.SelectAll,
+                                            contentDescription = "Select All",
+                                            tint = Color.White
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.invertFolderSelection() },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.FlipToBack,
+                                            contentDescription = stringResource(R.string.action_invert_selection),
+                                            tint = Color.White
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.requestBulkDelete() },
+                                        enabled = uiState.selectedFolderIds.isNotEmpty(),
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Delete Selected Folders",
+                                            tint = if (uiState.selectedFolderIds.isNotEmpty()) TagCrimson else Color(0xFF64748B)
+                                        )
+                                    }
                                 }
-                            )
+                            }
                         }
 
                             // Workspace Tab Bar (Phase 27 - Batch 2A / Phase 28 - Batch 2B)
@@ -737,11 +753,15 @@ fun HomeScreen(
                                         .fillMaxSize()
                                         .verticalEdgeFade(top = 20.dp)
                                 ) {
-                                    items(uiState.folders, key = { it.id }) { folder ->
+                                    items(
+                                        items = uiState.folders,
+                                        key = { it.id },
+                                        contentType = { "folder_card" }
+                                    ) { folder ->
                                         FolderCard(
                                             folder = folder,
                                             isSelectionMode = uiState.isMultiSelectMode,
-                                            isSelected = uiState.selectedFolderIds.contains(folder.id),
+                                            isSelected = viewModel.selectedFolderMap[folder.id] == true,
                                             glowAnchors = folderGlowAnchors[folder.id] ?: emptySet(),
                                             onClick = {
                                                 if (uiState.isMultiSelectMode) {
@@ -799,46 +819,51 @@ fun HomeScreen(
             }
 
             // Bottom Stack: Floating Dock & Bottom Navigation Bar
-            // Always above content, protected with gradient scrim to avoid collisions
-            if (!uiState.isMultiSelectMode) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .onSizeChanged { bottomStackHeightPx = it.height }
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    HomeNearBlack.copy(alpha = 0.85f),
-                                    HomeNearBlack
-                                )
+            // Kept measured with graphicsLayer alpha to prevent content padding shifts
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .onSizeChanged {
+                        if (it.height > 0) {
+                            bottomStackHeightPx = it.height
+                        }
+                    }
+                    .graphicsLayer {
+                        alpha = if (uiState.isMultiSelectMode) 0f else 1f
+                    }
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                HomeNearBlack.copy(alpha = 0.85f),
+                                HomeNearBlack
                             )
                         )
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .imePadding()
+                    )
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .imePadding()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Search bar + '+' action button row (only visible on HOME tab)
-                        if (selectedNavTab == HomeNavTab.HOME) {
-                            FloatingDock(
-                                onSearchClick = { viewModel.activateSearch() },
-                                onNewFolderClick = { viewModel.openNewFolderDialog() }
-                            )
-                        }
+                    // Search bar + '+' action button row (only visible on HOME tab)
+                    if (selectedNavTab == HomeNavTab.HOME) {
+                        FloatingDock(
+                            onSearchClick = { if (!uiState.isMultiSelectMode) viewModel.activateSearch() },
+                            onNewFolderClick = { if (!uiState.isMultiSelectMode) viewModel.openNewFolderDialog() }
+                        )
+                    }
 
-                        // Floating bottom navigation bar (hidden while keyboard is open)
-                        if (!isImeVisible) {
-                            HomeBottomNavBar(
-                                selectedTab = selectedNavTab,
-                                onTabSelected = { selectedNavTab = it }
-                            )
-                        }
+                    // Floating bottom navigation bar (hidden while keyboard is open)
+                    if (!isImeVisible) {
+                        HomeBottomNavBar(
+                            selectedTab = selectedNavTab,
+                            onTabSelected = { if (!uiState.isMultiSelectMode) selectedNavTab = it }
+                        )
                     }
                 }
             }

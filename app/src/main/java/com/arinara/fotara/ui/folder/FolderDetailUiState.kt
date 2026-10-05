@@ -15,6 +15,7 @@ import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.model.Subfolder
 
 import com.arinara.fotara.data.model.TextNote
+import androidx.compose.runtime.Immutable
 
 sealed interface UndoAction {
     data class Delete(
@@ -44,6 +45,7 @@ enum class PhotoSortOption {
     COLOR_LABEL
 }
 
+@Immutable
 sealed interface FolderGridItem {
     val key: String
     val itemId: Long
@@ -53,6 +55,7 @@ sealed interface FolderGridItem {
     val sortDeadline: Long?
     val sortColor: String?
 
+    @Immutable
     data class StandalonePhoto(
         val photo: Photo,
         override val linkGroupId: Long? = null
@@ -64,6 +67,7 @@ sealed interface FolderGridItem {
         override val sortColor: String? get() = photo.tagColor
     }
 
+    @Immutable
     data class Group(
         val group: PhotoGroup,
         val memberPhotos: List<Photo>,
@@ -77,6 +81,7 @@ sealed interface FolderGridItem {
         override val sortColor: String? get() = group.tagColor
     }
 
+    @Immutable
     data class Document(
         val documentNote: DocumentNote,
         val pages: List<DocumentPage> = emptyList(),
@@ -89,6 +94,7 @@ sealed interface FolderGridItem {
         override val sortColor: String? get() = documentNote.tagColor
     }
 
+    @Immutable
     data class TextNoteItem(
         val textNote: TextNote,
         override val linkGroupId: Long? = null
@@ -100,6 +106,7 @@ sealed interface FolderGridItem {
         override val sortColor: String? get() = textNote.tagColor
     }
 
+    @Immutable
     data class CanvasNoteItem(
         val canvasNote: com.arinara.fotara.data.model.CanvasNote,
         override val linkGroupId: Long? = null
