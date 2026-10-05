@@ -6,7 +6,7 @@
 
 # Release - Fotara 1.7.2
 Tag: Fotara_1.7.2    Stable: Fotara_1.7.2
-Date: 2026-10-05    Branch: release/1.7.0    Commit: 
+Date: 2026-10-05    Branch: release/1.7.0    Commit: 136252d
 Banner: Assets/Banners/FotaraBanner_1.7_2026-10-05.jpg    Changelog: Changelog/Changelog_1.7.md
 Artifacts: Output/Release/Fotara_1.7.2.apk
 GitHub: https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.7.2    Feedback: https://github.com/Arinaranetwork/Fotara/discussions
