@@ -84,11 +84,11 @@ object TabGestureReducer {
                 if (current.isHome) {
                     return TabDragState(state = TabGestureState.IDLE)
                 }
-                // Rule: Long-press on Archive: haptic and lift, no panel, reorder still possible
+                // Rule: Long-press on Archive: haptic and lift, options panel appears with Delete
                 if (current.isArchive) {
                     return current.copy(
                         state = TabGestureState.HELD,
-                        showRenamePanel = false
+                        showRenamePanel = true
                     )
                 }
                 // Custom tab: lifts and anchor panel appears

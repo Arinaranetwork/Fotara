@@ -315,7 +315,7 @@ fun SettingsScreen(
             },
             onChooseBorder = {
                 showProfileEditSheet = false
-                showBorderPicker = true
+                android.widget.Toast.makeText(context, "Under construction", android.widget.Toast.LENGTH_SHORT).show()
             },
             onChangeBanner = {
                 showProfileEditSheet = false

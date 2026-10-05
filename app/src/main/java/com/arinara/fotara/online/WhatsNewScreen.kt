@@ -88,6 +88,37 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
+        version = "1.7.2",
+        channel = "Stable",
+        releaseDate = "2026-10-05",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/v1.7.2",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "PDF Search Deep Link & Highlight: Tapping a PDF search match navigates directly into the target page, triggers animated auto-scroll once rendered, and displays an animated amber highlight border and overlay pulse.",
+            "Workspace Tab Reorder Animation: Dragging workspace tabs features live spring-animated empty slot shifting for neighboring tabs, with zero blinking or position resets on gesture completion.",
+            "Archive Workspace Deletion: Archive workspaces can now be deleted via the long-press options panel and confirmation dialog, safely reassigning contained folders to Home.",
+            "Search Workspace Scope Bar: Fixed blank pills by properly resolving localized Home, Archive, and custom workspace names and icons.",
+            "Notes Action Button Alignment: Unified the Notes screen (+) FAB to 52dp diameter, 26dp icon, matching Home elevation and spacing while eliminating the black vignette halo artifact.",
+            "Profile Border Feature Under Construction: Profile avatar decorative border feature is temporarily disabled, repositioned to the bottom in gray with an 'Under construction' notice, and automatically reset to 'none' for existing profiles.",
+            """
+| Component | Improvement | User Impact |
+|---|---|---|
+| PDF Search | Deep link auto-scroll & highlight pulse | Direct search navigation |
+| Workspace Tabs | Live spring slot animation & no-blink drag | Smooth tab reordering |
+| Archive Workspace | Deletion supported via options dialog | Full workspace control |
+| Search Scope Bar | Resolved localized names & icons | Zero blank pills |
+| Notes Screen | 52dp FAB alignment & vignette elimination | Clean visual consistency |
+| Profile Borders | Feature disabled & reset to none | Under construction indicator |
+            """.trimIndent()
+        ),
+        patchesAndFixes = listOf(
+            "Eliminated pointer layout mutation race conditions during workspace tab dragging.",
+            "Fixed search bar workspace pill text rendering for built-in workspaces with blank names.",
+            "Removed clipped rasterized shadow layer on Notes floating action button.",
+            "Bypassed PDF page auto-scroll zero-clamp by waiting for asynchronous page renderer initialization."
+        )
+    ),
+    ReleaseChangelogEntry(
         version = "1.7.1",
         channel = "Stable",
         releaseDate = "2026-10-05",

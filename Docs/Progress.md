@@ -2,7 +2,7 @@
 Last Updated: 2026-10-05
 
 ## Current Phase
-Phase 33 - PdfSearchDeepLinkAndHighlight [Pending]
+Phase 34 - WorkspacePolishAndUiRefinements [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -39,9 +39,18 @@ Phase 33 - PdfSearchDeepLinkAndHighlight [Pending]
 | 30    | PdfOcrAndRelease160               | Completed   |
 | 31    | QualityImprovementsAndBugfix      | Completed   |
 | 32    | QualityAndSmoothness              | Completed   |
-| 33    | PdfSearchDeepLinkAndHighlight     | Pending     |
+| 33    | PdfSearchDeepLinkAndHighlight     | Completed   |
+| 34    | WorkspacePolishAndUiRefinements   | Completed   |
 
 ## Completed
+- [x] A-001: PDF search deep link with auto-scroll and highlight - Phase 33
+- [x] A-002: Search screen: fix weird blank/empty workspace pills - Phase 34
+- [x] A-003: Notes screen: fix plus (+) button weird black vignette, size and position - Phase 34
+- [x] A-004: Workspace: make Archive workspace deletable (only Home is non-deletable) - Phase 34
+- [x] A-005: Workspace tab repositioning: live slot animation and fix blinking/resetting - Phase 34
+- [x] A-006: Verification: unit tests passing 100%, verify GIF banner implementation - Phase 34
+- [x] A-007: Disable border feature (gray, bottom, under construction, past users reset to none) - Phase 34
+- [x] A-008: Release 1.7.2 wrap (version 1.7.2 / 29, build APK, changelog, git push) - Phase 34
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 32
 - [x] Task 1: Zoom & Pan Smoothness Overhaul - Phase 32
 - [x] Task 2: Screen Headers Clipping Fix - Phase 32
@@ -64,7 +73,7 @@ Phase 33 - PdfSearchDeepLinkAndHighlight [Pending]
 None.
 
 ## Pending
-- [ ] A-001 (Carried from 1.7.1): PDF search deep link with auto-scroll and highlight - Phase 33
+None.
 
 ## Blocked
 None.

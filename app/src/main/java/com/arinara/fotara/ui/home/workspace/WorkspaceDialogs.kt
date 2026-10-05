@@ -437,8 +437,13 @@ fun DeleteWorkspaceConfirmDialog(
         containerColor = HomeCardSurface,
         shape = RoundedCornerShape(20.dp),
         title = {
+            val wsDisplayName = when (workspace.kind) {
+                WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
+                WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
+                WorkspaceKind.CUSTOM -> workspace.name
+            }
             Text(
-                text = stringResource(R.string.delete_workspace_confirm_title, workspace.name),
+                text = stringResource(R.string.delete_workspace_confirm_title, wsDisplayName),
                 color = Color.White,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Bold,

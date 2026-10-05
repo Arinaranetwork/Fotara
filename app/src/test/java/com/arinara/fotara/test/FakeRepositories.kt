@@ -788,7 +788,7 @@ class FakeSettingsRepository : SettingsRepository {
     }
 
     override suspend fun updateProfileBorder(borderId: String) {
-        _profileFlow.value = _profileFlow.value.copy(borderId = borderId)
+        _profileFlow.value = _profileFlow.value.copy(borderId = com.arinara.fotara.data.model.ProfileBorders.NONE_ID)
     }
 
     override suspend fun saveProfileAvatar(bitmap: android.graphics.Bitmap): String? {
@@ -1448,7 +1448,7 @@ class FakeWorkspaceRepository(
         val current = workspacesFlow.value
         val target = current.firstOrNull { it.id == workspaceId }
             ?: return WorkspaceResult.Error(WorkspaceError.NotFound)
-        if (target.kind != WorkspaceKind.CUSTOM) {
+        if (target.kind == WorkspaceKind.HOME) {
             return WorkspaceResult.Error(WorkspaceError.BuiltInImmutable)
         }
 
@@ -1476,7 +1476,7 @@ class FakeWorkspaceRepository(
         val current = workspacesFlow.value
         val target = current.firstOrNull { it.id == workspaceId }
             ?: return WorkspaceResult.Error(WorkspaceError.NotFound)
-        if (target.kind != WorkspaceKind.CUSTOM) {
+        if (target.kind == WorkspaceKind.HOME) {
             return WorkspaceResult.Error(WorkspaceError.BuiltInImmutable)
         }
 

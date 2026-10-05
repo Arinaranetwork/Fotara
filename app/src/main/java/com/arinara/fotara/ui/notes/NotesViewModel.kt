@@ -390,7 +390,7 @@ class NotesViewModel(
     }
 
     fun initiateDeleteWorkspace(workspace: Workspace) {
-        if (workspace.kind != WorkspaceKind.CUSTOM) return
+        if (workspace.kind == WorkspaceKind.HOME) return
         viewModelScope.launch {
             val repo = workspaceRepository ?: return@launch
             val stats = repo.getWorkspaceStats(workspace.id)

@@ -204,13 +204,13 @@ class WorkspaceFoundationTest {
     }
 
     @Test
-    fun testGesture_LongPressOnArchive_LiftsWithoutPanel() {
+    fun testGesture_LongPressOnArchive_ShowsPanelWithDeleteAndLifts() {
         val state0 = TabDragState(state = TabGestureState.IDLE)
         val state1 = TabGestureReducer.reduce(state0, TabGestureEvent.Down(tabId = 2L, kind = WorkspaceKind.ARCHIVE, x = 50f))
         val state2 = TabGestureReducer.reduce(state1, TabGestureEvent.LongPressTimeout)
 
         assertEquals(TabGestureState.HELD, state2.state)
-        assertFalse("Archive tab must never show rename panel", state2.showRenamePanel)
+        assertTrue("Archive tab shows options panel with Delete", state2.showRenamePanel)
         assertTrue(state2.isArchive)
     }
 

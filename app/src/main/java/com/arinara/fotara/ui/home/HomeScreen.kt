@@ -1594,8 +1594,15 @@ fun HomeScreen(
         }
         WorkspaceDeleteStep.PROGRESS -> {
             val progress = uiState.workspaceDeleteProgress
+            val wsToDelete = uiState.workspaceToDelete
+            val deleteWsName = when (wsToDelete?.kind) {
+                WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
+                WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
+                WorkspaceKind.CUSTOM -> wsToDelete.name
+                null -> ""
+            }
             DeleteWorkspaceProgressDialog(
-                workspaceName = uiState.workspaceToDelete?.name ?: "",
+                workspaceName = deleteWsName,
                 current = progress?.first ?: 0,
                 total = progress?.second ?: 0
             )

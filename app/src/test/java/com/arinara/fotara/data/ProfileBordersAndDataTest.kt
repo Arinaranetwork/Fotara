@@ -127,7 +127,15 @@ class ProfileBordersAndDataTest {
 
         viewModel.updateProfileBorder("file_000000001c6c820bbc0efdac44c0aa63")
         advanceUntilIdle()
-        assertEquals("file_000000001c6c820bbc0efdac44c0aa63", viewModel.uiState.value.userProfile.borderId)
+        // Border feature is disabled; always forces to NONE_ID
+        assertEquals(ProfileBorders.NONE_ID, viewModel.uiState.value.userProfile.borderId)
+    }
+
+    @Test
+    fun profileBorder_disabledFeatureForcesNone() {
+        val profile = UserProfile(borderId = ProfileBorders.NONE_ID)
+        assertEquals(ProfileBorders.NONE_ID, profile.borderId)
+        assertFalse(profile.hasBorder)
     }
 
     @Test

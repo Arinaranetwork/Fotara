@@ -146,15 +146,35 @@ class WorkspaceMoveDeleteTest {
     fun testDeleteWorkspace_BuiltInImmutable() = runTest(testDispatcher) {
         val workspaceRepo = FakeWorkspaceRepository()
 
-        // Home (1L)
+        // Home (1L) is immutable
         val resHome = workspaceRepo.deleteWorkspaceMoveFoldersToHome(1L)
         assertTrue(resHome is WorkspaceResult.Error)
         assertEquals(WorkspaceError.BuiltInImmutable, (resHome as WorkspaceResult.Error).error)
 
-        // Archive (2L)
+        // Archive (2L) is now deletable!
         val resArchive = workspaceRepo.deleteWorkspaceWithContents(2L, permanent = false) { _, _ -> }
-        assertTrue(resArchive is WorkspaceResult.Error)
-        assertEquals(WorkspaceError.BuiltInImmutable, (resArchive as WorkspaceResult.Error).error)
+        assertTrue(resArchive is WorkspaceResult.Success)
+    }
+
+    @Test
+    fun testDeleteWorkspace_Archive_MoveFoldersToHome() = runTest(testDispatcher) {
+        val folderRepo = FakeFolderRepository(initialFolders = emptyList())
+        val workspaceRepo = FakeWorkspaceRepository(folderRepository = folderRepo)
+
+        // Put a folder in Archive workspace (2L)
+        folderRepo.createFolder("ArchiveNotes", "#FFFFFF", false, 2L)
+
+        // Delete Archive and move folders to Home
+        val res = workspaceRepo.deleteWorkspaceMoveFoldersToHome(2L)
+        assertTrue(res is WorkspaceResult.Success)
+
+        // Verify folder moved to Home (1L)
+        val folders = folderRepo.getFolders().first().associateBy { it.name }
+        assertEquals(1L, folders["ArchiveNotes"]?.workspaceId)
+
+        // Verify Archive workspace no longer exists
+        val remainingWorkspaces = workspaceRepo.observeWorkspaces().first()
+        assertFalse(remainingWorkspaces.any { it.id == 2L })
     }
 
     @Test

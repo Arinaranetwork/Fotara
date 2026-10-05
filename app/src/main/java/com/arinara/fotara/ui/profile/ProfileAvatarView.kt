@@ -68,7 +68,8 @@ fun ProfileAvatar(
     onEditClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val border = remember(borderId) { ProfileBorders.getById(borderId) }
+    // Decorative border feature is temporarily disabled
+    val border = ProfileBorders.NONE
     val slotSize = avatarSize + (ProfileAvatarDefaults.FixedRingAllowance * 2)
 
     Box(
@@ -110,8 +111,8 @@ fun ProfileAvatar(
             }
         }
 
-        // 2. Overlaid Decorative Border (Normalized to avatar center with 1.5% overlap)
-        if (border.drawableRes != 0) {
+        // 2. Overlaid Decorative Border (Temporarily disabled from work)
+        if (false && border.drawableRes != 0) {
             val overlap = ProfileAvatarDefaults.InnerOverlapFraction
             val scaleWidth = (avatarSize * (1f - overlap)) / border.innerDiameterRatio
             val scaleHeight = scaleWidth * (border.canvasHeight.toFloat() / border.canvasWidth.toFloat())

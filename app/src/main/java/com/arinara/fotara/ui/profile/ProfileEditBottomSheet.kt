@@ -79,15 +79,6 @@ fun ProfileEditBottomSheet(
             )
 
             ProfileSheetActionRow(
-                icon = Icons.Default.AutoAwesome,
-                title = stringResource(R.string.profile_action_choose_border),
-                onClick = {
-                    onDismiss()
-                    onChooseBorder()
-                }
-            )
-
-            ProfileSheetActionRow(
                 icon = Icons.Default.Panorama,
                 title = stringResource(R.string.profile_action_change_banner),
                 onClick = {
@@ -137,6 +128,23 @@ fun ProfileEditBottomSheet(
                     }
                 )
             }
+
+            HorizontalDivider(
+                color = HomeCardBorder.copy(alpha = 0.5f),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
+            // Choose Border (Disabled - placed at most bottom, gray, under construction)
+            ProfileSheetActionRow(
+                icon = Icons.Default.AutoAwesome,
+                title = stringResource(R.string.profile_action_choose_border),
+                titleColor = Color.Gray,
+                iconTint = Color.Gray,
+                onClick = {
+                    onDismiss()
+                    onChooseBorder()
+                }
+            )
         }
     }
 }

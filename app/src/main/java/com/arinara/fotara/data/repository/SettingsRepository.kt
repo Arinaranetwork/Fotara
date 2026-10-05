@@ -131,12 +131,18 @@ class DefaultSettingsRepository(
             null
         }
 
+        // Border feature is temporarily disabled: past users with equipped borders are turned to none
+        val savedBorderId = prefs.getString(KEY_PROFILE_BORDER_ID, null)
+        if (savedBorderId != null && savedBorderId != ProfileBorders.NONE_ID) {
+            prefs.edit().putString(KEY_PROFILE_BORDER_ID, ProfileBorders.NONE_ID).apply()
+        }
+
         return UserProfile(
             name = prefs.getString(KEY_PROFILE_NAME, "") ?: "",
             email = prefs.getString(KEY_PROFILE_EMAIL, "") ?: "",
             avatarPath = resolvedAvatar,
             bannerPath = resolvedBanner,
-            borderId = prefs.getString(KEY_PROFILE_BORDER_ID, ProfileBorders.NONE_ID) ?: ProfileBorders.NONE_ID,
+            borderId = ProfileBorders.NONE_ID,
             avatarUpdatedAt = prefs.getLong(KEY_PROFILE_AVATAR_UPDATED_AT, 0L),
             bannerUpdatedAt = prefs.getLong(KEY_PROFILE_BANNER_UPDATED_AT, 0L),
             bannerCrop = prefs.getString(KEY_PROFILE_BANNER_CROP, null)
@@ -593,9 +599,9 @@ class DefaultSettingsRepository(
     }
 
     override suspend fun updateProfileBorder(borderId: String) = withContext(Dispatchers.IO) {
-        val resolvedId = if (borderId.isBlank()) ProfileBorders.NONE_ID else borderId
-        prefs.edit().putString(KEY_PROFILE_BORDER_ID, resolvedId).apply()
-        _profileFlow.value = _profileFlow.value.copy(borderId = resolvedId)
+        // Border feature is temporarily disabled: always persist and emit NONE_ID
+        prefs.edit().putString(KEY_PROFILE_BORDER_ID, ProfileBorders.NONE_ID).apply()
+        _profileFlow.value = _profileFlow.value.copy(borderId = ProfileBorders.NONE_ID)
     }
 
     override suspend fun saveProfileAvatar(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {

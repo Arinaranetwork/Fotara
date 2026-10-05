@@ -462,7 +462,7 @@ class SqliteWorkspaceRepository(
         val target = current.firstOrNull { it.id == workspaceId }
             ?: return@withContext WorkspaceResult.Error(WorkspaceError.NotFound)
 
-        if (target.kind != WorkspaceKind.CUSTOM) {
+        if (target.kind == WorkspaceKind.HOME) {
             return@withContext WorkspaceResult.Error(WorkspaceError.BuiltInImmutable)
         }
 
@@ -510,7 +510,7 @@ class SqliteWorkspaceRepository(
         val target = current.firstOrNull { it.id == workspaceId }
             ?: return@withContext WorkspaceResult.Error(WorkspaceError.NotFound)
 
-        if (target.kind != WorkspaceKind.CUSTOM) {
+        if (target.kind == WorkspaceKind.HOME) {
             return@withContext WorkspaceResult.Error(WorkspaceError.BuiltInImmutable)
         }
 

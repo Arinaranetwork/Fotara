@@ -106,6 +106,10 @@ import com.arinara.fotara.util.PdfPasswordException
 import com.arinara.fotara.util.PdfSplitManager
 import com.arinara.fotara.util.ScheduleAlertType
 import com.arinara.fotara.util.ScheduleNoteType
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import com.arinara.fotara.theme.TagAmber
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -126,7 +130,8 @@ fun PdfViewerScreen(
     onShare: () -> Unit,
     onSplitToImages: () -> Unit,
     onDelete: () -> Unit,
-    initialPageIndex: Int = 0
+    initialPageIndex: Int = 0,
+    highlightPageIndex: Int? = null
 ) {
     var showSplitConfirmDialog by remember { mutableStateOf(false) }
     var isReadingMode by rememberSaveable { mutableStateOf(false) }
@@ -168,9 +173,21 @@ fun PdfViewerScreen(
     )
     val zoomState = remember { PdfViewportZoomState() }
 
-    LaunchedEffect(initialPageIndex) {
-        if (initialPageIndex > 0 && initialPageIndex < totalPages) {
+    var hasScrolledToInitialPage by remember { mutableStateOf(false) }
+
+    LaunchedEffect(initialPageIndex, totalPages) {
+        if (!hasScrolledToInitialPage && totalPages > 0 && initialPageIndex in 0 until totalPages) {
+            hasScrolledToInitialPage = true
             listState.scrollToItem(initialPageIndex)
+        }
+    }
+
+    val highlightAlpha = remember { Animatable(0f) }
+    LaunchedEffect(highlightPageIndex) {
+        if (highlightPageIndex != null) {
+            highlightAlpha.snapTo(1f)
+            delay(2000L)
+            highlightAlpha.animateTo(0f, tween(1000, easing = FastOutSlowInEasing))
         }
     }
 
@@ -508,7 +525,9 @@ fun PdfViewerScreen(
                                 targetWidthPx = screenWidthPx,
                                 placeholderUri = placeholderPage?.imageUri,
                                 isZoomed = zoomState.isZoomed,
-                                currentZoomScale = zoomState.scale
+                                currentZoomScale = zoomState.scale,
+                                isHighlighted = pageIndex == highlightPageIndex && highlightAlpha.value > 0.01f,
+                                highlightAlpha = highlightAlpha.value
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                         }
@@ -603,7 +622,9 @@ private fun VirtualizedPdfPageView(
     targetWidthPx: Int,
     placeholderUri: String?,
     isZoomed: Boolean = false,
-    currentZoomScale: Float = 1.0f
+    currentZoomScale: Float = 1.0f,
+    isHighlighted: Boolean = false,
+    highlightAlpha: Float = 0f
 ) {
     val coroutineScope = rememberCoroutineScope()
     var baseBitmap by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
@@ -662,6 +683,15 @@ private fun VirtualizedPdfPageView(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (isHighlighted && highlightAlpha > 0.01f) {
+                    Modifier.border(
+                        width = 2.5.dp,
+                        color = TagAmber.copy(alpha = highlightAlpha),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                } else Modifier
+            )
             .clip(RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(containerColor = CardBg),
         shape = RoundedCornerShape(12.dp)
@@ -698,6 +728,13 @@ private fun VirtualizedPdfPageView(
                 contentAlignment = Alignment.Center
             ) {
                 val currentBitmap = highResBitmap ?: baseBitmap
+                if (isHighlighted && highlightAlpha > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(TagAmber.copy(alpha = highlightAlpha * 0.18f))
+                    )
+                }
                 when {
                     renderError && currentBitmap == null -> {
                         Column(

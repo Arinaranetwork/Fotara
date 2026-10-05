@@ -8,6 +8,7 @@ package com.arinara.fotara.ui.profile
 
 import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -334,15 +335,6 @@ fun ProfileScreen(
 
                 HorizontalDivider(color = HomeCardBorder.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
 
-                // Choose Border
-                ProfileItemRow(
-                    icon = Icons.Default.AutoAwesome,
-                    title = stringResource(R.string.profile_action_choose_border),
-                    onClick = { showBorderPicker = true }
-                )
-
-                HorizontalDivider(color = HomeCardBorder.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
-
                 // Change Banner
                 ProfileItemRow(
                     icon = Icons.Default.Panorama,
@@ -363,6 +355,19 @@ fun ProfileScreen(
                         onClick = { viewModel.removeProfileBanner() }
                     )
                 }
+
+                HorizontalDivider(color = HomeCardBorder.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+
+                // Choose Border (Disabled - placed at most bottom, gray, under construction)
+                ProfileItemRow(
+                    icon = Icons.Default.AutoAwesome,
+                    title = stringResource(R.string.profile_action_choose_border),
+                    titleColor = androidx.compose.ui.graphics.Color.Gray,
+                    iconTint = androidx.compose.ui.graphics.Color.Gray,
+                    onClick = {
+                        Toast.makeText(context, "Under construction", Toast.LENGTH_SHORT).show()
+                    }
+                )
             }
         }
 
@@ -490,6 +495,7 @@ private fun ProfileItemRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     titleColor: Color = Color.White,
+    iconTint: Color = if (titleColor == TagCrimson) TagCrimson else if (titleColor == Color.Gray) Color.Gray else Color.White.copy(alpha = 0.85f),
     onClick: () -> Unit
 ) {
     Row(
@@ -502,7 +508,7 @@ private fun ProfileItemRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (titleColor == TagCrimson) TagCrimson else Color.White.copy(alpha = 0.85f),
+            tint = iconTint,
             modifier = Modifier.size(20.dp)
         )
 

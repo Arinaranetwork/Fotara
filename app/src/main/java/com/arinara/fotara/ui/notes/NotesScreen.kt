@@ -110,6 +110,7 @@ import com.arinara.fotara.R
 import com.arinara.fotara.data.model.DocumentType
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.theme.HomeAddButtonBlue
 import com.arinara.fotara.theme.HomeCardBorder
 import com.arinara.fotara.theme.HomeCardSurface
 import com.arinara.fotara.theme.HomeHeaderButtonBg
@@ -151,7 +152,7 @@ fun NotesScreen(
     var pendingCreateAction by remember { mutableStateOf<((Folder) -> Unit)?>(null) }
 
     val bottomOverlayPadding = LocalBottomOverlayPadding.current
-    val fabBottomPadding = (bottomOverlayPadding + 16.dp).coerceAtLeast(82.dp)
+    val fabBottomPadding = (bottomOverlayPadding + 8.dp).coerceAtLeast(80.dp)
 
     LaunchedEffect(uiState.userMessage) {
         val msg = uiState.userMessage
@@ -323,22 +324,21 @@ fun NotesScreen(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = fabBottomPadding)
+                .padding(end = 18.dp, bottom = fabBottomPadding)
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(52.dp)
                     .clip(CircleShape)
-                    .background(HomeMainButtonBlue)
-                    .clickable { showFabCreateMenu = true }
-                    .shadow(8.dp, CircleShape),
+                    .background(HomeAddButtonBlue)
+                    .clickable { showFabCreateMenu = true },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = stringResource(R.string.create_note),
                     tint = Color.White,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
 
@@ -677,8 +677,15 @@ fun NotesScreen(
         }
         WorkspaceDeleteStep.PROGRESS -> {
             val progress = uiState.workspaceDeleteProgress
+            val wsToDelete = uiState.workspaceToDelete
+            val deleteWsName = when (wsToDelete?.kind) {
+                com.arinara.fotara.data.model.WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
+                com.arinara.fotara.data.model.WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
+                com.arinara.fotara.data.model.WorkspaceKind.CUSTOM -> wsToDelete.name
+                null -> ""
+            }
             DeleteWorkspaceProgressDialog(
-                workspaceName = uiState.workspaceToDelete?.name ?: "",
+                workspaceName = deleteWsName,
                 current = progress?.first ?: 0,
                 total = progress?.second ?: 0
             )

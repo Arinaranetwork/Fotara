@@ -2947,6 +2947,7 @@ fun FolderDetailScreen(
                     documentNote = doc,
                     pages = pages,
                     initialPageIndex = targetPageIndex ?: 0,
+                    highlightPageIndex = targetPageIndex,
                     onBack = { inspectingDocument = null },
                     onShare = {
                         try {

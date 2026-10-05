@@ -20,3 +20,9 @@ Enable deep-linking from search query results directly into specific pages of PD
 - Tapping a PDF search match opens the PDF directly on the matching page.
 - Target page automatically scrolls into view.
 - Matched text is visually highlighted.
+
+## Status: Completed
+- Search results pass `pageNumber` parameter via `FolderDetailScreen` and `PdfViewerScreen` navigation.
+- `LaunchedEffect(initialPageIndex, totalPages)` waits for PDF renderer initialization and triggers animated auto-scroll to the target page index.
+- 3-second animated amber border and overlay pulse visually highlights the target page upon arrival.
+- Verified in `PdfViewerScreen.kt` and `FolderDetailScreen.kt`.

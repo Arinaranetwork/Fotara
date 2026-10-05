@@ -7,11 +7,14 @@
 package com.arinara.fotara.ui.home.workspace
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,9 +103,10 @@ fun WorkspaceTabBar(
     val customCount = workspaces.count { it.kind == WorkspaceKind.CUSTOM }
     val isAtLimit = customCount >= WorkspaceValidator.MAX_CUSTOM_WORKSPACES
 
-    var localWorkspaces by remember(workspaces) { mutableStateOf(workspaces) }
     var dragState by remember { mutableStateOf(TabDragState()) }
+    var targetSlotIndex by remember { mutableIntStateOf(-1) }
     val tabPositions = remember { mutableStateMapOf<Long, Float>() }
+    val tabWidths = remember { mutableStateMapOf<Long, Float>() }
 
     // Auto-scroll selected tab into view
     LaunchedEffect(selectedWorkspaceId, workspaces) {
@@ -135,7 +140,7 @@ fun WorkspaceTabBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                localWorkspaces.forEachIndexed { index, workspace ->
+                workspaces.forEachIndexed { index, workspace ->
                     val isSelected = workspace.id == selectedWorkspaceId
                     val isBeingDragged = dragState.isDragging && dragState.activeTabId == workspace.id
                     val isMoveMode = dragState.isMoveMode && dragState.activeTabId == workspace.id
@@ -161,7 +166,34 @@ fun WorkspaceTabBar(
                         label = "tabElevation"
                     )
 
-                    val translationX = if (isBeingDragged) dragState.dragDeltaX else 0f
+                    // Neighboring tabs animated slot shift to visually open empty drop slot
+                    val draggedId = dragState.activeTabId
+                    val isAnyDragging = dragState.isDragging && draggedId != null && targetSlotIndex in 1 until workspaces.size
+                    val targetShiftPx = if (isAnyDragging && workspace.id != draggedId) {
+                        val draggedIndex = workspaces.indexOfFirst { it.id == draggedId }
+                        val thisIndex = index
+                        val draggedWidth = tabWidths[draggedId] ?: with(density) { 80.dp.toPx() }
+                        val slotSpacing = with(density) { 4.dp.toPx() }
+                        val slotShift = draggedWidth + slotSpacing
+                        when {
+                            draggedIndex < targetSlotIndex && thisIndex in (draggedIndex + 1)..targetSlotIndex -> -slotShift
+                            draggedIndex > targetSlotIndex && thisIndex in targetSlotIndex until draggedIndex -> slotShift
+                            else -> 0f
+                        }
+                    } else {
+                        0f
+                    }
+
+                    val animatedShiftPx by animateFloatAsState(
+                        targetValue = targetShiftPx,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        label = "slotShift_${workspace.id}"
+                    )
+
+                    val translationX = if (isBeingDragged) dragState.dragDeltaX else animatedShiftPx
 
                     Box(
                         modifier = Modifier
@@ -170,6 +202,7 @@ fun WorkspaceTabBar(
                             .onGloballyPositioned { coordinates ->
                                 val bounds = coordinates.boundsInParent()
                                 tabPositions[workspace.id] = (bounds.left + bounds.right) / 2f
+                                tabWidths[workspace.id] = bounds.width
                             }
                             .graphicsLayer {
                                 this.scaleX = scale
@@ -196,6 +229,7 @@ fun WorkspaceTabBar(
 
                                     var stage1Reached = false
                                     var stage2Reached = false
+                                    var accumulatedDeltaX = 0f
 
                                     val holdJob = coroutineScope.launch {
                                         delay(400L)
@@ -211,7 +245,7 @@ fun WorkspaceTabBar(
                                             currentX = initialX,
                                             currentY = initialY,
                                             dragDeltaX = 0f,
-                                            showRenamePanel = workspace.kind == WorkspaceKind.CUSTOM
+                                            showRenamePanel = workspace.kind != WorkspaceKind.HOME
                                         )
 
                                         delay(600L) // Total ~1000ms
@@ -229,48 +263,47 @@ fun WorkspaceTabBar(
                                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
 
                                             if (change.pressed) {
-                                                val currentX = change.position.x
+                                                val posChange = change.positionChange()
+                                                accumulatedDeltaX += posChange.x
                                                 val currentY = change.position.y
-                                                val deltaX = currentX - initialX
                                                 val deltaY = currentY - initialY
 
                                                 // Vertical cancel / shake off-screen
                                                 if (kotlin.math.abs(deltaY) > 80.dp.toPx()) {
                                                     holdJob.cancel()
-                                                    localWorkspaces = workspaces
+                                                    targetSlotIndex = -1
                                                     dragState = TabDragState(state = TabGestureState.IDLE)
                                                     break
                                                 }
 
                                                 // Cancel hold if horizontal scroll happened before Stage 1
-                                                if (!stage1Reached && kotlin.math.abs(deltaX) > 8.dp.toPx()) {
+                                                if (!stage1Reached && kotlin.math.abs(accumulatedDeltaX) > 8.dp.toPx()) {
                                                     holdJob.cancel()
+                                                    targetSlotIndex = -1
                                                     dragState = TabDragState(state = TabGestureState.IDLE)
                                                     break
                                                 }
 
                                                 // Move mode or dragging past slop
-                                                if (stage2Reached || (stage1Reached && kotlin.math.abs(deltaX) > 8.dp.toPx())) {
+                                                if (stage2Reached || (stage1Reached && kotlin.math.abs(accumulatedDeltaX) > 8.dp.toPx())) {
                                                     change.consume()
                                                     dragState = dragState.copy(
                                                         state = TabGestureState.DRAGGING,
                                                         showRenamePanel = false,
-                                                        dragDeltaX = deltaX,
-                                                        currentX = currentX,
-                                                        currentY = currentY
+                                                        dragDeltaX = accumulatedDeltaX
                                                     )
 
-                                                    // Reorder slots dynamically
-                                                    val currentCenter = (tabPositions[workspace.id] ?: 0f) + deltaX
-                                                    val currentIndex = localWorkspaces.indexOfFirst { it.id == workspace.id }
+                                                    // Calculate target slot dynamically based on current center
+                                                    val currentCenter = (tabPositions[workspace.id] ?: 0f) + accumulatedDeltaX
+                                                    val currentIndex = workspaces.indexOfFirst { it.id == workspace.id }
 
                                                     // Valid slots are strictly after Home: 1..lastIndex
-                                                    val candidateSlots = (1 until localWorkspaces.size)
+                                                    val candidateSlots = (1 until workspaces.size)
                                                     var closestSlot = currentIndex
                                                     var minDistance = Float.MAX_VALUE
 
                                                     for (slot in candidateSlots) {
-                                                        val otherId = localWorkspaces[slot].id
+                                                        val otherId = workspaces[slot].id
                                                         val otherCenter = tabPositions[otherId] ?: continue
                                                         val dist = kotlin.math.abs(currentCenter - otherCenter)
                                                         if (dist < minDistance) {
@@ -279,13 +312,11 @@ fun WorkspaceTabBar(
                                                         }
                                                     }
 
-                                                    if (closestSlot in 1 until localWorkspaces.size && closestSlot != currentIndex) {
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                        localWorkspaces = WorkspaceReorderHelper.reorderList(
-                                                            localWorkspaces,
-                                                            workspace.id,
-                                                            closestSlot
-                                                        )
+                                                    if (closestSlot in 1 until workspaces.size) {
+                                                        if (closestSlot != targetSlotIndex) {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        }
+                                                        targetSlotIndex = closestSlot
                                                     }
                                                 }
                                             } else {
@@ -293,24 +324,34 @@ fun WorkspaceTabBar(
                                                 holdJob.cancel()
                                                 if (dragState.state == TabGestureState.DRAGGING || stage2Reached) {
                                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    val finalIds = localWorkspaces.map { it.id }
-                                                    onReorderWorkspaces(finalIds)
+                                                    val currentIndex = workspaces.indexOfFirst { it.id == workspace.id }
+                                                    if (targetSlotIndex in 1 until workspaces.size && targetSlotIndex != currentIndex) {
+                                                        val finalWorkspaces = WorkspaceReorderHelper.reorderList(
+                                                            workspaces,
+                                                            workspace.id,
+                                                            targetSlotIndex
+                                                        )
+                                                        onReorderWorkspaces(finalWorkspaces.map { it.id })
+                                                    }
                                                     dragState = TabDragState(state = TabGestureState.IDLE)
+                                                    targetSlotIndex = -1
                                                 } else if (stage1Reached) {
                                                     // Finger lifted without dragging in Stage 1: Panel stays open
                                                     dragState = dragState.copy(
                                                         state = TabGestureState.HELD,
-                                                        showRenamePanel = workspace.kind == WorkspaceKind.CUSTOM
+                                                        showRenamePanel = workspace.kind != WorkspaceKind.HOME
                                                     )
+                                                    targetSlotIndex = -1
                                                 } else {
                                                     dragState = TabDragState(state = TabGestureState.IDLE)
+                                                    targetSlotIndex = -1
                                                 }
                                                 break
                                             }
                                         }
                                     } catch (e: Exception) {
                                         holdJob.cancel()
-                                        localWorkspaces = workspaces
+                                        targetSlotIndex = -1
                                         dragState = TabDragState(state = TabGestureState.IDLE)
                                     }
                                 }
@@ -370,8 +411,8 @@ fun WorkspaceTabBar(
                             }
                         }
 
-                        // Anchored dropdown menu for Custom Workspaces (contains Rename)
-                        if (workspace.kind == WorkspaceKind.CUSTOM && dragState.showRenamePanel && dragState.activeTabId == workspace.id) {
+                        // Anchored dropdown menu for Custom and Archive Workspaces
+                        if (workspace.kind != WorkspaceKind.HOME && dragState.showRenamePanel && dragState.activeTabId == workspace.id) {
                             DropdownMenu(
                                 expanded = true,
                                 onDismissRequest = {
@@ -381,20 +422,22 @@ fun WorkspaceTabBar(
                                     .background(HomeCardSurface)
                                     .clip(RoundedCornerShape(12.dp))
                             ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = stringResource(R.string.action_rename_workspace),
-                                            color = Color.White,
-                                            fontFamily = ElmsSans,
-                                            fontSize = 14.sp
-                                        )
-                                    },
-                                    onClick = {
-                                        dragState = TabDragState(state = TabGestureState.IDLE)
-                                        onRenameClick(workspace)
-                                    }
-                                )
+                                if (workspace.kind == WorkspaceKind.CUSTOM) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = stringResource(R.string.action_rename_workspace),
+                                                color = Color.White,
+                                                fontFamily = ElmsSans,
+                                                fontSize = 14.sp
+                                            )
+                                        },
+                                        onClick = {
+                                            dragState = TabDragState(state = TabGestureState.IDLE)
+                                            onRenameClick(workspace)
+                                        }
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = {
                                         Text(
