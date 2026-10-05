@@ -15,7 +15,11 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
+import com.arinara.fotara.data.db.FotaraDbHelper
 import com.arinara.fotara.data.model.Photo
+import com.arinara.fotara.data.repository.PhotoDrawingRepository
+import com.arinara.fotara.data.repository.SqlitePhotoDrawingRepository
+import com.arinara.fotara.data.storage.PhotoFlattener
 import com.arinara.fotara.ui.folder.FolderGridItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,59 +31,73 @@ object PdfExporter {
     suspend fun exportPhotosToPdf(
         context: Context,
         folderName: String,
-        photos: List<Photo>
+        photos: List<Photo>,
+        photoDrawingRepository: PhotoDrawingRepository? = null
     ): File = withContext(Dispatchers.IO) {
         val exportsDir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
         val cleanName = folderName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
         val outputFile = File(exportsDir, "${cleanName}_Notes_${System.currentTimeMillis()}.pdf")
 
         val pdfDoc = PdfDocument()
+        val resolvedDrawingRepo = photoDrawingRepository ?: SqlitePhotoDrawingRepository(FotaraDbHelper(context))
+        val tempFilesToClean = mutableListOf<File>()
 
-        val pageWidth = 595 // Standard A4 points at 72dpi
-        val pageHeight = 842
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        try {
+            val pageWidth = 595 // Standard A4 points at 72dpi
+            val pageHeight = 842
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        for ((index, photo) in photos.withIndex()) {
-            val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, index + 1).create()
-            val page = pdfDoc.startPage(pageInfo)
-            val canvas: Canvas = page.canvas
+            for ((index, photo) in photos.withIndex()) {
+                val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, index + 1).create()
+                val page = pdfDoc.startPage(pageInfo)
+                val canvas: Canvas = page.canvas
 
-            // Fill page background
-            canvas.drawColor(Color.WHITE)
+                // Fill page background
+                canvas.drawColor(Color.WHITE)
 
-            // Header text
-            paint.color = Color.DKGRAY
-            paint.textSize = 14f
-            val title = photo.caption ?: "$folderName — Note #${index + 1}"
-            canvas.drawText(title, 36f, 40f, paint)
+                // Header text
+                paint.color = Color.DKGRAY
+                paint.textSize = 14f
+                val title = photo.caption ?: "$folderName — Note #${index + 1}"
+                canvas.drawText(title, 36f, 40f, paint)
 
-            paint.textSize = 10f
-            paint.color = Color.GRAY
-            canvas.drawText("Page ${index + 1} of ${photos.size} • Fotara Offline Notes", 36f, 56f, paint)
+                paint.textSize = 10f
+                paint.color = Color.GRAY
+                canvas.drawText("Page ${index + 1} of ${photos.size} • Fotara Offline Notes", 36f, 56f, paint)
 
-            drawPhotoImage(canvas, photo, pageWidth, pageHeight, paint)
+                drawPhotoImage(context, canvas, photo, pageWidth, pageHeight, paint, resolvedDrawingRepo, tempFilesToClean)
 
-            pdfDoc.finishPage(page)
+                pdfDoc.finishPage(page)
+            }
+
+            FileOutputStream(outputFile).use { out ->
+                pdfDoc.writeTo(out)
+            }
+            pdfDoc.close()
+
+            outputFile
+        } finally {
+            for (f in tempFilesToClean) {
+                if (f.exists()) f.delete()
+            }
         }
-
-        FileOutputStream(outputFile).use { out ->
-            pdfDoc.writeTo(out)
-        }
-        pdfDoc.close()
-
-        outputFile
     }
 
     suspend fun exportFolderGridToPdf(
         context: Context,
         folderName: String,
-        gridItems: List<FolderGridItem>
+        gridItems: List<FolderGridItem>,
+        photoDrawingRepository: PhotoDrawingRepository? = null
     ): File = withContext(Dispatchers.IO) {
         val exportsDir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
         val cleanName = folderName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
         val outputFile = File(exportsDir, "${cleanName}_Notes_${System.currentTimeMillis()}.pdf")
 
         val pdfDoc = PdfDocument()
+        val resolvedDrawingRepo = photoDrawingRepository ?: SqlitePhotoDrawingRepository(FotaraDbHelper(context))
+        val tempFilesToClean = mutableListOf<File>()
+
+        try {
 
         val pageWidth = 595 // Standard A4 points at 72dpi
         val pageHeight = 842
@@ -129,7 +147,7 @@ object PdfExporter {
                     paint.color = Color.GRAY
                     canvas.drawText("Page $currentPageNumber of $totalPages • Fotara Offline Notes", 36f, 56f, paint)
 
-                    drawPhotoImage(canvas, photo, pageWidth, pageHeight, paint)
+                    drawPhotoImage(context, canvas, photo, pageWidth, pageHeight, paint, resolvedDrawingRepo, tempFilesToClean)
                     pdfDoc.finishPage(page)
                 }
                 is FolderGridItem.Group -> {
@@ -191,7 +209,7 @@ object PdfExporter {
                             paint.color = Color.GRAY
                             canvas.drawText("Group Note ${mIndex + 1} of ${members.size} • Page $currentPageNumber of $totalPages • Fotara Offline Notes", 36f, 56f, paint)
 
-                            drawPhotoImage(canvas, photo, pageWidth, pageHeight, paint)
+                            drawPhotoImage(context, canvas, photo, pageWidth, pageHeight, paint, resolvedDrawingRepo, tempFilesToClean)
                             pdfDoc.finishPage(page)
                         }
                     }
@@ -246,16 +264,28 @@ object PdfExporter {
         pdfDoc.close()
 
         outputFile
+        } finally {
+            for (f in tempFilesToClean) {
+                if (f.exists()) f.delete()
+            }
+        }
     }
 
-    private fun drawPhotoImage(
+    private suspend fun drawPhotoImage(
+        context: Context,
         canvas: Canvas,
         photo: Photo,
         pageWidth: Int,
         pageHeight: Int,
-        paint: Paint
+        paint: Paint,
+        drawingRepository: PhotoDrawingRepository,
+        tempFilesToClean: MutableList<File>
     ) {
-        val file = File(photo.fileUri)
+        val flattenedFile = PhotoFlattener.flattenIfNeeded(context, photo, drawingRepository)
+        if (flattenedFile.absolutePath != photo.fileUri) {
+            tempFilesToClean.add(flattenedFile)
+        }
+        val file = flattenedFile
         if (file.exists()) {
             val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(file.absolutePath, boundsOptions)

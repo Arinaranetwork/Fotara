@@ -2,7 +2,7 @@
 Last Updated: 2026-10-05
 
 ## Current Phase
-Phase 31 - QualityImprovementsAndBugfix [In Progress]
+Phase 33 - PdfSearchDeepLinkAndHighlight [Pending]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -37,27 +37,37 @@ Phase 31 - QualityImprovementsAndBugfix [In Progress]
 | 28    | WorkspacesPart2                   | Completed   |
 | 29    | UIUXConsistency                   | Completed   |
 | 30    | PdfOcrAndRelease160               | Completed   |
-| 31    | QualityImprovementsAndBugfix      | In Progress |
+| 31    | QualityImprovementsAndBugfix      | Completed   |
+| 32    | QualityAndSmoothness              | Completed   |
+| 33    | PdfSearchDeepLinkAndHighlight     | Pending     |
 
 ## Completed
-- [x] Task 6: Selection Mode Jumping & Blinking Fix (Home & Folder Detail zero-shift overlays, item snapshot tracking, thumbnail caching) - Phase 31
-- [x] Task 7: Release Name 1.7.0 Documentation & Transition (Changelog_1.7.md, Progress.md, WhatsNew metadata note) - Phase 31
-- [x] Task 0: Verify earlier batches (Batches 2A, 2B, 3, 4B) with file evidence - Phase 30
-- [x] Task 1: PDF content OCR for search (reliable page OCR, NULL vs empty string, throttled backfill, incremental FTS, zero UI display) - Phase 30
-- [x] Task 2: Built-in update banner with channel pills (UpdateBanner, ChannelPill, UpdateVersionUtils Stable vs Beta) - Phase 30
-- [x] Task 3: What's New screen and release information (1.6.0 Stable highlights, breaking changes, shared pill) - Phase 30
-- [x] Task 4: Final release build 1.6.0 Stable (versionName 1.6.0, versionCode 26, tests, release APK, changelog) - Phase 30
-- [x] Task 0: Batch 2A and 2B verification reporting - Phase 29
-- [x] Task 1: One shared screen header (Home, Notes, Settings) with ScreenHeader and ScreenHeaderDefaults - Phase 29
-- [x] Task 2: Menu cleanup (remove Settings from Home & Notes menus), Settings back button removal, FolderCard three-dot position, note cards inside folders audit - Phase 29
-- [x] Task 3: Notes screen no tagline, filters hidden by default with on-demand toggle - Phase 29
-- [x] Task 4: Workspace tabs on Notes screen with shared state from WorkspaceRepository - Phase 29
-- [x] Task 4B: Profile borders one consistent fit (alpha measurement, ProfileBorder table, ProfileAvatar component, layout bounds, unit tests) - Phase 29
-- [x] Task 5: Final validation and documentation - Phase 29
+- [x] Task 0: Verification & Android Skills Compliance Audit - Phase 32
+- [x] Task 1: Zoom & Pan Smoothness Overhaul - Phase 32
+- [x] Task 2: Screen Headers Clipping Fix - Phase 32
+- [x] Task 3: Workspace Tab Move Mode Hold Gesture - Phase 32
+- [x] Task 4: Release Notes & Update Banner Remote Images - Phase 32
+- [x] Task 5: What's New 1.7.1, Version Bump & Release Build - Phase 32
+- [x] Task 1: PDF viewer Split to Images button color alignment (`TabCream`) - Phase 31
+- [x] Task 2: Duplicate "Beta" and Version Text Resolution (`VersionInfo` pure parser) - Phase 31
+- [x] Task 3: Settings Pinned Title & Progressive Fade (`SettingsFadeMath`, zero recomposition) - Phase 31
+- [x] Task 4: Animated GIF Profile Banner (`ImageFormatDetector`, `BannerCropTransform`, `AnimatedImageDrawable`) - Phase 31
+- [x] Task 5: Markdown Table Rendering in Release Notes (`MarkdownTableParser`, `ReleaseNotesRenderer`) - Phase 31
+- [x] Task 6: Drawing Data Layer & SQLite Migration (`photo_drawings`, DB v17 migration, repository) - Phase 31
+- [x] Task 7: Photo viewer integration & interactive draw mode - Phase 31
+- [x] Task 8: Share and export flattening with visible drawings - Phase 31
+- [x] Task 9: What's New 1.7.0 entry, update dialog & About legal - Phase 31
+- [x] Task 10: Database migration & release hygiene checks - Phase 31
+- [x] Task 11: Version bump to 1.7.0, build release APK & git finalize - Phase 31
 
 ## In Progress
+None.
 
 ## Pending
+- [ ] A-001 (Carried from 1.7.1): PDF search deep link with auto-scroll and highlight - Phase 33
+
+## Blocked
+None.
 
 
 
@@ -342,11 +352,4 @@ Phase 31 - QualityImprovementsAndBugfix [In Progress]
 - [x] Task 4: Bottom overlay spacing (shared dynamic height source of truth, snackbars and Notes (+) FAB clear floating nav bar) - Phase 21
 - [x] Task 5: Overflow menu anchor position (nested in trigger IconButton, right-aligned, flipped upward if needed) - Phase 21
 
-## In Progress
-None.
 
-## Pending
-None.
-
-## Blocked
-None.

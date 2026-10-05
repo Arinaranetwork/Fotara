@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.ui.components.ChannelPill
+import com.arinara.fotara.ui.components.ReleaseNotesRenderer
 import com.arinara.fotara.ui.components.RichMarkdownText
 
 private val ScreenNavy = Color(0xFF03071E)
@@ -86,6 +87,64 @@ private data class ReleaseChangelogEntry(
 )
 
 private val BundledReleases = listOf(
+    ReleaseChangelogEntry(
+        version = "1.7.1",
+        channel = "Stable",
+        releaseDate = "2026-10-05",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/v1.7.1",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Zoom & Pan Smoothness Overhaul: Zero-recomposition GPU matrix transformations across Canvas and Photo Drawing, throttled viewport publishing (<=10Hz), and continuous centroid calculation eliminating stutter during pinch-to-zoom and multi-finger gestures.",
+            "Screen Headers Descender & Layout Fix: Content-measured header heights and reserved tagline slot height across Home, Notes, and detail screens, eliminating text clipping on descenders and preventing vertical tab-switching jump across all font scales (0.85x to 2.0x).",
+            "Workspace Tab Two-Stage Hold Gesture: Holding for ~400ms lifts tab and opens the action panel (kept open if finger is released); holding past ~1000ms enters Direct Move Mode with distinct haptic feedback, panel fade-out, 1.1x tab elevation, and instant horizontal drag reordering.",
+            "Rich Release Notes & Update Banner Images: Native support for remote release banner artwork behind dark gradient scrims, GitHub markdown images, linked images, and HTML <img> tags with HTTPS allowlist validation and full-screen pinch-to-zoom inspection.",
+            """
+| Component | Improvement | User Impact |
+|---|---|---|
+| Canvas & Photo Drawing | GPU matrix transforms & <=10Hz publish | Smooth 60 FPS pinch-zoom |
+| Screen Headers | Dynamic height & lineHeight padding | Zero descender clipping |
+| Workspace Tabs | Two-stage hold for Direct Move Mode | Intuitive tab reordering |
+| Update & Release Notes | Remote images & allowlist security | Rich release documentation |
+            """.trimIndent()
+        ),
+        patchesAndFixes = listOf(
+            "Prevented gesture cancellation spikes in PhotoDrawingEditor by stabilizing pointerInput modifier keys.",
+            "Added vertical drag off-screen and shake gesture cancellation for workspace tab reordering.",
+            "Enforced strict HTTPS domain allowlist rejecting unverified third-party image sources in release notes."
+        )
+    ),
+    ReleaseChangelogEntry(
+        version = "1.7.0",
+        channel = "Stable",
+        releaseDate = "2026-10-05",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/v1.7.0",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Draw on Photo Notes: Annotate photo notes with freehand pen, natural highlighter with blend modes (Multiply, Darken, Screen), and an eraser tool with capsule hit testing. Includes 100-step undo/redo stack, 600ms debounced autosave, and non-destructive vector overlays.",
+            "Export & Share Flattening: Photo notes with visible drawings automatically flatten into high-quality JPEG (quality 92) for direct sharing, PDF exports, and combined document generation.",
+            "PDF Viewer Split Button Color Alignment: Aligned the 'Split to Images' action button tint with TabCream to maintain consistent top-bar styling alongside Share and viewer tools.",
+            "Clean Channel Parsing: Integrated pure VersionInfo parser eliminating duplicate 'Beta' labels in update modals and settings cards while unifying channel pill presentation.",
+            "Settings Pinned Title & Progressive Fade: Pinned Settings header with an ultra-smooth, zero-recomposition progressive vertical gradient fade driven by scroll state.",
+            "Animated GIF Profile Banners: Support for animated GIF profile banners (Android 9+ / API 28+) with first-frame preview fallback, 8MB memory safety cap, and lifecycle-aware playback gating.",
+            "Release Notes Markdown Tables: Full GitHub Flavored Markdown table syntax parsing with column alignments, alternating row highlights, horizontal scroll containers, and TalkBack accessibility semantics.",
+            "Selection Mode Stability: Eliminated layout jumping and image blinking when toggling selection mode across Home and Folder Detail screens.",
+            """
+| Area | Changes | Impact |
+|---|---|---|
+| Photo Notes | Vector drawing tools & export flattening | Creative note annotation |
+| PDF Viewer | Split button color alignment | Visual consistency |
+| Versioning | Eliminated duplicate Beta pill | Clean release display |
+| Settings | Pinned title & progressive fade | Smooth scroll UX |
+| Profile | Animated GIF banner support | Dynamic customization |
+| Release Notes | Markdown table parser & semantics | Rich release documentation |
+| Selection Mode | Snapshot state & zero-shift overlays | Flicker-free browsing |
+            """.trimIndent()
+        ),
+        patchesAndFixes = listOf(
+            "Synchronized drawing coordinate transformations during 90° photo rotation and region cropping.",
+            "Purged orphan drawing records automatically during startup maintenance and photo permanent deletion."
+        )
+    ),
     ReleaseChangelogEntry(
         version = "1.6.0",
         channel = "Stable",
@@ -444,27 +503,36 @@ private fun ChangelogSectionBlock(
                     .padding(12.dp)
             ) {
                 items.forEach { item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Box(
+                    if (item.trim().startsWith("|") || item.contains("\n|")) {
+                        ReleaseNotesRenderer(
+                            markdown = item,
+                            primaryTextColor = TabCream.copy(alpha = 0.90f),
+                            accentColor = accentColor,
+                            cardBorder = accentColor.copy(alpha = 0.3f),
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        Row(
                             modifier = Modifier
-                                .padding(top = 6.dp)
-                                .size(5.dp)
-                                .clip(CircleShape)
-                                .background(accentColor)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        RichMarkdownText(
-                            text = item,
-                            color = TabCream.copy(alpha = 0.90f),
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp,
-                            accentColor = accentColor
-                        )
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 6.dp)
+                                    .size(5.dp)
+                                    .clip(CircleShape)
+                                    .background(accentColor)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            ReleaseNotesRenderer(
+                                markdown = item,
+                                primaryTextColor = TabCream.copy(alpha = 0.90f),
+                                accentColor = accentColor,
+                                cardBorder = accentColor.copy(alpha = 0.3f)
+                            )
+                        }
                     }
                 }
             }

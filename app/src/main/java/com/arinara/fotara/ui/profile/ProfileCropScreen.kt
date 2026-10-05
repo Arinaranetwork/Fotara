@@ -99,7 +99,7 @@ fun ProfileCropScreen(
     imageUri: Uri,
     isAvatar: Boolean,
     aspectRatio: Float = if (isAvatar) 1.0f else (16f / 9f),
-    onCropSaved: (Bitmap) -> Unit,
+    onCropSaved: (Bitmap, NormalizedCropRect) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -259,7 +259,13 @@ fun ProfileCropScreen(
                             }
 
                             if (cropped != null) {
-                                onCropSaved(cropped)
+                                val normRect = NormalizedCropRect(
+                                    left = currentNorm.left,
+                                    top = currentNorm.top,
+                                    right = currentNorm.right,
+                                    bottom = currentNorm.bottom
+                                )
+                                onCropSaved(cropped, normRect)
                             } else {
                                 Toast.makeText(
                                     context,
@@ -604,3 +610,23 @@ fun ProfileCropScreen(
         }
     }
 }
+
+@Composable
+fun ProfileCropScreen(
+    imageUri: Uri,
+    isAvatar: Boolean,
+    aspectRatio: Float = if (isAvatar) 1.0f else (16f / 9f),
+    onCropSaved: (Bitmap) -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ProfileCropScreen(
+        imageUri = imageUri,
+        isAvatar = isAvatar,
+        aspectRatio = aspectRatio,
+        onCropSaved = { bmp, _ -> onCropSaved(bmp) },
+        onCancel = onCancel,
+        modifier = modifier
+    )
+}
+

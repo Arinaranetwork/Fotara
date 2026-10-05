@@ -105,20 +105,35 @@ fun NewUpdateDialog(
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // Top: Built-in Update Banner
+                    val relInfo = com.arinara.fotara.online.VersionInfo.parse(release.version, release.isPrerelease)
                     UpdateBanner(
-                        version = release.version,
+                        version = relInfo.displayVersion,
                         releaseUrl = release.htmlUrl,
-                        channel = if (com.arinara.fotara.online.UpdateVersionUtils.isBeta(release.version, release.isPrerelease)) "Beta" else "Stable",
+                        channel = relInfo.channelLabel,
+                        bannerImageUrl = release.bannerUrl,
                         onClose = onLater,
                         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                     )
 
-                    // Body: Release notes rendered with Rich Markdown (headings, lists, bold text)
+                    // Body: Release notes rendered with shared ReleaseNotesRenderer
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 22.dp, vertical = 16.dp)
                     ) {
+                        if (release.title.isNotBlank()) {
+                            Text(
+                                text = release.title,
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -134,11 +149,10 @@ fun NewUpdateDialog(
                                     lineHeight = 20.sp
                                 )
                             } else {
-                                RichMarkdownColumn(
+                                ReleaseNotesRenderer(
                                     markdown = release.releaseNotes,
                                     primaryTextColor = Color.White.copy(alpha = 0.92f),
                                     accentColor = Color(0xFF60A5FA),
-                                    cardBg = Color(0xFF141936),
                                     cardBorder = Color(0xFF283256)
                                 )
                             }

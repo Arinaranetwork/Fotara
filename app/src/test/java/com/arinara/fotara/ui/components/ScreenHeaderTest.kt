@@ -21,8 +21,8 @@ class ScreenHeaderTest {
         assertEquals(18.dp, ScreenHeaderDefaults.HorizontalPadding)
         assertEquals(16.dp, ScreenHeaderDefaults.TopPadding)
         assertEquals(12.dp, ScreenHeaderDefaults.BottomPadding)
-        assertEquals(2.dp, ScreenHeaderDefaults.TitleToTaglineGap)
-        assertEquals(20.dp, ScreenHeaderDefaults.TaglineSlotHeight)
+        assertEquals(4.dp, ScreenHeaderDefaults.TitleToTaglineGap)
+        assertEquals(18.dp, ScreenHeaderDefaults.TaglineSlotHeight)
         assertEquals(12.dp, ScreenHeaderDefaults.HeaderBottomGap)
     }
 
@@ -40,12 +40,36 @@ class ScreenHeaderTest {
 
     @Test
     fun screenHeaderDefaults_typographyTokensMatchSpecification() {
-        assertEquals(38.sp, ScreenHeaderDefaults.TitleFontSize)
-        assertEquals(FontWeight.Medium, ScreenHeaderDefaults.TitleFontWeight)
+        assertEquals(32.sp, ScreenHeaderDefaults.TitleFontSize)
+        assertEquals(38.sp, ScreenHeaderDefaults.TitleLineHeight)
+        assertEquals(FontWeight.Bold, ScreenHeaderDefaults.TitleFontWeight)
         assertEquals((-0.5).sp, ScreenHeaderDefaults.TitleLetterSpacing)
 
-        assertEquals(15.sp, ScreenHeaderDefaults.TaglineFontSize)
-        assertEquals(FontWeight.Light, ScreenHeaderDefaults.TaglineFontWeight)
+        assertEquals(14.sp, ScreenHeaderDefaults.TaglineFontSize)
+        assertEquals(18.sp, ScreenHeaderDefaults.TaglineLineHeight)
+        assertEquals(FontWeight.Normal, ScreenHeaderDefaults.TaglineFontWeight)
+    }
+
+    @Test
+    fun screenHeader_fontScaleLayoutValidation() {
+        val fontScales = listOf(0.85f, 1.0f, 1.3f, 1.5f, 2.0f)
+        for (scale in fontScales) {
+            // Scaled font sp in pixels equivalent at 160dpi (1dp = 1px)
+            val titleScaledPx = ScreenHeaderDefaults.TitleFontSize.value * scale
+            val titleLineHeightPx = ScreenHeaderDefaults.TitleLineHeight.value * scale
+            val taglineScaledPx = ScreenHeaderDefaults.TaglineFontSize.value * scale
+            val taglineLineHeightPx = ScreenHeaderDefaults.TaglineLineHeight.value * scale
+
+            // Verify line height is always strictly greater than font size to prevent descender clipping
+            assertTrue(
+                "Title line height must accommodate title at font scale $scale",
+                titleLineHeightPx >= titleScaledPx
+            )
+            assertTrue(
+                "Tagline line height must accommodate tagline at font scale $scale",
+                taglineLineHeightPx >= taglineScaledPx
+            )
+        }
     }
 
     @Test

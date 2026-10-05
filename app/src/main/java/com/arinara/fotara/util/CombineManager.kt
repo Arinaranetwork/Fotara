@@ -25,6 +25,9 @@ import com.arinara.fotara.data.model.DocumentType
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.TextNote
+import com.arinara.fotara.data.repository.PhotoDrawingRepository
+import com.arinara.fotara.data.repository.SqlitePhotoDrawingRepository
+import com.arinara.fotara.data.storage.PhotoFlattener
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -55,10 +58,18 @@ class PageLimitExceededException(val totalPages: Int) : Exception(
 class CombineManager(
     private val context: Context,
     private val canvasRepository: CanvasRepository? = null,
-    private val canvasAssetManager: CanvasAssetManager? = null
+    private val canvasAssetManager: CanvasAssetManager? = null,
+    private val photoDrawingRepository: PhotoDrawingRepository? = null
 ) {
 
     private val docxExporter = DocxExporter(context)
+
+    private val resolvedPhotoDrawingRepository by lazy {
+        photoDrawingRepository ?: run {
+            val dbHelper = FotaraDbHelper(context)
+            SqlitePhotoDrawingRepository(dbHelper)
+        }
+    }
 
     private val resolvedCanvasRepository by lazy {
         canvasRepository ?: run {
@@ -123,6 +134,7 @@ class CombineManager(
         val pageHeight = TextNotePdfRenderer.PAGE_HEIGHT
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         var currentPageNum = 0
+        val tempFilesToClean = mutableListOf<File>()
 
         try {
             for (item in preparedItems) {
@@ -130,15 +142,23 @@ class CombineManager(
                 when (item) {
                     is CombineItem.StandalonePhoto -> {
                         currentPageNum++
-                        renderImagePage(pdfDoc, item.photo.fileUri, item.photo.caption ?: "Note #$currentPageNum", currentPageNum, totalPages, pageWidth, pageHeight, paint)
+                        val flattenedFile = PhotoFlattener.flattenIfNeeded(context, item.photo, resolvedPhotoDrawingRepository)
+                        if (flattenedFile.absolutePath != item.photo.fileUri) {
+                            tempFilesToClean.add(flattenedFile)
+                        }
+                        renderImagePage(pdfDoc, flattenedFile.absolutePath, item.photo.caption ?: "Note #$currentPageNum", currentPageNum, totalPages, pageWidth, pageHeight, paint)
                         onProgress?.invoke(currentPageNum, totalPages)
                     }
                     is CombineItem.Group -> {
                         for (photo in item.members) {
                             ensureActive()
                             currentPageNum++
+                            val flattenedFile = PhotoFlattener.flattenIfNeeded(context, photo, resolvedPhotoDrawingRepository)
+                            if (flattenedFile.absolutePath != photo.fileUri) {
+                                tempFilesToClean.add(flattenedFile)
+                            }
                             val cap = "${item.group.name} — ${photo.caption ?: "Item"}"
-                            renderImagePage(pdfDoc, photo.fileUri, cap, currentPageNum, totalPages, pageWidth, pageHeight, paint)
+                            renderImagePage(pdfDoc, flattenedFile.absolutePath, cap, currentPageNum, totalPages, pageWidth, pageHeight, paint)
                             onProgress?.invoke(currentPageNum, totalPages)
                         }
                     }
@@ -201,6 +221,10 @@ class CombineManager(
             pdfDoc.close()
             if (outputFile.exists()) outputFile.delete()
             throw e
+        } finally {
+            for (f in tempFilesToClean) {
+                if (f.exists()) f.delete()
+            }
         }
     }
 
@@ -225,11 +249,19 @@ class CombineManager(
             ensureActive()
             when (item) {
                 is CombineItem.StandalonePhoto -> {
-                    docxItems.add(DocxContentItem.ImagePage(item.photo.fileUri, item.photo.caption))
+                    val flattenedFile = PhotoFlattener.flattenIfNeeded(context, item.photo, resolvedPhotoDrawingRepository)
+                    if (flattenedFile.absolutePath != item.photo.fileUri) {
+                        tempFilesToClean.add(flattenedFile)
+                    }
+                    docxItems.add(DocxContentItem.ImagePage(flattenedFile.absolutePath, item.photo.caption))
                 }
                 is CombineItem.Group -> {
                     for (photo in item.members) {
-                        docxItems.add(DocxContentItem.ImagePage(photo.fileUri, "${item.group.name}: ${photo.caption ?: ""}"))
+                        val flattenedFile = PhotoFlattener.flattenIfNeeded(context, photo, resolvedPhotoDrawingRepository)
+                        if (flattenedFile.absolutePath != photo.fileUri) {
+                            tempFilesToClean.add(flattenedFile)
+                        }
+                        docxItems.add(DocxContentItem.ImagePage(flattenedFile.absolutePath, "${item.group.name}: ${photo.caption ?: ""}"))
                     }
                 }
                 is CombineItem.Document -> {

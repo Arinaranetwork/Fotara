@@ -159,4 +159,29 @@ class ProfileBordersAndDataTest {
         assertTrue("Max pan must be non-negative", maxPanX >= 0f)
         assertTrue("Max pan must be non-negative", maxPanY >= 0f)
     }
+
+    @Test
+    fun saveProfileBannerGif_updatesPathAndCropAndLifecycle() = testScope.runTest {
+        val viewModel = SettingsViewModel(fakeRepo)
+        val gifBytes = "GIF89a...fake_gif_data".toByteArray()
+        val cropRect = "0.1,0.2,0.9,0.8"
+
+        viewModel.saveProfileBannerGif(gifBytes, cropRect)
+        advanceUntilIdle()
+
+        val profile = viewModel.uiState.value.userProfile
+        assertEquals("/fake/files/profile/banner.gif", profile.bannerPath)
+        assertEquals(cropRect, profile.bannerCrop)
+        assertTrue(profile.isBannerGif)
+
+        // Remove clears all
+        viewModel.removeProfileBanner()
+        advanceUntilIdle()
+
+        val emptyProfile = viewModel.uiState.value.userProfile
+        assertEquals(null, emptyProfile.bannerPath)
+        assertEquals(null, emptyProfile.bannerCrop)
+        assertFalse(emptyProfile.isBannerGif)
+    }
 }
+

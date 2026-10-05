@@ -305,6 +305,20 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_layer_id ON canvas_elements(layer_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_assets_canvas_id ON canvas_assets(canvas_id)")
 
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS photo_drawings (
+                photo_id INTEGER PRIMARY KEY,
+                data BLOB NOT NULL,
+                width_px INTEGER NOT NULL,
+                height_px INTEGER NOT NULL,
+                is_visible INTEGER NOT NULL DEFAULT 1,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY(photo_id) REFERENCES photos(id) ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+
         createFtsTable(db)
     }
 
@@ -674,6 +688,25 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v16 failed: ${e.message}")
             }
         }
+        if (oldVersion < 17) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS photo_drawings (
+                        photo_id INTEGER PRIMARY KEY,
+                        data BLOB NOT NULL,
+                        width_px INTEGER NOT NULL,
+                        height_px INTEGER NOT NULL,
+                        is_visible INTEGER NOT NULL DEFAULT 1,
+                        updated_at INTEGER NOT NULL,
+                        FOREIGN KEY(photo_id) REFERENCES photos(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v17 failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -709,7 +742,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 16
+        const val DATABASE_VERSION = 17
         const val HOME_WORKSPACE_ID = 1L
         const val ARCHIVE_WORKSPACE_ID = 2L
         const val HOME_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000001"

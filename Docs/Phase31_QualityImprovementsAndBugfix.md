@@ -103,3 +103,55 @@ Eliminate sudden layout shifts, viewport jumping, and item/thumbnail blinking ac
 - [x] Changing workspace tab on Home clears selection while preserving multi-select mode as per existing rules.
 - [x] Changelog for 1.7.0 established at `/Changelog/Changelog_1.7.md`, with note in `/Changelog/Changelog_1.6.md`.
 - [x] Compose UI tests in `androidTest` and logic tests in `test` validate zero scroll shift and selection invariants.
+
+---
+
+## Final Batch: Batches 2 and 3 Merged (Tasks 1 to 11)
+
+### Part A: Fixes and Improvements
+- **Task 1: PDF Viewer Split to Images Icon Tint**:
+  - Replace orange `AccentGold` tint on `Icons.AutoMirrored.Filled.CallSplit` with uniform `TabCream` matching Share and standard navigation actions.
+  - Audit and retain stateful tints (AutoStories reading mode in gold; Delete in red).
+- **Task 2: Duplicate "Beta" and Version Text Resolution**:
+  - Pure parser `VersionInfo.parse(rawVersion)` returning numeric version and `UpdateChannel` (`STABLE` or `BETA`).
+  - Unify all screens (`UpdateScreen`, `SettingsScreen`, `WhatsNewScreen`, `NewUpdateDialog`, `FeedbackManager`) to display numeric version once, channel once via `ChannelPill`.
+- **Task 3: Settings Pinned Title & Progressive Fade**:
+  - Fixed `ScreenHeader("Settings")` at top over root `Box`.
+  - Behind title: vertical fade gradient overlay (`HomeNearBlack` to transparent, height: status bar + header + 24dp).
+  - Alpha driven smoothly from 0f (scroll = 0dp) to 1f (scroll >= 160dp) via zero-recomposition `graphicsLayer`.
+  - Drag gestures pass through to scrollable list.
+- **Task 4: Animated GIF Profile Banner**:
+  - Header signature check (`GIF87a` / `GIF89a`) independent of file extension.
+  - Store picked GIF as-is in `filesDir/profile/banner.gif` with 8 MB limit.
+  - Crop editor shows first frame and persists normalized rect in `SettingsRepository` key `key_profile_banner_crop`.
+  - API 28+ hardware-accelerated `AnimatedImageDrawable` gated by Lifecycle `RESUMED`, viewport visibility, and system animation settings. API 24-27 shows static first frame.
+- **Task 5: Markdown Table Rendering in Release Notes**:
+  - Shared `ReleaseNotesMarkdownRenderer` for `NewUpdateDialog`, `WhatsNewScreen`, and `UpdateScreen`.
+  - Full GitHub-style table parser: headers, alignment markers (`---`, `:---`, `---:`, `:---:`), escaped pipes (`\|`), padding, horizontal scrolling container, and accessibility semantics (`collectionInfo`).
+
+### Part B: Draw on Photo Notes
+- **Task 6: Drawing Data Layer & SQLite Migration**:
+  - Table `photo_drawings` (photo_id PRIMARY KEY, data BLOB, width_px, height_px, is_visible DEFAULT 1, updated_at).
+  - Increment `DATABASE_VERSION` from 16 to 17 with migration step in `FotaraDbHelper`.
+  - `PhotoDrawingRepository` via `AppContainer`: observe, save (single-writer mutex), setVisible, clear, rotate, crop.
+  - Explicit cleanup in permanent-delete and 30-day purge paths; orphan row cleanup on startup.
+  - Rotate 90° clockwise maps `(x, y) -> (H - y, x)` and swaps dimensions. Crop translates coordinates by offset and clips at render time.
+- **Task 7: Viewer Integration & Draw Mode**:
+  - Three-dot menu items: "Draw" / "Edit drawing", "Hide/Show drawing", "Clear drawing" (with confirmation dialog).
+  - `PhotoDrawingView`: renders photo bitmap and vector strokes into the same canvas with unified matrix for accurate Multiply blending.
+  - Interactive draw mode: Top bar with Done, title "Draw", Undo, Redo, Eye toggle. Floating bottom dock with Pen, Highlighter, Eraser, Swatch, and options panel.
+  - Size mapping: `sliderDp * density / fitScale`. Two-finger pan/zoom, one-finger draw, 100-step undo/redo, 600ms autosave debounce.
+- **Task 8: Share & Export Flattening**:
+  - `PhotoFlattener`: flattens photo + visible strokes into JPEG (quality 92, max 4096px long side) in `cacheDir/exports`.
+  - Integrated into Photo Viewer Share, `PdfExporter`, `CombineManager`, and Group PDF export only when photo has visible drawing.
+
+### Part C: Release
+- **Task 9: What's New, Update Dialog, and About for 1.7.0**:
+  - 1.7.0 Stable entry with release highlights and area summary table.
+  - About & Legal shows "Fotara 1.7.0" with Stable pill.
+- **Task 10: Migration & Hygiene Checks**:
+  - Database upgrade test, zero TODO/FIXME in `app/src/main`, ProGuard passes, debug tools excluded.
+- **Task 11: Version Bump & Release Artifact Packaging**:
+  - `versionName = "1.7.0"`, `versionCode = 27`.
+  - Update `/Changelog/Changelog_1.7.md`, `/Docs/Progress.md`, and `/Docs/Version/1.0/1.7/1.7.0/Anchor.md`.
+  - Assemble release APK, copy to `/Output/Release/Fotara_1.7.0.apk`, verify checksums.

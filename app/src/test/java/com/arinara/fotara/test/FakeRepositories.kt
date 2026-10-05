@@ -42,6 +42,7 @@ import com.arinara.fotara.data.repository.WorkspaceResult
 import com.arinara.fotara.data.repository.WorkspaceError
 import com.arinara.fotara.data.repository.WorkspaceContentStats
 import com.arinara.fotara.data.repository.WorkspaceValidator
+import com.arinara.fotara.data.repository.PhotoDrawingRepository
 import android.net.Uri
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -805,13 +806,20 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun saveProfileBanner(bitmap: android.graphics.Bitmap): String? {
         val fakePath = "/fake/files/profile/banner.webp"
         val now = System.currentTimeMillis()
-        _profileFlow.value = _profileFlow.value.copy(bannerPath = fakePath, bannerUpdatedAt = now)
+        _profileFlow.value = _profileFlow.value.copy(bannerPath = fakePath, bannerUpdatedAt = now, bannerCrop = null)
+        return fakePath
+    }
+
+    override suspend fun saveProfileBannerGif(bytes: ByteArray, crop: String?): String? {
+        val fakePath = "/fake/files/profile/banner.gif"
+        val now = System.currentTimeMillis()
+        _profileFlow.value = _profileFlow.value.copy(bannerPath = fakePath, bannerUpdatedAt = now, bannerCrop = crop)
         return fakePath
     }
 
     override suspend fun removeProfileBanner() {
         val now = System.currentTimeMillis()
-        _profileFlow.value = _profileFlow.value.copy(bannerPath = null, bannerUpdatedAt = now)
+        _profileFlow.value = _profileFlow.value.copy(bannerPath = null, bannerUpdatedAt = now, bannerCrop = null)
     }
 
     override suspend fun updateSortOrder(sortOrder: SortOrder) {
@@ -1504,6 +1512,59 @@ class FakeWorkspaceRepository(
     }
 
     override suspend fun refresh() {}
+}
+
+class FakePhotoDrawingRepository : PhotoDrawingRepository {
+    val drawingsMap = mutableMapOf<Long, com.arinara.fotara.data.model.PhotoDrawing>()
+    private val updates = kotlinx.coroutines.flow.MutableSharedFlow<Long>(extraBufferCapacity = 64)
+
+    override fun observeDrawing(photoId: Long): kotlinx.coroutines.flow.Flow<com.arinara.fotara.data.model.PhotoDrawing?> = kotlinx.coroutines.flow.flow {
+        emit(drawingsMap[photoId])
+        updates.collect { id ->
+            if (id == photoId || id == -1L) emit(drawingsMap[photoId])
+        }
+    }
+
+    override suspend fun getDrawing(photoId: Long): com.arinara.fotara.data.model.PhotoDrawing? = drawingsMap[photoId]
+
+    override suspend fun saveDrawing(drawing: com.arinara.fotara.data.model.PhotoDrawing) {
+        drawingsMap[drawing.photoId] = drawing
+        updates.emit(drawing.photoId)
+    }
+
+    override suspend fun setVisible(photoId: Long, isVisible: Boolean) {
+        val existing = drawingsMap[photoId]
+        if (existing != null) {
+            drawingsMap[photoId] = existing.copy(isVisible = isVisible, updatedAt = System.currentTimeMillis())
+            updates.emit(photoId)
+        }
+    }
+
+    override suspend fun clearDrawing(photoId: Long) {
+        drawingsMap.remove(photoId)
+        updates.emit(photoId)
+    }
+
+    override suspend fun deleteDrawing(photoId: Long) {
+        drawingsMap.remove(photoId)
+        updates.emit(photoId)
+    }
+
+    override suspend fun transformRotate(photoId: Long, oldW: Int, oldH: Int) {
+        val existing = drawingsMap[photoId] ?: return
+        drawingsMap[photoId] = com.arinara.fotara.canvas.engine.PhotoDrawingTransform.rotate90Clockwise(existing, oldW, oldH)
+        updates.emit(photoId)
+    }
+
+    override suspend fun transformCrop(photoId: Long, cropLeft: Float, cropTop: Float, newW: Int, newH: Int) {
+        val existing = drawingsMap[photoId] ?: return
+        drawingsMap[photoId] = com.arinara.fotara.canvas.engine.PhotoDrawingTransform.crop(existing, cropLeft, cropTop, newW, newH)
+        updates.emit(photoId)
+    }
+
+    override suspend fun cleanOrphanDrawings() {
+        updates.emit(-1L)
+    }
 }
 
 

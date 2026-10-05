@@ -200,9 +200,10 @@ class UpdateManager(private val context: Context) {
                         for (j in 0 until assets.length()) {
                             val asset = assets.getJSONObject(j)
                             val name = asset.optString("name", "")
-                            if (name.endsWith(".apk", ignoreCase = true)) {
+                            val lowerName = name.lowercase()
+                            if (lowerName.endsWith(".apk")) {
                                 downloadUrl = if (asset.has("browser_download_url")) asset.getString("browser_download_url") else null
-                            } else if (name.endsWith(".jpg", ignoreCase = true) || name.endsWith(".png", ignoreCase = true) || name.endsWith(".webp", ignoreCase = true)) {
+                            } else if (bannerUrl == null && (lowerName.contains("banner") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png") || lowerName.endsWith(".webp") || lowerName.endsWith(".gif"))) {
                                 bannerUrl = if (asset.has("browser_download_url")) asset.getString("browser_download_url") else null
                             }
                         }
@@ -268,7 +269,8 @@ class UpdateManager(private val context: Context) {
                     newestRelease
                 } else {
                     _updateState.value = UpdateState.NO_UPDATE
-                    _statusNotice.value = "Your application is up to date (v$currentVersion)."
+                    val info = VersionInfo.parse(currentVersion)
+                    _statusNotice.value = "Your application is up to date (${info.displayVersion})."
                     null
                 }
             } else {

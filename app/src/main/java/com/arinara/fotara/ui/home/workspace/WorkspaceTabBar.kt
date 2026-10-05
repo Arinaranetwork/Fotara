@@ -10,7 +10,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,8 +42,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -90,6 +94,7 @@ fun WorkspaceTabBar(
     val scrollState = rememberScrollState()
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
 
     val customCount = workspaces.count { it.kind == WorkspaceKind.CUSTOM }
     val isAtLimit = customCount >= WorkspaceValidator.MAX_CUSTOM_WORKSPACES
@@ -133,17 +138,26 @@ fun WorkspaceTabBar(
                 localWorkspaces.forEachIndexed { index, workspace ->
                     val isSelected = workspace.id == selectedWorkspaceId
                     val isBeingDragged = dragState.isDragging && dragState.activeTabId == workspace.id
+                    val isMoveMode = dragState.isMoveMode && dragState.activeTabId == workspace.id
                     val isHeld = dragState.state == TabGestureState.HELD && dragState.activeTabId == workspace.id
 
                     val scale by animateFloatAsState(
-                        targetValue = if (isBeingDragged || isHeld) 1.06f else 1.0f,
-                        animationSpec = tween(150),
+                        targetValue = when {
+                            isBeingDragged || isMoveMode -> 1.10f
+                            isHeld -> 1.06f
+                            else -> 1.0f
+                        },
+                        animationSpec = tween(120),
                         label = "tabScale"
                     )
 
                     val elevation by animateFloatAsState(
-                        targetValue = if (isBeingDragged || isHeld) 8f else 0f,
-                        animationSpec = tween(150),
+                        targetValue = when {
+                            isBeingDragged || isMoveMode -> 12f
+                            isHeld -> 6f
+                            else -> 0f
+                        },
+                        animationSpec = tween(120),
                         label = "tabElevation"
                     )
 
@@ -175,80 +189,131 @@ fun WorkspaceTabBar(
                                     // Home does not allow drag or long-press; select mode disables tab gestures
                                     return@pointerInput
                                 }
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = { offset ->
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val initialX = down.position.x
+                                    val initialY = down.position.y
+
+                                    var stage1Reached = false
+                                    var stage2Reached = false
+
+                                    val holdJob = coroutineScope.launch {
+                                        delay(400L)
+                                        stage1Reached = true
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         dragState = TabDragState(
                                             state = TabGestureState.HELD,
                                             activeTabId = workspace.id,
                                             isHome = workspace.kind == WorkspaceKind.HOME,
                                             isArchive = workspace.kind == WorkspaceKind.ARCHIVE,
-                                            startX = offset.x,
-                                            currentX = offset.x,
+                                            startX = initialX,
+                                            startY = initialY,
+                                            currentX = initialX,
+                                            currentY = initialY,
                                             dragDeltaX = 0f,
                                             showRenamePanel = workspace.kind == WorkspaceKind.CUSTOM
                                         )
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        val newDragDelta = dragState.dragDeltaX + dragAmount.x
-                                        val newCurrentX = dragState.startX + newDragDelta
 
-                                        if (dragState.state == TabGestureState.HELD && kotlin.math.abs(newDragDelta) > 8.dp.toPx()) {
-                                            dragState = dragState.copy(
-                                                state = TabGestureState.DRAGGING,
-                                                showRenamePanel = false,
-                                                dragDeltaX = newDragDelta,
-                                                currentX = newCurrentX
-                                            )
-                                        } else if (dragState.state == TabGestureState.DRAGGING) {
-                                            dragState = dragState.copy(
-                                                dragDeltaX = newDragDelta,
-                                                currentX = newCurrentX
-                                            )
+                                        delay(600L) // Total ~1000ms
+                                        stage2Reached = true
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        dragState = dragState.copy(
+                                            state = TabGestureState.MOVE_MODE,
+                                            showRenamePanel = false
+                                        )
+                                    }
 
-                                            // Reorder slots dynamically
-                                            val currentCenter = (tabPositions[workspace.id] ?: 0f) + newDragDelta
-                                            val currentIndex = localWorkspaces.indexOfFirst { it.id == workspace.id }
+                                    try {
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
 
-                                            // Valid slots are strictly after Home: 1..lastIndex
-                                            val candidateSlots = (1 until localWorkspaces.size)
-                                            var closestSlot = currentIndex
-                                            var minDistance = Float.MAX_VALUE
+                                            if (change.pressed) {
+                                                val currentX = change.position.x
+                                                val currentY = change.position.y
+                                                val deltaX = currentX - initialX
+                                                val deltaY = currentY - initialY
 
-                                            for (slot in candidateSlots) {
-                                                val otherId = localWorkspaces[slot].id
-                                                val otherCenter = tabPositions[otherId] ?: continue
-                                                val dist = kotlin.math.abs(currentCenter - otherCenter)
-                                                if (dist < minDistance) {
-                                                    minDistance = dist
-                                                    closestSlot = slot
+                                                // Vertical cancel / shake off-screen
+                                                if (kotlin.math.abs(deltaY) > 80.dp.toPx()) {
+                                                    holdJob.cancel()
+                                                    localWorkspaces = workspaces
+                                                    dragState = TabDragState(state = TabGestureState.IDLE)
+                                                    break
                                                 }
-                                            }
 
-                                            if (closestSlot in 1 until localWorkspaces.size && closestSlot != currentIndex) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                localWorkspaces = WorkspaceReorderHelper.reorderList(
-                                                    localWorkspaces,
-                                                    workspace.id,
-                                                    closestSlot
-                                                )
+                                                // Cancel hold if horizontal scroll happened before Stage 1
+                                                if (!stage1Reached && kotlin.math.abs(deltaX) > 8.dp.toPx()) {
+                                                    holdJob.cancel()
+                                                    dragState = TabDragState(state = TabGestureState.IDLE)
+                                                    break
+                                                }
+
+                                                // Move mode or dragging past slop
+                                                if (stage2Reached || (stage1Reached && kotlin.math.abs(deltaX) > 8.dp.toPx())) {
+                                                    change.consume()
+                                                    dragState = dragState.copy(
+                                                        state = TabGestureState.DRAGGING,
+                                                        showRenamePanel = false,
+                                                        dragDeltaX = deltaX,
+                                                        currentX = currentX,
+                                                        currentY = currentY
+                                                    )
+
+                                                    // Reorder slots dynamically
+                                                    val currentCenter = (tabPositions[workspace.id] ?: 0f) + deltaX
+                                                    val currentIndex = localWorkspaces.indexOfFirst { it.id == workspace.id }
+
+                                                    // Valid slots are strictly after Home: 1..lastIndex
+                                                    val candidateSlots = (1 until localWorkspaces.size)
+                                                    var closestSlot = currentIndex
+                                                    var minDistance = Float.MAX_VALUE
+
+                                                    for (slot in candidateSlots) {
+                                                        val otherId = localWorkspaces[slot].id
+                                                        val otherCenter = tabPositions[otherId] ?: continue
+                                                        val dist = kotlin.math.abs(currentCenter - otherCenter)
+                                                        if (dist < minDistance) {
+                                                            minDistance = dist
+                                                            closestSlot = slot
+                                                        }
+                                                    }
+
+                                                    if (closestSlot in 1 until localWorkspaces.size && closestSlot != currentIndex) {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        localWorkspaces = WorkspaceReorderHelper.reorderList(
+                                                            localWorkspaces,
+                                                            workspace.id,
+                                                            closestSlot
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                // Pointer lifted (Up)
+                                                holdJob.cancel()
+                                                if (dragState.state == TabGestureState.DRAGGING || stage2Reached) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    val finalIds = localWorkspaces.map { it.id }
+                                                    onReorderWorkspaces(finalIds)
+                                                    dragState = TabDragState(state = TabGestureState.IDLE)
+                                                } else if (stage1Reached) {
+                                                    // Finger lifted without dragging in Stage 1: Panel stays open
+                                                    dragState = dragState.copy(
+                                                        state = TabGestureState.HELD,
+                                                        showRenamePanel = workspace.kind == WorkspaceKind.CUSTOM
+                                                    )
+                                                } else {
+                                                    dragState = TabDragState(state = TabGestureState.IDLE)
+                                                }
+                                                break
                                             }
                                         }
-                                    },
-                                    onDragEnd = {
-                                        if (dragState.state == TabGestureState.DRAGGING) {
-                                            val finalIds = localWorkspaces.map { it.id }
-                                            onReorderWorkspaces(finalIds)
-                                            dragState = TabDragState(state = TabGestureState.IDLE)
-                                        }
-                                        // If finger lifted without dragging, HELD state keeps showRenamePanel open
-                                    },
-                                    onDragCancel = {
+                                    } catch (e: Exception) {
+                                        holdJob.cancel()
                                         localWorkspaces = workspaces
                                         dragState = TabDragState(state = TabGestureState.IDLE)
                                     }
-                                )
+                                }
                             }
                             .clickable {
                                 onWorkspaceSelected(workspace)

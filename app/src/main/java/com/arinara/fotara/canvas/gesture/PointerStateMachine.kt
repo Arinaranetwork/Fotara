@@ -323,7 +323,28 @@ class PointerStateMachine(
                 )
             }
             is PointerState.PanZoom -> {
-                // 3rd or 4th finger ignored safely
+                // Re-anchor centroid when another pointer lands to prevent jumping
+                val trackedP1 = activePointers[current.pointer1Id]
+                val trackedP2 = if (current.pointer2Id != -1) activePointers[current.pointer2Id] else null
+                if (trackedP1 != null && trackedP2 != null) {
+                    val dist = hypot(trackedP1.x - trackedP2.x, trackedP1.y - trackedP2.y).coerceAtLeast(1f)
+                    state = current.copy(
+                        lastCenterX = (trackedP1.x + trackedP2.x) / 2f,
+                        lastCenterY = (trackedP1.y + trackedP2.y) / 2f,
+                        lastDistance = dist
+                    )
+                } else if (trackedP1 != null) {
+                    // Transition smoothly from 1-finger pan to 2-finger pan/zoom
+                    val newP2 = activePointers[event.pointerId]!!
+                    val dist = hypot(trackedP1.x - newP2.x, trackedP1.y - newP2.y).coerceAtLeast(1f)
+                    state = PointerState.PanZoom(
+                        pointer1Id = current.pointer1Id,
+                        pointer2Id = event.pointerId,
+                        lastCenterX = (trackedP1.x + newP2.x) / 2f,
+                        lastCenterY = (trackedP1.y + newP2.y) / 2f,
+                        lastDistance = dist
+                    )
+                }
             }
         }
 
@@ -495,15 +516,26 @@ class PointerStateMachine(
             }
             is PointerState.PanZoom -> {
                 if (event.pointerId == current.pointer1Id || event.pointerId == current.pointer2Id) {
-                    val remainingId = if (event.pointerId == current.pointer1Id) current.pointer2Id else current.pointer1Id
-                    val remainingPointer = activePointers[remainingId]
-                    if (remainingId != -1 && remainingPointer != null && stylusOnlyDrawing) {
-                        // Smoothly transition remaining finger to 1-finger pan without jumping focal point
+                    val remainingPointers = activePointers.filterKeys { it != event.pointerId }
+                    if (remainingPointers.size >= 2) {
+                        val keys = remainingPointers.keys.toList()
+                        val p1 = remainingPointers[keys[0]]!!
+                        val p2 = remainingPointers[keys[1]]!!
+                        val dist = hypot(p1.x - p2.x, p1.y - p2.y).coerceAtLeast(1f)
                         state = PointerState.PanZoom(
-                            pointer1Id = remainingId,
+                            pointer1Id = keys[0],
+                            pointer2Id = keys[1],
+                            lastCenterX = (p1.x + p2.x) / 2f,
+                            lastCenterY = (p1.y + p2.y) / 2f,
+                            lastDistance = dist
+                        )
+                    } else if (remainingPointers.size == 1 && stylusOnlyDrawing) {
+                        val (remId, remPointer) = remainingPointers.entries.first()
+                        state = PointerState.PanZoom(
+                            pointer1Id = remId,
                             pointer2Id = -1,
-                            lastCenterX = remainingPointer.x,
-                            lastCenterY = remainingPointer.y,
+                            lastCenterX = remPointer.x,
+                            lastCenterY = remPointer.y,
                             lastDistance = 1f
                         )
                     } else {

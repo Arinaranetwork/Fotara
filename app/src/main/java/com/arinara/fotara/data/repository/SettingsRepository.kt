@@ -25,6 +25,7 @@ import com.arinara.fotara.data.model.UserSettings
 import com.arinara.fotara.data.storage.PhotoStorageManager
 import com.arinara.fotara.util.ProfileImageUtils
 import java.io.File
+import java.io.FileOutputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,6 +41,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 interface SettingsRepository {
+    companion object {
+        const val MAX_BANNER_GIF_BYTES = 8 * 1024 * 1024L // 8 MB
+    }
     val settingsFlow: StateFlow<UserSettings>
     val profileFlow: StateFlow<UserProfile>
     suspend fun updateProfileName(name: String)
@@ -48,6 +52,7 @@ interface SettingsRepository {
     suspend fun saveProfileAvatar(bitmap: Bitmap): String?
     suspend fun removeProfileAvatar()
     suspend fun saveProfileBanner(bitmap: Bitmap): String?
+    suspend fun saveProfileBannerGif(bytes: ByteArray, crop: String?): String?
     suspend fun removeProfileBanner()
     suspend fun updateSortOrder(sortOrder: SortOrder)
     suspend fun updateGridDensity(density: Int)
@@ -116,6 +121,8 @@ class DefaultSettingsRepository(
         val rawBanner = prefs.getString(KEY_PROFILE_BANNER_PATH, null)
         val resolvedBanner = if (rawBanner != null && File(rawBanner).exists()) {
             rawBanner
+        } else if (File(profileDir, "banner.gif").exists()) {
+            File(profileDir, "banner.gif").absolutePath
         } else if (File(profileDir, "banner.png").exists()) {
             File(profileDir, "banner.png").absolutePath
         } else if (File(profileDir, "banner.webp").exists()) {
@@ -131,7 +138,8 @@ class DefaultSettingsRepository(
             bannerPath = resolvedBanner,
             borderId = prefs.getString(KEY_PROFILE_BORDER_ID, ProfileBorders.NONE_ID) ?: ProfileBorders.NONE_ID,
             avatarUpdatedAt = prefs.getLong(KEY_PROFILE_AVATAR_UPDATED_AT, 0L),
-            bannerUpdatedAt = prefs.getLong(KEY_PROFILE_BANNER_UPDATED_AT, 0L)
+            bannerUpdatedAt = prefs.getLong(KEY_PROFILE_BANNER_UPDATED_AT, 0L),
+            bannerCrop = prefs.getString(KEY_PROFILE_BANNER_CROP, null)
         )
     }
 
@@ -636,6 +644,7 @@ class DefaultSettingsRepository(
     override suspend fun saveProfileBanner(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
         val targetFile = File(profileDir, "banner.png")
         val legacyFile = File(profileDir, "banner.webp")
+        val gifFile = File(profileDir, "banner.gif")
         val success = ProfileImageUtils.savePngAtomically(
             bitmap = bitmap,
             targetFile = targetFile,
@@ -643,15 +652,18 @@ class DefaultSettingsRepository(
         )
         if (success) {
             if (legacyFile.exists()) legacyFile.delete()
+            if (gifFile.exists()) gifFile.delete()
             val path = targetFile.absolutePath
             val now = System.currentTimeMillis()
             prefs.edit()
                 .putString(KEY_PROFILE_BANNER_PATH, path)
                 .putLong(KEY_PROFILE_BANNER_UPDATED_AT, now)
+                .remove(KEY_PROFILE_BANNER_CROP)
                 .apply()
             _profileFlow.value = _profileFlow.value.copy(
                 bannerPath = path,
-                bannerUpdatedAt = now
+                bannerUpdatedAt = now,
+                bannerCrop = null
             )
             path
         } else {
@@ -659,23 +671,99 @@ class DefaultSettingsRepository(
         }
     }
 
+    override suspend fun saveProfileBannerGif(bytes: ByteArray, crop: String?): String? = withContext(Dispatchers.IO) {
+        if (bytes.size > MAX_BANNER_GIF_BYTES) return@withContext null
+        if (!com.arinara.fotara.util.ImageFormatDetector.isGif(bytes)) return@withContext null
+
+        val targetFile = File(profileDir, "banner.gif")
+        val pngFile = File(profileDir, "banner.png")
+        val webpFile = File(profileDir, "banner.webp")
+        val tempFile = File(profileDir, "banner.gif.tmp_${System.currentTimeMillis()}")
+
+        try {
+            FileOutputStream(tempFile).use { out ->
+                out.write(bytes)
+                out.flush()
+            }
+            if (!tempFile.exists() || tempFile.length() == 0L) {
+                if (tempFile.exists()) tempFile.delete()
+                return@withContext null
+            }
+
+            val replaced = if (targetFile.exists()) {
+                val backupFile = File(profileDir, "banner.gif.bak")
+                if (backupFile.exists()) backupFile.delete()
+                targetFile.renameTo(backupFile)
+                if (tempFile.renameTo(targetFile)) {
+                    backupFile.delete()
+                    true
+                } else {
+                    tempFile.copyTo(targetFile, overwrite = true)
+                    tempFile.delete()
+                    backupFile.delete()
+                    true
+                }
+            } else {
+                tempFile.renameTo(targetFile) || {
+                    tempFile.copyTo(targetFile, overwrite = true)
+                    tempFile.delete()
+                    true
+                }()
+            }
+
+            if (replaced && targetFile.exists() && targetFile.length() > 0L) {
+                if (pngFile.exists()) pngFile.delete()
+                if (webpFile.exists()) webpFile.delete()
+                val path = targetFile.absolutePath
+                val now = System.currentTimeMillis()
+                val editor = prefs.edit()
+                    .putString(KEY_PROFILE_BANNER_PATH, path)
+                    .putLong(KEY_PROFILE_BANNER_UPDATED_AT, now)
+                if (crop != null) {
+                    editor.putString(KEY_PROFILE_BANNER_CROP, crop)
+                } else {
+                    editor.remove(KEY_PROFILE_BANNER_CROP)
+                }
+                editor.apply()
+                _profileFlow.value = _profileFlow.value.copy(
+                    bannerPath = path,
+                    bannerUpdatedAt = now,
+                    bannerCrop = crop
+                )
+                path
+            } else {
+                if (tempFile.exists()) tempFile.delete()
+                null
+            }
+        } catch (_: Exception) {
+            if (tempFile.exists()) tempFile.delete()
+            null
+        }
+    }
+
     override suspend fun removeProfileBanner() = withContext(Dispatchers.IO) {
         val targetFile = File(profileDir, "banner.png")
         val legacyFile = File(profileDir, "banner.webp")
+        val gifFile = File(profileDir, "banner.gif")
         if (targetFile.exists()) targetFile.delete()
         if (legacyFile.exists()) legacyFile.delete()
+        if (gifFile.exists()) gifFile.delete()
         val now = System.currentTimeMillis()
         prefs.edit()
             .remove(KEY_PROFILE_BANNER_PATH)
+            .remove(KEY_PROFILE_BANNER_CROP)
             .putLong(KEY_PROFILE_BANNER_UPDATED_AT, now)
             .apply()
         _profileFlow.value = _profileFlow.value.copy(
             bannerPath = null,
-            bannerUpdatedAt = now
+            bannerUpdatedAt = now,
+            bannerCrop = null
         )
     }
 
     companion object {
+        const val KEY_PROFILE_BANNER_CROP = "key_profile_banner_crop"
+        const val MAX_BANNER_GIF_BYTES = 8 * 1024 * 1024L // 8 MB
         private const val PREFS_NAME = "fotara_settings"
         private const val KEY_SORT_ORDER = "key_sort_order"
         private const val KEY_GRID_DENSITY = "key_grid_density"

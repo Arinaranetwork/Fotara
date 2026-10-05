@@ -14,6 +14,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalConfiguration
+import com.arinara.fotara.data.repository.SettingsRepository
+import com.arinara.fotara.ui.components.ProfileBanner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -117,6 +119,14 @@ fun ProfileScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
+            val isGif = com.arinara.fotara.util.ProfileImageUtils.isGifUri(context, uri)
+            if (isGif) {
+                val size = com.arinara.fotara.util.ProfileImageUtils.getUriFileSize(context, uri)
+                if (size > SettingsRepository.MAX_BANNER_GIF_BYTES) {
+                    android.widget.Toast.makeText(context, context.getString(R.string.profile_banner_gif_too_large), android.widget.Toast.LENGTH_SHORT).show()
+                    return@rememberLauncherForActivityResult
+                }
+            }
             pendingCropUriString = uri.toString()
             pendingCropIsAvatar = false
         }
@@ -139,11 +149,21 @@ fun ProfileScreen(
             imageUri = cropUri,
             isAvatar = pendingCropIsAvatar,
             aspectRatio = if (pendingCropIsAvatar) 1.0f else bannerRatio,
-            onCropSaved = { cropped ->
+            onCropSaved = { cropped, normRect ->
                 if (pendingCropIsAvatar) {
                     viewModel.saveProfileAvatar(cropped)
                 } else {
-                    viewModel.saveProfileBanner(cropped)
+                    val isGif = com.arinara.fotara.util.ProfileImageUtils.isGifUri(context, cropUri)
+                    if (isGif) {
+                        val bytes = com.arinara.fotara.util.ProfileImageUtils.readBytesFromUri(context, cropUri)
+                        if (bytes != null && bytes.size <= SettingsRepository.MAX_BANNER_GIF_BYTES) {
+                            viewModel.saveProfileBannerGif(bytes, normRect.toSerializedString())
+                        } else {
+                            android.widget.Toast.makeText(context, context.getString(R.string.profile_banner_gif_too_large), android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        viewModel.saveProfileBanner(cropped)
+                    }
                 }
                 cleanupStaged()
                 pendingCropUriString = null
@@ -185,39 +205,13 @@ fun ProfileScreen(
                 .fillMaxWidth()
                 .height(220.dp)
         ) {
-            val bannerFile = remember(profile.bannerPath, profile.bannerUpdatedAt) { profile.bannerPath?.let { File(it) } }
-            if (bannerFile != null && bannerFile.exists()) {
-                val bannerCacheKey = "${bannerFile.absolutePath}_${if (profile.bannerUpdatedAt > 0L) profile.bannerUpdatedAt else bannerFile.lastModified()}"
-                val bannerReq = remember(bannerCacheKey) {
-                    ImageRequest.Builder(context)
-                        .data(bannerFile)
-                        .memoryCacheKey(bannerCacheKey)
-                        .diskCacheKey(bannerCacheKey)
-                        .crossfade(true)
-                        .build()
-                }
-                AsyncImage(
-                    model = bannerReq,
-                    contentDescription = "Profile Banner",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                // Subtle Theme Gradient Fallback
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFF1E293B),
-                                    Color(0xFF0F172A),
-                                    HomeNearBlack
-                                )
-                            )
-                        )
-                )
-            }
+            ProfileBanner(
+                bannerPath = profile.bannerPath,
+                bannerUpdatedAt = profile.bannerUpdatedAt,
+                bannerCrop = profile.bannerCrop,
+                isOnScreen = true,
+                modifier = Modifier.fillMaxSize()
+            )
 
             // Top Scrim for Status Bar & Back Button
             Box(

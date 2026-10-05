@@ -27,7 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -42,8 +46,8 @@ object ScreenHeaderDefaults {
     val HorizontalPadding: Dp = 18.dp
     val TopPadding: Dp = 16.dp
     val BottomPadding: Dp = 12.dp
-    val TitleToTaglineGap: Dp = 2.dp
-    val TaglineSlotHeight: Dp = 20.dp
+    val TitleToTaglineGap: Dp = 4.dp
+    val TaglineSlotHeight: Dp = 18.dp
     val HeaderBottomGap: Dp = 12.dp
 
     val ActionButtonSize: Dp = 48.dp
@@ -51,12 +55,14 @@ object ScreenHeaderDefaults {
     val ActionIconSize: Dp = 20.dp
     val ActionButtonSpacing: Dp = 12.dp
 
-    val TitleFontSize: TextUnit = 38.sp
-    val TitleFontWeight: FontWeight = FontWeight.Medium
+    val TitleFontSize: TextUnit = 32.sp
+    val TitleLineHeight: TextUnit = 38.sp
+    val TitleFontWeight: FontWeight = FontWeight.Bold
     val TitleLetterSpacing: TextUnit = (-0.5).sp
 
-    val TaglineFontSize: TextUnit = 15.sp
-    val TaglineFontWeight: FontWeight = FontWeight.Light
+    val TaglineFontSize: TextUnit = 14.sp
+    val TaglineLineHeight: TextUnit = 18.sp
+    val TaglineFontWeight: FontWeight = FontWeight.Normal
 }
 
 /**
@@ -71,6 +77,8 @@ fun ScreenHeader(
     tagline: String? = null,
     actions: (@Composable RowScope.() -> Unit)? = null
 ) {
+    val density = LocalDensity.current
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -88,11 +96,19 @@ fun ScreenHeader(
         ) {
             Text(
                 text = title,
-                color = Color.White,
-                fontSize = ScreenHeaderDefaults.TitleFontSize,
-                fontFamily = ElmsSans,
-                fontWeight = ScreenHeaderDefaults.TitleFontWeight,
-                letterSpacing = ScreenHeaderDefaults.TitleLetterSpacing,
+                style = TextStyle(
+                    fontSize = ScreenHeaderDefaults.TitleFontSize,
+                    lineHeight = ScreenHeaderDefaults.TitleLineHeight,
+                    fontFamily = ElmsSans,
+                    fontWeight = ScreenHeaderDefaults.TitleFontWeight,
+                    letterSpacing = ScreenHeaderDefaults.TitleLetterSpacing,
+                    color = Color.White,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                    lineHeightStyle = LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.None
+                    )
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -100,15 +116,26 @@ fun ScreenHeader(
             if (!tagline.isNullOrBlank()) {
                 Text(
                     text = tagline,
-                    color = HomeSubtitleGray,
-                    fontSize = ScreenHeaderDefaults.TaglineFontSize,
-                    fontFamily = ElmsSans,
-                    fontWeight = ScreenHeaderDefaults.TaglineFontWeight,
+                    style = TextStyle(
+                        fontSize = ScreenHeaderDefaults.TaglineFontSize,
+                        lineHeight = ScreenHeaderDefaults.TaglineLineHeight,
+                        fontFamily = ElmsSans,
+                        fontWeight = ScreenHeaderDefaults.TaglineFontWeight,
+                        color = HomeSubtitleGray,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.None
+                        )
+                    ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             } else {
-                Spacer(modifier = Modifier.height(ScreenHeaderDefaults.TaglineSlotHeight))
+                val reservedTaglineDp = with(density) {
+                    ScreenHeaderDefaults.TaglineLineHeight.toDp()
+                }
+                Spacer(modifier = Modifier.height(reservedTaglineDp))
             }
         }
 

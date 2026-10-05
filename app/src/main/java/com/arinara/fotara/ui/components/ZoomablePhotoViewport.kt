@@ -209,6 +209,7 @@ fun ZoomableBox(
 fun ZoomablePhotoViewport(
     photo: Photo,
     imageVersion: Long = 0L,
+    drawing: com.arinara.fotara.data.model.PhotoDrawing? = null,
     modifier: Modifier = Modifier,
     maxScale: Float = 4.0f,
     doubleTapScale: Float = 2.5f,
@@ -232,6 +233,10 @@ fun ZoomablePhotoViewport(
                     .build(),
                 contentDescription = photo.caption ?: "Note photo",
                 contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+            PhotoDrawingOverlay(
+                drawing = drawing,
                 modifier = Modifier.fillMaxSize()
             )
         } else {

@@ -15,6 +15,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -70,7 +71,13 @@ import androidx.compose.material.icons.filled.ViewStream
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.arinara.fotara.data.repository.SettingsRepository
+import com.arinara.fotara.ui.components.ProfileBanner
+import com.arinara.fotara.ui.settings.SettingsFadeMath
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import kotlinx.coroutines.launch
 import com.arinara.fotara.ui.profile.BorderPickerDialog
 import com.arinara.fotara.ui.profile.CropShape
 import com.arinara.fotara.ui.profile.ProfileAvatar
@@ -236,6 +243,16 @@ fun SettingsScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
+            val isGif = ProfileImageUtils.isGifUri(context, uri)
+            if (isGif) {
+                val size = ProfileImageUtils.getUriFileSize(context, uri)
+                if (size > SettingsRepository.MAX_BANNER_GIF_BYTES) {
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(context.getString(R.string.profile_banner_gif_too_large))
+                    }
+                    return@rememberLauncherForActivityResult
+                }
+            }
             pendingCropUriString = uri.toString()
             pendingCropIsAvatar = false
         }
@@ -257,11 +274,23 @@ fun SettingsScreen(
             imageUri = cropUri,
             isAvatar = pendingCropIsAvatar,
             aspectRatio = if (pendingCropIsAvatar) 1.0f else bannerRatio,
-            onCropSaved = { cropped ->
+            onCropSaved = { cropped, normRect ->
                 if (pendingCropIsAvatar) {
                     viewModel.saveProfileAvatar(cropped)
                 } else {
-                    viewModel.saveProfileBanner(cropped)
+                    val isGif = ProfileImageUtils.isGifUri(context, cropUri)
+                    if (isGif) {
+                        val bytes = ProfileImageUtils.readBytesFromUri(context, cropUri)
+                        if (bytes != null && bytes.size <= SettingsRepository.MAX_BANNER_GIF_BYTES) {
+                            viewModel.saveProfileBannerGif(bytes, normRect.toSerializedString())
+                        } else {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(context.getString(R.string.profile_banner_gif_too_large))
+                            }
+                        }
+                    } else {
+                        viewModel.saveProfileBanner(cropped)
+                    }
                 }
                 cleanupStaged()
                 pendingCropUriString = null
@@ -343,152 +372,163 @@ fun SettingsScreen(
             )
         } else if (activeSection == null) {
             val rootScrollState = rememberScrollState()
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rootScrollState)
-                    .padding(bottom = effectiveBottomPadding + 24.dp)
-            ) {
-                // 1. Full-Width Banner with Gradient Fade
-                Box(
+            var headerHeightPx by remember { mutableIntStateOf(0) }
+            val density = LocalDensity.current
+            val bannerHeightPx = with(density) { 230.dp.roundToPx() }
+            val thresholdPx = with(density) { 160.dp.toPx() }
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(230.dp)
+                        .fillMaxSize()
+                        .verticalScroll(rootScrollState)
+                        .padding(bottom = effectiveBottomPadding + 24.dp)
                 ) {
-                    val bannerFile = remember(uiState.userProfile.bannerPath, uiState.userProfile.bannerUpdatedAt) {
-                        uiState.userProfile.bannerPath?.let { File(it) }
-                    }
-                    if (bannerFile != null && bannerFile.exists()) {
-                        val bannerCacheKey = "${bannerFile.absolutePath}_${if (uiState.userProfile.bannerUpdatedAt > 0L) uiState.userProfile.bannerUpdatedAt else bannerFile.lastModified()}"
-                        val bannerReq = remember(bannerCacheKey) {
-                            ImageRequest.Builder(context)
-                                .data(bannerFile)
-                                .memoryCacheKey(bannerCacheKey)
-                                .diskCacheKey(bannerCacheKey)
-                                .crossfade(true)
-                                .build()
-                        }
-                        AsyncImage(
-                            model = bannerReq,
-                            contentDescription = "Profile Banner",
-                            contentScale = ContentScale.Crop,
+                    // 1. Full-Width Banner with Gradient Fade
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(230.dp)
+                    ) {
+                        ProfileBanner(
+                            bannerPath = uiState.userProfile.bannerPath,
+                            bannerUpdatedAt = uiState.userProfile.bannerUpdatedAt,
+                            bannerCrop = uiState.userProfile.bannerCrop,
+                            isOnScreen = rootScrollState.value < bannerHeightPx,
                             modifier = Modifier.fillMaxSize()
                         )
-                    } else {
-                        // Subtle Theme Gradient Fallback
+
+                        // Top Scrim for Status Bar and Title Legibility
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
+                                .height(95.dp)
                                 .background(
-                                    Brush.linearGradient(
+                                    Brush.verticalGradient(
                                         colors = listOf(
-                                            Color(0xFF1E293B),
-                                            Color(0xFF0F172A),
+                                            Color.Black.copy(alpha = 0.65f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                )
+                        )
+
+                        // Lower Gradient Mask Smoothly Fading into HomeNearBlack
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(115.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            HomeNearBlack.copy(alpha = 0.75f),
                                             HomeNearBlack
                                         )
                                     )
                                 )
                         )
+
+                        // Centered Profile Avatar + Border + Pen Button
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                        ) {
+                            ProfileAvatar(
+                                avatarPath = uiState.userProfile.avatarPath,
+                                borderId = uiState.userProfile.borderId,
+                                avatarSize = 78.dp,
+                                avatarUpdatedAt = uiState.userProfile.avatarUpdatedAt,
+                                showEditButton = true,
+                                onEditClick = { showProfileEditSheet = true }
+                            )
+                        }
                     }
 
-                    // Top Scrim for Status Bar and Title Legibility
+                    // Centered User Name & Optional Email
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp, bottom = 18.dp)
+                    ) {
+                        val defaultName = stringResource(R.string.profile_default_name)
+                        Text(
+                            text = uiState.userProfile.resolvedName(defaultName),
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (uiState.userProfile.email.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = uiState.userProfile.email,
+                                color = HomeSubtitleGray,
+                                fontSize = 14.sp,
+                                fontFamily = ElmsSans
+                            )
+                        }
+                    }
+
+                    // 7 Category Cards
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp)
+                    ) {
+                        SettingsSection.entries.forEach { section ->
+                            SettingsCardItem(
+                                title = section.title,
+                                subtitle = section.subtitle,
+                                icon = section.icon,
+                                onClick = { activeSection = section }
+                            )
+                        }
+                    }
+                }
+
+                // 2. Pinned Fade Gradient and ScreenHeader above scrolling content
+                val fadeHeightDp = with(density) {
+                    if (headerHeightPx > 0) (headerHeightPx.toDp() + 24.dp) else 0.dp
+                }
+
+                if (fadeHeightDp > 0.dp) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(95.dp)
+                            .height(fadeHeightDp)
+                            .align(Alignment.TopCenter)
+                            .graphicsLayer {
+                                alpha = SettingsFadeMath.computeFadeAlpha(
+                                    scrollOffsetPx = rootScrollState.value.toFloat(),
+                                    thresholdPx = thresholdPx
+                                )
+                            }
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.Black.copy(alpha = 0.65f),
+                                        HomeNearBlack,
+                                        HomeNearBlack,
+                                        HomeNearBlack.copy(alpha = 0.95f),
+                                        HomeNearBlack.copy(alpha = 0.5f),
                                         Color.Transparent
                                     )
                                 )
                             )
                     )
-
-                    // Lower Gradient Mask Smoothly Fading into HomeNearBlack
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(115.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        HomeNearBlack.copy(alpha = 0.75f),
-                                        HomeNearBlack
-                                    )
-                                )
-                            )
-                    )
-
-                    // Top Row: Unified "Settings" Title (Back arrow removed on root Settings tab)
-                    ScreenHeader(
-                        title = "Settings",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .windowInsetsPadding(WindowInsets.statusBars)
-                    )
-
-                    // Centered Profile Avatar + Border + Pen Button
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                    ) {
-                        ProfileAvatar(
-                            avatarPath = uiState.userProfile.avatarPath,
-                            borderId = uiState.userProfile.borderId,
-                            avatarSize = 78.dp,
-                            avatarUpdatedAt = uiState.userProfile.avatarUpdatedAt,
-                            showEditButton = true,
-                            onEditClick = { showProfileEditSheet = true }
-                        )
-                    }
                 }
 
-                // Centered User Name & Optional Email
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                ScreenHeader(
+                    title = "Settings",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 10.dp, bottom = 18.dp)
-                ) {
-                    val defaultName = stringResource(R.string.profile_default_name)
-                    Text(
-                        text = uiState.userProfile.resolvedName(defaultName),
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (uiState.userProfile.email.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = uiState.userProfile.email,
-                            color = HomeSubtitleGray,
-                            fontSize = 14.sp,
-                            fontFamily = ElmsSans
-                        )
-                    }
-                }
-
-                // 7 Category Cards
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp)
-                ) {
-                    SettingsSection.entries.forEach { section ->
-                        SettingsCardItem(
-                            title = section.title,
-                            subtitle = section.subtitle,
-                            icon = section.icon,
-                            onClick = { activeSection = section }
-                        )
-                    }
-                }
+                        .align(Alignment.TopCenter)
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .onSizeChanged { headerHeightPx = it.height }
+                )
             }
         } else {
             LazyColumn(
@@ -1455,18 +1495,18 @@ private fun SettingsAboutCard(versionName: String, versionCode: Long) {
             Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
+                val info = com.arinara.fotara.online.VersionInfo.parse(versionName)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Fotara $versionName",
+                        text = "Fotara ${info.displayVersion}",
                         color = Color.White,
                         fontSize = 17.sp,
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    val isBeta = com.arinara.fotara.online.UpdateVersionUtils.isBeta(versionName)
                     com.arinara.fotara.ui.components.ChannelPill(
-                        channel = if (isBeta) "Beta" else "Stable"
+                        channel = info.channelLabel
                     )
                 }
                 Spacer(modifier = Modifier.height(2.dp))

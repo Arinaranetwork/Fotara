@@ -51,7 +51,7 @@ object ProfileImageUtils {
      * Reads all bytes from a URI in a single pass.
      * Guarantees consistent in-memory access immune to stream consumption or multi-open restrictions.
      */
-    private fun readBytesFromUri(context: Context, uri: Uri): ByteArray? {
+    fun readBytesFromUri(context: Context, uri: Uri): ByteArray? {
         return try {
             if (uri.scheme == "file" && uri.path != null) {
                 val f = File(uri.path!!)
@@ -63,6 +63,39 @@ object ProfileImageUtils {
             null
         }
     }
+
+    /**
+     * Checks if the given URI points to a GIF file based on its binary header signature.
+     */
+    fun isGifUri(context: Context, uri: Uri): Boolean {
+        return try {
+            val stream = openStream(context, uri) ?: return false
+            val header = ByteArray(6)
+            val read = stream.use { it.read(header) }
+            if (read >= 6) ImageFormatDetector.isGif(header) else false
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * Returns the file size in bytes for a given URI.
+     */
+    fun getUriFileSize(context: Context, uri: Uri): Long {
+        return try {
+            if (uri.scheme == "file" && uri.path != null) {
+                val f = File(uri.path!!)
+                if (f.exists()) f.length() else 0L
+            } else {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use {
+                    it.statSize
+                } ?: 0L
+            }
+        } catch (_: Throwable) {
+            0L
+        }
+    }
+
 
     private fun getExifRotation(filePath: String): Int {
         return try {

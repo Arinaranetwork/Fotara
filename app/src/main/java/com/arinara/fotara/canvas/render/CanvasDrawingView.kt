@@ -148,6 +148,37 @@ class CanvasDrawingView(
         return true
     }
 
+    private var lastViewportPublishTimeMs: Long = 0L
+    private val VIEWPORT_PUBLISH_INTERVAL_MS = 100L // Max 10 per second
+
+    var isGestureActive: Boolean = false
+        private set
+
+    private val settleHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val settleRunnable = Runnable {
+        isGestureActive = false
+        com.arinara.fotara.debug.FrameIntervalRecorder.stopGesture()
+        publishViewportThrottled(force = true)
+        invalidate()
+    }
+
+    fun publishViewportThrottled(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (force || now - lastViewportPublishTimeMs >= VIEWPORT_PUBLISH_INTERVAL_MS) {
+            lastViewportPublishTimeMs = now
+            onViewportChanged?.invoke(viewport)
+        }
+    }
+
+    private fun markGestureActive() {
+        if (!isGestureActive) {
+            isGestureActive = true
+            com.arinara.fotara.debug.FrameIntervalRecorder.startGesture()
+        }
+        settleHandler.removeCallbacks(settleRunnable)
+        settleHandler.postDelayed(settleRunnable, 120L)
+    }
+
     private fun handlePointerActions(actions: List<PointerAction>) {
         var needsInvalidate = false
 
@@ -176,6 +207,7 @@ class CanvasDrawingView(
                     needsInvalidate = true
                 }
                 is PointerAction.PanZoomDelta -> {
+                    markGestureActive()
                     val panned = ViewportTransform.pan(viewport, action.deltaScreenX, action.deltaScreenY)
                     val zoomed = if (kotlin.math.abs(action.zoomFactor - 1.0f) < 0.001f) {
                         panned
@@ -188,10 +220,11 @@ class CanvasDrawingView(
                         )
                     }
                     viewport = ViewportTransform.clampToExtent(zoomed, width.toFloat(), height.toFloat())
-                    onViewportChanged?.invoke(viewport)
+                    publishViewportThrottled(force = false)
                     needsInvalidate = true
                 }
                 is PointerAction.Fling -> {
+                    markGestureActive()
                     val w = if (width > 0) width.toFloat() else 1080f
                     val h = if (height > 0) height.toFloat() else 1920f
                     val minX = (w / 2f - com.arinara.fotara.canvas.engine.CanvasConfig.WORLD_MAX_X * viewport.scale).toInt()
@@ -312,8 +345,10 @@ class CanvasDrawingView(
                 translateY = scroller.currY.toFloat()
             )
             viewport = ViewportTransform.clampToExtent(updated, width.toFloat(), height.toFloat())
-            onViewportChanged?.invoke(viewport)
+            publishViewportThrottled(force = false)
             postInvalidateOnAnimation()
+        } else if (isGestureActive) {
+            publishViewportThrottled(force = true)
         }
     }
 
@@ -359,6 +394,7 @@ class CanvasDrawingView(
             previewElements = toolController.previewElements,
             activeLassoPolygon = activeLassoPolygon,
             density = resources.displayMetrics.density,
+            isGestureActive = isGestureActive,
             onTileInvalidated = { postInvalidate() }
         )
     }
@@ -371,19 +407,21 @@ class CanvasDrawingView(
             screenHeight = height.toFloat()
         )
         tileCacheManager.invalidateAll()
-        onViewportChanged?.invoke(viewport)
+        publishViewportThrottled(force = true)
         invalidate()
     }
 
     fun resetZoom() {
         viewport = ViewportState(scale = 1.0f, translateX = 0f, translateY = 0f)
         tileCacheManager.invalidateAll()
-        onViewportChanged?.invoke(viewport)
+        publishViewportThrottled(force = true)
         invalidate()
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        settleHandler.removeCallbacks(settleRunnable)
+        com.arinara.fotara.debug.FrameIntervalRecorder.stopGesture()
         scroller.abortAnimation()
         tileCacheManager.release()
         canvasRenderer.clearImageCache()

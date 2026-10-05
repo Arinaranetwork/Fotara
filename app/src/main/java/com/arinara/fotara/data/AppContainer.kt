@@ -51,6 +51,7 @@ interface AppContainer {
     val canvasRepository: com.arinara.fotara.canvas.persistence.CanvasRepository
     val canvasAssetManager: com.arinara.fotara.canvas.persistence.CanvasAssetManager
     val noteScheduleManager: com.arinara.fotara.util.NoteScheduleManager
+    val photoDrawingRepository: com.arinara.fotara.data.repository.PhotoDrawingRepository
     val updateManager: UpdateManager
     val feedbackManager: FeedbackManager
 }
@@ -74,7 +75,12 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
     }
 
     override val photoRepository: PhotoRepository by lazy {
-        SqlitePhotoRepository(dbHelper, folderRepository, photoStorageManager)
+        SqlitePhotoRepository(
+            dbHelper = dbHelper,
+            folderRepository = folderRepository,
+            photoStorageManager = photoStorageManager,
+            photoDrawingRepository = photoDrawingRepository
+        )
     }
 
     override val ocrEngine: OcrEngine by lazy {
@@ -135,6 +141,10 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
         )
     }
 
+    override val photoDrawingRepository: com.arinara.fotara.data.repository.PhotoDrawingRepository by lazy {
+        com.arinara.fotara.data.repository.SqlitePhotoDrawingRepository(dbHelper)
+    }
+
     override val updateManager: UpdateManager by lazy {
         UpdateManager(context)
     }
@@ -149,6 +159,11 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
                 photoRepository.purgeOldTrashedItems(30)
             } catch (e: Exception) {
                 android.util.Log.e("AppContainer", "Startup trash purge failed: ${e.message}", e)
+            }
+            try {
+                photoDrawingRepository.cleanOrphanDrawings()
+            } catch (e: Exception) {
+                android.util.Log.e("AppContainer", "Startup orphan drawings purge failed: ${e.message}", e)
             }
         }
     }

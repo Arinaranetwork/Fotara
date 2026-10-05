@@ -159,6 +159,8 @@ class CanvasRenderer(
      * Main render function called per frame.
      * Guaranteed zero object allocations.
      */
+    private var cachedVisibleElements: List<CanvasElement>? = null
+
     fun drawCanvas(
         canvas: Canvas,
         viewport: ViewportState,
@@ -176,6 +178,7 @@ class CanvasRenderer(
         previewElements: List<CanvasElement>? = null,
         activeLassoPolygon: List<Pair<Float, Float>>?,
         density: Float = 1.0f,
+        isGestureActive: Boolean = false,
         onTileInvalidated: () -> Unit
     ) {
         if (screenWidth <= 0f || screenHeight <= 0f) return
@@ -198,7 +201,8 @@ class CanvasRenderer(
             inProgressColor = inProgressColor,
             inProgressWidth = inProgressWidth,
             inProgressBlendMode = inProgressBlendMode,
-            inProgressLayerId = inProgressLayerId ?: documentSnapshot.getPrimaryLayerId()
+            inProgressLayerId = inProgressLayerId ?: documentSnapshot.getPrimaryLayerId(),
+            isGestureActive = isGestureActive
         )
 
         // 3. Draw Active Lasso Polygon if selecting
@@ -289,18 +293,24 @@ class CanvasRenderer(
         inProgressColor: Long = 0xFFEBD8B8,
         inProgressWidth: Float = 4f,
         inProgressBlendMode: com.arinara.fotara.canvas.model.StrokeBlendMode = com.arinara.fotara.canvas.model.StrokeBlendMode.NORMAL,
-        inProgressLayerId: String? = null
+        inProgressLayerId: String? = null,
+        isGestureActive: Boolean = false
     ) {
-        val (worldMinX, worldMinY) = ViewportTransform.screenToWorld(0f, 0f, viewport)
-        val (worldMaxX, worldMaxY) = ViewportTransform.screenToWorld(screenWidth, screenHeight, viewport)
-        val viewportWorldBounds = CanvasRect(
-            left = minOf(worldMinX, worldMaxX),
-            top = minOf(worldMinY, worldMaxY),
-            right = maxOf(worldMinX, worldMaxX),
-            bottom = maxOf(worldMinY, worldMaxY)
-        )
-
-        val visibleElements = spatialIndex.query(viewportWorldBounds)
+        val visibleElements = if (isGestureActive && cachedVisibleElements != null) {
+            cachedVisibleElements!!
+        } else {
+            val (worldMinX, worldMinY) = ViewportTransform.screenToWorld(0f, 0f, viewport)
+            val (worldMaxX, worldMaxY) = ViewportTransform.screenToWorld(screenWidth, screenHeight, viewport)
+            val viewportWorldBounds = CanvasRect(
+                left = minOf(worldMinX, worldMaxX),
+                top = minOf(worldMinY, worldMaxY),
+                right = maxOf(worldMinX, worldMaxX),
+                bottom = maxOf(worldMinY, worldMaxY)
+            )
+            spatialIndex.query(viewportWorldBounds).also {
+                cachedVisibleElements = it
+            }
+        }
         val hasPreview = previewElements != null && selectedElementIds.isNotEmpty()
 
         canvas.save()

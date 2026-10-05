@@ -34,10 +34,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -94,6 +97,7 @@ fun UpdateBanner(
     version: String,
     releaseUrl: String?,
     channel: String,
+    bannerImageUrl: String? = null,
     onClose: (() -> Unit)? = null,
     shape: Shape = RoundedCornerShape(16.dp),
     modifier: Modifier = Modifier
@@ -136,10 +140,36 @@ fun UpdateBanner(
             )
             .border(BorderStroke(1.dp, MidnightCardOutline), shape)
             .semantics { contentDescription = "Fotara update banner" }
-            .padding(18.dp)
     ) {
+        // Banner background image behind dark gradient scrim
+        if (!bannerImageUrl.isNullOrBlank() && com.arinara.fotara.ui.markdown.ReleaseNotesImageValidator.isAllowedImageUrl(bannerImageUrl)) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(bannerImageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.60f),
+                                Color.Black.copy(alpha = 0.88f)
+                            )
+                        )
+                    )
+            )
+        }
+
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {

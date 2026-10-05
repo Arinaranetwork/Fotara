@@ -12,8 +12,10 @@ import com.arinara.fotara.data.model.WorkspaceKind
 enum class TabGestureState {
     IDLE,
     PRESSED,
-    HELD,     // Lifted; options panel open (if custom tab)
-    DRAGGING  // Panel dismissed; dragging horizontally
+    HELD,      // Lifted; options panel open (if custom tab)
+    MOVE_MODE, // Stage 2 hold reached (~1000ms): panel retracted, ready for immediate drag
+    DRAGGING,  // Dragging horizontally
+    SETTLING   // Finger lifted, animating to drop slot
 }
 
 sealed class TabGestureEvent {
@@ -31,6 +33,7 @@ sealed class TabGestureEvent {
         )
     }
     object LongPressTimeout : TabGestureEvent()
+    object MoveModeTimeout : TabGestureEvent()
     data class Move(val currentX: Float, val touchSlopPx: Float) : TabGestureEvent()
     object Up : TabGestureEvent()
     object Cancel : TabGestureEvent()
@@ -43,12 +46,17 @@ data class TabDragState(
     val isHome: Boolean = false,
     val isArchive: Boolean = false,
     val startX: Float = 0f,
+    val startY: Float = 0f,
     val currentX: Float = 0f,
+    val currentY: Float = 0f,
     val dragDeltaX: Float = 0f,
-    val showRenamePanel: Boolean = false
+    val dragDeltaY: Float = 0f,
+    val showRenamePanel: Boolean = false,
+    val isOverArchiveZone: Boolean = false
 ) {
-    val isLifted: Boolean get() = state == TabGestureState.HELD || state == TabGestureState.DRAGGING
+    val isLifted: Boolean get() = state == TabGestureState.HELD || state == TabGestureState.MOVE_MODE || state == TabGestureState.DRAGGING || state == TabGestureState.SETTLING
     val isDragging: Boolean get() = state == TabGestureState.DRAGGING
+    val isMoveMode: Boolean get() = state == TabGestureState.MOVE_MODE
 }
 
 object TabGestureReducer {
@@ -89,6 +97,14 @@ object TabGestureReducer {
                     showRenamePanel = true
                 )
             }
+            is TabGestureEvent.MoveModeTimeout -> {
+                if (current.state != TabGestureState.HELD && current.state != TabGestureState.PRESSED) return current
+                if (current.isHome) return TabDragState(state = TabGestureState.IDLE)
+                return current.copy(
+                    state = TabGestureState.MOVE_MODE,
+                    showRenamePanel = false
+                )
+            }
             is TabGestureEvent.Move -> {
                 when (current.state) {
                     TabGestureState.IDLE -> current
@@ -114,12 +130,15 @@ object TabGestureReducer {
                             current.copy(currentX = event.currentX)
                         }
                     }
+                    TabGestureState.MOVE_MODE,
                     TabGestureState.DRAGGING -> {
                         current.copy(
+                            state = TabGestureState.DRAGGING,
                             currentX = event.currentX,
                             dragDeltaX = event.currentX - current.startX
                         )
                     }
+                    TabGestureState.SETTLING -> current
                 }
             }
             is TabGestureEvent.Up -> {
@@ -132,6 +151,7 @@ object TabGestureReducer {
                             current.copy(state = TabGestureState.HELD, showRenamePanel = true)
                         }
                     }
+                    TabGestureState.MOVE_MODE,
                     TabGestureState.DRAGGING -> {
                         current.copy(state = TabGestureState.IDLE, showRenamePanel = false)
                     }

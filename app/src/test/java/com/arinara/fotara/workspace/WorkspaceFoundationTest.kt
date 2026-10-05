@@ -293,7 +293,7 @@ class WorkspaceFoundationTest {
 
     @Test
     fun testV16Schema_VersionAndSeedingConstants() {
-        assertEquals(16, FotaraDbHelper.DATABASE_VERSION)
+        assertTrue(FotaraDbHelper.DATABASE_VERSION >= 16)
         assertEquals("00000000-0000-4000-8000-000000000001", FotaraDbHelper.HOME_WORKSPACE_UUID)
         assertEquals("00000000-0000-4000-8000-000000000002", FotaraDbHelper.ARCHIVE_WORKSPACE_UUID)
     }

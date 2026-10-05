@@ -22,12 +22,7 @@ object UpdateVersionUtils {
     }
 
     fun resolveChannel(rawVersion: String, isPrerelease: Boolean = false): UpdateChannel {
-        if (isPrerelease) return UpdateChannel.BETA
-        return if (rawVersion.contains("Beta", ignoreCase = true)) {
-            UpdateChannel.BETA
-        } else {
-            UpdateChannel.STABLE
-        }
+        return VersionInfo.parse(rawVersion, isPrerelease).channel
     }
 
     fun isBeta(rawVersion: String, isPrerelease: Boolean = false): Boolean {
@@ -40,11 +35,11 @@ object UpdateVersionUtils {
         remoteIsPrerelease: Boolean = false,
         currentIsPrerelease: Boolean = false
     ): Boolean {
-        val cleanRemote = cleanVersionString(remoteTag)
-        val cleanCurrent = cleanVersionString(currentTag)
+        val remoteInfo = VersionInfo.parse(remoteTag, remoteIsPrerelease)
+        val currentInfo = VersionInfo.parse(currentTag, currentIsPrerelease)
 
-        val remoteParts = cleanRemote.split(".").mapNotNull { it.toIntOrNull() }
-        val currentParts = cleanCurrent.split(".").mapNotNull { it.toIntOrNull() }
+        val remoteParts = remoteInfo.numericVersion.split(".").mapNotNull { it.toIntOrNull() }
+        val currentParts = currentInfo.numericVersion.split(".").mapNotNull { it.toIntOrNull() }
 
         val maxLen = maxOf(remoteParts.size, currentParts.size)
         for (i in 0 until maxLen) {
@@ -55,8 +50,8 @@ object UpdateVersionUtils {
         }
 
         // If numeric version is identical, a Stable build is newer than Beta
-        val remoteBeta = isBeta(remoteTag, remoteIsPrerelease)
-        val currentBeta = isBeta(currentTag, currentIsPrerelease)
+        val remoteBeta = remoteInfo.channel == UpdateChannel.BETA
+        val currentBeta = currentInfo.channel == UpdateChannel.BETA
 
         if (!remoteBeta && currentBeta) {
             return true

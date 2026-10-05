@@ -47,7 +47,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import com.arinara.fotara.ui.components.RichMarkdownColumn
+import com.arinara.fotara.ui.components.ReleaseNotesRenderer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -295,18 +295,19 @@ fun UpdateScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(6.dp))
+                            val currentInfo = remember(currentVersion) { VersionInfo.parse(currentVersion) }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 Text(
-                                    text = "Current: $currentVersion",
+                                    text = "Current: ${currentInfo.displayVersion}",
                                     color = TabCream.copy(alpha = 0.8f),
                                     fontSize = 14.sp
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 com.arinara.fotara.ui.components.ChannelPill(
-                                    channel = if (UpdateVersionUtils.isBeta(currentVersion)) "Beta" else "Stable"
+                                    channel = currentInfo.channelLabel
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
@@ -384,11 +385,12 @@ fun UpdateScreen(
                     // Update Available State
                     val rel = release
 
-                    // Banner Card: built-in UpdateBanner with gradient styling, version, release link, and channel pill
+                    val targetInfo = remember(rel) { VersionInfo.parse(rel?.version ?: "", rel?.isPrerelease == true) }
                     com.arinara.fotara.ui.components.UpdateBanner(
-                        version = rel?.version ?: "1.6.0",
+                        version = targetInfo.displayVersion,
                         releaseUrl = rel?.htmlUrl,
-                        channel = if (UpdateVersionUtils.isBeta(rel?.version ?: "", rel?.isPrerelease == true)) "Beta" else "Stable",
+                        channel = targetInfo.channelLabel,
+                        bannerImageUrl = rel?.bannerUrl,
                         onClose = null,
                         shape = RoundedCornerShape(16.dp)
                     )
@@ -410,12 +412,11 @@ fun UpdateScreen(
                         border = androidx.compose.foundation.BorderStroke(1.dp, CardOutline)
                     ) {
                         Box(modifier = Modifier.padding(16.dp)) {
-                            RichMarkdownColumn(
+                            ReleaseNotesRenderer(
                                 markdown = rel?.releaseNotes?.ifBlank { "Bug fixes and performance improvements." }
                                     ?: "Bug fixes and performance improvements.",
                                 primaryTextColor = TabCream,
                                 accentColor = AccentGold,
-                                cardBg = CardBg,
                                 cardBorder = CardOutline
                             )
                         }

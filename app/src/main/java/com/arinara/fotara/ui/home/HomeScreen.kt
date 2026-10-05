@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -408,16 +409,16 @@ fun HomeScreen(
                             .fillMaxSize()
                             .windowInsetsPadding(WindowInsets.statusBars)
                     ) {
-                        // Invariant Header Slot (94dp): ScreenHeader and Multi-Select action header overlay
+                        // Dynamic Header Slot: ScreenHeader and Multi-Select action header overlay
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(94.dp)
+                                .wrapContentHeight()
                         ) {
                             // Normal Header (Brand & actions)
                             Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
+                                    .fillMaxWidth()
                                     .graphicsLayer {
                                         alpha = if (uiState.isMultiSelectMode) 0f else 1f
                                     }
@@ -562,7 +563,7 @@ fun HomeScreen(
                             if (uiState.isMultiSelectMode) {
                                 Row(
                                     modifier = Modifier
-                                        .fillMaxSize()
+                                        .matchParentSize()
                                         .padding(horizontal = 14.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {

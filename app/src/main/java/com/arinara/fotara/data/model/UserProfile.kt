@@ -13,7 +13,8 @@ data class UserProfile(
     val bannerPath: String? = null,
     val borderId: String = "none",
     val avatarUpdatedAt: Long = 0L,
-    val bannerUpdatedAt: Long = 0L
+    val bannerUpdatedAt: Long = 0L,
+    val bannerCrop: String? = null
 ) {
     fun resolvedName(defaultFallback: String = "Fotara User"): String {
         val trimmed = name.trim()
@@ -23,4 +24,5 @@ data class UserProfile(
     val hasCustomAvatar: Boolean get() = !avatarPath.isNullOrBlank()
     val hasCustomBanner: Boolean get() = !bannerPath.isNullOrBlank()
     val hasBorder: Boolean get() = borderId.isNotBlank() && borderId != "none"
+    val isBannerGif: Boolean get() = bannerPath != null && bannerPath.endsWith(".gif", ignoreCase = true)
 }

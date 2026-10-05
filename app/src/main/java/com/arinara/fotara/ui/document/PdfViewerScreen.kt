@@ -261,7 +261,7 @@ fun PdfViewerScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.CallSplit,
                         contentDescription = "Split to Images",
-                        tint = AccentGold
+                        tint = TabCream
                     )
                 }
 

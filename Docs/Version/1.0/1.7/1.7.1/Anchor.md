@@ -1,0 +1,13 @@
+# Anchor - Fotara 1.7.1
+Status: Finished    Opened: 2026-10-05    Finished: 2026-10-05
+
+| ID    | Request                                                                                                         | Phase | Acceptance                                                                 | Status   | Evidence              |
+|-------|-----------------------------------------------------------------------------------------------------------------|-------|----------------------------------------------------------------------------|----------|-----------------------|
+| A-001 | Task 0: Report Android skills compliance, 1.7.0 status, versionName/code, and dependency checks                 | 32    | Compliance table complete, 1.7.0 status verified, version reported         | Verified | Task 0 report, Android.md, build.gradle.kts |
+| A-002 | Task 1: Zoom and pan smoothness audit, debug frame recorder, GPU transform, throttled publish, centroid parity  | 32    | Zero-allocation gesture path, debounced tile render, publish <=10Hz, tests | Verified | CanvasDrawingView.kt, PhotoDrawingEditor.kt, ZoomPanSmoothnessTest (4/4 pass) |
+| A-003 | Task 2: Screen headers fix for clipped title and cut-off tagline on Home, Notes, and related screens            | 32    | Content-measured height, descenders visible, tagline slot reserved, tests   | Verified | ScreenHeader.kt, HomeScreen.kt, ScreenHeaderTest (10/10 pass) |
+| A-004 | Task 3: Workspace tab hold-longer gesture for direct move mode (Stage 1 panel hold, Stage 2 direct drag)        | 32    | Pure state machine with injected clock, panel fade-out, 1.1x scale, tests  | Verified | WorkspaceTabGestureStateMachine.kt, WorkspaceTabBar.kt, WorkspaceTabGestureStateMachineTest (6/6 pass) |
+| A-005 | Task 4: Images in release notes, update dialog, What's New and Update screen with banner asset and allowlist    | 32    | Markdown & HTML image support, banner asset scrim, HTTPS allowlist, tests  | Verified | ReleaseNotesRenderer.kt, MarkdownTableParser.kt, ReleaseNotesImageParserTest (6/6 pass) |
+| A-006 | Task 5: What's New 1.7.1 entry, version bump 1.7.1 / 28, unit tests pass, release build, and git hygiene       | 32    | What's New updated, version 1.7.1/28, 0 TODOs, release APK built, git clean| Verified | build.gradle.kts (28/1.7.1), testDebugUnitTest (673/673 pass 100%), Output/Release/Fotara_1.7.1.apk |
+| A-007 | PDF search deep link: scroll automatically to specific page and highlight matched content                       | 33    | Deep link parameter to PdfViewer, animated page scroll, text highlight      | Moved -> 1.8.0 | Carried to Docs/Version/1.0/1.8/1.8.0/Anchor.md |
+

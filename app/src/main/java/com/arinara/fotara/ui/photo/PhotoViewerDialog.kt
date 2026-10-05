@@ -11,6 +11,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -58,6 +59,9 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -82,6 +86,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -140,9 +145,15 @@ fun PhotoViewerDialog(
     onCropPhoto: ((photo: Photo, left: Float, top: Float, right: Float, bottom: Float) -> Unit)? = null,
     onRemoveFromGroup: ((Photo) -> Unit)? = null,
     onSetAsCover: ((Photo) -> Unit)? = null,
+    photoDrawingRepository: com.arinara.fotara.data.repository.PhotoDrawingRepository? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val activeDrawingRepository = remember(photoDrawingRepository, context) {
+        photoDrawingRepository ?: com.arinara.fotara.data.repository.SqlitePhotoDrawingRepository(com.arinara.fotara.data.db.FotaraDbHelper(context))
+    }
+
     val initialIndex = remember(photo, photos) {
         val idx = photos.indexOfFirst { it.id == photo.id }
         if (idx >= 0) idx else 0
@@ -161,6 +172,15 @@ fun PhotoViewerDialog(
 
     var isCropping by remember { mutableStateOf(false) }
     var isOperating by remember { mutableStateOf(false) }
+    var isDrawingMode by remember { mutableStateOf(false) }
+    var currentDrawing by remember { mutableStateOf<com.arinara.fotara.data.model.PhotoDrawing?>(null) }
+    var showClearDrawingDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentPhoto.id) {
+        activeDrawingRepository.observeDrawing(currentPhoto.id).collect { d ->
+            currentDrawing = d
+        }
+    }
 
     var isOcrExpanded by remember { mutableStateOf(false) }
     var copyMessage by remember { mutableStateOf<String?>(null) }
@@ -172,7 +192,9 @@ fun PhotoViewerDialog(
 
     Dialog(
         onDismissRequest = {
-            if (isCropping) {
+            if (isDrawingMode) {
+                isDrawingMode = false
+            } else if (isCropping) {
                 isCropping = false
             } else {
                 onDismiss()
@@ -185,7 +207,9 @@ fun PhotoViewerDialog(
         )
     ) {
         BackHandler {
-            if (isCropping) {
+            if (isDrawingMode) {
+                isDrawingMode = false
+            } else if (isCropping) {
                 isCropping = false
             } else {
                 onDismiss()
@@ -197,7 +221,20 @@ fun PhotoViewerDialog(
                 .fillMaxSize()
                 .background(MidnightNavy)
         ) {
-            if (isCropping) {
+            if (isDrawingMode) {
+                PhotoDrawingEditor(
+                    photo = currentPhoto,
+                    initialDrawing = currentDrawing,
+                    imageVersion = imageVersion,
+                    onSaveDrawing = { updated ->
+                        currentDrawing = updated
+                        coroutineScope.launch {
+                            activeDrawingRepository.saveDrawing(updated)
+                        }
+                    },
+                    onDismiss = { isDrawingMode = false }
+                )
+            } else if (isCropping) {
                 // Interactive 4-Corner Crop Editor
                 InteractiveCropEditor(
                     photo = currentPhoto,
@@ -226,6 +263,7 @@ fun PhotoViewerDialog(
                         ZoomablePhotoViewport(
                             photo = pagePhoto,
                             imageVersion = imageVersion,
+                            drawing = if (pagePhoto.id == currentPhoto.id) currentDrawing else null,
                             onZoomChanged = { isZoomed ->
                                 if (pagerState.currentPage == page) {
                                     isCurrentPhotoZoomed = isZoomed
@@ -346,21 +384,27 @@ fun PhotoViewerDialog(
 
                         // Share Button
                         IconButton(onClick = {
-                            val file = File(currentPhoto.fileUri)
-                            if (file.exists()) {
-                                try {
-                                    val uri = FileProvider.getUriForFile(
-                                        context,
-                                        "${context.packageName}.fileprovider",
-                                        file
-                                    )
-                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "image/jpeg"
-                                        putExtra(Intent.EXTRA_STREAM, uri)
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    context.startActivity(Intent.createChooser(shareIntent, "Share Note"))
-                                } catch (_: Exception) {}
+                            coroutineScope.launch {
+                                val file = com.arinara.fotara.data.storage.PhotoFlattener.flattenIfNeeded(
+                                    context = context,
+                                    photo = currentPhoto,
+                                    drawing = currentDrawing
+                                )
+                                if (file.exists()) {
+                                    try {
+                                        val uri = FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            file
+                                        )
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "image/jpeg"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, "Share Note"))
+                                    } catch (_: Exception) {}
+                                }
                             }
                         }) {
                             Icon(
@@ -425,6 +469,81 @@ fun PhotoViewerDialog(
                                         showScheduleDialog = true
                                     }
                                 )
+
+                                HorizontalDivider(
+                                    color = MidnightCardOutline,
+                                    thickness = 1.dp,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+
+                                // Draw / Edit drawing item
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = if (currentDrawing != null && currentDrawing!!.hasStrokes) {
+                                                stringResource(R.string.action_edit_drawing)
+                                            } else {
+                                                stringResource(R.string.action_draw)
+                                            },
+                                            color = TextPrimary
+                                        )
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Edit, null, tint = FolderTabCream) },
+                                    onClick = {
+                                        showMenu = false
+                                        isDrawingMode = true
+                                    }
+                                )
+
+                                // If drawing exists with strokes: Hide/Show drawing and Clear drawing
+                                if (currentDrawing != null && currentDrawing!!.hasStrokes) {
+                                    val isVisible = currentDrawing!!.isVisible
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = if (isVisible) {
+                                                    stringResource(R.string.action_hide_drawing)
+                                                } else {
+                                                    stringResource(R.string.action_show_drawing)
+                                                },
+                                                color = TextPrimary
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = if (isVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                contentDescription = null,
+                                                tint = FolderTabCream
+                                            )
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            coroutineScope.launch {
+                                                activeDrawingRepository.setVisible(currentPhoto.id, !isVisible)
+                                            }
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = stringResource(R.string.action_clear_drawing),
+                                                color = TagCrimson
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.LayersClear,
+                                                contentDescription = null,
+                                                tint = TagCrimson
+                                            )
+                                        },
+                                        onClick = {
+                                            showMenu = false
+                                            showClearDrawingDialog = true
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -829,6 +948,44 @@ fun PhotoViewerDialog(
                         scheduleManager.cancelSchedule(ScheduleNoteType.PHOTO, currentPhoto.id)
                         showScheduleDialog = false
                     }
+                )
+            }
+
+            if (showClearDrawingDialog) {
+                AlertDialog(
+                    onDismissRequest = { showClearDrawingDialog = false },
+                    title = {
+                        Text(
+                            text = stringResource(R.string.dialog_clear_drawing_title),
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.dialog_clear_drawing_message),
+                            color = TextSecondary
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showClearDrawingDialog = false
+                                coroutineScope.launch {
+                                    activeDrawingRepository.clearDrawing(currentPhoto.id)
+                                }
+                            }
+                        ) {
+                            Text(stringResource(R.string.action_clear), color = TagCrimson, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showClearDrawingDialog = false }) {
+                            Text(stringResource(R.string.confirm_cancel), color = FolderTabCream)
+                        }
+                    },
+                    containerColor = MidnightSurface,
+                    shape = RoundedCornerShape(16.dp)
                 )
             }
         }

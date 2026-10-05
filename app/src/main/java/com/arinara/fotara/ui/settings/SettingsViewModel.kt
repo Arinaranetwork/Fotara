@@ -291,6 +291,18 @@ class SettingsViewModel(
         }
     }
 
+    fun saveProfileBannerGif(bytes: ByteArray, crop: String?, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val path = settingsRepository.saveProfileBannerGif(bytes, crop)
+            val success = path != null
+            if (!success) {
+                val msg = "Failed to save banner"
+                _eventChannel.trySend(msg)
+            }
+            onResult(success)
+        }
+    }
+
     fun removeProfileBanner() {
         viewModelScope.launch {
             settingsRepository.removeProfileBanner()

@@ -85,7 +85,8 @@ class SqlitePhotoRepository(
     private val dbHelper: FotaraDbHelper,
     private val folderRepository: FolderRepository,
     private val photoStorageManager: PhotoStorageManager? = null,
-    coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val photoDrawingRepository: PhotoDrawingRepository? = null
 ) : PhotoRepository {
 
     private val scope = coroutineScope
@@ -840,7 +841,14 @@ class SqlitePhotoRepository(
             addedAt = now,
             fileSizeBytes = copiedFiles.fileSizeBytes
         )
-        addPhoto(newPhoto)
+        val newPhotoId = addPhoto(newPhoto)
+        if (newPhotoId > 0 && photoDrawingRepository != null) {
+            val srcDrawing = photoDrawingRepository.getDrawing(photoId)
+            if (srcDrawing != null && srcDrawing.hasStrokes) {
+                photoDrawingRepository.saveDrawing(srcDrawing.copy(photoId = newPhotoId, updatedAt = now))
+            }
+        }
+        newPhotoId
     }
 
     override suspend fun updatePhotosTagColor(ids: List<Long>, colorHex: String?) = withContext(Dispatchers.IO) {
@@ -913,6 +921,9 @@ class SqlitePhotoRepository(
         try {
             db.execSQL("DELETE FROM photos_fts WHERE photo_id = ?", arrayOf(id.toString()))
         } catch (_: Exception) {}
+        try {
+            db.execSQL("DELETE FROM photo_drawings WHERE photo_id = ?", arrayOf(id.toString()))
+        } catch (_: Exception) {}
         db.delete("photos", "id = ?", arrayOf(id.toString()))
         refreshSync()
         folderRepository.refresh()
@@ -939,6 +950,9 @@ class SqlitePhotoRepository(
             db.execSQL("DELETE FROM photo_groups WHERE is_trashed = 1")
             db.execSQL("DELETE FROM subfolders WHERE is_trashed = 1")
             db.execSQL("DELETE FROM folders WHERE is_trashed = 1")
+            try {
+                db.execSQL("DELETE FROM photo_drawings WHERE photo_id NOT IN (SELECT id FROM photos)")
+            } catch (_: Exception) {}
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -969,6 +983,9 @@ class SqlitePhotoRepository(
             db.execSQL("DELETE FROM photo_groups WHERE is_trashed = 1 AND deleted_at < $cutoff")
             db.execSQL("DELETE FROM subfolders WHERE is_trashed = 1 AND deleted_at < $cutoff")
             db.execSQL("DELETE FROM folders WHERE is_trashed = 1 AND deleted_at < $cutoff")
+            try {
+                db.execSQL("DELETE FROM photo_drawings WHERE photo_id NOT IN (SELECT id FROM photos)")
+            } catch (_: Exception) {}
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -1033,7 +1050,11 @@ class SqlitePhotoRepository(
         val photo = getPhotoById(id) ?: return@withContext null
         val manager = photoStorageManager ?: return@withContext null
         try {
+            val drawing = photoDrawingRepository?.getDrawing(id)
             val saved = manager.rotatePhotoClockwise(photo.fileUri, photo.thumbnailUri)
+            if (drawing != null && drawing.hasStrokes) {
+                photoDrawingRepository.transformRotate(id, drawing.widthPx, drawing.heightPx)
+            }
             val db = dbHelper.getSafeWritableDatabase()
             val values = ContentValues().apply {
                 put("file_size_bytes", saved.fileSizeBytes)
@@ -1057,7 +1078,15 @@ class SqlitePhotoRepository(
         val photo = getPhotoById(id) ?: return@withContext null
         val manager = photoStorageManager ?: return@withContext null
         try {
+            val drawing = photoDrawingRepository?.getDrawing(id)
             val saved = manager.cropPhoto(photo.fileUri, photo.thumbnailUri, left, top, right, bottom)
+            if (drawing != null && drawing.hasStrokes) {
+                val cropLeft = left * drawing.widthPx
+                val cropTop = top * drawing.heightPx
+                val newW = ((right - left) * drawing.widthPx).toInt().coerceAtLeast(1)
+                val newH = ((bottom - top) * drawing.heightPx).toInt().coerceAtLeast(1)
+                photoDrawingRepository.transformCrop(id, cropLeft, cropTop, newW, newH)
+            }
             val db = dbHelper.getSafeWritableDatabase()
             val values = ContentValues().apply {
                 put("file_size_bytes", saved.fileSizeBytes)
