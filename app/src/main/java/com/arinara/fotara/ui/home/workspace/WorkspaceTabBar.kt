@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -73,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import com.arinara.fotara.R
 import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.model.getDisplayName
 import com.arinara.fotara.data.repository.WorkspaceValidator
 import androidx.compose.material.icons.filled.Delete
 import com.arinara.fotara.theme.TagCrimson
@@ -123,6 +125,7 @@ fun WorkspaceTabBar(
             .fillMaxWidth()
             .padding(horizontal = 18.dp)
             .height(48.dp)
+            .systemGestureExclusion()
             .clip(RoundedCornerShape(24.dp))
             .background(HomeTabBarContainer)
             .padding(4.dp)
@@ -131,12 +134,13 @@ fun WorkspaceTabBar(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val isScrollEnabled = !dragState.isDragging && !dragState.isMoveMode && dragState.state == TabGestureState.IDLE
             // Scrollable tabs section
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .horizontalScroll(scrollState),
+                    .horizontalScroll(scrollState, enabled = isScrollEnabled),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -194,6 +198,7 @@ fun WorkspaceTabBar(
                     )
 
                     val translationX = if (isBeingDragged) dragState.dragDeltaX else animatedShiftPx
+                    val wsDisplayName = workspace.getDisplayName()
 
                     Box(
                         modifier = Modifier
@@ -215,7 +220,7 @@ fun WorkspaceTabBar(
                             .clip(RoundedCornerShape(20.dp))
                             .background(if (isSelected) HomeTabBarSelectedPill else Color.Transparent)
                             .semantics {
-                                contentDescription = "${workspace.name} workspace tab"
+                                contentDescription = "$wsDisplayName workspace tab"
                             }
                             .pointerInput(workspace.id, workspace.kind, isSelectMode) {
                                 if (isSelectMode || workspace.kind == WorkspaceKind.HOME) {
@@ -374,13 +379,6 @@ fun WorkspaceTabBar(
                                         tint = if (isSelected) Color.White else Color(0xFF6B7280),
                                         modifier = Modifier.size(17.dp)
                                     )
-                                    Text(
-                                        text = stringResource(R.string.workspace_home),
-                                        color = if (isSelected) Color.White else Color(0xFF6B7280),
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = ElmsSans
-                                    )
                                 }
                                 WorkspaceKind.ARCHIVE -> {
                                     Icon(
@@ -389,26 +387,18 @@ fun WorkspaceTabBar(
                                         tint = if (isSelected) Color.White else Color(0xFF6B7280),
                                         modifier = Modifier.size(17.dp)
                                     )
-                                    Text(
-                                        text = stringResource(R.string.workspace_archive),
-                                        color = if (isSelected) Color.White else Color(0xFF6B7280),
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = ElmsSans
-                                    )
                                 }
-                                WorkspaceKind.CUSTOM -> {
-                                    Text(
-                                        text = workspace.name,
-                                        color = if (isSelected) Color.White else Color(0xFF6B7280),
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = ElmsSans,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                WorkspaceKind.CUSTOM -> {}
                             }
+                            Text(
+                                text = workspace.getDisplayName(),
+                                color = if (isSelected) Color.White else Color(0xFF6B7280),
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                fontFamily = ElmsSans,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
 
                         // Anchored dropdown menu for Custom and Archive Workspaces

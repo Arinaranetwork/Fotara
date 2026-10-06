@@ -505,6 +505,19 @@ fun CanvasScreen(
                             onDismissRequest = { showOverflowMenu = false },
                             modifier = Modifier.background(MidnightSurface)
                         ) {
+                            if (com.arinara.fotara.BuildConfig.DEBUG) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_copy_frame_stats), color = TextPrimary) },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        val summary = com.arinara.fotara.debug.FrameIntervalRecorder.getSummary()
+                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Frame Stats", summary))
+                                        android.widget.Toast.makeText(context, context.getString(R.string.msg_frame_stats_copied), android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Info, null, tint = FolderTabCream) }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("Schedule Note", color = TextPrimary) },
                                 onClick = {

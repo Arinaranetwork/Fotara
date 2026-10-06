@@ -461,6 +461,25 @@ fun PhotoViewerDialog(
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 )
 
+                                if (com.arinara.fotara.BuildConfig.DEBUG) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.action_copy_frame_stats), color = TextPrimary) },
+                                        leadingIcon = { Icon(Icons.Default.Info, null, tint = FolderTabCream) },
+                                        onClick = {
+                                            showMenu = false
+                                            val summary = com.arinara.fotara.debug.FrameIntervalRecorder.getSummary()
+                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Frame Stats", summary))
+                                            android.widget.Toast.makeText(context, context.getString(R.string.msg_frame_stats_copied), android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                    HorizontalDivider(
+                                        color = MidnightCardOutline,
+                                        thickness = 1.dp,
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+                                }
+
                                 DropdownMenuItem(
                                     text = { Text("Schedule...", color = TextPrimary) },
                                     leadingIcon = { Icon(Icons.Default.Alarm, null, tint = FolderTabCream) },

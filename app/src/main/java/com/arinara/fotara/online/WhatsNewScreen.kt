@@ -88,60 +88,38 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
-        version = "1.7.2",
+        version = "1.7.1",
         channel = "Stable",
-        releaseDate = "2026-10-05",
-        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/v1.7.2",
+        releaseDate = "2026-10-06",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/v1.7.1",
         breakingChanges = emptyList(),
         whatsNew = listOf(
-            "PDF Search Deep Link & Highlight: Tapping a PDF search match navigates directly into the target page, triggers animated auto-scroll once rendered, and displays an animated amber highlight border and overlay pulse.",
-            "Workspace Tab Reorder Animation: Dragging workspace tabs features live spring-animated empty slot shifting for neighboring tabs, with zero blinking or position resets on gesture completion.",
+            "Smoother Zoom and Pan: Zero-recomposition GPU matrix transformations across Canvas and Photo Drawing, throttled viewport publishing (<=10Hz), and continuous centroid calculation eliminating stutter during pinch-to-zoom and multi-finger gestures.",
+            "Headers No Longer Cut Off: Content-measured header heights and reserved tagline slot height across Home, Notes, and detail screens, eliminating text clipping on descenders and preventing vertical tab-switching jump across all font scales (0.85x to 2.0x).",
+            "Smoother Workspace Reordering: Single settle animation on release, system gesture exclusion allowing drag start from the left edge, hold longer (~1000ms) to enter Direct Move Mode, and live neighbor gap animation.",
+            "Workspace Names Always Visible: Universal display name resolution across search scope chips, tab bars, dialogs, and folder pickers, eliminating blank chips for Home and Archive.",
             "Archive Workspace Deletion: Archive workspaces can now be deleted via the long-press options panel and confirmation dialog, safely reassigning contained folders to Home.",
-            "Search Workspace Scope Bar: Fixed blank pills by properly resolving localized Home, Archive, and custom workspace names and icons.",
-            "Notes Action Button Alignment: Unified the Notes screen (+) FAB to 52dp diameter, 26dp icon, matching Home elevation and spacing while eliminating the black vignette halo artifact.",
-            "Profile Border Feature Under Construction: Profile avatar decorative border feature is temporarily disabled, repositioned to the bottom in gray with an 'Under construction' notice, and automatically reset to 'none' for existing profiles.",
+            "Consistent (+) Button: Unified 52dp diameter FAB with 26dp icon, matching Home elevation, offset, and spacing while eliminating the black vignette halo artifact.",
+            "GIF Banner Picking: Dedicated 'Choose a GIF' document picker with binary signature detection (GIF87a/GIF89a) alongside system photo picker, 8 MB limit, and first-frame crop editor.",
+            "Images in Release Notes & Update Banners: Native support for remote release banner artwork behind dark gradient scrims, markdown images, linked images, and HTML <img> tags with strict HTTPS allowlist validation.",
             """
 | Component | Improvement | User Impact |
 |---|---|---|
-| PDF Search | Deep link auto-scroll & highlight pulse | Direct search navigation |
-| Workspace Tabs | Live spring slot animation & no-blink drag | Smooth tab reordering |
-| Archive Workspace | Deletion supported via options dialog | Full workspace control |
-| Search Scope Bar | Resolved localized names & icons | Zero blank pills |
-| Notes Screen | 52dp FAB alignment & vignette elimination | Clean visual consistency |
-| Profile Borders | Feature disabled & reset to none | Under construction indicator |
+| Zoom & Pan | GPU matrix transforms & <=10Hz publish | Smooth 60 FPS pinch-zoom |
+| Screen Headers | Dynamic height & lineHeight padding | Zero descender clipping |
+| Workspace Tabs | Single settle, left-edge drag & gap animation | Reliable reordering |
+| Search & Workspaces | Universal display names & Archive deletion | Zero blank chips, full control |
+| Notes Button | Unified 52dp FAB & vignette elimination | Clean visual consistency |
+| Profile Banners | Dedicated GIF document picker & signature check | Reliable GIF banner selection |
+| Update Notes | Remote banners & allowlist image support | Rich visual release notes |
             """.trimIndent()
         ),
         patchesAndFixes = listOf(
             "Eliminated pointer layout mutation race conditions during workspace tab dragging.",
             "Fixed search bar workspace pill text rendering for built-in workspaces with blank names.",
             "Removed clipped rasterized shadow layer on Notes floating action button.",
-            "Bypassed PDF page auto-scroll zero-clamp by waiting for asynchronous page renderer initialization."
-        )
-    ),
-    ReleaseChangelogEntry(
-        version = "1.7.1",
-        channel = "Stable",
-        releaseDate = "2026-10-05",
-        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/v1.7.1",
-        breakingChanges = emptyList(),
-        whatsNew = listOf(
-            "Zoom & Pan Smoothness Overhaul: Zero-recomposition GPU matrix transformations across Canvas and Photo Drawing, throttled viewport publishing (<=10Hz), and continuous centroid calculation eliminating stutter during pinch-to-zoom and multi-finger gestures.",
-            "Screen Headers Descender & Layout Fix: Content-measured header heights and reserved tagline slot height across Home, Notes, and detail screens, eliminating text clipping on descenders and preventing vertical tab-switching jump across all font scales (0.85x to 2.0x).",
-            "Workspace Tab Two-Stage Hold Gesture: Holding for ~400ms lifts tab and opens the action panel (kept open if finger is released); holding past ~1000ms enters Direct Move Mode with distinct haptic feedback, panel fade-out, 1.1x tab elevation, and instant horizontal drag reordering.",
-            "Rich Release Notes & Update Banner Images: Native support for remote release banner artwork behind dark gradient scrims, GitHub markdown images, linked images, and HTML <img> tags with HTTPS allowlist validation and full-screen pinch-to-zoom inspection.",
-            """
-| Component | Improvement | User Impact |
-|---|---|---|
-| Canvas & Photo Drawing | GPU matrix transforms & <=10Hz publish | Smooth 60 FPS pinch-zoom |
-| Screen Headers | Dynamic height & lineHeight padding | Zero descender clipping |
-| Workspace Tabs | Two-stage hold for Direct Move Mode | Intuitive tab reordering |
-| Update & Release Notes | Remote images & allowlist security | Rich release documentation |
-            """.trimIndent()
-        ),
-        patchesAndFixes = listOf(
-            "Prevented gesture cancellation spikes in PhotoDrawingEditor by stabilizing pointerInput modifier keys.",
-            "Added vertical drag off-screen and shake gesture cancellation for workspace tab reordering.",
-            "Enforced strict HTTPS domain allowlist rejecting unverified third-party image sources in release notes."
+            "Corrected banner asset matching to enforce startsWith(\"banner\") and valid image extensions.",
+            "Fallback Archive folders to Home when Archive workspace does not exist during backup import."
         )
     ),
     ReleaseChangelogEntry(

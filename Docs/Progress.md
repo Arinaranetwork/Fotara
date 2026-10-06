@@ -1,8 +1,8 @@
 # Progress - Fotara
-Last Updated: 2026-10-05
+Last Updated: 2026-10-06
 
 ## Current Phase
-Phase 34 - WorkspacePolishAndUiRefinements [Completed]
+Phase 32 - QualityAndSmoothness [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -43,20 +43,15 @@ Phase 34 - WorkspacePolishAndUiRefinements [Completed]
 | 34    | WorkspacePolishAndUiRefinements   | Completed   |
 
 ## Completed
-- [x] A-001: PDF search deep link with auto-scroll and highlight - Phase 33
-- [x] A-002: Search screen: fix weird blank/empty workspace pills - Phase 34
-- [x] A-003: Notes screen: fix plus (+) button weird black vignette, size and position - Phase 34
-- [x] A-004: Workspace: make Archive workspace deletable (only Home is non-deletable) - Phase 34
-- [x] A-005: Workspace tab repositioning: live slot animation and fix blinking/resetting - Phase 34
-- [x] A-006: Verification: unit tests passing 100%, verify GIF banner implementation - Phase 34
-- [x] A-007: Disable border feature (gray, bottom, under construction, past users reset to none) - Phase 34
-- [x] A-008: Release 1.7.2 wrap (version 1.7.2 / 29, build APK, changelog, git push) - Phase 34
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 32
 - [x] Task 1: Zoom & Pan Smoothness Overhaul - Phase 32
 - [x] Task 2: Screen Headers Clipping Fix - Phase 32
 - [x] Task 3: Workspace Tab Move Mode Hold Gesture - Phase 32
-- [x] Task 4: Release Notes & Update Banner Remote Images - Phase 32
-- [x] Task 5: What's New 1.7.1, Version Bump & Release Build - Phase 32
+- [x] Task 4: Workspace Names Resolution & Archive Deletion - Phase 32
+- [x] Task 5: Notes (+) Button Alignment & Vignette Elimination - Phase 32
+- [x] Task 6: Remote Release Notes & Update Banner Images - Phase 32
+- [x] Task 7: GIF Banner Picking Overhaul - Phase 32
+- [x] Task 8: What's New 1.7.1, Version Bump & Release Build - Phase 32
 - [x] Task 1: PDF viewer Split to Images button color alignment (`TabCream`) - Phase 31
 - [x] Task 2: Duplicate "Beta" and Version Text Resolution (`VersionInfo` pure parser) - Phase 31
 - [x] Task 3: Settings Pinned Title & Progressive Fade (`SettingsFadeMath`, zero recomposition) - Phase 31

@@ -262,4 +262,10 @@
     <string name="tool_highlighter">Highlighter</string>
     <string name="tool_eraser">Eraser</string>
     <string name="drawing_save_failed">Could not save drawing</string>
+    <string name="action_copy_frame_stats">Copy frame stats</string>
+    <string name="msg_frame_stats_copied">Frame stats copied to clipboard</string>
+    <string name="profile_banner_choose_image">Choose image</string>
+    <string name="profile_banner_choose_gif">Choose a GIF</string>
+    <string name="profile_banner_not_a_gif">Selected file is not a valid GIF</string>
+    <string name="action_cancel">Cancel</string>
 </resources>

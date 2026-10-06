@@ -43,7 +43,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Panorama
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -52,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -116,7 +119,9 @@ fun ProfileScreen(
         }
     }
 
-    val bannerPickerLauncher = rememberLauncherForActivityResult(
+    var showBannerSourceDialog by remember { mutableStateOf(false) }
+
+    val bannerImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
@@ -127,6 +132,25 @@ fun ProfileScreen(
                     android.widget.Toast.makeText(context, context.getString(R.string.profile_banner_gif_too_large), android.widget.Toast.LENGTH_SHORT).show()
                     return@rememberLauncherForActivityResult
                 }
+            }
+            pendingCropUriString = uri.toString()
+            pendingCropIsAvatar = false
+        }
+    }
+
+    val bannerGifPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val isGif = com.arinara.fotara.util.ProfileImageUtils.isGifUri(context, uri)
+            if (!isGif) {
+                android.widget.Toast.makeText(context, context.getString(R.string.profile_banner_not_a_gif), android.widget.Toast.LENGTH_SHORT).show()
+                return@rememberLauncherForActivityResult
+            }
+            val size = com.arinara.fotara.util.ProfileImageUtils.getUriFileSize(context, uri)
+            if (size > SettingsRepository.MAX_BANNER_GIF_BYTES) {
+                android.widget.Toast.makeText(context, context.getString(R.string.profile_banner_gif_too_large), android.widget.Toast.LENGTH_SHORT).show()
+                return@rememberLauncherForActivityResult
             }
             pendingCropUriString = uri.toString()
             pendingCropIsAvatar = false
@@ -175,6 +199,90 @@ fun ProfileScreen(
             }
         )
         return
+    }
+
+    if (showBannerSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showBannerSourceDialog = false },
+            containerColor = HomeCardSurface,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text(
+                    text = stringResource(R.string.profile_action_change_banner),
+                    color = Color.White,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showBannerSourceDialog = false
+                                bannerImagePickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                            .padding(vertical = 12.dp, horizontal = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.profile_banner_choose_image),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    HorizontalDivider(color = HomeCardBorder.copy(alpha = 0.5f))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showBannerSourceDialog = false
+                                bannerGifPickerLauncher.launch(arrayOf("image/gif"))
+                            }
+                            .padding(vertical = 12.dp, horizontal = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Movie,
+                            contentDescription = null,
+                            tint = Color(0xFF34D399),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.profile_banner_choose_gif),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showBannerSourceDialog = false }) {
+                    Text(
+                        text = stringResource(R.string.action_cancel),
+                        color = HomeSubtitleGray,
+                        fontFamily = ElmsSans
+                    )
+                }
+            }
+        )
     }
 
     if (showBorderPicker) {
@@ -340,9 +448,7 @@ fun ProfileScreen(
                     icon = Icons.Default.Panorama,
                     title = stringResource(R.string.profile_action_change_banner),
                     onClick = {
-                        bannerPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
+                        showBannerSourceDialog = true
                     }
                 )
 

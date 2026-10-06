@@ -97,21 +97,10 @@ fun FloatingDock(
             }
         }
 
-        // Circular '+' Button (~52-54dp, #2563EB) opens New Folder directly
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(CircleShape)
-                .background(HomeAddButtonBlue)
-                .clickable { onNewFolderClick() },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = stringResource(R.string.menu_new_folder),
-                tint = Color.White,
-                modifier = Modifier.size(26.dp)
-            )
-        }
+        // Circular '+' Button (52dp, #2563EB) opens New Folder directly
+        SharedFloatingAddButton(
+            onClick = onNewFolderClick,
+            contentDescription = stringResource(R.string.menu_new_folder)
+        )
     }
 }

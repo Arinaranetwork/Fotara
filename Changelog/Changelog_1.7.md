@@ -36,19 +36,14 @@ Released: 2026-10-05   Status: Released
 - **Selection Blinking**: Resolved Coil crossfade blinking on thumbnail images when toggling selection mode.
 
 ## Patches
-### 1.7.1 - 2026-10-05
-- **Smoother Zoom and Pan**: Direct GPU matrix transformation on gestures with debounced off-thread tile re-rendering and throttled viewport state publishing.
-- **Screen Headers Clipping Fix**: Content-measured header height and line-height descender protection ensuring "Fotara" title and tagline remain unclipped across all system font scales.
-- **Workspace Tab Move Mode**: Two-stage long-press interaction enabling panel access on initial lift or full drag reordering when held for an additional 600ms.
-- **Remote Release Notes & Banner Images**: Secure HTTPS image loading within update dialogs, What's New screen, and update banners with 16:9 placeholder reservation and dark contrast scrims.
-
-### 1.7.2 - 2026-10-05
-- **PDF Search Deep Link & Highlight**: Navigates directly into the target PDF page on search result click, triggering smooth auto-scroll and rendering a 3-second animated amber highlight border and overlay pulse.
-- **Workspace Tab Reordering Animation**: Live spring-animated neighboring tab shifting during tab drag reordering, with zero list mutation during gesture loop to eliminate blinking or position resets.
-- **Archive Workspace Deletion**: Archive workspace can now be deleted from its options panel, safely transferring contained folders to Home (Home remains the sole immutable workspace).
-- **Search Screen Workspace Scope Bar**: Resolved localized names and distinct icons for Home and Archive workspace pills, eliminating blank pills.
-- **Notes Screen Action Button Alignment**: Unified the Notes screen (+) FAB to 52dp diameter, 26dp icon, matching Home elevation and spacing while eliminating the black vignette halo artifact.
-- **Profile Border Feature Inactivation**: Profile avatar decorative border feature is temporarily disabled, repositioned to the bottom in gray with an "Under construction" notice, and automatically reset to "none" for all existing user profiles.
+### 1.7.1 - 2026-10-06 (Released)
+- **Smoother Zoom and Pan**: Direct GPU matrix transformation on gestures with debounced off-thread tile re-rendering (~120ms) and throttled viewport state publishing (<=10Hz).
+- **Screen Headers Clipping Fix**: Content-measured header height and line-height descender protection ensuring "Fotara" title and tagline remain unclipped across all system font scales (0.85x to 2.0x).
+- **Workspace Tab Reordering & Move Mode**: System back gesture exclusion, live spring gap animation (~200ms), single settle animation (~180ms), and two-stage hold gesture (Stage 1 panel, Stage 2 MOVE MODE at 1000ms with 1.1x scale).
+- **Universal Workspace Names & Archive Deletion**: Single canonical `getDisplayName()` function across all chips, tabs, pickers, and dialogs; Archive workspace deletable with folder transfer to Home (sole permanent workspace) and backup fallback.
+- **Notes (+) Button Alignment & Vignette Fix**: Shared floating action button composable with identical 52dp diameter, 26dp icon, matching bottom overlay position, and elimination of dark vignette halo.
+- **Remote Release Notes & Banner Images**: Secure HTTPS image loading within update dialogs, What's New screen, and update banners with 16:9 placeholder reservation, dark contrast scrims, and domain allowlist.
+- **GIF Banner Picking**: Dedicated two-source flow ("Choose image" via photo picker, "Choose a GIF" via `OpenDocument("image/gif")`), binary header signature validation (`GIF87a`/`GIF89a`), 8MB limit, and first-frame crop editor.
 
 
 

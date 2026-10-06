@@ -23,6 +23,7 @@ import com.arinara.fotara.R
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.model.getDisplayName
 import com.arinara.fotara.theme.ElmsSans
 
 data class WorkspaceFolderGroup(
@@ -72,11 +73,7 @@ object WorkspaceFolderGroupingHelper {
     }
 
     fun getWorkspaceDisplayName(workspace: Workspace, homeLabel: String, archiveLabel: String): String {
-        return when (workspace.kind) {
-            WorkspaceKind.HOME -> homeLabel
-            WorkspaceKind.ARCHIVE -> archiveLabel
-            WorkspaceKind.CUSTOM -> workspace.name
-        }
+        return workspace.getDisplayName(homeLabel, archiveLabel)
     }
 }
 
@@ -110,9 +107,7 @@ fun LazyListScope.workspaceGroupedFolderItems(
 
 @Composable
 fun WorkspaceHeaderItem(workspace: Workspace, modifier: Modifier = Modifier) {
-    val homeName = stringResource(R.string.workspace_home)
-    val archiveName = stringResource(R.string.workspace_archive)
-    val name = WorkspaceFolderGroupingHelper.getWorkspaceDisplayName(workspace, homeName, archiveName)
+    val name = workspace.getDisplayName()
 
     Text(
         text = name,

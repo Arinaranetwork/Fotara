@@ -65,6 +65,7 @@ import com.arinara.fotara.R
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.model.getDisplayName
 import com.arinara.fotara.data.repository.WorkspaceContentStats
 import com.arinara.fotara.data.repository.WorkspaceError
 import com.arinara.fotara.data.repository.WorkspaceValidator
@@ -348,11 +349,7 @@ fun MoveToWorkspaceDialog(
             Column(modifier = Modifier.fillMaxWidth()) {
                 orderedWorkspaces.forEach { ws ->
                     val isCurrent = commonWorkspaceId != null && ws.id == commonWorkspaceId
-                    val displayName = when (ws.kind) {
-                        WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
-                        WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
-                        WorkspaceKind.CUSTOM -> ws.name
-                    }
+                    val displayName = ws.getDisplayName()
                     val isSelected = selectedId == ws.id
 
                     Row(
@@ -437,11 +434,7 @@ fun DeleteWorkspaceConfirmDialog(
         containerColor = HomeCardSurface,
         shape = RoundedCornerShape(20.dp),
         title = {
-            val wsDisplayName = when (workspace.kind) {
-                WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
-                WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
-                WorkspaceKind.CUSTOM -> workspace.name
-            }
+            val wsDisplayName = workspace.getDisplayName()
             Text(
                 text = stringResource(R.string.delete_workspace_confirm_title, wsDisplayName),
                 color = Color.White,
@@ -800,11 +793,7 @@ fun RestoreWorkspaceDestinationDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 orderedWorkspaces.forEach { ws ->
-                    val displayName = when (ws.kind) {
-                        WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
-                        WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
-                        WorkspaceKind.CUSTOM -> ws.name
-                    }
+                    val displayName = ws.getDisplayName()
                     val isSelected = selectedId == ws.id
 
                     Row(

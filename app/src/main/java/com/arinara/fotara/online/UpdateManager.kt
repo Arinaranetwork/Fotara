@@ -203,7 +203,7 @@ class UpdateManager(private val context: Context) {
                             val lowerName = name.lowercase()
                             if (lowerName.endsWith(".apk")) {
                                 downloadUrl = if (asset.has("browser_download_url")) asset.getString("browser_download_url") else null
-                            } else if (bannerUrl == null && (lowerName.contains("banner") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png") || lowerName.endsWith(".webp") || lowerName.endsWith(".gif"))) {
+                            } else if (bannerUrl == null && lowerName.startsWith("banner") && (lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".webp") || lowerName.endsWith(".gif"))) {
                                 bannerUrl = if (asset.has("browser_download_url")) asset.getString("browser_download_url") else null
                             }
                         }

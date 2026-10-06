@@ -329,11 +329,11 @@ class DefaultSettingsRepository(
             val homeWs = currentWorkspaces.firstOrNull { it.kind == WorkspaceKind.HOME }
                 ?: Workspace(id = 1L, uuid = FotaraDbHelper.HOME_WORKSPACE_UUID, kind = WorkspaceKind.HOME)
             val archiveWs = currentWorkspaces.firstOrNull { it.kind == WorkspaceKind.ARCHIVE }
-                ?: Workspace(id = 2L, uuid = FotaraDbHelper.ARCHIVE_WORKSPACE_UUID, kind = WorkspaceKind.ARCHIVE)
+            val archiveTargetId = archiveWs?.id ?: homeWs.id
 
             val workspaceUuidToIdMap = mutableMapOf<String, Long>()
             workspaceUuidToIdMap[FotaraDbHelper.HOME_WORKSPACE_UUID] = homeWs.id
-            workspaceUuidToIdMap[FotaraDbHelper.ARCHIVE_WORKSPACE_UUID] = archiveWs.id
+            workspaceUuidToIdMap[FotaraDbHelper.ARCHIVE_WORKSPACE_UUID] = archiveTargetId
 
             for (ws in currentWorkspaces) {
                 workspaceUuidToIdMap[ws.uuid] = ws.id
@@ -350,7 +350,7 @@ class DefaultSettingsRepository(
                     if (wKind == "HOME") {
                         workspaceUuidToIdMap[wUuid] = homeWs.id
                     } else if (wKind == "ARCHIVE") {
-                        workspaceUuidToIdMap[wUuid] = archiveWs.id
+                        workspaceUuidToIdMap[wUuid] = archiveTargetId
                     } else if (!workspaceUuidToIdMap.containsKey(wUuid)) {
                         if (currentCustomCount < WorkspaceValidator.MAX_CUSTOM_WORKSPACES) {
                             val res = workspaceRepository.createWorkspace(wName)

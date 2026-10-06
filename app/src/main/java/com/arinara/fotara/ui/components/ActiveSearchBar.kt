@@ -68,6 +68,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.model.getDisplayName
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -922,11 +923,7 @@ fun ActiveSearchBar(
 
                 sortedWorkspaces.forEach { ws ->
                     val isWsSelected = selectedWorkspaceScopeId == ws.id
-                    val displayName = when (ws.kind) {
-                        WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
-                        WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
-                        WorkspaceKind.CUSTOM -> ws.name
-                    }
+                    val displayName = ws.getDisplayName()
                     Surface(
                         color = if (isWsSelected) HomeMainButtonBlue else HomeSearchBarSurface,
                         shape = RoundedCornerShape(12.dp),

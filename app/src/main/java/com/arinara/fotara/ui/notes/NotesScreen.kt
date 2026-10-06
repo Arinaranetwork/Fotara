@@ -118,6 +118,7 @@ import com.arinara.fotara.theme.HomeMainButtonBlue
 import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.TagCrimson
+import com.arinara.fotara.ui.components.SharedFloatingAddButton
 import com.arinara.fotara.ui.components.verticalEdgeFade
 
 @Composable
@@ -326,21 +327,10 @@ fun NotesScreen(
                 .align(Alignment.BottomEnd)
                 .padding(end = 18.dp, bottom = fabBottomPadding)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(HomeAddButtonBlue)
-                    .clickable { showFabCreateMenu = true },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = stringResource(R.string.create_note),
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
+            SharedFloatingAddButton(
+                onClick = { showFabCreateMenu = true },
+                contentDescription = stringResource(R.string.create_note)
+            )
 
             // Upward menu for FAB note creation
             DropdownMenu(

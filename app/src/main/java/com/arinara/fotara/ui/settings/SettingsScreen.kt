@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
@@ -239,6 +240,8 @@ fun SettingsScreen(
         }
     }
 
+    var showBannerSourceDialog by remember { mutableStateOf(false) }
+
     val bannerPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
@@ -252,6 +255,29 @@ fun SettingsScreen(
                     }
                     return@rememberLauncherForActivityResult
                 }
+            }
+            pendingCropUriString = uri.toString()
+            pendingCropIsAvatar = false
+        }
+    }
+
+    val bannerGifPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val isGif = ProfileImageUtils.isGifUri(context, uri)
+            if (!isGif) {
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(context.getString(R.string.profile_banner_not_a_gif))
+                }
+                return@rememberLauncherForActivityResult
+            }
+            val size = ProfileImageUtils.getUriFileSize(context, uri)
+            if (size > SettingsRepository.MAX_BANNER_GIF_BYTES) {
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(context.getString(R.string.profile_banner_gif_too_large))
+                }
+                return@rememberLauncherForActivityResult
             }
             pendingCropUriString = uri.toString()
             pendingCropIsAvatar = false
@@ -303,6 +329,90 @@ fun SettingsScreen(
         return
     }
 
+    if (showBannerSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showBannerSourceDialog = false },
+            containerColor = HomeCardSurface,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text(
+                    text = stringResource(R.string.profile_action_change_banner),
+                    color = Color.White,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showBannerSourceDialog = false
+                                bannerPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                            .padding(vertical = 12.dp, horizontal = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.profile_banner_choose_image),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    HorizontalDivider(color = HomeCardBorder.copy(alpha = 0.5f))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showBannerSourceDialog = false
+                                bannerGifPickerLauncher.launch(arrayOf("image/gif"))
+                            }
+                            .padding(vertical = 12.dp, horizontal = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Movie,
+                            contentDescription = null,
+                            tint = Color(0xFF34D399),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.profile_banner_choose_gif),
+                            color = Color.White,
+                            fontFamily = ElmsSans,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showBannerSourceDialog = false }) {
+                    Text(
+                        text = stringResource(R.string.action_cancel),
+                        color = HomeSubtitleGray,
+                        fontFamily = ElmsSans
+                    )
+                }
+            }
+        )
+    }
+
     if (showProfileEditSheet) {
         ProfileEditBottomSheet(
             hasCustomAvatar = uiState.userProfile.hasCustomAvatar,
@@ -319,9 +429,7 @@ fun SettingsScreen(
             },
             onChangeBanner = {
                 showProfileEditSheet = false
-                bannerPickerLauncher.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
+                showBannerSourceDialog = true
             },
             onEditNameEmail = {
                 showProfileEditSheet = false
