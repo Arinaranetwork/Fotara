@@ -268,4 +268,14 @@
     <string name="profile_banner_choose_gif">Choose a GIF</string>
     <string name="profile_banner_not_a_gif">Selected file is not a valid GIF</string>
     <string name="action_cancel">Cancel</string>
+    <string name="privacy_policy_title">Privacy Policy</string>
+    <string name="terms_of_service_title">Terms of Service</string>
+    <string name="privacy_policy_subtitle">Review our student-first local data principles</string>
+    <string name="terms_of_service_subtitle">Review software license and terms</string>
+    <string name="consent_dialog_title">Terms of Service and Privacy Policy</string>
+    <string name="device_count_switch_title">Share anonymous device count</string>
+    <string name="device_count_switch_desc">Sends a random ID and the app version so the developer can count active devices. No personal data. You can change this anytime in Settings.</string>
+    <string name="consent_accept_statement">By tapping Accept you agree to the Privacy Policy and the Terms of Service.</string>
+    <string name="consent_accept_button">Accept and continue</string>
+    <string name="settings_privacy_header">Privacy</string>
 </resources>

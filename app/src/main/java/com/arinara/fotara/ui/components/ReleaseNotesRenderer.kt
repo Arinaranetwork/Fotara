@@ -89,7 +89,8 @@ fun ReleaseNotesRenderer(
     primaryTextColor: Color = Color.White.copy(alpha = 0.92f),
     accentColor: Color = Color(0xFFF77F00),
     surfaceColor: Color = Color(0xFF0F131D),
-    cardBorder: Color = Color(0xFF26324A)
+    cardBorder: Color = Color(0xFF26324A),
+    allowImages: Boolean = true
 ) {
     val blocks = remember(markdown) {
         MarkdownTableParser.parseReleaseNotes(markdown)
@@ -251,11 +252,13 @@ fun ReleaseNotesRenderer(
                 }
 
                 is ReleaseNotesBlock.Image -> {
-                    ReleaseNotesImageComposable(
-                        block = block,
-                        onImageClick = { selectedFullscreenImageUrl = block.url },
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
+                    if (allowImages) {
+                        ReleaseNotesImageComposable(
+                            block = block,
+                            onImageClick = { selectedFullscreenImageUrl = block.url },
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
                 }
             }
         }
@@ -275,9 +278,10 @@ private fun ReleaseNotesImageComposable(
     onImageClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
 
-    if (!block.isAllowed) {
+    if (!block.isAllowed || !com.arinara.fotara.legal.NetworkGate.isConsentGranted(context)) {
         // Blocked untrusted or non-HTTPS image placeholder
         Box(
             modifier = modifier

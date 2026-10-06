@@ -822,6 +822,10 @@ class FakeSettingsRepository : SettingsRepository {
         _profileFlow.value = _profileFlow.value.copy(bannerPath = null, bannerUpdatedAt = now, bannerCrop = null)
     }
 
+    override suspend fun updateDeviceCountEnabled(enabled: Boolean) {
+        _settingsFlow.value = _settingsFlow.value.copy(isDeviceCountEnabled = enabled)
+    }
+
     override suspend fun updateSortOrder(sortOrder: SortOrder) {
         _settingsFlow.value = _settingsFlow.value.copy(defaultSortOrder = sortOrder)
     }

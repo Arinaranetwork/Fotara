@@ -47,6 +47,12 @@ android {
       shaders = false
     }
 
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(file("build/generated/assets/legal"))
+        }
+    }
+
     packaging {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -56,6 +62,17 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+}
+
+val copyLegalDocsToAssets = tasks.register<Copy>("copyLegalDocsToAssets") {
+    from(rootProject.file("Legal")) {
+        include("PRIVACY.md", "TERMS.md")
+    }
+    into(file("build/generated/assets/legal"))
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(copyLegalDocsToAssets)
 }
 
 kotlin {

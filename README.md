@@ -28,6 +28,12 @@
 
 ---
 
+## Legal
+
+By downloading, installing or using Fotara you acknowledge that you have read, understood and agree to the [Privacy Policy](Legal/PRIVACY.md) and the [Terms of Service](Legal/TERMS.md). The same documents are shown inside the app on first launch and must be accepted to use it.
+
+---
+
 ## Overview
 
 Traditional mobile gallery apps dump educational material alongside casual snapshots without structure, academic deadline awareness, or handwritten text recognition.

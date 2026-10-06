@@ -54,9 +54,12 @@ interface AppContainer {
     val photoDrawingRepository: com.arinara.fotara.data.repository.PhotoDrawingRepository
     val updateManager: UpdateManager
     val feedbackManager: FeedbackManager
+    val context: Context
+    val dialogCoordinator: com.arinara.fotara.coordinator.AppDialogCoordinator
+    val deviceRegistry: com.arinara.fotara.online.DeviceRegistry
 }
 
-class DefaultAppContainer(private val context: Context) : AppContainer {
+class DefaultAppContainer(override val context: Context) : AppContainer {
 
     private val dbHelper by lazy {
         FotaraDbHelper(context)
@@ -151,6 +154,17 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
 
     override val feedbackManager: FeedbackManager by lazy {
         FeedbackManager(context)
+    }
+
+    override val dialogCoordinator: com.arinara.fotara.coordinator.AppDialogCoordinator by lazy {
+        com.arinara.fotara.coordinator.AppDialogCoordinator()
+    }
+
+    override val deviceRegistry: com.arinara.fotara.online.DeviceRegistry by lazy {
+        com.arinara.fotara.online.DeviceRegistry(
+            context = context,
+            settingsRepository = settingsRepository
+        )
     }
 
     init {

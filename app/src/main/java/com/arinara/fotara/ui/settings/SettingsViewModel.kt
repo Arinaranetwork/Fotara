@@ -107,6 +107,12 @@ class SettingsViewModel(
         }
     }
 
+    fun updateDeviceCountEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.updateDeviceCountEnabled(enabled)
+        }
+    }
+
     fun updateStorageLocation(location: StorageLocation) {
         viewModelScope.launch {
             settingsRepository.updateStorageLocation(location)

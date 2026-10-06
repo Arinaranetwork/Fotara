@@ -193,6 +193,7 @@ fun HomeScreen(
     onOpenSupport: () -> Unit = {},
     onOpenWhatsNew: () -> Unit = {},
     feedbackManager: FeedbackManager? = null,
+    dialogCoordinator: com.arinara.fotara.coordinator.AppDialogCoordinator? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -208,14 +209,24 @@ fun HomeScreen(
     var showHomeOverflowMenu by remember { mutableStateOf(false) }
     var showBatchRenameDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
-    var updatePopupRelease by remember { mutableStateOf<com.arinara.fotara.online.ReleaseInfo?>(null) }
 
     LaunchedEffect(updateManager) {
         if (updateManager != null) {
             try {
                 val rel = updateManager.checkForUpdates()
                 if (rel != null && updateManager.shouldShowUpdatePopup(rel)) {
-                    updatePopupRelease = rel
+                    dialogCoordinator?.requestDialog(
+                        com.arinara.fotara.coordinator.AppDialogRequest.Update(
+                            release = rel,
+                            onLater = {
+                                updateManager.isPopupDismissedForSession = true
+                            },
+                            onSkipVersion = {
+                                updateManager.setSkippedVersion(rel.version)
+                                updateManager.isPopupDismissedForSession = true
+                            }
+                        )
+                    )
                 }
             } catch (_: Exception) {}
         }
@@ -1504,21 +1515,6 @@ fun HomeScreen(
         FeedbackDialog(
             feedbackManager = feedbackManager,
             onDismiss = { showFeedbackDialog = false }
-        )
-    }
-
-    updatePopupRelease?.let { release ->
-        com.arinara.fotara.ui.components.NewUpdateDialog(
-            release = release,
-            onLater = {
-                updateManager?.isPopupDismissedForSession = true
-                updatePopupRelease = null
-            },
-            onSkipVersion = {
-                updateManager?.setSkippedVersion(release.version)
-                updateManager?.isPopupDismissedForSession = true
-                updatePopupRelease = null
-            }
         )
     }
 

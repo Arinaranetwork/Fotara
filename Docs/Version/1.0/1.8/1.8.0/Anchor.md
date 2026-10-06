@@ -1,5 +1,5 @@
 # Anchor - Fotara 1.8.0
-Status: Finished    Opened: 2026-10-05    Finished: 2026-10-05
+Status: Open    Opened: 2026-10-06
 
 | ID    | Request                                                                                                         | Phase | Acceptance                                                                 | Status         | Evidence                                          |
 |-------|-----------------------------------------------------------------------------------------------------------------|-------|----------------------------------------------------------------------------|----------------|---------------------------------------------------|
@@ -9,5 +9,9 @@ Status: Finished    Opened: 2026-10-05    Finished: 2026-10-05
 | A-004 | Workspace: make Archive workspace deletable (only Home workspace is non-deletable)                              | 34    | Archive options panel offers delete, confirmation dialogs work, Home pinned| Moved -> 1.7.2 | Wrapped into release 1.7.2 per owner instruction |
 | A-005 | Workspace tab repositioning: live slot animation (empty space for dragged pill) and fix blinking/resetting bug  | 34    | Smooth animated slot shifting, stable coordinate tracking, drag commit     | Moved -> 1.7.2 | Wrapped into release 1.7.2 per owner instruction |
 | A-006 | Verification: unit tests passing 100%, verify GIF banner implementation status and report                       | 34    | Full test suite passing, zero regressions, clear GIF banner status report  | Moved -> 1.7.2 | Wrapped into release 1.7.2 per owner instruction |
-
-
+| A-007 | TASK 0: Skills compliance audit, report versionName/versionCode, 1.7.1 tasks status, automatic dialogs/entry points audit, network & Supabase audit, backup audit, LICENSE type | 35 | Comprehensive Task 0 audit tables and verification in report                | Verified       | Task 0 Audit Report in deliverables               |
+| A-008 | TASK 1: Legal documents: canonical Legal/PRIVACY.md and Legal/TERMS.md, Gradle asset copy task, LegalDocumentLoader, parser unit tests, README.md pre-install statement | 35 | Strict version header, build-time asset sync, loader and unit tests pass    | Verified       | Legal/*.md, LegalDocumentLoaderTest (100% pass)   |
+| A-009 | TASK 2: Privacy Policy and Terms of Service screens in Settings > About & Legal with Markdown rendering and back navigation; Privacy section with device count toggle | 35 | Full screens rendered, back navigation, privacy toggle integrated          | Verified       | SettingsScreen.kt, LegalDocumentScreen.kt         |
+| A-010 | TASK 3: AppDialogCoordinator (priority, preemption, deduplication, 250ms gap) and first-launch ConsentDialog gating all entry points and NetworkGate | 35 | Consent modal gates app cold start and share; NetworkGate blocks pre-consent traffic; tests pass | Verified | AppDialogCoordinatorTest, ConsentValidityTest, NetworkGateWiringTest |
+| A-011 | TASK 4: Optional anonymous device count (UUID v4 in fotara_device_prefs, 24h throttle, version change, unregister on toggle off, Supabase SQL, backup exclusion rules) | 35 | UUID v4 created, sends throttled, manifest backup rules exclude prefs, SQL drafted | Verified | DeviceRegistryTest, BackupRulesXmlTest, SQL script |
+| A-012 | TASK 5: Finalize Batch 1: unit tests passing 100%, assemble debug APK, Changelog_1.8.md Batch 1 entry, zero TODO/FIXME, release branch git commit | 35 | Test suite green, debug APK produced, documentation and changelog complete  | Verified       | 696 tests passed, app-debug.apk assembled, commit |

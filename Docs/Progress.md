@@ -2,7 +2,7 @@
 Last Updated: 2026-10-06
 
 ## Current Phase
-Phase 32 - QualityAndSmoothness [Completed]
+Phase 35 - LegalConsentAndDialogCoordinator [In Progress]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -41,6 +41,7 @@ Phase 32 - QualityAndSmoothness [Completed]
 | 32    | QualityAndSmoothness              | Completed   |
 | 33    | PdfSearchDeepLinkAndHighlight     | Completed   |
 | 34    | WorkspacePolishAndUiRefinements   | Completed   |
+| 35    | LegalConsentAndDialogCoordinator  | In Progress |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 32
@@ -64,11 +65,19 @@ Phase 32 - QualityAndSmoothness [Completed]
 - [x] Task 10: Database migration & release hygiene checks - Phase 31
 - [x] Task 11: Version bump to 1.7.0, build release APK & git finalize - Phase 31
 
+- [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
+- [x] Task 1: Legal documents: one source, two places (`Legal/*.md`, Gradle asset copy, loader, test, README statement) - Phase 35
+- [x] Task 2: Privacy Policy and Terms of Service screens in About & Legal, and Privacy section - Phase 35
+- [x] Task 3: Dialog coordinator and the consent gate (`AppDialogCoordinator`, `ConsentDialog`, `NetworkGate`, entry gating) - Phase 35
+- [x] Task 4: Optional anonymous device count (`key_device_count_enabled`, `DeviceRegistry`, Supabase SQL, backup exclusion) - Phase 35
+- [x] Task 5: Finalize Batch 1 (unit tests, debug APK, changelog, hygiene) - Phase 35
+
 ## In Progress
-None.
+None (Batch 1 complete; waiting for Batch 2).
 
 ## Pending
-None.
+- [ ] Batch 2: Workspace icons, PDF page menu, pins, save to gallery, search jump and highlight - Phase 35
+- [ ] Batch 3: PDF page drawing editor and 1.8.0 Beta release build - Phase 35
 
 ## Blocked
 None.

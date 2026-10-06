@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,9 +38,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arinara.fotara.coordinator.AppDialogCoordinatorHost
+import com.arinara.fotara.coordinator.AppDialogRequest
 import com.arinara.fotara.data.AppContainer
 import com.arinara.fotara.data.DefaultAppContainer
 import com.arinara.fotara.data.db.FotaraDbHelper
+import com.arinara.fotara.legal.LegalConsentManager
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FotaraTheme
 import com.arinara.fotara.theme.MidnightNavy
@@ -90,13 +94,18 @@ class MainActivity : ComponentActivity() {
                     val error = startupError
                     when {
                         container != null -> {
-                            MainNavigation(
-                                appContainer = container,
-                                deepLinkPhotoId = deepLinkPhotoId,
-                                deepLinkDirectView = deepLinkDirectView,
-                                openUpdateScreen = openUpdateScreenRequested,
-                                onUpdateScreenOpened = { openUpdateScreenRequested = false }
-                            )
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                MainNavigation(
+                                    appContainer = container,
+                                    deepLinkPhotoId = deepLinkPhotoId,
+                                    deepLinkDirectView = deepLinkDirectView,
+                                    openUpdateScreen = openUpdateScreenRequested,
+                                    onUpdateScreenOpened = { openUpdateScreenRequested = false }
+                                )
+                                AppDialogCoordinatorHost(
+                                    appContainer = container
+                                )
+                            }
                         }
                         error != null -> {
                             StartupRecoveryScreen(
@@ -123,6 +132,27 @@ class MainActivity : ComponentActivity() {
         } catch (e: Throwable) {
             Log.e("MainActivity", "Failed to initialize AppContainer: ${e.message}", e)
             startupError = e.message ?: e.toString()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        appContainer?.dialogCoordinator?.setActivityResumed(true)
+        checkAndEnqueueConsent()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        appContainer?.dialogCoordinator?.setActivityResumed(false)
+    }
+
+    private fun checkAndEnqueueConsent() {
+        val container = appContainer ?: return
+        val consentManager = LegalConsentManager(applicationContext)
+        if (!consentManager.isConsentValid()) {
+            container.dialogCoordinator.requestDialog(
+                AppDialogRequest.Consent()
+            )
         }
     }
 

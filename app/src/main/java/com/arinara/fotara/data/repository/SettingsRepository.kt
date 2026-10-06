@@ -42,10 +42,13 @@ import org.json.JSONObject
 
 interface SettingsRepository {
     companion object {
+        const val DEVICE_COUNT_DEFAULT_ENABLED = true
+        const val KEY_DEVICE_COUNT_ENABLED = "key_device_count_enabled"
         const val MAX_BANNER_GIF_BYTES = 8 * 1024 * 1024L // 8 MB
     }
     val settingsFlow: StateFlow<UserSettings>
     val profileFlow: StateFlow<UserProfile>
+    suspend fun updateDeviceCountEnabled(enabled: Boolean)
     suspend fun updateProfileName(name: String)
     suspend fun updateProfileEmail(email: String)
     suspend fun updateProfileBorder(borderId: String)
@@ -167,8 +170,14 @@ class DefaultSettingsRepository(
             storageLocation = StorageLocation.fromName(prefs.getString(KEY_STORAGE_LOCATION, StorageLocation.INTERNAL.name)),
             autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK_UPDATES, true),
             optInCrashReporting = prefs.getBoolean(KEY_OPT_IN_CRASH_REPORTING, false),
-            combineFileNamePreset = prefs.getString(KEY_COMBINE_NAME_PRESET, "{folder}_{date}") ?: "{folder}_{date}"
+            combineFileNamePreset = prefs.getString(KEY_COMBINE_NAME_PRESET, "{folder}_{date}") ?: "{folder}_{date}",
+            isDeviceCountEnabled = prefs.getBoolean(KEY_DEVICE_COUNT_ENABLED, DEVICE_COUNT_DEFAULT_ENABLED)
         )
+    }
+
+    override suspend fun updateDeviceCountEnabled(enabled: Boolean) = withContext(Dispatchers.IO) {
+        prefs.edit().putBoolean(KEY_DEVICE_COUNT_ENABLED, enabled).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(isDeviceCountEnabled = enabled)
     }
 
     override suspend fun updateSortOrder(sortOrder: SortOrder) = withContext(Dispatchers.IO) {
@@ -771,6 +780,8 @@ class DefaultSettingsRepository(
         const val KEY_PROFILE_BANNER_CROP = "key_profile_banner_crop"
         const val MAX_BANNER_GIF_BYTES = 8 * 1024 * 1024L // 8 MB
         private const val PREFS_NAME = "fotara_settings"
+        private const val KEY_DEVICE_COUNT_ENABLED = SettingsRepository.KEY_DEVICE_COUNT_ENABLED
+        private const val DEVICE_COUNT_DEFAULT_ENABLED = SettingsRepository.DEVICE_COUNT_DEFAULT_ENABLED
         private const val KEY_SORT_ORDER = "key_sort_order"
         private const val KEY_GRID_DENSITY = "key_grid_density"
         private const val KEY_THEME_MODE = "key_theme_mode"

@@ -163,7 +163,9 @@ class FeedbackManager(private val context: Context) {
     init {
         // Opportunistically flush pending offline queue on init
         scope.launch {
-            flushLocalQueue()
+            if (com.arinara.fotara.legal.NetworkGate.isConsentGranted(context)) {
+                flushLocalQueue()
+            }
         }
     }
 
@@ -247,6 +249,12 @@ class FeedbackManager(private val context: Context) {
         email: String?,
         includeDiagnostics: Boolean
     ): FeedbackSubmissionResult = withContext(Dispatchers.IO) {
+        if (!com.arinara.fotara.legal.NetworkGate.isConsentGranted(context)) {
+            return@withContext FeedbackSubmissionResult(
+                success = false,
+                message = "Consent required before submitting feedback."
+            )
+        }
         val (allowed, error) = canSubmit()
         if (!allowed) {
             return@withContext FeedbackSubmissionResult(
@@ -376,6 +384,9 @@ class FeedbackManager(private val context: Context) {
     }
 
     suspend fun flushLocalQueue(): Int = withContext(Dispatchers.IO) {
+        if (!com.arinara.fotara.legal.NetworkGate.isConsentGranted(context)) {
+            return@withContext 0
+        }
         var syncedCount = 0
         try {
             // Check daily quota and cooldown before flushing

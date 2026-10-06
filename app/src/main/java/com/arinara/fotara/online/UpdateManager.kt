@@ -151,6 +151,10 @@ class UpdateManager(private val context: Context) {
     private var isCheckingInProgress = false
 
     suspend fun checkForUpdates(forceRefresh: Boolean = false): ReleaseInfo? = withContext(Dispatchers.IO) {
+        if (!com.arinara.fotara.legal.NetworkGate.isConsentGranted(context)) {
+            _updateState.value = UpdateState.IDLE
+            return@withContext null
+        }
         if (isDownloading && downloadJob?.isActive == true) {
             return@withContext _latestRelease.value
         }

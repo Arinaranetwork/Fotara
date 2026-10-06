@@ -131,6 +131,7 @@ fun MainNavigation(
                     settingsViewModel = settingsViewModel,
                     notesViewModel = notesViewModel,
                     updateManager = appContainer.updateManager,
+                    dialogCoordinator = appContainer.dialogCoordinator,
                     onFolderClick = { folder ->
                         backStack.add(FolderDetailNavKey(folder.id))
                     },

@@ -178,9 +178,22 @@ fun SettingsScreen(
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     val context = LocalContext.current
     var activeSection by remember { mutableStateOf<SettingsSection?>(null) }
+    var activeLegalDocument by remember { mutableStateOf<com.arinara.fotara.legal.ParsedLegalDocument?>(null) }
 
-    BackHandler(enabled = activeSection != null) {
-        activeSection = null
+    BackHandler(enabled = activeLegalDocument != null || activeSection != null) {
+        if (activeLegalDocument != null) {
+            activeLegalDocument = null
+        } else {
+            activeSection = null
+        }
+    }
+
+    if (activeLegalDocument != null) {
+        com.arinara.fotara.ui.legal.LegalDocumentScreen(
+            document = activeLegalDocument!!,
+            onBackClick = { activeLegalDocument = null }
+        )
+        return
     }
 
     val (appVersionName, appVersionCode) = remember(context) {
@@ -896,6 +909,52 @@ fun SettingsScreen(
                             SettingsAboutCard(
                                 versionName = appVersionName,
                                 versionCode = appVersionCode
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = stringResource(R.string.privacy_policy_title),
+                                subtitle = stringResource(R.string.privacy_policy_subtitle),
+                                icon = Icons.Default.Info,
+                                onClick = {
+                                    try {
+                                        activeLegalDocument = com.arinara.fotara.legal.LegalDocumentLoader(context).loadPrivacyPolicy()
+                                    } catch (_: Exception) {}
+                                }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = stringResource(R.string.terms_of_service_title),
+                                subtitle = stringResource(R.string.terms_of_service_subtitle),
+                                icon = Icons.Default.Description,
+                                onClick = {
+                                    try {
+                                        activeLegalDocument = com.arinara.fotara.legal.LegalDocumentLoader(context).loadTermsOfService()
+                                    } catch (_: Exception) {}
+                                }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            Text(
+                                text = stringResource(R.string.settings_privacy_header),
+                                color = Color(0xFF60A5FA),
+                                fontSize = 13.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 8.dp, top = 16.dp, bottom = 4.dp)
+                            )
+                        }
+                        item {
+                            SettingsRowToggle(
+                                title = stringResource(R.string.device_count_switch_title),
+                                subtitle = stringResource(R.string.device_count_switch_desc),
+                                icon = Icons.Default.Storage,
+                                checked = uiState.userSettings.isDeviceCountEnabled,
+                                onCheckedChange = { viewModel.updateDeviceCountEnabled(it) }
                             )
                         }
                         item { SettingsListDivider() }
