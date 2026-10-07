@@ -24,5 +24,8 @@ data class SettingsUiState(
     val showImportDialog: Boolean = false,
     val showLicensesDialog: Boolean = false,
     val feedbackMessage: String? = null,
-    val registeredDeviceId: String? = null
+    val registeredDeviceId: String? = null,
+    val appResidueInfo: com.arinara.fotara.data.model.AppResidueInfo = com.arinara.fotara.data.model.AppResidueInfo(),
+    val isCleaningResidue: Boolean = false,
+    val residueCleanProgress: Float = 0f
 )

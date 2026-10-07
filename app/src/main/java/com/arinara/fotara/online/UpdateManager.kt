@@ -122,6 +122,22 @@ class UpdateManager(private val context: Context) {
 
     fun setSkippedVersion(version: String) {
         prefs.edit().putString(KEY_SKIPPED_VERSION, version).apply()
+        cancelDownload()
+        try {
+            val targetDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                ?: context.externalCacheDir
+                ?: context.cacheDir
+            val safeVersion = version.replace('/', '_')
+            val apkFile = File(targetDir, "Fotara_Update_$safeVersion.apk")
+            if (apkFile.exists()) apkFile.delete()
+            val partFile = File(targetDir, "Fotara_Update_$safeVersion.apk.part")
+            if (partFile.exists()) partFile.delete()
+            if (downloadedApkFile?.name == apkFile.name) {
+                downloadedApkFile = null
+            }
+        } catch (_: Exception) {}
+        _updateState.value = UpdateState.IDLE
+        _downloadProgress.value = 0
     }
 
     fun clearSkippedVersion() {
@@ -154,9 +170,6 @@ class UpdateManager(private val context: Context) {
         if (!com.arinara.fotara.legal.NetworkGate.isConsentGranted(context)) {
             _updateState.value = UpdateState.IDLE
             return@withContext null
-        }
-        if (isDownloading && downloadJob?.isActive == true) {
-            return@withContext _latestRelease.value
         }
         if (isCheckingInProgress) {
             return@withContext _latestRelease.value
@@ -241,10 +254,14 @@ class UpdateManager(private val context: Context) {
                 val previousRelease = _latestRelease.value
                 val isNewerThanApp = isNewerVersion(newestRelease.version, currentVersion, newestRelease.isPrerelease)
                 val isSkippedToNewer = previousRelease != null && isNewerVersion(newestRelease.version, previousRelease.version, newestRelease.isPrerelease, previousRelease.isPrerelease)
+                val isCurrentlyDownloading = isDownloading && downloadJob?.isActive == true
 
                 if (isNewerThanApp) {
-                    // If moving to a newer release than previously cached/displayed, clear old APK file
-                    if (isSkippedToNewer) {
+                    if (isCurrentlyDownloading && isSkippedToNewer) {
+                        // Older download in progress when a newer release arrives: abort older download immediately
+                        cancelDownload()
+                        _statusNotice.value = "Newer release discovered (${newestRelease.version})! Previous download cancelled."
+                    } else if (isSkippedToNewer) {
                         if (downloadedApkFile != null && downloadedApkFile!!.exists()) {
                             try { downloadedApkFile!!.delete() } catch (_: Exception) {}
                             downloadedApkFile = null
@@ -430,24 +447,36 @@ class UpdateManager(private val context: Context) {
     }
 
     fun cancelDownload() {
-        if (isDownloading) {
-            downloadJob?.cancel()
-            downloadJob = null
-            isDownloading = false
-            notificationManager.cancel(NOTIF_ID)
+        downloadJob?.cancel()
+        downloadJob = null
+        isDownloading = false
+        notificationManager.cancel(NOTIF_ID)
+        _downloadProgress.value = 0
+        if (_updateState.value == UpdateState.DOWNLOADING) {
             _updateState.value = UpdateState.UPDATE_AVAILABLE
-            _downloadProgress.value = 0
-            val rel = _latestRelease.value
+        }
+        val rel = _latestRelease.value
+        try {
+            val targetDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                ?: context.externalCacheDir
+                ?: context.cacheDir
             if (rel != null) {
-                val targetDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-                    ?: context.externalCacheDir
-                    ?: context.cacheDir
                 val partFile = File(targetDir, "Fotara_Update_${rel.version.replace('/', '_')}.apk.part")
                 if (partFile.exists()) {
-                    try { partFile.delete() } catch (_: Exception) {}
+                    partFile.delete()
                 }
             }
-        }
+            targetDir.listFiles()?.forEach { file ->
+                if (file.name.endsWith(".apk.part")) {
+                    file.delete()
+                }
+            }
+            context.cacheDir.listFiles()?.forEach { file ->
+                if (file.name.endsWith(".apk.part")) {
+                    file.delete()
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     private fun postProgressNotification(title: String, progress: Int) {
@@ -520,6 +549,14 @@ class UpdateManager(private val context: Context) {
     }
 
     fun triggerApkInstall(apkFile: File): Boolean {
+        // Halt any background downloading threads and settle progress immediately
+        downloadJob?.cancel()
+        downloadJob = null
+        isDownloading = false
+        notificationManager.cancel(NOTIF_ID)
+        _downloadProgress.value = 100
+        _updateState.value = UpdateState.DOWNLOADED
+
         if (!apkFile.exists() || apkFile.length() <= 0L) {
             android.util.Log.e("UpdateManager", "APK file does not exist or is empty")
             return false

@@ -53,6 +53,42 @@ class SettingsViewModel(
             }
         }
         refreshStorageBreakdown()
+        refreshAppResidue()
+    }
+
+    fun refreshAppResidue() {
+        viewModelScope.launch {
+            try {
+                val info = settingsRepository.getAppResidueInfo()
+                _uiState.update { it.copy(appResidueInfo = info) }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun cleanAppResidue() {
+        if (_uiState.value.isCleaningResidue) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCleaningResidue = true, residueCleanProgress = 0f) }
+            try {
+                val reclaimed = settingsRepository.cleanAppResidue { progress ->
+                    _uiState.update { it.copy(residueCleanProgress = progress) }
+                }
+                val refreshed = settingsRepository.getAppResidueInfo()
+                _uiState.update {
+                    it.copy(
+                        isCleaningResidue = false,
+                        residueCleanProgress = 1f,
+                        appResidueInfo = refreshed
+                    )
+                }
+                val formatted = com.arinara.fotara.data.model.AppResidueInfo.formatBytes(reclaimed)
+                _eventChannel.send("Cleaned $formatted of temporary app residue.")
+                refreshStorageBreakdown()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isCleaningResidue = false) }
+                _eventChannel.send("Failed to clean app residue: ${e.message}")
+            }
+        }
     }
 
     fun refreshStorageBreakdown() {

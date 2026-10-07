@@ -103,6 +103,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -246,6 +247,13 @@ fun SettingsScreen(
         viewModel.eventFlow.collect { msg ->
             viewModel.consumeFeedbackMessage()
             snackbarHostState.showSnackbar(msg)
+        }
+    }
+
+    LaunchedEffect(activeSection) {
+        if (activeSection == SettingsSection.STORAGE) {
+            viewModel.refreshStorageBreakdown()
+            viewModel.refreshAppResidue()
         }
     }
 
@@ -792,6 +800,16 @@ fun SettingsScreen(
                                 formattedThumbnails = uiState.storageBreakdown.formattedThumbnails,
                                 formattedDatabase = uiState.storageBreakdown.formattedDatabase,
                                 formattedTotal = uiState.storageBreakdown.formattedTotal
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsAppResidueCard(
+                                formattedSize = uiState.appResidueInfo.formattedSize,
+                                fileCount = uiState.appResidueInfo.fileCount,
+                                isCleaning = uiState.isCleaningResidue,
+                                progress = uiState.residueCleanProgress,
+                                onCleanClick = { viewModel.cleanAppResidue() }
                             )
                         }
                         item { SettingsListDivider() }
@@ -1594,6 +1612,166 @@ private fun StoragePill(label: String, size: String, modifier: Modifier = Modifi
             Text(text = label, color = HomeSubtitleGray, fontSize = 11.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Light)
             Spacer(modifier = Modifier.height(2.dp))
             Text(text = size, color = TagAmber, fontSize = 13.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/**
+ * Dedicated storage cleaner card for disposable application residue (leftover update APKs,
+ * partial download files, share staging files, temporary document exports, and cache files).
+ * Coursework notes, photos, and SQLite databases are strictly excluded.
+ */
+@Composable
+private fun SettingsAppResidueCard(
+    formattedSize: String,
+    fileCount: Int,
+    isCleaning: Boolean,
+    progress: Float,
+    onCleanClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+        border = BorderStroke(1.dp, HomeCardBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1E2638)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = Color(0xFF60A5FA),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "App Trash & Temporary Residue",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Leftover APKs, share staging, and cache residue (coursework notes and photos are preserved)",
+                        color = HomeSubtitleGray,
+                        fontSize = 12.5.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Light,
+                        lineHeight = 17.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Total disk used indicator row
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF161A22),
+                border = BorderStroke(1.dp, Color(0xFF283248)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Total Disk Used",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = if (fileCount > 0) "$formattedSize ($fileCount ${if (fileCount == 1) "file" else "files"})" else "$formattedSize (0 files)",
+                        color = if (fileCount > 0) Color(0xFFE2E8F0) else Color(0xFF64748B),
+                        fontSize = 13.5.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            if (isCleaning) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Cleaning temporary residue...",
+                            color = Color(0xFF60A5FA),
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans
+                        )
+                        Text(
+                            text = "${(progress * 100).toInt().coerceIn(0, 100)}%",
+                            color = Color(0xFF60A5FA),
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = Color(0xFF3B82F6),
+                        trackColor = Color(0xFF1E293B)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Button(
+                onClick = onCleanClick,
+                enabled = !isCleaning && fileCount > 0,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = HomeMainButtonBlue,
+                    disabledContainerColor = Color(0xFF202636)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = if (!isCleaning && fileCount > 0) Color.White else Color(0xFF64748B),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (fileCount > 0) "Clean Residue Now" else "No Residue to Clean",
+                    color = if (!isCleaning && fileCount > 0) Color.White else Color(0xFF64748B),
+                    fontSize = 14.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }

@@ -129,4 +129,32 @@ class UpdateManagerLogicTest {
             )
         )
     }
+
+    @Test
+    fun isNewerVersion_preemptsOlderDownloadingVersionWhenNewerArrives() {
+        // Active download is 1.8.2 Beta, but 1.8.4 Beta arrives on GitHub
+        val downloadingVersion = "Fotara_1.8.2_Beta"
+        val arrivedVersion = "Fotara_1.8.4_Beta"
+        assertTrue(UpdateVersionUtils.isNewerVersion(arrivedVersion, downloadingVersion, remoteIsPrerelease = true, currentIsPrerelease = true))
+
+        // Same version arriving should not preempt
+        assertFalse(UpdateVersionUtils.isNewerVersion(downloadingVersion, downloadingVersion, remoteIsPrerelease = true, currentIsPrerelease = true))
+
+        // Skipping 1.8.3 should not prevent 1.8.4 from showing
+        val rel184 = ReleaseInfo(
+            version = "1.8.4 Beta",
+            title = "Fotara 1.8.4",
+            releaseNotes = "Update lifecycle fix",
+            downloadUrl = "https://example.com/app.apk",
+            isPrerelease = true
+        )
+        assertTrue(
+            UpdateVersionUtils.shouldShowUpdatePopup(
+                release = rel184,
+                currentVersion = "1.8.3 Beta",
+                skippedVersion = "1.8.3 Beta",
+                isPopupDismissedForSession = false
+            )
+        )
+    }
 }

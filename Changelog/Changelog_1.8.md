@@ -1,6 +1,11 @@
 # Fotara 1.8 - Workspace Icons, PDF Tools & Page Drawing
 Released: 2026-10-07   Status: Released (Beta)
 
+## 1.8.4 Beta - 2026-10-07
+- **Update Download Lifecycle & Collision Resolution**: Fixed background download persistence when skipping updates or initiating installation. Active APK download jobs and `.apk.part` files are now reliably cancelled and deleted when the user chooses "Skip this version" or triggers APK installation. If a newer release is discovered while an older release is downloading, the obsolete download is cleanly aborted, partial files are removed, and the update prompt transitions to the newer version.
+- **App Trash & Disposable Residue Cleaner**: Added a dedicated storage maintenance tool in Settings under Storage ("App Trash & Temporary Residue") displaying total disk space consumed by app-generated disposable residue (leftover update packages, partial download files, share staging buffers, and temporary export scratch files). Features a live progress bar during cleaning and instantly reclaims disk space without touching user notes, photos, or databases.
+- **1.8 Release Banner**: Bundled official 16:9 1.8 release banner asset (`FotaraBanner_1.8_2026-10-07.jpg`) across distribution channels.
+
 ## 1.8.3 Beta - 2026-10-07
 - **Expandable Anonymous Device ID Panel**: Added an expandable inspection panel directly below the "Share anonymous device count" toggle in Settings under About & Legal / Privacy. When an anonymous device ID is generated, users can tap to expand the panel to inspect their random local UUID v4 identifier and copy it to the clipboard. The panel automatically disappears if anonymous device counting is turned off.
 

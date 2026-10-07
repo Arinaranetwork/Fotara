@@ -88,6 +88,8 @@ interface SettingsRepository {
     suspend fun updateOptInCrashReporting(enabled: Boolean)
     suspend fun updateCombineFileNamePreset(preset: String)
     suspend fun updateSavedImageLocation(locationKey: String, customName: String)
+    suspend fun getAppResidueInfo(): com.arinara.fotara.data.model.AppResidueInfo = com.arinara.fotara.data.model.AppResidueInfo()
+    suspend fun cleanAppResidue(onProgress: (Float) -> Unit = {}): Long = 0L
 }
 
 class DefaultSettingsRepository(
@@ -247,6 +249,18 @@ class DefaultSettingsRepository(
 
     override suspend fun getStorageBreakdown(): StorageBreakdown = withContext(Dispatchers.IO) {
         photoStorageManager.calculateStorageBreakdown()
+    }
+
+    private val appResidueManager: com.arinara.fotara.data.storage.AppResidueManager by lazy {
+        com.arinara.fotara.data.storage.AppResidueManager(context)
+    }
+
+    override suspend fun getAppResidueInfo(): com.arinara.fotara.data.model.AppResidueInfo = withContext(Dispatchers.IO) {
+        appResidueManager.calculateAppResidue()
+    }
+
+    override suspend fun cleanAppResidue(onProgress: (Float) -> Unit): Long = withContext(Dispatchers.IO) {
+        appResidueManager.cleanAppResidue(onProgress)
     }
 
     override suspend fun rebuildThumbnails(): Int = withContext(Dispatchers.IO) {

@@ -88,6 +88,22 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
+        version = "1.8.4",
+        channel = "Beta",
+        releaseDate = "2026-10-07",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.8.4_Beta",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Update Lifecycle Bugfixes: Background download jobs and partial files are now completely aborted and cleaned when skipping updates, during package install, or when a newer update is discovered.",
+            "App Trash & Disposable Residue Cleaner: Clean leftover APKs, download chunks, share staging files, and temporary export scratch directly from Settings > Storage with live progress and byte counting (coursework notes and photos are never deleted)."
+        ),
+        patchesAndFixes = listOf(
+            "Added automatic download cancellation and .part cleanup in UpdateManager.",
+            "Created AppResidueManager and SettingsAppResidueCard with real-time LinearProgressIndicator.",
+            "Bundled official 16:9 1.8 release banner asset across distribution."
+        )
+    ),
+    ReleaseChangelogEntry(
         version = "1.8.3",
         channel = "Beta",
         releaseDate = "2026-10-07",

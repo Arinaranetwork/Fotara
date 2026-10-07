@@ -536,7 +536,15 @@ fun UpdateScreen(
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         OutlinedButton(
-                            onClick = safeClose,
+                            onClick = {
+                                val currentRel = rel
+                                if (currentRel != null) {
+                                    updateManager.setSkippedVersion(currentRel.version)
+                                } else {
+                                    updateManager.cancelDownload()
+                                }
+                                safeClose()
+                            },
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1f)

@@ -212,4 +212,19 @@ class SettingsViewModelTest {
         assertTrue(receivedEvent!!.contains("Search index rebuilt successfully"))
         job.cancel()
     }
+
+    @Test
+    fun appResidue_loadsInitialStateAndCleansResidue() = runTest(testDispatcher) {
+        advanceUntilIdle()
+
+        assertEquals(5242880L, viewModel.uiState.value.appResidueInfo.totalSizeBytes)
+        assertEquals(3, viewModel.uiState.value.appResidueInfo.fileCount)
+
+        viewModel.cleanAppResidue()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isCleaningResidue)
+        assertEquals(0L, viewModel.uiState.value.appResidueInfo.totalSizeBytes)
+        assertEquals(0, viewModel.uiState.value.appResidueInfo.fileCount)
+    }
 }

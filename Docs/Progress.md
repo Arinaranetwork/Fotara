@@ -2,7 +2,7 @@
 Last Updated: 2026-10-07
 
 ## Current Phase
-Phase 40 - Release183BetaHotfix [Completed]
+Phase 41 - UpdateLifecycleAndAppResidueCleaner [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -47,6 +47,7 @@ Phase 40 - Release183BetaHotfix [Completed]
 | 38    | Release181BetaHotfix              | Completed   |
 | 39    | Release182BetaHotfix              | Completed   |
 | 40    | Release183BetaHotfix              | Completed   |
+| 41    | UpdateLifecycleAndAppResidueCleaner | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -77,6 +78,9 @@ Phase 40 - Release183BetaHotfix [Completed]
 - [x] Task 3: Version bump to 1.8.2 Beta, changelogs, unit tests, and GitHub release - Phase 39
 - [x] Task 1: Expandable device ID panel below anonymous share toggle (`DeviceRegistry.kt`, `SettingsScreen.kt`) - Phase 40
 - [x] Task 2: Version bump to 1.8.3 Beta, changelogs, unit tests, APK assembly, and GitHub release - Phase 40
+- [x] Task 1: Update download lifecycle cancellation on skip, install, and newer release arrival - Phase 41
+- [x] Task 2: App residue and trash cleaner in Settings with disk usage counter and live progress bar - Phase 41
+- [x] Task 3: 1.8 image banner integration, version bump to 1.8.4 Beta, test pass, packaging, and Stable tag Confirm Gate - Phase 41
 
 ## In Progress
 None.

@@ -940,6 +940,22 @@ class FakeSettingsRepository : SettingsRepository {
             savedImageCustomName = sanitized
         )
     }
+
+    var appResidueInfo = com.arinara.fotara.data.model.AppResidueInfo(
+        totalSizeBytes = 5242880L,
+        fileCount = 3
+    )
+    var cleanedBytesResult = 5242880L
+
+    override suspend fun getAppResidueInfo(): com.arinara.fotara.data.model.AppResidueInfo = appResidueInfo
+
+    override suspend fun cleanAppResidue(onProgress: (Float) -> Unit): Long {
+        onProgress(0.5f)
+        onProgress(1.0f)
+        val reclaimed = cleanedBytesResult
+        appResidueInfo = com.arinara.fotara.data.model.AppResidueInfo(0L, 0)
+        return reclaimed
+    }
 }
 
 class FakeDocumentRepository(
