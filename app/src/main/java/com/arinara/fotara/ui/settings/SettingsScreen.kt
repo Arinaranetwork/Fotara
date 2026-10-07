@@ -179,7 +179,7 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     val context = LocalContext.current
-    var activeSection by remember { mutableStateOf<SettingsSection?>(null) }
+    var activeSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
     var activeLegalDocument by remember { mutableStateOf<com.arinara.fotara.legal.ParsedLegalDocument?>(null) }
 
     BackHandler(enabled = activeLegalDocument != null || activeSection != null) {

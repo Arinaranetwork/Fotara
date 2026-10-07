@@ -1,0 +1,9 @@
+# Anchor - Fotara 1.8.1
+Status: Finished    Opened: 2026-10-07    Finished: 2026-10-07
+
+| ID    | Request                                                                                                         | Phase | Acceptance                                                                 | Status   | Evidence                                                                      |
+|-------|-----------------------------------------------------------------------------------------------------------------|-------|----------------------------------------------------------------------------|----------|-------------------------------------------------------------------------------|
+| H-001 | Photo picker navigation glitch: when done picking images it goes back to home screen then eventually to editor  | 38    | Persist selectedNavTab and activeSection in rememberSaveable; instant editor | Verified | HomeScreen.kt:217, SettingsScreen.kt:182; 716 unit tests pass                 |
+| H-002 | Banner resolution/scale defect: tiny unscaled banner thumbnail in top-left corner of 230dp container           | 38    | AnimatedBannerView onSizeChanged recomputation and ContentScale.Crop fallback | Verified | ProfileBanner.kt:AnimatedBannerView (onSizeChanged, fallback scale); 716 tests|
+| H-003 | Banner area blinking/flashing when clicking Profile settings and returning back                                 | 38    | ProfileBannerMemoryCache & Coil no-crossfade; zero blink on screen transition| Verified | ProfileBanner.kt (ProfileBannerMemoryCache, crossfade=false); 716 tests       |
+| H-004 | Release packaging & version bump to 1.8.1 Beta, changelogs, full test pass and GitHub release publication      | 38    | Version 1.8.1 Beta (code 30), 100% test pass, release APK built and uploaded | Verified | build.gradle.kts (30 / 1.8.1 Beta), Fotara_1.8.1_Beta.apk, GitHub Release     |

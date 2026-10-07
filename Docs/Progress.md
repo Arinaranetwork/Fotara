@@ -2,7 +2,7 @@
 Last Updated: 2026-10-07
 
 ## Current Phase
-Phase 37 - Release180AddendumBugfixes [Completed]
+Phase 38 - Release181BetaHotfix [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -44,6 +44,7 @@ Phase 37 - Release180AddendumBugfixes [Completed]
 | 35    | LegalConsentAndDialogCoordinator  | Completed   |
 | 36    | WorkspaceIconsPdfPageMenuAndDrawingEditor | Completed   |
 | 37    | Release180AddendumBugfixes        | Completed   |
+| 38    | Release181BetaHotfix              | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -65,6 +66,10 @@ Phase 37 - Release180AddendumBugfixes [Completed]
 - [x] Task 1: Profile screen header position and banner consistency across Settings sub-screens - Phase 37
 - [x] Task 2: Floating (+) button tab container hoisting and tab switch stability - Phase 37
 - [x] Task 3: Drawing stroke offset after zooming fix via DrawingViewTransform - Phase 37
+- [x] Task 1: Photo picker return navigation stability (rememberSaveable tab/section) - Phase 38
+- [x] Task 2: Banner resolution & scaling in AnimatedBannerView (onSizeChanged, ContentScale.Crop fallback) - Phase 38
+- [x] Task 3: Banner blink prevention across Profile navigation (ProfileBannerMemoryCache, no-crossfade Coil) - Phase 38
+- [x] Task 4: Version bump to 1.8.1 Beta, changelogs, unit tests, and GitHub release - Phase 38
 
 ## In Progress
 None.

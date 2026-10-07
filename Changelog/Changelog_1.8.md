@@ -1,6 +1,11 @@
 # Fotara 1.8 - Workspace Icons, PDF Tools & Page Drawing
 Released: 2026-10-07   Status: Released (Beta)
 
+## 1.8.1 Beta - 2026-10-07
+- **Instant Photo Picker Return**: Restored seamless navigation when returning from the system photo picker without flashing or redirecting to the Home screen by persisting tab selection (`selectedNavTab`) and settings section (`activeSection`) across Activity recreation via `rememberSaveable`.
+- **Animated Banner Resolution & Scaling**: Fixed tiny unscaled GIF banners rendered in the top-left corner by recomputing crop transforms upon View size allocation (`onSizeChanged`) and adding centered `ContentScale.Crop` fallback scaling in `AnimatedBannerView`.
+- **Zero-Blink Profile Banner Navigation**: Added in-memory caching for active profile banners (`ProfileBannerMemoryCache`) and eliminated crossfade delay when navigating into and back from Profile settings.
+
 ## 1.8.0 Beta - 2026-10-07
 By downloading, installing or using Fotara you acknowledge that you have read, understood and agree to the Privacy Policy and the Terms of Service. The same documents are shown inside the app on first launch and must be accepted to use it.
 

@@ -118,7 +118,7 @@ fun ProfileCropScreen(
 
     LaunchedEffect(imageUri) {
         withContext(Dispatchers.IO) {
-            val bmp = ProfileImageUtils.decodeSampledBitmap(context, imageUri, 2048)
+            val bmp = ProfileImageUtils.decodeSampledBitmap(context, imageUri, 1440)
             if (bmp != null) {
                 previewBitmap = bmp
             } else {

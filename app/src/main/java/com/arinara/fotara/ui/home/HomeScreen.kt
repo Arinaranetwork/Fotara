@@ -93,6 +93,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
 import androidx.compose.ui.Alignment
@@ -213,7 +214,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val keyguardManager = remember { context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager }
 
-    var selectedNavTab by remember { mutableStateOf(HomeNavTab.HOME) }
+    var selectedNavTab by rememberSaveable { mutableStateOf(HomeNavTab.HOME) }
 
     var activeContextFolder by remember { mutableStateOf<Folder?>(null) }
     var folderToRename by remember { mutableStateOf<Folder?>(null) }

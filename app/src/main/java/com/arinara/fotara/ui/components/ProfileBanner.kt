@@ -55,6 +55,42 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
+ * In-memory cache for profile banner drawables and first-frame bitmaps to guarantee
+ * zero-delay synchronous rendering and prevent black/blue flash when navigating across screens.
+ */
+internal object ProfileBannerMemoryCache {
+    private var cachedKey: String? = null
+    private var cachedDrawable: Drawable? = null
+    private var cachedFirstFrame: Bitmap? = null
+
+    @Synchronized
+    fun getDrawable(key: String): Drawable? {
+        return if (cachedKey == key) cachedDrawable else null
+    }
+
+    @Synchronized
+    fun getFirstFrame(key: String): Bitmap? {
+        return if (cachedKey == key) cachedFirstFrame else null
+    }
+
+    @Synchronized
+    fun put(key: String, drawable: Drawable?, firstFrame: Bitmap? = null) {
+        cachedKey = key
+        cachedDrawable = drawable
+        if (firstFrame != null) {
+            cachedFirstFrame = firstFrame
+        }
+    }
+
+    @Synchronized
+    fun clear() {
+        cachedKey = null
+        cachedDrawable = null
+        cachedFirstFrame = null
+    }
+}
+
+/**
  * Custom View for rendering AnimatedImageDrawable with precision crop transformation.
  * Invalidates automatically on native frame callbacks without Compose recomposition overhead.
  */
@@ -64,14 +100,37 @@ private class AnimatedBannerView(context: Context) : View(context) {
             field?.callback = null
             field = value
             field?.callback = this
+            recomputeCropParams()
+            invalidate()
+        }
+
+    var cropRect: NormalizedCropRect = NormalizedCropRect.FULL
+        set(value) {
+            field = value
+            recomputeCropParams()
             invalidate()
         }
 
     var cropParams: BannerCropTransform.TransformParams? = null
-        set(value) {
-            field = value
-            invalidate()
+        private set
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        recomputeCropParams()
+    }
+
+    fun recomputeCropParams() {
+        val d = animatedDrawable
+        if (width > 0 && height > 0 && d != null && d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+            cropParams = BannerCropTransform.computeTransformParams(
+                viewWidth = width.toFloat(),
+                viewHeight = height.toFloat(),
+                imageWidth = d.intrinsicWidth.toFloat(),
+                imageHeight = d.intrinsicHeight.toFloat(),
+                crop = cropRect
+            )
         }
+    }
 
     override fun verifyDrawable(who: Drawable): Boolean {
         return who == animatedDrawable || super.verifyDrawable(who)
@@ -80,14 +139,33 @@ private class AnimatedBannerView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val d = animatedDrawable ?: return
+        if (cropParams == null) {
+            recomputeCropParams()
+        }
         canvas.save()
         val params = cropParams
         if (params != null) {
             canvas.clipRect(0, 0, width, height)
             canvas.translate(params.tx, params.ty)
             canvas.scale(params.scale, params.scale)
+            d.setBounds(0, 0, d.intrinsicWidth, d.intrinsicHeight)
+        } else if (width > 0 && height > 0 && d.intrinsicWidth > 0 && d.intrinsicHeight > 0) {
+            // ContentScale.Crop fallback to fill container and center
+            val scale = maxOf(
+                width.toFloat() / d.intrinsicWidth.toFloat(),
+                height.toFloat() / d.intrinsicHeight.toFloat()
+            )
+            val scaledW = d.intrinsicWidth * scale
+            val scaledH = d.intrinsicHeight * scale
+            val tx = (width - scaledW) / 2f
+            val ty = (height - scaledH) / 2f
+            canvas.clipRect(0, 0, width, height)
+            canvas.translate(tx, ty)
+            canvas.scale(scale, scale)
+            d.setBounds(0, 0, d.intrinsicWidth, d.intrinsicHeight)
+        } else {
+            d.setBounds(0, 0, width, height)
         }
-        d.setBounds(0, 0, d.intrinsicWidth, d.intrinsicHeight)
         d.draw(canvas)
         canvas.restore()
     }
@@ -152,11 +230,15 @@ fun ProfileBanner(
                     apiLevel = Build.VERSION.SDK_INT
                 )
 
-                var animatedDrawable by remember(bannerFile.absolutePath, bannerUpdatedAt) {
-                    mutableStateOf<Drawable?>(null)
+                val cacheKey = "${bannerFile.absolutePath}_$bannerUpdatedAt"
+                var animatedDrawable by remember(cacheKey) {
+                    mutableStateOf(ProfileBannerMemoryCache.getDrawable(cacheKey))
                 }
 
                 LaunchedEffect(bannerFile.absolutePath, bannerUpdatedAt) {
+                    if (animatedDrawable != null && ProfileBannerMemoryCache.getDrawable(cacheKey) != null) {
+                        return@LaunchedEffect
+                    }
                     withContext(Dispatchers.IO) {
                         try {
                             val source = ImageDecoder.createSource(bannerFile)
@@ -172,6 +254,7 @@ fun ProfileBanner(
                                 decoded.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
                             }
                             withContext(Dispatchers.Main) {
+                                ProfileBannerMemoryCache.put(cacheKey, decoded)
                                 animatedDrawable = decoded
                             }
                         } catch (_: Throwable) {
@@ -208,20 +291,14 @@ fun ProfileBanner(
                     AndroidView(
                         factory = { ctx ->
                             AnimatedBannerView(ctx).apply {
+                                this.cropRect = cropRect
                                 this.animatedDrawable = currentDrawable
                             }
                         },
                         update = { view ->
+                            view.cropRect = cropRect
                             view.animatedDrawable = currentDrawable
-                            if (view.width > 0 && view.height > 0 && currentDrawable.intrinsicWidth > 0 && currentDrawable.intrinsicHeight > 0) {
-                                view.cropParams = BannerCropTransform.computeTransformParams(
-                                    viewWidth = view.width.toFloat(),
-                                    viewHeight = view.height.toFloat(),
-                                    imageWidth = currentDrawable.intrinsicWidth.toFloat(),
-                                    imageHeight = currentDrawable.intrinsicHeight.toFloat(),
-                                    crop = cropRect
-                                )
-                            }
+                            view.recomputeCropParams()
                         },
                         modifier = modifier.fillMaxSize()
                     )
@@ -230,13 +307,18 @@ fun ProfileBanner(
                 }
             } else {
                 // API 24-27: Show static first frame
-                var firstFrameBitmap by remember(bannerFile.absolutePath, bannerUpdatedAt) {
-                    mutableStateOf<Bitmap?>(null)
+                val cacheKey = "${bannerFile.absolutePath}_$bannerUpdatedAt"
+                var firstFrameBitmap by remember(cacheKey) {
+                    mutableStateOf(ProfileBannerMemoryCache.getFirstFrame(cacheKey))
                 }
                 LaunchedEffect(bannerFile.absolutePath, bannerUpdatedAt) {
+                    if (firstFrameBitmap != null && ProfileBannerMemoryCache.getFirstFrame(cacheKey) != null) {
+                        return@LaunchedEffect
+                    }
                     withContext(Dispatchers.IO) {
                         val bmp = ProfileImageUtils.decodeSampledBitmap(context, Uri.fromFile(bannerFile), 1080)
                         withContext(Dispatchers.Main) {
+                            ProfileBannerMemoryCache.put(cacheKey, null, bmp)
                             firstFrameBitmap = bmp
                         }
                     }
@@ -274,7 +356,7 @@ fun ProfileBanner(
                     .data(bannerFile)
                     .memoryCacheKey(bannerCacheKey)
                     .diskCacheKey(bannerCacheKey)
-                    .crossfade(true)
+                    .crossfade(false)
                     .build()
             }
             AsyncImage(

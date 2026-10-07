@@ -88,6 +88,23 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
+        version = "1.8.1",
+        channel = "Beta",
+        releaseDate = "2026-10-07",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.8.1_Beta",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Instant Photo Picker Return: Seamless navigation when returning from the system photo picker without flashing or redirecting to the Home screen.",
+            "Full Banner Resolution: Fixed unscaled rendering bug in animated GIF banners where intrinsic dimensions drew into the top-left corner instead of filling the banner container.",
+            "Zero-Blink Profile Banner Navigation: In-memory caching for active profile banners and eliminated crossfade delay when navigating into and back from Profile settings."
+        ),
+        patchesAndFixes = listOf(
+            "Persisted selectedNavTab in HomeScreen and activeSection in SettingsScreen across activity recreation via rememberSaveable.",
+            "Added onSizeChanged crop transform recalculation and ContentScale.Crop fallback in AnimatedBannerView.",
+            "Introduced ProfileBannerMemoryCache and disabled Coil crossfade for cached profile banners."
+        )
+    ),
+    ReleaseChangelogEntry(
         version = "1.8.0",
         channel = "Beta",
         releaseDate = "2026-10-07",
