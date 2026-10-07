@@ -16,6 +16,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,7 +65,11 @@ class DeviceRegistry(
     private var currentBackoffMs: Long = INITIAL_BACKOFF_MS
     private var scheduledJob: Job? = null
 
+    private val _deviceIdFlow = MutableStateFlow<String?>(null)
+    val deviceIdFlow: StateFlow<String?> = _deviceIdFlow.asStateFlow()
+
     init {
+        _deviceIdFlow.value = prefs.getString(KEY_DEVICE_ID, null)
         // Observe settings changes
         scope.launch {
             settingsRepository.settingsFlow.collect { settings ->
@@ -80,6 +87,9 @@ class DeviceRegistry(
         if (id == null) {
             id = UUID.randomUUID().toString()
             prefs.edit().putString(KEY_DEVICE_ID, id).apply()
+            _deviceIdFlow.value = id
+        } else if (_deviceIdFlow.value != id) {
+            _deviceIdFlow.value = id
         }
         return id
     }
@@ -216,6 +226,7 @@ class DeviceRegistry(
             .remove(KEY_LAST_SENT_VERSION)
             .putBoolean(KEY_PENDING_SEND, false)
             .apply()
+        _deviceIdFlow.value = null
 
         // Queue best-effort unregister if an ID previously existed
         if (existingId != null) {
@@ -294,5 +305,6 @@ class DeviceRegistry(
 
     fun clearLocalDataForTesting() {
         prefs.edit().clear().apply()
+        _deviceIdFlow.value = null
     }
 }

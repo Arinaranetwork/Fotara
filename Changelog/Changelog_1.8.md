@@ -1,6 +1,9 @@
 # Fotara 1.8 - Workspace Icons, PDF Tools & Page Drawing
 Released: 2026-10-07   Status: Released (Beta)
 
+## 1.8.3 Beta - 2026-10-07
+- **Expandable Anonymous Device ID Panel**: Added an expandable inspection panel directly below the "Share anonymous device count" toggle in Settings under About & Legal / Privacy. When an anonymous device ID is generated, users can tap to expand the panel to inspect their random local UUID v4 identifier and copy it to the clipboard. The panel automatically disappears if anonymous device counting is turned off.
+
 ## 1.8.2 Beta - 2026-10-07
 - **Legal Document Reader Bottom Clearance**: Fixed text cut-off in Terms of Service and Privacy Policy readers where the last paragraph was obscured behind the floating navigation bar and 3-button navigation insets by dynamically computing clearance via `LocalBottomOverlayPadding`.
 - **Workspace Tab Reorder Drop Stability**: Fixed tab reorder animation replay bug where releasing a dragged tab caused it to snap back and replay the swap animation; implemented optimistic local state tracking and immediate translation reset on drop commit.

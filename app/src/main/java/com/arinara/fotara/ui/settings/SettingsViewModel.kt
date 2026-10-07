@@ -24,7 +24,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val deviceRegistry: com.arinara.fotara.online.DeviceRegistry? = null
 ) : ViewModel() {
 
     private val _eventChannel = Channel<String>(Channel.BUFFERED)
@@ -42,6 +43,13 @@ class SettingsViewModel(
         viewModelScope.launch {
             settingsRepository.profileFlow.collect { profile ->
                 _uiState.update { it.copy(userProfile = profile) }
+            }
+        }
+        deviceRegistry?.let { registry ->
+            viewModelScope.launch {
+                registry.deviceIdFlow.collect { id ->
+                    _uiState.update { it.copy(registeredDeviceId = id) }
+                }
             }
         }
         refreshStorageBreakdown()
@@ -338,11 +346,14 @@ class SettingsViewModel(
     }
 
     companion object {
-        fun provideFactory(settingsRepository: SettingsRepository): ViewModelProvider.Factory =
+        fun provideFactory(
+            settingsRepository: SettingsRepository,
+            deviceRegistry: com.arinara.fotara.online.DeviceRegistry? = null
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return SettingsViewModel(settingsRepository) as T
+                    return SettingsViewModel(settingsRepository, deviceRegistry) as T
                 }
             }
     }

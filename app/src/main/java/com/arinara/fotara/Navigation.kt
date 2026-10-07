@@ -113,7 +113,8 @@ fun MainNavigation(
                 )
                 val settingsViewModel: SettingsViewModel = viewModel(
                     factory = SettingsViewModel.provideFactory(
-                        settingsRepository = appContainer.settingsRepository
+                        settingsRepository = appContainer.settingsRepository,
+                        deviceRegistry = appContainer.deviceRegistry
                     )
                 )
                 val notesViewModel: com.arinara.fotara.ui.notes.NotesViewModel = viewModel(
@@ -294,7 +295,8 @@ fun MainNavigation(
             entry<SettingsNavKey> {
                 val settingsViewModel: SettingsViewModel = viewModel(
                     factory = SettingsViewModel.provideFactory(
-                        settingsRepository = appContainer.settingsRepository
+                        settingsRepository = appContainer.settingsRepository,
+                        deviceRegistry = appContainer.deviceRegistry
                     )
                 )
                 SettingsScreen(

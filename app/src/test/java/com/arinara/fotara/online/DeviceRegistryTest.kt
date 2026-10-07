@@ -181,4 +181,24 @@ class DeviceRegistryTest {
         assertNotNull(newId)
         assertNotEquals("New ID must be different from previous ID", initialId, newId)
     }
+
+    @Test
+    fun testDeviceIdFlowEmitsOnGenerationAndRevocation() = kotlinx.coroutines.test.runTest {
+        // Initial state before generation is null
+        assertNull("Initial deviceIdFlow value must be null", deviceRegistry.deviceIdFlow.value)
+
+        // Generating ID updates flow immediately
+        val id = deviceRegistry.getOrCreateDeviceId()
+        assertEquals("deviceIdFlow must reflect generated ID", id, deviceRegistry.deviceIdFlow.value)
+
+        // Disabling device count clears flow to null
+        deviceRegistry.onDeviceCountDisabled()
+        assertNull("deviceIdFlow must become null when disabled", deviceRegistry.deviceIdFlow.value)
+
+        // Clearing for testing clears flow to null
+        val id2 = deviceRegistry.getOrCreateDeviceId()
+        assertEquals(id2, deviceRegistry.deviceIdFlow.value)
+        deviceRegistry.clearLocalDataForTesting()
+        assertNull("deviceIdFlow must become null after clearLocalDataForTesting", deviceRegistry.deviceIdFlow.value)
+    }
 }

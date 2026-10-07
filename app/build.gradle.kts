@@ -11,8 +11,8 @@ android {
         applicationId = "com.arinara.fotara"
         minSdk = 24
         targetSdk = 36
-        versionCode = 31
-        versionName = "1.8.2 Beta"
+        versionCode = 32
+        versionName = "1.8.3 Beta"
         resourceConfigurations += listOf("en")
     }
 

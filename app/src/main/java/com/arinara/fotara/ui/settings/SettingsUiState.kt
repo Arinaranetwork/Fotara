@@ -23,5 +23,6 @@ data class SettingsUiState(
     val showExportDialog: Boolean = false,
     val showImportDialog: Boolean = false,
     val showLicensesDialog: Boolean = false,
-    val feedbackMessage: String? = null
+    val feedbackMessage: String? = null,
+    val registeredDeviceId: String? = null
 )

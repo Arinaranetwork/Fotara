@@ -2,7 +2,7 @@
 Last Updated: 2026-10-07
 
 ## Current Phase
-Phase 39 - Release182BetaHotfix [Completed]
+Phase 40 - Release183BetaHotfix [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -46,6 +46,7 @@ Phase 39 - Release182BetaHotfix [Completed]
 | 37    | Release180AddendumBugfixes        | Completed   |
 | 38    | Release181BetaHotfix              | Completed   |
 | 39    | Release182BetaHotfix              | Completed   |
+| 40    | Release183BetaHotfix              | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -74,6 +75,8 @@ Phase 39 - Release182BetaHotfix [Completed]
 - [x] Task 1: Legal document reader bottom clearance (`LegalDocumentScreen.kt`, `LocalBottomOverlayPadding`) - Phase 39
 - [x] Task 2: Stable workspace tab reorder drop commit with zero animation replay (`WorkspaceTabBar.kt`) - Phase 39
 - [x] Task 3: Version bump to 1.8.2 Beta, changelogs, unit tests, and GitHub release - Phase 39
+- [x] Task 1: Expandable device ID panel below anonymous share toggle (`DeviceRegistry.kt`, `SettingsScreen.kt`) - Phase 40
+- [x] Task 2: Version bump to 1.8.3 Beta, changelogs, unit tests, APK assembly, and GitHub release - Phase 40
 
 ## In Progress
 None.

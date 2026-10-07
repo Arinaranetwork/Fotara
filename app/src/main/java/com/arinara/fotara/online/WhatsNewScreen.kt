@@ -88,6 +88,19 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
+        version = "1.8.3",
+        channel = "Beta",
+        releaseDate = "2026-10-07",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.8.3_Beta",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Expandable Anonymous Device ID Panel: In Settings under About & Legal / Privacy, view your generated anonymous device ID in an expandable panel with a one-tap copy button."
+        ),
+        patchesAndFixes = listOf(
+            "Added reactive deviceIdFlow in DeviceRegistry and expandable inspection panel in SettingsScreen."
+        )
+    ),
+    ReleaseChangelogEntry(
         version = "1.8.2",
         channel = "Beta",
         releaseDate = "2026-10-07",
