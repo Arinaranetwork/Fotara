@@ -43,6 +43,7 @@ import com.arinara.fotara.data.repository.WorkspaceError
 import com.arinara.fotara.data.repository.WorkspaceContentStats
 import com.arinara.fotara.data.repository.WorkspaceValidator
 import com.arinara.fotara.data.repository.PhotoDrawingRepository
+import kotlinx.coroutines.flow.map
 import android.net.Uri
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -931,6 +932,14 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun updateCombineFileNamePreset(preset: String) {
         _settingsFlow.value = _settingsFlow.value.copy(combineFileNamePreset = preset)
     }
+
+    override suspend fun updateSavedImageLocation(locationKey: String, customName: String) {
+        val sanitized = customName.trim().take(30)
+        _settingsFlow.value = _settingsFlow.value.copy(
+            savedImageLocation = locationKey,
+            savedImageCustomName = sanitized
+        )
+    }
 }
 
 class FakeDocumentRepository(
@@ -1359,7 +1368,7 @@ class FakeWorkspaceRepository(
         return workspacesFlow.value.first { it.kind == WorkspaceKind.ARCHIVE }
     }
 
-    override suspend fun createWorkspace(name: String): WorkspaceResult<Workspace> {
+    override suspend fun createWorkspace(name: String, iconKey: String?): WorkspaceResult<Workspace> {
         val current = workspacesFlow.value
         val customCount = current.count { it.kind == WorkspaceKind.CUSTOM }
         if (customCount >= WorkspaceValidator.MAX_CUSTOM_WORKSPACES) {
@@ -1369,19 +1378,24 @@ class FakeWorkspaceRepository(
         val err = WorkspaceValidator.validateName(name, current)
         if (err != null) return WorkspaceResult.Error(err)
 
+        val iconErr = WorkspaceValidator.validateIconKey(iconKey)
+        if (iconErr != null) return WorkspaceResult.Error(iconErr)
+
         val normalized = WorkspaceValidator.normalizeName(name)
+        val sanitizedIcon = iconKey?.trim()?.lowercase()
         val newWs = Workspace(
             id = nextId.incrementAndGet(),
             uuid = java.util.UUID.randomUUID().toString(),
             kind = WorkspaceKind.CUSTOM,
             name = normalized,
-            position = current.size
+            position = current.size,
+            iconKey = sanitizedIcon
         )
         workspacesFlow.value = current + newWs
         return WorkspaceResult.Success(newWs)
     }
 
-    override suspend fun renameWorkspace(workspaceId: Long, newName: String): WorkspaceResult<Unit> {
+    override suspend fun updateWorkspace(workspaceId: Long, newName: String, iconKey: String?): WorkspaceResult<Unit> {
         val current = workspacesFlow.value
         val target = current.firstOrNull { it.id == workspaceId }
             ?: return WorkspaceResult.Error(WorkspaceError.NotFound)
@@ -1393,11 +1407,22 @@ class FakeWorkspaceRepository(
         val err = WorkspaceValidator.validateName(newName, current, editingWorkspaceId = workspaceId)
         if (err != null) return WorkspaceResult.Error(err)
 
+        val iconErr = WorkspaceValidator.validateIconKey(iconKey)
+        if (iconErr != null) return WorkspaceResult.Error(iconErr)
+
         val normalized = WorkspaceValidator.normalizeName(newName)
+        val sanitizedIcon = iconKey?.trim()?.lowercase()
         workspacesFlow.value = current.map {
-            if (it.id == workspaceId) it.copy(name = normalized) else it
+            if (it.id == workspaceId) it.copy(name = normalized, iconKey = sanitizedIcon) else it
         }
         return WorkspaceResult.Success(Unit)
+    }
+
+    override suspend fun renameWorkspace(workspaceId: Long, newName: String): WorkspaceResult<Unit> {
+        val current = workspacesFlow.value
+        val target = current.firstOrNull { it.id == workspaceId }
+        val currentIcon = target?.iconKey
+        return updateWorkspace(workspaceId, newName, currentIcon)
     }
 
     override suspend fun reorderWorkspaces(workspaceIds: List<Long>): WorkspaceResult<Unit> {
@@ -1568,6 +1593,106 @@ class FakePhotoDrawingRepository : PhotoDrawingRepository {
 
     override suspend fun cleanOrphanDrawings() {
         updates.emit(-1L)
+    }
+}
+
+class FakePdfPagePinRepository : com.arinara.fotara.data.repository.PdfPagePinRepository {
+    private val pinsMap = mutableMapOf<Long, MutableList<Int>>()
+    private val flows = mutableMapOf<Long, kotlinx.coroutines.flow.MutableStateFlow<List<Int>>>()
+
+    private fun getFlow(docId: Long): kotlinx.coroutines.flow.MutableStateFlow<List<Int>> {
+        return flows.getOrPut(docId) {
+            kotlinx.coroutines.flow.MutableStateFlow(pinsMap[docId]?.toList() ?: emptyList())
+        }
+    }
+
+    override fun observePinnedPages(documentId: Long): kotlinx.coroutines.flow.Flow<List<Int>> {
+        return getFlow(documentId)
+    }
+
+    override suspend fun getPinnedPagesSync(documentId: Long): List<Int> {
+        return pinsMap[documentId]?.toList() ?: emptyList()
+    }
+
+    override suspend fun pinPage(documentId: Long, pageIndex: Int): Boolean {
+        val list = pinsMap.getOrPut(documentId) { mutableListOf() }
+        if (list.contains(pageIndex)) return true
+        if (list.size >= com.arinara.fotara.data.repository.PdfPagePinRepository.MAX_PINS_PER_DOCUMENT) {
+            return false
+        }
+        list.add(pageIndex)
+        list.sort()
+        getFlow(documentId).value = list.toList()
+        return true
+    }
+
+    override suspend fun unpinPage(documentId: Long, pageIndex: Int) {
+        val list = pinsMap[documentId] ?: return
+        list.remove(pageIndex)
+        getFlow(documentId).value = list.toList()
+    }
+
+    override suspend fun deletePinsForDocument(documentId: Long) {
+        pinsMap.remove(documentId)
+        getFlow(documentId).value = emptyList()
+    }
+}
+
+class FakePdfPageDrawingRepository : com.arinara.fotara.data.repository.PdfPageDrawingRepository {
+    private val drawingsMap = mutableMapOf<Pair<Long, Int>, com.arinara.fotara.data.model.PdfPageDrawing>()
+    private val docFlows = mutableMapOf<Long, kotlinx.coroutines.flow.MutableStateFlow<Map<Int, com.arinara.fotara.data.model.PdfPageDrawing>>>()
+
+    private fun getFlow(docId: Long): kotlinx.coroutines.flow.MutableStateFlow<Map<Int, com.arinara.fotara.data.model.PdfPageDrawing>> {
+        return docFlows.getOrPut(docId) {
+            val map = drawingsMap.filterKeys { it.first == docId }.mapKeys { it.key.second }
+            kotlinx.coroutines.flow.MutableStateFlow(map)
+        }
+    }
+
+    private fun updateFlow(docId: Long) {
+        val map = drawingsMap.filterKeys { it.first == docId }.mapKeys { it.key.second }
+        getFlow(docId).value = map
+    }
+
+    override fun observeDocumentDrawings(documentId: Long): kotlinx.coroutines.flow.Flow<Map<Int, com.arinara.fotara.data.model.PdfPageDrawing>> {
+        return getFlow(documentId)
+    }
+
+    override fun observeVisibleDrawingPages(documentId: Long): kotlinx.coroutines.flow.Flow<Set<Int>> {
+        return getFlow(documentId).map { map ->
+            map.filterValues { it.isVisible && it.hasStrokes }.keys
+        }
+    }
+
+    override fun observeDrawing(documentId: Long, pageIndex: Int): kotlinx.coroutines.flow.Flow<com.arinara.fotara.data.model.PdfPageDrawing?> {
+        return getFlow(documentId).map { it[pageIndex] }
+    }
+
+    override suspend fun getDrawing(documentId: Long, pageIndex: Int): com.arinara.fotara.data.model.PdfPageDrawing? {
+        return drawingsMap[Pair(documentId, pageIndex)]
+    }
+
+    override suspend fun saveDrawing(drawing: com.arinara.fotara.data.model.PdfPageDrawing) {
+        drawingsMap[Pair(drawing.documentId, drawing.pageIndex)] = drawing
+        updateFlow(drawing.documentId)
+    }
+
+    override suspend fun setVisible(documentId: Long, pageIndex: Int, isVisible: Boolean) {
+        val key = Pair(documentId, pageIndex)
+        val existing = drawingsMap[key] ?: return
+        drawingsMap[key] = existing.copy(isVisible = isVisible, updatedAt = System.currentTimeMillis())
+        updateFlow(documentId)
+    }
+
+    override suspend fun clearDrawing(documentId: Long, pageIndex: Int) {
+        drawingsMap.remove(Pair(documentId, pageIndex))
+        updateFlow(documentId)
+    }
+
+    override suspend fun deleteDrawingsForDocument(documentId: Long) {
+        val keysToRemove = drawingsMap.keys.filter { it.first == documentId }
+        keysToRemove.forEach { drawingsMap.remove(it) }
+        updateFlow(documentId)
     }
 }
 

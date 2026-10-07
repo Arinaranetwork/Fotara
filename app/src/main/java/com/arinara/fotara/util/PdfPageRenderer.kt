@@ -176,6 +176,55 @@ class PdfPageRenderer(val file: File) : Closeable {
         }
     }
 
+    suspend fun getPageSizePoints(pageIndex: Int): Pair<Float, Float> = withContext(Dispatchers.IO) {
+        if (pageIndex < 0 || pageIndex >= pageCount) return@withContext Pair(595f, 842f)
+        renderMutex.withLock {
+            val r = renderer ?: return@withContext Pair(595f, 842f)
+            var page: PdfRenderer.Page? = null
+            try {
+                page = r.openPage(pageIndex)
+                val w = page.width.toFloat()
+                val h = page.height.toFloat()
+                if (aspectRatioCache[pageIndex] <= 0f && h > 0f) {
+                    aspectRatioCache[pageIndex] = w / h
+                }
+                Pair(w, h)
+            } catch (_: Exception) {
+                Pair(595f, 842f)
+            } finally {
+                try { page?.close() } catch (_: Exception) {}
+            }
+        }
+    }
+
+    suspend fun renderPageForExport(
+        pageIndex: Int,
+        targetWidth: Int,
+        targetHeight: Int
+    ): Bitmap? = withContext(Dispatchers.IO) {
+        if (pageIndex < 0 || pageIndex >= pageCount) return@withContext null
+        currentCoroutineContext().ensureActive()
+        renderMutex.withLock {
+            currentCoroutineContext().ensureActive()
+            val r = renderer ?: return@withContext null
+            var page: PdfRenderer.Page? = null
+            try {
+                page = r.openPage(pageIndex)
+                val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+                bitmap.eraseColor(Color.WHITE)
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                bitmap
+            } catch (e: Exception) {
+                Log.e("PdfPageRenderer", "Error rendering export page $pageIndex: ${e.message}")
+                null
+            } finally {
+                try {
+                    page?.close()
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     suspend fun prefetchPage(pageIndex: Int, destWidth: Int, destHeight: Int) {
         if (pageIndex < 0 || pageIndex >= pageCount) return
         withContext(Dispatchers.IO) {

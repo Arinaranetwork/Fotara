@@ -59,44 +59,12 @@ fun LegalDocumentScreen(
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
         // Top app bar with back navigation and title
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onBackClick,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 4.dp, end = 16.dp)
-            ) {
-                Text(
-                    text = document.title,
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Version ${document.version}, effective ${document.effectiveDate}",
-                    color = HomeSubtitleGray,
-                    fontSize = 12.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
+        com.arinara.fotara.ui.components.SettingsSubScreenHeader(
+            title = document.title,
+            subtitle = "Version ${document.version}, effective ${document.effectiveDate}",
+            onBackClick = onBackClick,
+            modifier = Modifier.padding(horizontal = com.arinara.fotara.ui.components.SettingsSubScreenHeaderDefaults.HorizontalPadding)
+        )
 
         // Scrollable content area
         Box(

@@ -141,17 +141,31 @@ fun MainNavigation(
                     onNavigateToGroup = { folderId, subfolderId, groupId ->
                         backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetGroupId = groupId))
                     },
-                    onNavigateToDocument = { folderId, subfolderId, docId, targetPageIndex ->
+                    onNavigateToDocument = { folderId, subfolderId, docId, targetPageIndex, searchQuery ->
                         backStack.add(FolderDetailNavKey(
                             folderId = folderId,
                             initialSubfolderId = subfolderId,
                             targetDocumentId = docId,
                             openViewerDirectly = true,
-                            targetPageIndex = targetPageIndex
+                            targetPageIndex = targetPageIndex,
+                            searchQuery = searchQuery
                         ))
                     },
-                    onNavigateToTextNote = { folderId, subfolderId, noteId ->
-                        backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetTextNoteId = noteId))
+                    onNavigateToTextNote = { folderId, subfolderId, noteId, highlightQuery ->
+                        if (noteId != -1L) {
+                            backStack.add(TextNoteEditorNavKey(
+                                noteId = noteId,
+                                folderId = folderId,
+                                subfolderId = subfolderId,
+                                highlightQuery = highlightQuery
+                            ))
+                        } else {
+                            backStack.add(TextNoteEditorNavKey(
+                                noteId = null,
+                                folderId = folderId,
+                                subfolderId = subfolderId
+                            ))
+                        }
                     },
                     onNavigateToCanvasNote = { folderId, subfolderId, canvasId ->
                         backStack.add(FolderDetailNavKey(folderId = folderId, initialSubfolderId = subfolderId, targetCanvasId = canvasId))
@@ -211,6 +225,13 @@ fun MainNavigation(
                     onBackClick = { safePopBack() },
                     openViewerDirectly = key.openViewerDirectly,
                     targetPageIndex = key.targetPageIndex,
+                    searchQuery = key.searchQuery,
+                    pdfPagePinRepository = appContainer.pdfPagePinRepository,
+                    pdfPageDrawingRepository = appContainer.pdfPageDrawingRepository,
+                    settingsRepository = appContainer.settingsRepository,
+                    onNavigateToEditor = { docId, pageIndex ->
+                        backStack.add(PdfPageEditorNavKey(documentId = docId, pageIndex = pageIndex))
+                    },
                     onOpenGroup = { fId, gId, targetPhotoId ->
                         backStack.add(GroupDetailNavKey(folderId = fId, groupId = gId, targetPhotoId = targetPhotoId))
                     },
@@ -312,7 +333,8 @@ fun MainNavigation(
                     subfolderId = key.subfolderId,
                     textNoteRepository = appContainer.textNoteRepository,
                     onBack = { safePopBack() },
-                    onShare = { note -> textNoteToShare = note }
+                    onShare = { note -> textNoteToShare = note },
+                    highlightQuery = key.highlightQuery
                 )
                 textNoteToShare?.let { note ->
                     val context = androidx.compose.ui.platform.LocalContext.current
@@ -372,6 +394,17 @@ fun MainNavigation(
                 com.arinara.fotara.online.WhatsNewScreen(
                     updateManager = appContainer.updateManager,
                     onBack = { safePopBack() }
+                )
+            }
+
+            entry<PdfPageEditorNavKey> { key ->
+                com.arinara.fotara.ui.document.PdfPageEditorScreen(
+                    documentId = key.documentId,
+                    pageIndex = key.pageIndex,
+                    documentRepository = appContainer.documentRepository,
+                    pdfPageDrawingRepository = appContainer.pdfPageDrawingRepository,
+                    onBack = { safePopBack() },
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }

@@ -88,6 +88,40 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
+        version = "1.8.0",
+        channel = "Beta",
+        releaseDate = "2026-10-07",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/v1.8.0-beta",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Workspace Icons: Personalize custom workspaces with 24 bundled vector icons (Book, Science, Code, Sports, Art, and more) in a 6-column picker grid, displayed consistently across Home/Notes tabs, search scope chips, and destination pickers.",
+            "PDF Page Menu & Pins: Contextual 3-dot options menu on every PDF page card. Pin up to 3 important pages per document with jump chips right beneath the top bar without modifying original PDF files.",
+            "Save PDF Page to Gallery: Render and save individual PDF pages as high-resolution 300 DPI JPEGs with visible drawing annotations flattened.",
+            "Saved Image Location Setting: Configure preferred export directory in Settings (Pictures/Fotara, DCIM/Fotara, or custom subfolder under Pictures).",
+            "Search Jump & Transient Highlights: PDF search results open directly at the matching page with OCR word bounding boxes highlighted. Text note matches open with smooth auto-scroll and 4-second fading highlight without modifying note content.",
+            "PDF Page Drawing Editor: Annotate PDF pages with a dedicated vector drawing editor featuring Pen, Highlighter (Multiply blend), Eraser, 8 curated colors, 1x–6x GPU pinch-zoom & pan, 100-step undo, and 600ms autosave.",
+            "Privacy Policy & Terms of Service: Dedicated in-app legal consent screens with transparent offline-first declarations and first-launch consent gating.",
+            "Optional Device Count: Anonymous, opt-in device telemetry with clear local toggle and privacy safeguards.",
+            """
+| Feature | Details | Benefit |
+|---|---|---|
+| Workspace Icons | 24 vector icons & 6-column picker | Visual workspace organization |
+| PDF Page Menu | Pin up to 3 pages & jump chips | Fast navigation to key pages |
+| Save to Gallery | 300 DPI render & drawing flattening | Easy high-res page export |
+| Image Location | Configurable export destination | Flexible file organization |
+| Search Jump | Direct page open & OCR highlights | Instant study retrieval |
+| PDF Drawing | Dedicated editor, 1x-6x zoom, vector strokes | Seamless lecture note markup |
+| Privacy & Legal | Consent gating & opt-in telemetry | Complete privacy transparency |
+            """.trimIndent()
+        ),
+        patchesAndFixes = listOf(
+            "Eliminated PDF search result jump failures by passing targetPageIndex directly to viewer.",
+            "Preserved PDF viewer overlay state across navigation to editor and device rotation.",
+            "Fixed text note search matching to verify query terms against stripped and raw markdown body text.",
+            "Added automatic SQLite orphan cleanup for pinned pages and vector drawings upon document deletion."
+        )
+    ),
+    ReleaseChangelogEntry(
         version = "1.7.1",
         channel = "Stable",
         releaseDate = "2026-10-06",

@@ -64,6 +64,7 @@ import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -74,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import com.arinara.fotara.R
 import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.model.getDisplay
 import com.arinara.fotara.data.model.getDisplayName
 import com.arinara.fotara.data.repository.WorkspaceValidator
 import androidx.compose.material.icons.filled.Delete
@@ -367,31 +369,19 @@ fun WorkspaceTabBar(
                             .padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center
                     ) {
+                        val wsDisplay = workspace.getDisplay()
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            when (workspace.kind) {
-                                WorkspaceKind.HOME -> {
-                                    Icon(
-                                        imageVector = Icons.Filled.GridView,
-                                        contentDescription = null,
-                                        tint = if (isSelected) Color.White else Color(0xFF6B7280),
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                }
-                                WorkspaceKind.ARCHIVE -> {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Archive,
-                                        contentDescription = null,
-                                        tint = if (isSelected) Color.White else Color(0xFF6B7280),
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                }
-                                WorkspaceKind.CUSTOM -> {}
-                            }
+                            Icon(
+                                painter = painterResource(wsDisplay.iconResId),
+                                contentDescription = null,
+                                tint = if (isSelected) Color.White else Color(0xFF6B7280),
+                                modifier = Modifier.size(16.dp)
+                            )
                             Text(
-                                text = workspace.getDisplayName(),
+                                text = wsDisplay.name,
                                 color = if (isSelected) Color.White else Color(0xFF6B7280),
                                 fontSize = 14.5.sp,
                                 fontWeight = FontWeight.Medium,
@@ -416,7 +406,7 @@ fun WorkspaceTabBar(
                                     DropdownMenuItem(
                                         text = {
                                             Text(
-                                                text = stringResource(R.string.action_rename_workspace),
+                                                text = stringResource(R.string.action_edit_workspace),
                                                 color = Color.White,
                                                 fontFamily = ElmsSans,
                                                 fontSize = 14.sp

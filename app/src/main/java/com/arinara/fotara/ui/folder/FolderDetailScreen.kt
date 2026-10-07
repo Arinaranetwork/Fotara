@@ -107,6 +107,7 @@ import com.arinara.fotara.ui.components.computeGridFacingGlowCorners
 import com.arinara.fotara.ui.components.computeGridGlowAnchors
 import com.arinara.fotara.ui.components.linkItGlow
 import com.arinara.fotara.ui.components.toGlowAnchor
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.arinara.fotara.ui.document.PdfViewerScreen
 import com.arinara.fotara.util.CombineItem
 import com.arinara.fotara.util.CombineManager
@@ -228,6 +229,11 @@ fun FolderDetailScreen(
     onOpenCanvasNote: ((canvasId: Long?, folderId: Long, subfolderId: Long?) -> Unit)? = null,
     canvasRepository: com.arinara.fotara.canvas.persistence.CanvasRepository? = null,
     canvasAssetManager: com.arinara.fotara.canvas.persistence.CanvasAssetManager? = null,
+    searchQuery: String? = null,
+    pdfPagePinRepository: com.arinara.fotara.data.repository.PdfPagePinRepository? = null,
+    pdfPageDrawingRepository: com.arinara.fotara.data.repository.PdfPageDrawingRepository? = null,
+    settingsRepository: com.arinara.fotara.data.repository.SettingsRepository? = null,
+    onNavigateToEditor: ((Long, Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -305,6 +311,7 @@ fun FolderDetailScreen(
     var shareProgressTotal by remember { mutableStateOf(0) }
     var shareErrorMessage by remember { mutableStateOf<String?>(null) }
     var shareTargetItems by remember { mutableStateOf<List<FolderGridItem>>(emptyList()) }
+    var inspectingDocumentId by rememberSaveable { mutableStateOf<Long?>(null) }
     var inspectingDocument by remember { mutableStateOf<DocumentNote?>(null) }
     var inspectingDocx by remember { mutableStateOf<DocumentNote?>(null) }
     var textNoteActionTarget by remember { mutableStateOf<FolderGridItem.TextNoteItem?>(null) }
@@ -407,6 +414,27 @@ fun FolderDetailScreen(
         }
     }
 
+    LaunchedEffect(inspectingDocumentId) {
+        val id: Long? = inspectingDocumentId
+        if (id != null && (inspectingDocument == null || inspectingDocument?.id != id)) {
+            val doc = viewModel.documentRepository?.getDocumentNoteById(id)
+            if (doc != null && doc.docType == com.arinara.fotara.data.model.DocumentType.PDF) {
+                inspectingDocument = doc
+            }
+        }
+    }
+
+    LaunchedEffect(openViewerDirectly, viewModel.targetDocumentId) {
+        val targetId = viewModel.targetDocumentId
+        if (openViewerDirectly && targetId != null && inspectingDocument == null) {
+            val doc = viewModel.documentRepository?.getDocumentNoteById(targetId)
+            if (doc != null && doc.docType == com.arinara.fotara.data.model.DocumentType.PDF) {
+                inspectingDocument = doc
+                inspectingDocumentId = doc.id
+            }
+        }
+    }
+
     LaunchedEffect(uiState.highlightedDocumentId) {
         val targetId = uiState.highlightedDocumentId ?: return@LaunchedEffect
         if (uiState.gridItems.isEmpty()) return@LaunchedEffect
@@ -422,6 +450,7 @@ fun FolderDetailScreen(
             val matchedDoc = (uiState.gridItems[targetIndex] as FolderGridItem.Document).documentNote
             if (openViewerDirectly && inspectingDocument == null && matchedDoc.docType == com.arinara.fotara.data.model.DocumentType.PDF) {
                 inspectingDocument = matchedDoc
+                inspectingDocumentId = matchedDoc.id
             }
             highlightAlpha.animateTo(0.28f, tween(250, easing = FastOutSlowInEasing))
             delay(1500L)
@@ -1129,6 +1158,7 @@ fun FolderDetailScreen(
                                             } else {
                                                 if (doc.docType == DocumentType.PDF) {
                                                     inspectingDocument = doc
+                                                    inspectingDocumentId = doc.id
                                                 } else {
                                                     if (onOpenDocx != null) {
                                                         onOpenDocx(doc.id)
@@ -2948,7 +2978,15 @@ fun FolderDetailScreen(
                     pages = pages,
                     initialPageIndex = targetPageIndex ?: 0,
                     highlightPageIndex = targetPageIndex,
-                    onBack = { inspectingDocument = null },
+                    pdfPagePinRepository = pdfPagePinRepository,
+                    pdfPageDrawingRepository = pdfPageDrawingRepository,
+                    settingsRepository = settingsRepository,
+                    searchQuery = searchQuery,
+                    onNavigateToEditor = onNavigateToEditor,
+                    onBack = { 
+                        inspectingDocument = null 
+                        inspectingDocumentId = null
+                    },
                     onShare = {
                         try {
                             val file = File(doc.originFileUri)
@@ -2969,10 +3007,12 @@ fun FolderDetailScreen(
                     },
                     onSplitToImages = {
                         inspectingDocument = null
+                        inspectingDocumentId = null
                         viewModel.splitPdfToImages(doc.id)
                     },
                     onDelete = {
                         inspectingDocument = null
+                        inspectingDocumentId = null
                         viewModel.deleteDocument(doc.id)
                     }
                 )

@@ -85,6 +85,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -135,6 +136,16 @@ import com.arinara.fotara.ui.components.ActiveSearchBar
 import com.arinara.fotara.ui.components.BatchRenameDialog
 import com.arinara.fotara.ui.components.FeedbackDialog
 import com.arinara.fotara.ui.components.FloatingDock
+import com.arinara.fotara.ui.components.FloatingSearchBarPill
+import com.arinara.fotara.ui.components.SharedFloatingAddButton
+import com.arinara.fotara.ui.home.TabContainerBottomState
+import androidx.compose.material.icons.outlined.Draw
+import androidx.compose.material.icons.automirrored.outlined.NoteAdd
+import androidx.compose.material.icons.outlined.UploadFile
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.foundation.lazy.LazyColumn
+import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
 import com.arinara.fotara.ui.components.FolderCard
 import com.arinara.fotara.ui.components.FolderUnlockDialog
 import com.arinara.fotara.ui.components.HomeBottomNavBar
@@ -147,6 +158,7 @@ import com.arinara.fotara.ui.components.ScreenHeaderActionButton
 import com.arinara.fotara.ui.components.ScreenHeaderDefaults
 import com.arinara.fotara.ui.home.workspace.WorkspaceTabBar
 import com.arinara.fotara.ui.home.workspace.AddWorkspaceDialog
+import com.arinara.fotara.ui.home.workspace.EditWorkspaceDialog
 import com.arinara.fotara.ui.home.workspace.RenameWorkspaceDialog
 import com.arinara.fotara.ui.home.workspace.MoveToWorkspaceDialog
 import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceConfirmDialog
@@ -183,8 +195,8 @@ fun HomeScreen(
     onFolderClick: (Folder) -> Unit,
     onNavigateToPhoto: (folderId: Long, subfolderId: Long?, photoId: Long) -> Unit = { _, _, _ -> },
     onNavigateToGroup: (folderId: Long, subfolderId: Long?, groupId: Long) -> Unit = { _, _, _ -> },
-    onNavigateToDocument: (folderId: Long, subfolderId: Long?, docId: Long, targetPageIndex: Int?) -> Unit = { _, _, _, _ -> },
-    onNavigateToTextNote: (folderId: Long, subfolderId: Long?, noteId: Long) -> Unit = { _, _, _ -> },
+    onNavigateToDocument: (folderId: Long, subfolderId: Long?, docId: Long, targetPageIndex: Int?, searchQuery: String?) -> Unit = { _, _, _, _, _ -> },
+    onNavigateToTextNote: (folderId: Long, subfolderId: Long?, noteId: Long, highlightQuery: String?) -> Unit = { _, _, _, _ -> },
     onNavigateToCanvasNote: (folderId: Long, subfolderId: Long?, canvasId: Long) -> Unit = { _, _, _ -> },
     onOpenDocx: (documentId: Long) -> Unit = {},
     onOpenTrash: () -> Unit = {},
@@ -242,7 +254,9 @@ fun HomeScreen(
     var pendingDocumentSearchResult by remember { mutableStateOf<DocumentNote?>(null) }
     var pendingTextNoteSearchResult by remember { mutableStateOf<TextNote?>(null) }
     var pendingCanvasSearchResult by remember { mutableStateOf<CanvasNote?>(null) }
-    var bottomStackHeightPx by remember { mutableIntStateOf(0) }
+    val bottomBarState = remember { TabContainerBottomState() }
+    var showNotesCreateMenu by remember { mutableStateOf(false) }
+    var pendingNotesCreateAction by remember { mutableStateOf<((Folder) -> Unit)?>(null) }
     val density = LocalDensity.current
 
     val deviceLockLauncher = rememberLauncherForActivityResult(
@@ -276,14 +290,14 @@ fun HomeScreen(
                     pendingDocumentSearchResult = null
                     if (doc != null) {
                         viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId, pageIndex ->
-                            onNavigateToDocument(folderId, subfolderId, docId, pageIndex)
+                            onNavigateToDocument(folderId, subfolderId, docId, pageIndex, uiState.searchQuery)
                         }
                     }
                 } else if (pendingTextNoteSearchResult != null) {
                     val note = pendingTextNoteSearchResult!!
                     pendingTextNoteSearchResult = null
                     viewModel.onTextNoteSearchResultClicked(note) { folderId, subfolderId, noteId ->
-                        onNavigateToTextNote(folderId, subfolderId, noteId)
+                        onNavigateToTextNote(folderId, subfolderId, noteId, uiState.searchQuery)
                     }
                 } else if (pendingCanvasSearchResult != null) {
                     val canvas = pendingCanvasSearchResult
@@ -330,8 +344,7 @@ fun HomeScreen(
 
     val isImeVisible = WindowInsets.isImeVisible
 
-    val bottomStackDp = with(density) { bottomStackHeightPx.toDp() }
-    val bottomOverlayPaddingDp = if (bottomStackDp > 0.dp) bottomStackDp else 96.dp
+    val bottomOverlayPaddingDp = bottomBarState.bottomOverlayPaddingDp
 
     CompositionLocalProvider(LocalBottomOverlayPadding provides bottomOverlayPaddingDp) {
         Scaffold(
@@ -389,13 +402,13 @@ fun HomeScreen(
                         com.arinara.fotara.ui.notes.NotesScreen(
                             viewModel = notesViewModel,
                             onNavigateToPhoto = onNavigateToPhoto,
-                            onNavigateToDocument = onNavigateToDocument,
-                            onNavigateToTextNote = onNavigateToTextNote,
+                            onNavigateToDocument = { fId, sId, dId, pIdx -> onNavigateToDocument(fId, sId, dId, pIdx, null) },
+                            onNavigateToTextNote = { fId, sId, nId -> onNavigateToTextNote(fId, sId, nId, null) },
                             onNavigateToCanvasNote = onNavigateToCanvasNote,
                             onOpenDocx = onOpenDocx,
                             onFolderClick = onFolderClick,
                             onCreatePhotoNote = { folder -> onFolderClick(folder) },
-                            onCreateTextNote = { folder -> onNavigateToTextNote(folder.id, null, -1L) },
+                            onCreateTextNote = { folder -> onNavigateToTextNote(folder.id, null, -1L, null) },
                             onCreateCanvasNote = { folder -> onNavigateToCanvasNote(folder.id, null, -1L) },
                             onImportDocument = { folder -> onFolderClick(folder) },
                             onOpenSettings = { selectedNavTab = HomeNavTab.SETTINGS },
@@ -692,7 +705,7 @@ fun HomeScreen(
                             }
 
                         // Content Area
-                        val bottomStackDp = with(density) { bottomStackHeightPx.toDp() }
+                        val bottomStackDp = bottomBarState.bottomOverlayPaddingDp
                         val dynamicBottomPadding = HomeLayoutHelper.computeBottomContentPadding(
                             measuredBottomStackHeightDp = bottomStackDp.value,
                             additionalBufferDp = 16f,
@@ -700,7 +713,7 @@ fun HomeScreen(
                         ).dp
 
                         val homeGridState = rememberLazyGridState()
-                        val isOverlayOpen = folderToUnlock != null || activeContextFolder != null || folderToLock != null || folderToResetPin != null || uiState.showNewFolderDialog || uiState.showBulkDeleteDialog || uiState.showAddWorkspaceDialog || uiState.workspaceToRename != null || uiState.foldersToMoveWorkspace != null || uiState.workspaceDeleteStep != WorkspaceDeleteStep.NONE
+                        val isOverlayOpen = folderToUnlock != null || activeContextFolder != null || folderToLock != null || folderToResetPin != null || uiState.showNewFolderDialog || uiState.showBulkDeleteDialog || uiState.showAddWorkspaceDialog || uiState.workspaceToRename != null || uiState.foldersToMoveWorkspace != null || uiState.workspaceDeleteStep != WorkspaceDeleteStep.NONE || pendingNotesCreateAction != null
                         val canRefresh = PullToRefreshHelper.canTriggerRefresh(
                             isAtTop = homeGridState.firstVisibleItemIndex == 0 && homeGridState.firstVisibleItemScrollOffset == 0,
                             isMultiSelectActive = uiState.isMultiSelectMode,
@@ -830,15 +843,24 @@ fun HomeScreen(
                 }
             }
 
-            // Bottom Stack: Floating Dock & Bottom Navigation Bar
+            // Bottom Stack: Persistent Floating Dock & Bottom Navigation Bar
             // Kept measured with graphicsLayer alpha to prevent content padding shifts
+            val fabAlpha by animateFloatAsState(
+                targetValue = if (selectedNavTab == HomeNavTab.SETTINGS) 0f else 1f,
+                label = "fabAlpha"
+            )
+            val searchPillAlpha by animateFloatAsState(
+                targetValue = if (selectedNavTab == HomeNavTab.HOME) 1f else 0f,
+                label = "searchPillAlpha"
+            )
+
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .onSizeChanged {
                         if (it.height > 0) {
-                            bottomStackHeightPx = it.height
+                            bottomBarState.onHeightMeasured(it.height, density)
                         }
                     }
                     .graphicsLayer {
@@ -862,12 +884,100 @@ fun HomeScreen(
                         .padding(bottom = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Search bar + '+' action button row (only visible on HOME tab)
-                    if (selectedNavTab == HomeNavTab.HOME) {
-                        FloatingDock(
-                            onSearchClick = { if (!uiState.isMultiSelectMode) viewModel.activateSearch() },
-                            onNewFolderClick = { if (!uiState.isMultiSelectMode) viewModel.openNewFolderDialog() }
-                        )
+                    // Unified Floating Action Row: search pill (Home) + single persistent (+) button
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Left: Search Bar Pill (visible on Home, placeholder space preserved on Notes to maintain row geometry)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp)
+                                .graphicsLayer {
+                                    alpha = searchPillAlpha
+                                }
+                        ) {
+                            if (searchPillAlpha > 0.01f) {
+                                FloatingSearchBarPill(
+                                    onClick = {
+                                        if (!uiState.isMultiSelectMode && selectedNavTab == HomeNavTab.HOME) {
+                                            viewModel.activateSearch()
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        // Right: Single (+) Action Button hosted at tab container level
+                        Box(
+                            contentAlignment = Alignment.Center
+                        ) {
+                            SharedFloatingAddButton(
+                                onClick = {
+                                    if (!uiState.isMultiSelectMode) {
+                                        when (selectedNavTab) {
+                                            HomeNavTab.HOME -> viewModel.openNewFolderDialog()
+                                            HomeNavTab.NOTES -> showNotesCreateMenu = true
+                                            HomeNavTab.SETTINGS -> { /* hidden */ }
+                                        }
+                                    }
+                                },
+                                contentDescription = when (selectedNavTab) {
+                                    HomeNavTab.NOTES -> stringResource(R.string.create_note)
+                                    else -> stringResource(R.string.menu_new_folder)
+                                },
+                                modifier = Modifier.graphicsLayer {
+                                    alpha = fabAlpha
+                                }
+                            )
+
+                            // Upward menu for (+) note creation on Notes tab
+                            DropdownMenu(
+                                expanded = showNotesCreateMenu && selectedNavTab == HomeNavTab.NOTES,
+                                onDismissRequest = { showNotesCreateMenu = false },
+                                modifier = Modifier
+                                    .background(HomeCardSurface)
+                                    .border(1.dp, HomeCardBorder, RoundedCornerShape(14.dp))
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.menu_new_photo_note), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                    leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(20.dp)) },
+                                    onClick = {
+                                        showNotesCreateMenu = false
+                                        handleNotesCreateAction(uiState.folders, onFolderClick) { pendingNotesCreateAction = it }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.menu_new_text_note), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.NoteAdd, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(20.dp)) },
+                                    onClick = {
+                                        showNotesCreateMenu = false
+                                        handleNotesCreateAction(uiState.folders, { folder -> onNavigateToTextNote(folder.id, null, -1L, null) }) { pendingNotesCreateAction = it }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.menu_new_canvas_note), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                    leadingIcon = { Icon(Icons.Outlined.Draw, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(20.dp)) },
+                                    onClick = {
+                                        showNotesCreateMenu = false
+                                        handleNotesCreateAction(uiState.folders, { folder -> onNavigateToCanvasNote(folder.id, null, -1L) }) { pendingNotesCreateAction = it }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.menu_import_document), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                    leadingIcon = { Icon(Icons.Outlined.UploadFile, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp)) },
+                                    onClick = {
+                                        showNotesCreateMenu = false
+                                        handleNotesCreateAction(uiState.folders, onFolderClick) { pendingNotesCreateAction = it }
+                                    }
+                                )
+                            }
+                        }
                     }
 
                     // Floating bottom navigation bar (hidden while keyboard is open)
@@ -1249,16 +1359,18 @@ fun HomeScreen(
                                 val doc = pendingDocumentSearchResult
                                 pendingDocumentSearchResult = null
                                 if (doc != null) {
+                                    val currentQuery = uiState.searchQuery
                                     viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId, pageIndex ->
-                                        onNavigateToDocument(folderId, subfolderId, docId, pageIndex)
+                                        onNavigateToDocument(folderId, subfolderId, docId, pageIndex, currentQuery)
                                     }
                                 }
                             }
                             pendingTextNoteSearchResult != null -> {
                                 val note = pendingTextNoteSearchResult!!
                                 pendingTextNoteSearchResult = null
+                                val currentQuery = uiState.searchQuery
                                 viewModel.onTextNoteSearchResultClicked(note) { folderId, subfolderId, noteId ->
-                                    onNavigateToTextNote(folderId, subfolderId, noteId)
+                                    onNavigateToTextNote(folderId, subfolderId, noteId, currentQuery)
                                 }
                             }
                             pendingCanvasSearchResult != null -> {
@@ -1467,8 +1579,9 @@ fun HomeScreen(
                             pendingTextNoteSearchResult = note
                             folderToUnlock = targetFolder
                         } else {
+                            val currentQuery = uiState.searchQuery
                             viewModel.onTextNoteSearchResultClicked(note) { folderId, subfolderId, noteId ->
-                                onNavigateToTextNote(folderId, subfolderId, noteId)
+                                onNavigateToTextNote(folderId, subfolderId, noteId, currentQuery)
                             }
                         }
                     },
@@ -1478,8 +1591,9 @@ fun HomeScreen(
                             pendingDocumentSearchResult = doc
                             folderToUnlock = targetFolder
                         } else {
+                            val currentQuery = uiState.searchQuery
                             viewModel.onDocumentSearchResultClicked(doc) { folderId, subfolderId, docId, pageIndex ->
-                                onNavigateToDocument(folderId, subfolderId, docId, pageIndex)
+                                onNavigateToDocument(folderId, subfolderId, docId, pageIndex, currentQuery)
                             }
                         }
                     },
@@ -1522,16 +1636,16 @@ fun HomeScreen(
         AddWorkspaceDialog(
             workspaces = uiState.workspaces,
             onDismiss = { viewModel.closeAddWorkspaceDialog() },
-            onCreate = { name -> viewModel.createWorkspace(name) }
+            onCreate = { name, iconKey -> viewModel.createWorkspace(name, iconKey) }
         )
     }
 
     uiState.workspaceToRename?.let { wsToRename ->
-        RenameWorkspaceDialog(
+        EditWorkspaceDialog(
             workspace = wsToRename,
             workspaces = uiState.workspaces,
             onDismiss = { viewModel.closeRenameWorkspaceDialog() },
-            onRename = { newName -> viewModel.renameWorkspace(wsToRename.id, newName) }
+            onSave = { newName, newIconKey -> viewModel.updateWorkspace(wsToRename.id, newName, newIconKey) }
         )
     }
 
@@ -1605,6 +1719,73 @@ fun HomeScreen(
         }
         WorkspaceDeleteStep.NONE -> { /* No delete dialog */ }
     }
+
+    // Quick Folder Selection Dialog for Note Creation from FAB on Notes Tab
+    pendingNotesCreateAction?.let { action ->
+        AlertDialog(
+            onDismissRequest = { pendingNotesCreateAction = null },
+            containerColor = HomeCardSurface,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Text(
+                    text = stringResource(R.string.select_destination_folder),
+                    color = Color.White,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                ) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        workspaceGroupedFolderItems(
+                            folders = uiState.folders,
+                            workspaces = uiState.workspaces,
+                            keyPrefix = "home_notes_create"
+                        ) { folder ->
+                            Surface(
+                                color = Color.Transparent,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        pendingNotesCreateAction = null
+                                        action(folder)
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 12.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Folder,
+                                        contentDescription = null,
+                                        tint = Color(0xFF60A5FA),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = folder.name,
+                                        color = Color.White,
+                                        fontFamily = ElmsSans,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { pendingNotesCreateAction = null }) {
+                    Text(stringResource(R.string.confirm_cancel), color = HomeSubtitleGray, fontFamily = ElmsSans)
+                }
+            }
+        )
+    }
     }
 }
 
@@ -1642,5 +1823,20 @@ private fun HomeHeader(
                 }
             }
         }
+    }
+}
+
+private fun handleNotesCreateAction(
+    folders: List<Folder>,
+    action: (Folder) -> Unit,
+    setPendingAction: (((Folder) -> Unit)?) -> Unit
+) {
+    if (folders.isEmpty()) {
+        return
+    }
+    if (folders.size == 1) {
+        action(folders[0])
+    } else {
+        setPendingAction(action)
     }
 }

@@ -125,6 +125,12 @@ class SettingsViewModel(
         }
     }
 
+    fun updateSavedImageLocation(locationKey: String, customName: String) {
+        viewModelScope.launch {
+            settingsRepository.updateSavedImageLocation(locationKey, customName)
+        }
+    }
+
     fun rebuildThumbnails() {
         if (_uiState.value.isRebuildingThumbnails) return
         viewModelScope.launch {

@@ -48,6 +48,7 @@ import com.arinara.fotara.ui.components.ScreenHeader
 import com.arinara.fotara.ui.components.ScreenHeaderActionButton
 import com.arinara.fotara.ui.home.workspace.WorkspaceTabBar
 import com.arinara.fotara.ui.home.workspace.AddWorkspaceDialog
+import com.arinara.fotara.ui.home.workspace.EditWorkspaceDialog
 import com.arinara.fotara.ui.home.workspace.RenameWorkspaceDialog
 import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceConfirmDialog
 import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceChoiceDialog
@@ -321,59 +322,7 @@ fun NotesScreen(
             }
         }
 
-        // 4. Floating Action Button (+) anchored bottom-right above bottom nav
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 18.dp, bottom = fabBottomPadding)
-        ) {
-            SharedFloatingAddButton(
-                onClick = { showFabCreateMenu = true },
-                contentDescription = stringResource(R.string.create_note)
-            )
 
-            // Upward menu for FAB note creation
-            DropdownMenu(
-                expanded = showFabCreateMenu,
-                onDismissRequest = { showFabCreateMenu = false },
-                modifier = Modifier
-                    .background(HomeCardSurface)
-                    .border(1.dp, HomeCardBorder, RoundedCornerShape(14.dp))
-            ) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.menu_new_photo_note), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                    leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(20.dp)) },
-                    onClick = {
-                        showFabCreateMenu = false
-                        handleFabCreateSelection(uiState.folders, onCreatePhotoNote) { pendingCreateAction = it }
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.menu_new_text_note), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.NoteAdd, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(20.dp)) },
-                    onClick = {
-                        showFabCreateMenu = false
-                        handleFabCreateSelection(uiState.folders, onCreateTextNote) { pendingCreateAction = it }
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.menu_new_canvas_note), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                    leadingIcon = { Icon(Icons.Outlined.Draw, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(20.dp)) },
-                    onClick = {
-                        showFabCreateMenu = false
-                        handleFabCreateSelection(uiState.folders, onCreateCanvasNote) { pendingCreateAction = it }
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.menu_import_document), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                    leadingIcon = { Icon(Icons.Outlined.UploadFile, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp)) },
-                    onClick = {
-                        showFabCreateMenu = false
-                        handleFabCreateSelection(uiState.folders, onImportDocument) { pendingCreateAction = it }
-                    }
-                )
-            }
-        }
     }
 
     // Confirmation Dialog for Delete Note
@@ -610,16 +559,16 @@ fun NotesScreen(
         AddWorkspaceDialog(
             workspaces = uiState.workspaces,
             onDismiss = { viewModel.closeAddWorkspaceDialog() },
-            onCreate = { name -> viewModel.createWorkspace(name) }
+            onCreate = { name, iconKey -> viewModel.createWorkspace(name, iconKey) }
         )
     }
 
     uiState.workspaceToRename?.let { wsToRename ->
-        RenameWorkspaceDialog(
+        EditWorkspaceDialog(
             workspace = wsToRename,
             workspaces = uiState.workspaces,
             onDismiss = { viewModel.closeRenameWorkspaceDialog() },
-            onRename = { newName -> viewModel.renameWorkspace(wsToRename.id, newName) }
+            onSave = { newName, newIconKey -> viewModel.updateWorkspace(wsToRename.id, newName, newIconKey) }
         )
     }
 

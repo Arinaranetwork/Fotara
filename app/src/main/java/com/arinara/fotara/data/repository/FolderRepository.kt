@@ -481,9 +481,9 @@ class SqliteFolderRepository(
         }
 
         // Clean up document note original files and page image files to prevent disk leaks
+        val docIds = mutableListOf<Long>()
         try {
             val docCursor = db.rawQuery("SELECT origin_file_uri, id FROM document_notes WHERE folder_id = ?", arrayOf(id.toString()))
-            val docIds = mutableListOf<Long>()
             docCursor.use { c ->
                 while (c.moveToNext()) {
                     val originUri = c.getString(0)
@@ -507,6 +507,14 @@ class SqliteFolderRepository(
         db.beginTransaction()
         try {
             db.execSQL("DELETE FROM photos WHERE folder_id = ?", arrayOf(id.toString()))
+            try {
+                if (docIds.isNotEmpty()) {
+                    val placeholders = docIds.joinToString(",") { "?" }
+                    val args = docIds.map { it.toString() }.toTypedArray()
+                    db.execSQL("DELETE FROM pdf_page_pins WHERE document_id IN ($placeholders)", args)
+                    db.execSQL("DELETE FROM pdf_page_drawings WHERE document_id IN ($placeholders)", args)
+                }
+            } catch (_: Exception) {}
             db.execSQL("DELETE FROM document_notes WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM text_notes WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM canvas_notes WHERE folder_id = ?", arrayOf(id.toString()))

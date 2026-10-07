@@ -12,6 +12,8 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import com.arinara.fotara.ui.components.SettingsSubScreenHeader
+import com.arinara.fotara.ui.components.SettingsSubScreenHeaderDefaults
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -30,6 +32,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -159,140 +162,126 @@ fun ProfileCropScreen(
             .background(HomeNearBlack)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Top Bar
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            // Top Bar using unified SettingsSubScreenHeader
+            SettingsSubScreenHeader(
+                title = title,
+                onBackClick = onCancel,
+                navigationIcon = Icons.Default.Close,
+                navigationContentDescription = stringResource(R.string.profile_crop_cancel),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(WindowInsets.statusBars.asPaddingValues())
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                IconButton(onClick = onCancel, enabled = !isSaving) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = stringResource(R.string.profile_crop_cancel),
-                        tint = Color.White
-                    )
-                }
-
-                Text(
-                    text = title,
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp)
-                )
-
-                // Reset Action
-                TextButton(
-                    onClick = {
-                        val bmp = previewBitmap
-                        if (bmp != null) {
-                            val init = CropBoxGeometry.computeInitialBox(
-                                bmp.width.toFloat(),
-                                bmp.height.toFloat(),
-                                aspectRatio
-                            )
-                            normBoxState.value = CropRectF(
-                                init.left / bmp.width.toFloat(),
-                                init.top / bmp.height.toFloat(),
-                                init.right / bmp.width.toFloat(),
-                                init.bottom / bmp.height.toFloat()
-                            )
-                        }
-                    },
-                    enabled = !isSaving && previewBitmap != null
-                ) {
-                    Text(
-                        text = stringResource(R.string.profile_crop_reset),
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 14.sp,
-                        fontFamily = ElmsSans
-                    )
-                }
-
-                // Save Check Action
-                IconButton(
-                    onClick = {
-                        if (isSaving) return@IconButton
-                        val bmp = previewBitmap ?: return@IconButton
-                        val currentNorm = normBoxState.value ?: run {
-                            val init = CropBoxGeometry.computeInitialBox(
-                                bmp.width.toFloat(),
-                                bmp.height.toFloat(),
-                                aspectRatio
-                            )
-                            CropRectF(
-                                init.left / bmp.width.toFloat(),
-                                init.top / bmp.height.toFloat(),
-                                init.right / bmp.width.toFloat(),
-                                init.bottom / bmp.height.toFloat()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = SettingsSubScreenHeaderDefaults.HorizontalPadding),
+                actions = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Reset Action
+                        TextButton(
+                            onClick = {
+                                val bmp = previewBitmap
+                                if (bmp != null) {
+                                    val init = CropBoxGeometry.computeInitialBox(
+                                        bmp.width.toFloat(),
+                                        bmp.height.toFloat(),
+                                        aspectRatio
+                                    )
+                                    normBoxState.value = CropRectF(
+                                        init.left / bmp.width.toFloat(),
+                                        init.top / bmp.height.toFloat(),
+                                        init.right / bmp.width.toFloat(),
+                                        init.bottom / bmp.height.toFloat()
+                                    )
+                                }
+                            },
+                            enabled = !isSaving && previewBitmap != null
+                        ) {
+                            Text(
+                                text = stringResource(R.string.profile_crop_reset),
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 14.sp,
+                                fontFamily = ElmsSans
                             )
                         }
 
-                        isSaving = true
-                        coroutineScope.launch {
-                            val cropped = withContext(Dispatchers.IO) {
-                                val sub = ProfileImageUtils.cropNormalized(
-                                    source = bmp,
-                                    normLeft = currentNorm.left,
-                                    normTop = currentNorm.top,
-                                    normRight = currentNorm.right,
-                                    normBottom = currentNorm.bottom
-                                ) ?: return@withContext null
+                        // Save Check Action
+                        IconButton(
+                            onClick = {
+                                if (isSaving) return@IconButton
+                                val bmp = previewBitmap ?: return@IconButton
+                                val currentNorm = normBoxState.value ?: run {
+                                    val init = CropBoxGeometry.computeInitialBox(
+                                        bmp.width.toFloat(),
+                                        bmp.height.toFloat(),
+                                        aspectRatio
+                                    )
+                                    CropRectF(
+                                        init.left / bmp.width.toFloat(),
+                                        init.top / bmp.height.toFloat(),
+                                        init.right / bmp.width.toFloat(),
+                                        init.bottom / bmp.height.toFloat()
+                                    )
+                                }
 
-                                if (isAvatar) {
-                                    Bitmap.createScaledBitmap(sub, 512, 512, true)
-                                } else {
-                                    val targetWidth = min(sub.width, 1080).coerceAtLeast(1)
-                                    val ratio = targetWidth.toFloat() / sub.width.toFloat()
-                                    val targetHeight = (sub.height * ratio).toInt().coerceAtLeast(1)
-                                    if (sub.width != targetWidth || sub.height != targetHeight) {
-                                        Bitmap.createScaledBitmap(sub, targetWidth, targetHeight, true)
+                                isSaving = true
+                                coroutineScope.launch {
+                                    val cropped = withContext(Dispatchers.IO) {
+                                        val sub = ProfileImageUtils.cropNormalized(
+                                            source = bmp,
+                                            normLeft = currentNorm.left,
+                                            normTop = currentNorm.top,
+                                            normRight = currentNorm.right,
+                                            normBottom = currentNorm.bottom
+                                        ) ?: return@withContext null
+
+                                        if (isAvatar) {
+                                            Bitmap.createScaledBitmap(sub, 512, 512, true)
+                                        } else {
+                                            val targetWidth = min(sub.width, 1080).coerceAtLeast(1)
+                                            val ratio = targetWidth.toFloat() / sub.width.toFloat()
+                                            val targetHeight = (sub.height * ratio).toInt().coerceAtLeast(1)
+                                            if (sub.width != targetWidth || sub.height != targetHeight) {
+                                                Bitmap.createScaledBitmap(sub, targetWidth, targetHeight, true)
+                                            } else {
+                                                sub
+                                            }
+                                        }
+                                    }
+
+                                    if (cropped != null) {
+                                        val normRect = NormalizedCropRect(
+                                            left = currentNorm.left,
+                                            top = currentNorm.top,
+                                            right = currentNorm.right,
+                                            bottom = currentNorm.bottom
+                                        )
+                                        onCropSaved(cropped, normRect)
                                     } else {
-                                        sub
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.profile_load_failed),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        isSaving = false
                                     }
                                 }
-                            }
-
-                            if (cropped != null) {
-                                val normRect = NormalizedCropRect(
-                                    left = currentNorm.left,
-                                    top = currentNorm.top,
-                                    right = currentNorm.right,
-                                    bottom = currentNorm.bottom
+                            },
+                            enabled = !isSaving && previewBitmap != null
+                        ) {
+                            if (isSaving) {
+                                CircularProgressIndicator(
+                                    color = HomeMainButtonBlue,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                onCropSaved(cropped, normRect)
                             } else {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.profile_load_failed),
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                isSaving = false
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = stringResource(R.string.profile_crop_save),
+                                    tint = HomeMainButtonBlue
+                                )
                             }
                         }
-                    },
-                    enabled = !isSaving && previewBitmap != null
-                ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(
-                            color = HomeMainButtonBlue,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = stringResource(R.string.profile_crop_save),
-                            tint = HomeMainButtonBlue
-                        )
                     }
                 }
-            }
+            )
 
             // Muted Hint Line Below Top Bar
             Text(

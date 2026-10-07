@@ -34,6 +34,7 @@ sealed class WorkspaceError {
     object InvalidReorder : WorkspaceError()
     object NotFound : WorkspaceError()
     object TrashedFolderCannotMove : WorkspaceError()
+    object InvalidIconKey : WorkspaceError()
     data class DeletionInterrupted(val remainingCount: Int) : WorkspaceError()
 }
 
@@ -55,6 +56,14 @@ object WorkspaceValidator {
 
     fun normalizeName(name: String): String {
         return name.trim().replace(Regex("\\s+"), " ")
+    }
+
+    fun validateIconKey(iconKey: String?): WorkspaceError? {
+        if (iconKey == null) return null
+        if (!com.arinara.fotara.data.model.WorkspaceIcons.isValidKey(iconKey)) {
+            return WorkspaceError.InvalidIconKey
+        }
+        return null
     }
 
     fun validateName(
@@ -90,7 +99,8 @@ interface WorkspaceRepository {
     suspend fun getWorkspacesSync(): List<Workspace>
     suspend fun getHomeWorkspace(): Workspace
     suspend fun getArchiveWorkspace(): Workspace
-    suspend fun createWorkspace(name: String): WorkspaceResult<Workspace>
+    suspend fun createWorkspace(name: String, iconKey: String? = null): WorkspaceResult<Workspace>
+    suspend fun updateWorkspace(workspaceId: Long, newName: String, iconKey: String? = null): WorkspaceResult<Unit>
     suspend fun renameWorkspace(workspaceId: Long, newName: String): WorkspaceResult<Unit>
     suspend fun reorderWorkspaces(workspaceIds: List<Long>): WorkspaceResult<Unit>
     suspend fun moveFolders(folderIds: List<Long>, targetWorkspaceId: Long): WorkspaceResult<Unit>
@@ -134,11 +144,12 @@ class SqliteWorkspaceRepository(
             val db = dbHelper.getSafeReadableDatabase()
             val list = mutableListOf<Workspace>()
             val cursor = db.rawQuery(
-                "SELECT id, uuid, kind, name, position, created_at FROM workspaces ORDER BY position ASC",
+                "SELECT id, uuid, kind, name, position, created_at, icon_key FROM workspaces ORDER BY position ASC",
                 null
             )
             cursor.use { c ->
                 while (c.moveToNext()) {
+                    val iconKey = if (!c.isNull(6)) c.getString(6) else null
                     list.add(
                         Workspace(
                             id = c.getLong(0),
@@ -146,7 +157,8 @@ class SqliteWorkspaceRepository(
                             kind = try { WorkspaceKind.valueOf(c.getString(2)) } catch (_: Exception) { WorkspaceKind.CUSTOM },
                             name = c.getString(3) ?: "",
                             position = c.getInt(4),
-                            createdAt = c.getLong(5)
+                            createdAt = c.getLong(5),
+                            iconKey = iconKey
                         )
                     )
                 }
@@ -197,7 +209,7 @@ class SqliteWorkspaceRepository(
             ?: Workspace(id = 2L, uuid = FotaraDbHelper.ARCHIVE_WORKSPACE_UUID, kind = WorkspaceKind.ARCHIVE, position = 1)
     }
 
-    override suspend fun createWorkspace(name: String): WorkspaceResult<Workspace> = withContext(Dispatchers.IO) {
+    override suspend fun createWorkspace(name: String, iconKey: String?): WorkspaceResult<Workspace> = withContext(Dispatchers.IO) {
         val current = getWorkspacesSync()
         val customCount = current.count { it.kind == WorkspaceKind.CUSTOM }
         if (customCount >= WorkspaceValidator.MAX_CUSTOM_WORKSPACES) {
@@ -209,7 +221,13 @@ class SqliteWorkspaceRepository(
             return@withContext WorkspaceResult.Error(validationErr)
         }
 
+        val iconErr = WorkspaceValidator.validateIconKey(iconKey)
+        if (iconErr != null) {
+            return@withContext WorkspaceResult.Error(iconErr)
+        }
+
         val normalizedName = WorkspaceValidator.normalizeName(name)
+        val sanitizedIconKey = iconKey?.trim()?.lowercase()
         val nextPos = current.size
         val uuid = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
@@ -221,6 +239,11 @@ class SqliteWorkspaceRepository(
             put("name", normalizedName)
             put("position", nextPos)
             put("created_at", now)
+            if (sanitizedIconKey != null) {
+                put("icon_key", sanitizedIconKey)
+            } else {
+                putNull("icon_key")
+            }
         }
         val insertedId = db.insert("workspaces", null, values)
         refreshSync()
@@ -231,12 +254,13 @@ class SqliteWorkspaceRepository(
             kind = WorkspaceKind.CUSTOM,
             name = normalizedName,
             position = nextPos,
-            createdAt = now
+            createdAt = now,
+            iconKey = sanitizedIconKey
         )
         WorkspaceResult.Success(created)
     }
 
-    override suspend fun renameWorkspace(workspaceId: Long, newName: String): WorkspaceResult<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun updateWorkspace(workspaceId: Long, newName: String, iconKey: String?): WorkspaceResult<Unit> = withContext(Dispatchers.IO) {
         val current = getWorkspacesSync()
         val target = current.firstOrNull { it.id == workspaceId }
             ?: return@withContext WorkspaceResult.Error(WorkspaceError.NotFound)
@@ -250,14 +274,32 @@ class SqliteWorkspaceRepository(
             return@withContext WorkspaceResult.Error(validationErr)
         }
 
+        val iconErr = WorkspaceValidator.validateIconKey(iconKey)
+        if (iconErr != null) {
+            return@withContext WorkspaceResult.Error(iconErr)
+        }
+
         val normalized = WorkspaceValidator.normalizeName(newName)
+        val sanitizedIconKey = iconKey?.trim()?.lowercase()
         val db = dbHelper.getSafeWritableDatabase()
         val values = ContentValues().apply {
             put("name", normalized)
+            if (sanitizedIconKey != null) {
+                put("icon_key", sanitizedIconKey)
+            } else {
+                putNull("icon_key")
+            }
         }
         db.update("workspaces", values, "id = ?", arrayOf(workspaceId.toString()))
         refreshSync()
         WorkspaceResult.Success(Unit)
+    }
+
+    override suspend fun renameWorkspace(workspaceId: Long, newName: String): WorkspaceResult<Unit> = withContext(Dispatchers.IO) {
+        val current = getWorkspacesSync()
+        val target = current.firstOrNull { it.id == workspaceId }
+        val currentIcon = target?.iconKey
+        updateWorkspace(workspaceId, newName, currentIcon)
     }
 
     override suspend fun reorderWorkspaces(workspaceIds: List<Long>): WorkspaceResult<Unit> = withContext(Dispatchers.IO) {

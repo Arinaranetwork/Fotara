@@ -22,7 +22,8 @@ data class FolderDetailNavKey(
     val targetDocumentId: Long? = null,
     val targetTextNoteId: Long? = null,
     val targetCanvasId: Long? = null,
-    val targetPageIndex: Int? = null
+    val targetPageIndex: Int? = null,
+    val searchQuery: String? = null
 ) : NavKey
 
 @Serializable
@@ -51,7 +52,8 @@ data class DocxViewerNavKey(val documentId: Long) : NavKey
 data class TextNoteEditorNavKey(
     val noteId: Long? = null,
     val folderId: Long,
-    val subfolderId: Long? = null
+    val subfolderId: Long? = null,
+    val highlightQuery: String? = null
 ) : NavKey
 
 @Serializable
@@ -68,5 +70,11 @@ data class CanvasNoteNavKey(
     val canvasId: Long? = null,
     val folderId: Long,
     val subfolderId: Long? = null
+) : NavKey
+
+@Serializable
+data class PdfPageEditorNavKey(
+    val documentId: Long,
+    val pageIndex: Int
 ) : NavKey
 

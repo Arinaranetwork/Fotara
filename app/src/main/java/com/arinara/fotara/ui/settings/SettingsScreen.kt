@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import com.arinara.fotara.ui.components.ScreenHeader
+import com.arinara.fotara.ui.components.ProfileBannerHeader
+import com.arinara.fotara.ui.components.SettingsSubScreenHeader
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
@@ -225,6 +227,7 @@ fun SettingsScreen(
     var showLeadTimeDialog by remember { mutableStateOf(false) }
     var showStorageLocationDialog by remember { mutableStateOf(false) }
     var showCombineFileNameDialog by remember { mutableStateOf(false) }
+    var showSavedImageLocationDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         val initialMsg = viewModel.consumeFeedbackMessage()
@@ -487,9 +490,7 @@ fun SettingsScreen(
             ProfileScreen(
                 viewModel = viewModel,
                 onBackClick = { activeSection = null },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = innerPadding.calculateTopPadding())
+                modifier = Modifier.fillMaxSize()
             )
         } else if (activeSection == null) {
             val rootScrollState = rememberScrollState()
@@ -506,66 +507,17 @@ fun SettingsScreen(
                         .padding(bottom = effectiveBottomPadding + 24.dp)
                 ) {
                     // 1. Full-Width Banner with Gradient Fade
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(230.dp)
-                    ) {
-                        ProfileBanner(
-                            bannerPath = uiState.userProfile.bannerPath,
-                            bannerUpdatedAt = uiState.userProfile.bannerUpdatedAt,
-                            bannerCrop = uiState.userProfile.bannerCrop,
-                            isOnScreen = rootScrollState.value < bannerHeightPx,
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        // Top Scrim for Status Bar and Title Legibility
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(95.dp)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Black.copy(alpha = 0.65f),
-                                            Color.Transparent
-                                        )
-                                    )
-                                )
-                        )
-
-                        // Lower Gradient Mask Smoothly Fading into HomeNearBlack
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(115.dp)
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            HomeNearBlack.copy(alpha = 0.75f),
-                                            HomeNearBlack
-                                        )
-                                    )
-                                )
-                        )
-
-                        // Centered Profile Avatar + Border + Pen Button
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                        ) {
-                            ProfileAvatar(
-                                avatarPath = uiState.userProfile.avatarPath,
-                                borderId = uiState.userProfile.borderId,
-                                avatarSize = 78.dp,
-                                avatarUpdatedAt = uiState.userProfile.avatarUpdatedAt,
-                                showEditButton = true,
-                                onEditClick = { showProfileEditSheet = true }
-                            )
-                        }
-                    }
+                    ProfileBannerHeader(
+                        bannerPath = uiState.userProfile.bannerPath,
+                        bannerUpdatedAt = uiState.userProfile.bannerUpdatedAt,
+                        bannerCrop = uiState.userProfile.bannerCrop,
+                        avatarPath = uiState.userProfile.avatarPath,
+                        borderId = uiState.userProfile.borderId,
+                        avatarUpdatedAt = uiState.userProfile.avatarUpdatedAt,
+                        isOnScreen = rootScrollState.value < bannerHeightPx,
+                        showEditButton = true,
+                        onEditClick = { showProfileEditSheet = true }
+                    )
 
                     // Centered User Name & Optional Email
                     Column(
@@ -664,35 +616,10 @@ fun SettingsScreen(
             ) {
                 // Header of Active Section with Back Arrow to Root
                 item {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp, bottom = 6.dp)
-                    ) {
-                        IconButton(
-                            onClick = { activeSection = null },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color(0xFF131925))
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back to Settings",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = activeSection!!.title,
-                            color = Color.White,
-                            fontSize = 24.sp,
-                            fontFamily = ElmsSans,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+                    SettingsSubScreenHeader(
+                        title = activeSection!!.title,
+                        onBackClick = { activeSection = null }
+                    )
                 }
 
                 // Clean Un-carded List Rows inside Selected Section
@@ -732,6 +659,15 @@ fun SettingsScreen(
                                 subtitle = uiState.userSettings.combineFileNamePreset,
                                 icon = Icons.Default.Description,
                                 onClick = { showCombineFileNameDialog = true }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = stringResource(R.string.settings_saved_image_location_title),
+                                subtitle = uiState.userSettings.getEffectiveSavedImageRelativePath(),
+                                icon = Icons.Default.Image,
+                                onClick = { showSavedImageLocationDialog = true }
                             )
                         }
                     }
@@ -1081,6 +1017,18 @@ fun SettingsScreen(
                 showCombineFileNameDialog = false
             },
             onDismiss = { showCombineFileNameDialog = false }
+        )
+    }
+
+    if (showSavedImageLocationDialog) {
+        SavedImageLocationDialog(
+            currentLocationKey = uiState.userSettings.savedImageLocation,
+            currentCustomName = uiState.userSettings.savedImageCustomName,
+            onSave = { locationKey, customName ->
+                viewModel.updateSavedImageLocation(locationKey, customName)
+                showSavedImageLocationDialog = false
+            },
+            onDismiss = { showSavedImageLocationDialog = false }
         )
     }
 
@@ -1977,5 +1925,182 @@ private fun SettingsListDivider() {
         color = Color(0xFF161E30),
         thickness = 0.8.dp,
         modifier = Modifier.padding(horizontal = 4.dp)
+    )
+}
+
+@Composable
+private fun SavedImageLocationDialog(
+    currentLocationKey: String,
+    currentCustomName: String,
+    onSave: (locationKey: String, customName: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedOption by remember { mutableStateOf(currentLocationKey) }
+    var customNameText by remember { mutableStateOf(currentCustomName) }
+
+    val trimmed = customNameText.trim()
+    val isCustomValid = selectedOption != "custom" || (
+        trimmed.isNotEmpty() && trimmed.length <= 30 && trimmed.matches(Regex("^[a-zA-Z0-9 _-]+$"))
+    )
+
+    val currentEffectivePath = when (selectedOption) {
+        "dcim_fotara" -> "DCIM/Fotara"
+        "custom" -> {
+            val folder = trimmed.ifEmpty { "Fotara" }
+            "Pictures/$folder"
+        }
+        else -> "Pictures/Fotara"
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = HomeCardSurface,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = stringResource(R.string.settings_saved_image_location_title),
+                color = Color.White,
+                fontSize = 18.sp,
+                fontFamily = ElmsSans,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = currentEffectivePath,
+                    color = TagAmber,
+                    fontSize = 13.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Option 1: Pictures/Fotara
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedOption = "pictures_fotara" }
+                        .padding(vertical = 4.dp)
+                ) {
+                    RadioButton(
+                        selected = selectedOption == "pictures_fotara",
+                        onClick = { selectedOption = "pictures_fotara" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = HomeMainButtonBlue,
+                            unselectedColor = Color(0xFF64748B)
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.settings_saved_image_location_pictures),
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontFamily = ElmsSans
+                    )
+                }
+
+                // Option 2: DCIM/Fotara
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedOption = "dcim_fotara" }
+                        .padding(vertical = 4.dp)
+                ) {
+                    RadioButton(
+                        selected = selectedOption == "dcim_fotara",
+                        onClick = { selectedOption = "dcim_fotara" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = HomeMainButtonBlue,
+                            unselectedColor = Color(0xFF64748B)
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.settings_saved_image_location_dcim),
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontFamily = ElmsSans
+                    )
+                }
+
+                // Option 3: Custom folder under Pictures
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedOption = "custom" }
+                        .padding(vertical = 4.dp)
+                ) {
+                    RadioButton(
+                        selected = selectedOption == "custom",
+                        onClick = { selectedOption = "custom" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = HomeMainButtonBlue,
+                            unselectedColor = Color(0xFF64748B)
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.settings_saved_image_location_custom),
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontFamily = ElmsSans
+                    )
+                }
+
+                if (selectedOption == "custom") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customNameText,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == ' ' || it == '-' || it == '_' }.take(30)
+                            customNameText = filtered
+                        },
+                        label = { Text(stringResource(R.string.settings_saved_image_custom_folder_hint)) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = HomeMainButtonBlue,
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = HomeMainButtonBlue,
+                            unfocusedLabelColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(R.string.settings_saved_image_legacy_notice),
+                        color = Color(0xFF94A3B8),
+                        fontSize = 12.sp,
+                        fontFamily = ElmsSans
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(selectedOption, customNameText.trim()) },
+                enabled = isCustomValid,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = HomeMainButtonBlue,
+                    disabledContainerColor = HomeMainButtonBlue.copy(alpha = 0.38f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Save", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = HomeSubtitleGray, fontFamily = ElmsSans)
+            }
+        }
     )
 }

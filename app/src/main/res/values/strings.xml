@@ -278,4 +278,45 @@
     <string name="consent_accept_statement">By tapping Accept you agree to the Privacy Policy and the Terms of Service.</string>
     <string name="consent_accept_button">Accept and continue</string>
     <string name="settings_privacy_header">Privacy</string>
+
+    <!-- 1.8.0 Final Batch -->
+    <string name="action_edit_workspace">Edit</string>
+    <string name="dialog_edit_workspace_title">Edit workspace</string>
+    <string name="workspace_icon_label">Select icon</string>
+    <string name="cd_workspace_icon">Icon %1$s</string>
+
+    <!-- PDF Page Menu & Pins -->
+    <string name="cd_page_options">Page options</string>
+    <string name="pdf_page_menu_save_to_gallery">Save to gallery</string>
+    <string name="pdf_page_menu_pin_page">Pin page</string>
+    <string name="pdf_page_menu_unpin_page">Unpin page</string>
+    <string name="pdf_page_menu_draw_on_page">Draw on page</string>
+    <string name="pdf_page_menu_edit_drawing">Edit drawing</string>
+    <string name="pdf_page_menu_hide_drawing">Hide drawing</string>
+    <string name="pdf_page_menu_show_drawing">Show drawing</string>
+    <string name="pdf_page_menu_clear_drawing">Clear drawing</string>
+    <string name="pdf_clear_drawing_confirm_title">Clear drawing?</string>
+    <string name="pdf_clear_drawing_confirm_msg">This removes every stroke from this page and cannot be undone.</string>
+    <string name="pdf_pin_limit_reached">You can pin up to 3 pages.</string>
+    <string name="pdf_pinned_page_chip">Page %1$d</string>
+    <string name="action_unpin">Unpin</string>
+
+    <!-- Save to gallery & Saved image location -->
+    <string name="settings_saved_image_location_title">Saved image location</string>
+    <string name="settings_saved_image_location_pictures">Pictures/Fotara</string>
+    <string name="settings_saved_image_location_dcim">DCIM/Fotara</string>
+    <string name="settings_saved_image_location_custom">Custom folder under Pictures</string>
+    <string name="settings_saved_image_custom_folder_hint">Folder name</string>
+    <string name="settings_saved_image_legacy_notice">On Android 9 and older you choose the location each time you save.</string>
+    <string name="msg_saved_to_path">Saved to %1$s</string>
+    <string name="msg_saved">Saved</string>
+    <string name="msg_save_failed">Failed to save image</string>
+
+    <!-- PDF Page Drawing Editor -->
+    <string name="pdf_editor_title">Page %1$d of %2$d</string>
+    <string name="pdf_drawing_size_mismatch">Drawing size does not match page size.</string>
+    <string name="pdf_drawing_save_failed">Failed to save drawing</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_more_options">More options</string>
+    <string name="cd_close">Close</string>
 </resources>

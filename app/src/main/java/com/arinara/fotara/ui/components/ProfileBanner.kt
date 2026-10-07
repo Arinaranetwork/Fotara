@@ -21,6 +21,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -302,3 +305,90 @@ private fun ProfileBannerFallbackGradient(modifier: Modifier = Modifier) {
             )
     )
 }
+
+object ProfileBannerDefaults {
+    val BannerHeight: androidx.compose.ui.unit.Dp = 230.dp
+    val TopScrimHeight: androidx.compose.ui.unit.Dp = 95.dp
+    val BottomFadeHeight: androidx.compose.ui.unit.Dp = 115.dp
+    val AvatarSize: androidx.compose.ui.unit.Dp = 78.dp
+    const val CropAspectRatio: Float = 16f / 9f
+}
+
+/**
+ * Shared Banner and Avatar header component utilized on Settings and Profile preview screens.
+ * Guarantees identical height (230dp), crop framing, top scrim, and bottom fade gradient.
+ */
+@Composable
+fun ProfileBannerHeader(
+    bannerPath: String?,
+    bannerUpdatedAt: Long,
+    bannerCrop: String?,
+    avatarPath: String?,
+    borderId: String?,
+    avatarUpdatedAt: Long,
+    isOnScreen: Boolean,
+    modifier: Modifier = Modifier,
+    showEditButton: Boolean = false,
+    onEditClick: (() -> Unit)? = null
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(ProfileBannerDefaults.BannerHeight)
+    ) {
+        ProfileBanner(
+            bannerPath = bannerPath,
+            bannerUpdatedAt = bannerUpdatedAt,
+            bannerCrop = bannerCrop,
+            isOnScreen = isOnScreen,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Top Scrim for Status Bar and Title Legibility
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(ProfileBannerDefaults.TopScrimHeight)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.65f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
+        // Lower Gradient Mask Smoothly Fading into HomeNearBlack
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(ProfileBannerDefaults.BottomFadeHeight)
+                .align(androidx.compose.ui.Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            HomeNearBlack.copy(alpha = 0.75f),
+                            HomeNearBlack
+                        )
+                    )
+                )
+        )
+
+        // Centered Profile Avatar + Border (+ optional edit button)
+        Box(
+            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
+        ) {
+            com.arinara.fotara.ui.profile.ProfileAvatar(
+                avatarPath = avatarPath,
+                borderId = borderId,
+                avatarSize = ProfileBannerDefaults.AvatarSize,
+                avatarUpdatedAt = avatarUpdatedAt,
+                showEditButton = showEditButton,
+                onEditClick = onEditClick ?: {}
+            )
+        }
+    }
+}
+

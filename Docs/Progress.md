@@ -1,8 +1,8 @@
 # Progress - Fotara
-Last Updated: 2026-10-06
+Last Updated: 2026-10-07
 
 ## Current Phase
-Phase 35 - LegalConsentAndDialogCoordinator [In Progress]
+Phase 37 - Release180AddendumBugfixes [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -41,43 +41,36 @@ Phase 35 - LegalConsentAndDialogCoordinator [In Progress]
 | 32    | QualityAndSmoothness              | Completed   |
 | 33    | PdfSearchDeepLinkAndHighlight     | Completed   |
 | 34    | WorkspacePolishAndUiRefinements   | Completed   |
-| 35    | LegalConsentAndDialogCoordinator  | In Progress |
+| 35    | LegalConsentAndDialogCoordinator  | Completed   |
+| 36    | WorkspaceIconsPdfPageMenuAndDrawingEditor | Completed   |
+| 37    | Release180AddendumBugfixes        | Completed   |
 
 ## Completed
-- [x] Task 0: Verification & Android Skills Compliance Audit - Phase 32
-- [x] Task 1: Zoom & Pan Smoothness Overhaul - Phase 32
-- [x] Task 2: Screen Headers Clipping Fix - Phase 32
-- [x] Task 3: Workspace Tab Move Mode Hold Gesture - Phase 32
-- [x] Task 4: Workspace Names Resolution & Archive Deletion - Phase 32
-- [x] Task 5: Notes (+) Button Alignment & Vignette Elimination - Phase 32
-- [x] Task 6: Remote Release Notes & Update Banner Images - Phase 32
-- [x] Task 7: GIF Banner Picking Overhaul - Phase 32
-- [x] Task 8: What's New 1.7.1, Version Bump & Release Build - Phase 32
-- [x] Task 1: PDF viewer Split to Images button color alignment (`TabCream`) - Phase 31
-- [x] Task 2: Duplicate "Beta" and Version Text Resolution (`VersionInfo` pure parser) - Phase 31
-- [x] Task 3: Settings Pinned Title & Progressive Fade (`SettingsFadeMath`, zero recomposition) - Phase 31
-- [x] Task 4: Animated GIF Profile Banner (`ImageFormatDetector`, `BannerCropTransform`, `AnimatedImageDrawable`) - Phase 31
-- [x] Task 5: Markdown Table Rendering in Release Notes (`MarkdownTableParser`, `ReleaseNotesRenderer`) - Phase 31
-- [x] Task 6: Drawing Data Layer & SQLite Migration (`photo_drawings`, DB v17 migration, repository) - Phase 31
-- [x] Task 7: Photo viewer integration & interactive draw mode - Phase 31
-- [x] Task 8: Share and export flattening with visible drawings - Phase 31
-- [x] Task 9: What's New 1.7.0 entry, update dialog & About legal - Phase 31
-- [x] Task 10: Database migration & release hygiene checks - Phase 31
-- [x] Task 11: Version bump to 1.7.0, build release APK & git finalize - Phase 31
-
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
 - [x] Task 1: Legal documents: one source, two places (`Legal/*.md`, Gradle asset copy, loader, test, README statement) - Phase 35
 - [x] Task 2: Privacy Policy and Terms of Service screens in About & Legal, and Privacy section - Phase 35
 - [x] Task 3: Dialog coordinator and the consent gate (`AppDialogCoordinator`, `ConsentDialog`, `NetworkGate`, entry gating) - Phase 35
 - [x] Task 4: Optional anonymous device count (`key_device_count_enabled`, `DeviceRegistry`, Supabase SQL, backup exclusion) - Phase 35
 - [x] Task 5: Finalize Batch 1 (unit tests, debug APK, changelog, hygiene) - Phase 35
+- [x] Task 0: Audits and reports (skills rules, branding spec search, PDF viewer, search navigation, tabs/drawings, update channel) - Phase 36
+- [x] Task 1: Database: schema bump v17 -> v18 (icon_key, pdf_page_pins, pdf_page_drawings, cascade and orphan cleanups) - Phase 36
+- [x] Task 2: Workspace icons (24 vector drawables, WorkspaceIcons registry, add/edit dialogs, custom tabs display, backup export/import) - Phase 36
+- [x] Task 3: PDF page menu and pinned pages (3-dot button on page cards, max 3 pins, top chip row, jump to page) - Phase 36
+- [x] Task 4: Save page to gallery & saved-image location setting in Settings (300 dpi render, flattened drawings, MediaStore/SAF, location setting) - Phase 36
+- [x] Task 5: Search opens PDF at matching page with highlight, and text note match highlight (deep link, ML Kit OCR bounding boxes, 4s text note highlight) - Phase 36
+- [x] Task 6: PDF page drawing data layer (shared engine extraction, PDF point coordinate space, data model & Sqlite repo complete, viewer wiring) - Phase 36
+- [x] Task 7: PDF page editor dedicated screen (PdfPageEditorNavKey, dock, panels, 1x-6x smooth zoom, autosave, viewer display) - Phase 36
+- [x] Task 8: Legal check, What's New 1.8.0 Beta entry, About text - Phase 36
+- [x] Task 9: Version bump to 1.8.0 Beta / code 29, tests, release build, changelog, git - Phase 36
+- [x] Task 1: Profile screen header position and banner consistency across Settings sub-screens - Phase 37
+- [x] Task 2: Floating (+) button tab container hoisting and tab switch stability - Phase 37
+- [x] Task 3: Drawing stroke offset after zooming fix via DrawingViewTransform - Phase 37
 
 ## In Progress
-None (Batch 1 complete; waiting for Batch 2).
+None.
 
 ## Pending
-- [ ] Batch 2: Workspace icons, PDF page menu, pins, save to gallery, search jump and highlight - Phase 35
-- [ ] Batch 3: PDF page drawing editor and 1.8.0 Beta release build - Phase 35
+None.
 
 ## Blocked
 None.

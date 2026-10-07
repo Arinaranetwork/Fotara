@@ -45,6 +45,10 @@ interface SettingsRepository {
         const val DEVICE_COUNT_DEFAULT_ENABLED = true
         const val KEY_DEVICE_COUNT_ENABLED = "key_device_count_enabled"
         const val MAX_BANNER_GIF_BYTES = 8 * 1024 * 1024L // 8 MB
+        const val KEY_SAVED_IMAGE_LOCATION = "key_saved_image_location"
+        const val KEY_SAVED_IMAGE_CUSTOM_NAME = "key_saved_image_custom_name"
+        const val DEFAULT_SAVED_IMAGE_LOCATION = "pictures_fotara"
+        const val DEFAULT_SAVED_IMAGE_CUSTOM_NAME = ""
     }
     val settingsFlow: StateFlow<UserSettings>
     val profileFlow: StateFlow<UserProfile>
@@ -83,6 +87,7 @@ interface SettingsRepository {
     suspend fun updateAutoCheckUpdates(enabled: Boolean)
     suspend fun updateOptInCrashReporting(enabled: Boolean)
     suspend fun updateCombineFileNamePreset(preset: String)
+    suspend fun updateSavedImageLocation(locationKey: String, customName: String)
 }
 
 class DefaultSettingsRepository(
@@ -171,7 +176,21 @@ class DefaultSettingsRepository(
             autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK_UPDATES, true),
             optInCrashReporting = prefs.getBoolean(KEY_OPT_IN_CRASH_REPORTING, false),
             combineFileNamePreset = prefs.getString(KEY_COMBINE_NAME_PRESET, "{folder}_{date}") ?: "{folder}_{date}",
-            isDeviceCountEnabled = prefs.getBoolean(KEY_DEVICE_COUNT_ENABLED, DEVICE_COUNT_DEFAULT_ENABLED)
+            isDeviceCountEnabled = prefs.getBoolean(KEY_DEVICE_COUNT_ENABLED, DEVICE_COUNT_DEFAULT_ENABLED),
+            savedImageLocation = prefs.getString(KEY_SAVED_IMAGE_LOCATION, DEFAULT_SAVED_IMAGE_LOCATION) ?: DEFAULT_SAVED_IMAGE_LOCATION,
+            savedImageCustomName = prefs.getString(KEY_SAVED_IMAGE_CUSTOM_NAME, DEFAULT_SAVED_IMAGE_CUSTOM_NAME) ?: DEFAULT_SAVED_IMAGE_CUSTOM_NAME
+        )
+    }
+
+    override suspend fun updateSavedImageLocation(locationKey: String, customName: String) = withContext(Dispatchers.IO) {
+        val sanitizedCustom = customName.trim().take(30)
+        prefs.edit()
+            .putString(KEY_SAVED_IMAGE_LOCATION, locationKey)
+            .putString(KEY_SAVED_IMAGE_CUSTOM_NAME, sanitizedCustom)
+            .apply()
+        _settingsFlow.value = _settingsFlow.value.copy(
+            savedImageLocation = locationKey,
+            savedImageCustomName = sanitizedCustom
         )
     }
 
@@ -261,6 +280,7 @@ class DefaultSettingsRepository(
                 put("kind", ws.kind.name)
                 put("name", ws.name)
                 put("position", ws.position)
+                ws.iconKey?.let { put("iconKey", it) }
             }
             workspacesArray.put(wObj)
             workspaceUuidMap[ws.id] = ws.uuid
@@ -356,13 +376,22 @@ class DefaultSettingsRepository(
                     val wKind = wObj.optString("kind", "CUSTOM")
                     val wName = wObj.optString("name", "")
 
+                    val rawIconKey = if (wObj.has("iconKey") && !wObj.isNull("iconKey")) {
+                        wObj.getString("iconKey")
+                    } else null
+                    val validIconKey = if (rawIconKey != null && com.arinara.fotara.data.model.WorkspaceIcons.isValidKey(rawIconKey)) {
+                        rawIconKey
+                    } else if (rawIconKey != null) {
+                        com.arinara.fotara.data.model.WorkspaceIcons.DEFAULT_KEY
+                    } else null
+
                     if (wKind == "HOME") {
                         workspaceUuidToIdMap[wUuid] = homeWs.id
                     } else if (wKind == "ARCHIVE") {
                         workspaceUuidToIdMap[wUuid] = archiveTargetId
                     } else if (!workspaceUuidToIdMap.containsKey(wUuid)) {
                         if (currentCustomCount < WorkspaceValidator.MAX_CUSTOM_WORKSPACES) {
-                            val res = workspaceRepository.createWorkspace(wName)
+                            val res = workspaceRepository.createWorkspace(wName, validIconKey)
                             if (res is WorkspaceResult.Success) {
                                 workspaceUuidToIdMap[wUuid] = res.data.id
                                 currentCustomCount++
@@ -804,5 +833,9 @@ class DefaultSettingsRepository(
         private const val KEY_PROFILE_BANNER_PATH = "key_profile_banner_path"
         private const val KEY_PROFILE_BANNER_UPDATED_AT = "key_profile_banner_updated_at"
         private const val KEY_PROFILE_BORDER_ID = "key_profile_border_id"
+        private const val KEY_SAVED_IMAGE_LOCATION = SettingsRepository.KEY_SAVED_IMAGE_LOCATION
+        private const val KEY_SAVED_IMAGE_CUSTOM_NAME = SettingsRepository.KEY_SAVED_IMAGE_CUSTOM_NAME
+        private const val DEFAULT_SAVED_IMAGE_LOCATION = SettingsRepository.DEFAULT_SAVED_IMAGE_LOCATION
+        private const val DEFAULT_SAVED_IMAGE_CUSTOM_NAME = SettingsRepository.DEFAULT_SAVED_IMAGE_CUSTOM_NAME
     }
 }

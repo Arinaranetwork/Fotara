@@ -88,6 +88,19 @@ class VersionInfoTest {
         // Equal version and channel
         assertFalse(UpdateVersionUtils.isNewerVersion("1.7.0", "1.7.0"))
         assertFalse(UpdateVersionUtils.isNewerVersion("1.7.0 Beta", "1.7.0 Beta"))
+
+        // 1.8.0 Beta is newer than 1.7.1
+        val v180Beta = VersionInfo.parse("1.8.0 Beta")
+        assertEquals("1.8.0", v180Beta.numericVersion)
+        assertEquals(UpdateChannel.BETA, v180Beta.channel)
+        assertEquals("Beta", v180Beta.channelLabel)
+        assertEquals("v1.8.0", v180Beta.displayVersion)
+        assertTrue(UpdateVersionUtils.isNewerVersion("1.8.0 Beta", "1.7.1"))
+        assertFalse(UpdateVersionUtils.isNewerVersion("1.7.1", "1.8.0 Beta"))
+
+        // 1.8.0 Stable is newer than 1.8.0 Beta
+        assertTrue(UpdateVersionUtils.isNewerVersion("1.8.0", "1.8.0 Beta"))
+        assertFalse(UpdateVersionUtils.isNewerVersion("1.8.0 Beta", "1.8.0"))
     }
 
     @Test

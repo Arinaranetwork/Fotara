@@ -91,8 +91,21 @@ data class UserSettings(
     val autoCheckUpdates: Boolean = true,
     val optInCrashReporting: Boolean = false,
     val combineFileNamePreset: String = "{folder}_{date}",
-    val isDeviceCountEnabled: Boolean = true
-)
+    val isDeviceCountEnabled: Boolean = true,
+    val savedImageLocation: String = "pictures_fotara",
+    val savedImageCustomName: String = ""
+) {
+    fun getEffectiveSavedImageRelativePath(): String {
+        return when (savedImageLocation) {
+            "dcim_fotara" -> "DCIM/Fotara"
+            "custom" -> {
+                val folderName = savedImageCustomName.trim().ifEmpty { "Fotara" }
+                "Pictures/$folderName"
+            }
+            else -> "Pictures/Fotara"
+        }
+    }
+}
 
 data class ImportResult(
     val success: Boolean,

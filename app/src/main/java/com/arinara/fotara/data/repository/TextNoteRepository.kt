@@ -277,9 +277,17 @@ class SqliteTextNoteRepository(
             val trimmed = query.trim().lowercase()
             if (trimmed.isBlank()) emptyList()
             else {
+                val terms = trimmed.split(Regex("\\s+")).filter { it.isNotBlank() }
                 notes.filter { note ->
-                    note.title.lowercase().contains(trimmed) ||
-                    TextNote.stripMarkdownFormatting(note.bodyMarkdown).lowercase().contains(trimmed)
+                    val titleNorm = note.title.lowercase()
+                    val plainBody = TextNote.stripMarkdownFormatting(note.bodyMarkdown).lowercase()
+                    val rawBody = note.bodyMarkdown.lowercase()
+                    titleNorm.contains(trimmed) ||
+                    plainBody.contains(trimmed) ||
+                    rawBody.contains(trimmed) ||
+                    (terms.isNotEmpty() && terms.all { term ->
+                        titleNorm.contains(term) || plainBody.contains(term) || rawBody.contains(term)
+                    })
                 }
             }
         }

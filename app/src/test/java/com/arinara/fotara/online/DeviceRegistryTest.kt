@@ -119,6 +119,7 @@ class DeviceRegistryTest {
         override suspend fun updateAutoCheckUpdates(enabled: Boolean) {}
         override suspend fun updateOptInCrashReporting(enabled: Boolean) {}
         override suspend fun updateCombineFileNamePreset(preset: String) {}
+        override suspend fun updateSavedImageLocation(locationKey: String, customName: String) {}
     }
 
     private lateinit var mockPrefs: MockSharedPreferences

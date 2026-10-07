@@ -902,6 +902,10 @@ class SqliteDocumentRepository(
 
         val db = dbHelper.getSafeWritableDatabase()
         removeDocumentFts(db, id)
+        try {
+            db.delete("pdf_page_pins", "document_id = ?", arrayOf(id.toString()))
+            db.delete("pdf_page_drawings", "document_id = ?", arrayOf(id.toString()))
+        } catch (_: Exception) {}
         db.delete("document_pages", "document_note_id = ?", arrayOf(id.toString()))
         db.delete("document_notes", "id = ?", arrayOf(id.toString()))
         refreshSync()

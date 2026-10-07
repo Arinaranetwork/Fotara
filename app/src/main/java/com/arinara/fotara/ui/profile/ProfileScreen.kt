@@ -17,6 +17,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalConfiguration
 import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.ui.components.ProfileBanner
+import com.arinara.fotara.ui.components.ProfileBannerDefaults
+import com.arinara.fotara.ui.components.ProfileBannerHeader
+import com.arinara.fotara.ui.components.SettingsSubScreenHeader
+import com.arinara.fotara.ui.components.SettingsSubScreenHeaderDefaults
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -32,6 +36,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -308,104 +313,38 @@ fun ProfileScreen(
             .verticalScroll(scrollState)
             .padding(bottom = bottomOverlayPadding + 24.dp)
     ) {
-        // Header Banner with Gradient Fade
+        // Header Banner with Gradient Fade, Centered Avatar, and Sub-Screen Header
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
+                .height(ProfileBannerDefaults.BannerHeight)
         ) {
-            ProfileBanner(
+            ProfileBannerHeader(
                 bannerPath = profile.bannerPath,
                 bannerUpdatedAt = profile.bannerUpdatedAt,
                 bannerCrop = profile.bannerCrop,
+                avatarPath = profile.avatarPath,
+                borderId = profile.borderId,
+                avatarUpdatedAt = profile.avatarUpdatedAt,
                 isOnScreen = true,
+                showEditButton = true,
+                onEditClick = {
+                    avatarPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Top Scrim for Status Bar & Back Button
-            Box(
+            // Sub-Screen Header
+            SettingsSubScreenHeader(
+                title = stringResource(R.string.profile_title),
+                onBackClick = onBackClick,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(90.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.65f),
-                                Color.Transparent
-                            )
-                        )
-                    )
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = SettingsSubScreenHeaderDefaults.HorizontalPadding)
             )
-
-            // Bottom Gradient Fade into HomeNearBlack
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(110.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                HomeNearBlack.copy(alpha = 0.75f),
-                                HomeNearBlack
-                            )
-                        )
-                    )
-            )
-
-            // Top Nav Row
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(WindowInsets.statusBars.asPaddingValues())
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF131925).copy(alpha = 0.85f))
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Text(
-                    text = stringResource(R.string.profile_title),
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // Centered Live Avatar View
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-            ) {
-                ProfileAvatar(
-                    avatarPath = profile.avatarPath,
-                    borderId = profile.borderId,
-                    avatarSize = 78.dp,
-                    avatarUpdatedAt = profile.avatarUpdatedAt,
-                    showEditButton = true,
-                    onEditClick = {
-                        avatarPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    }
-                )
-            }
         }
 
         Spacer(modifier = Modifier.height(18.dp))

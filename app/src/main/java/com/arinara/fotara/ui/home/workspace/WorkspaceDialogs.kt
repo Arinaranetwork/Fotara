@@ -69,6 +69,17 @@ import com.arinara.fotara.data.model.getDisplayName
 import com.arinara.fotara.data.repository.WorkspaceContentStats
 import com.arinara.fotara.data.repository.WorkspaceError
 import com.arinara.fotara.data.repository.WorkspaceValidator
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.arinara.fotara.data.model.WorkspaceIcons
+import com.arinara.fotara.data.model.getDisplay
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.HomeCardBorder
 import com.arinara.fotara.theme.HomeCardSurface
@@ -80,9 +91,10 @@ import com.arinara.fotara.theme.TagCrimson
 fun AddWorkspaceDialog(
     workspaces: List<Workspace>,
     onDismiss: () -> Unit,
-    onCreate: (String) -> Unit
+    onCreate: (name: String, iconKey: String?) -> Unit
 ) {
     var textValue by remember { mutableStateOf(TextFieldValue("")) }
+    var selectedIconKey by remember { mutableStateOf(WorkspaceIcons.DEFAULT_KEY) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val focusRequester = remember { FocusRequester() }
 
@@ -91,10 +103,12 @@ fun AddWorkspaceDialog(
     val duplicateError = stringResource(R.string.workspace_error_name_duplicate)
     val reservedError = stringResource(R.string.workspace_error_reserved)
 
+    val currentValidationErr = WorkspaceValidator.validateName(textValue.text, workspaces)
+    val isSaveEnabled = currentValidationErr == null
+
     fun submit() {
-        val err = WorkspaceValidator.validateName(textValue.text, workspaces)
-        if (err != null) {
-            errorMessage = when (err) {
+        if (currentValidationErr != null) {
+            errorMessage = when (currentValidationErr) {
                 WorkspaceError.NameEmpty -> emptyError
                 WorkspaceError.NameTooLong -> lengthError
                 WorkspaceError.NameDuplicate -> duplicateError
@@ -103,7 +117,7 @@ fun AddWorkspaceDialog(
             }
             return
         }
-        onCreate(textValue.text)
+        onCreate(textValue.text, selectedIconKey)
     }
 
     LaunchedEffect(Unit) {
@@ -135,7 +149,7 @@ fun AddWorkspaceDialog(
                     singleLine = true,
                     isError = errorMessage != null,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    keyboardActions = KeyboardActions(onDone = { if (isSaveEnabled) submit() }),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = HomeMainButtonBlue,
                         unfocusedBorderColor = HomeCardBorder,
@@ -156,16 +170,235 @@ fun AddWorkspaceDialog(
                         fontFamily = ElmsSans
                     )
                 }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = stringResource(R.string.workspace_icon_label),
+                    color = HomeSubtitleGray,
+                    fontFamily = ElmsSans,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(6),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(WorkspaceIcons.ALL_ICONS) { iconItem ->
+                        val isSelected = selectedIconKey == iconItem.key
+                        val iconCd = stringResource(R.string.cd_workspace_icon, iconItem.label)
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) HomeMainButtonBlue.copy(alpha = 0.25f) else Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) HomeMainButtonBlue else HomeCardBorder.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable { selectedIconKey = iconItem.key }
+                                .semantics { contentDescription = iconCd },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(iconItem.resId),
+                                contentDescription = null,
+                                tint = if (isSelected) HomeMainButtonBlue else Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = { submit() },
+                enabled = isSaveEnabled,
                 colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
                     text = stringResource(R.string.action_create),
+                    color = Color.White,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = stringResource(R.string.confirm_cancel),
+                    color = HomeSubtitleGray,
+                    fontFamily = ElmsSans
+                )
+            }
+        }
+    )
+}
+
+@Composable
+fun AddWorkspaceDialog(
+    workspaces: List<Workspace>,
+    onDismiss: () -> Unit,
+    onCreate: (String) -> Unit
+) {
+    AddWorkspaceDialog(
+        workspaces = workspaces,
+        onDismiss = onDismiss,
+        onCreate = { name, _ -> onCreate(name) }
+    )
+}
+
+@Composable
+fun EditWorkspaceDialog(
+    workspace: Workspace,
+    workspaces: List<Workspace>,
+    onDismiss: () -> Unit,
+    onSave: (newName: String, newIconKey: String?) -> Unit
+) {
+    var textValue by remember {
+        mutableStateOf(TextFieldValue(workspace.name, TextRange(0, workspace.name.length)))
+    }
+    var selectedIconKey by remember {
+        mutableStateOf(workspace.iconKey ?: WorkspaceIcons.DEFAULT_KEY)
+    }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val focusRequester = remember { FocusRequester() }
+
+    val emptyError = stringResource(R.string.workspace_error_name_empty)
+    val lengthError = stringResource(R.string.workspace_error_name_length)
+    val duplicateError = stringResource(R.string.workspace_error_name_duplicate)
+    val reservedError = stringResource(R.string.workspace_error_reserved)
+
+    val currentValidationErr = WorkspaceValidator.validateName(textValue.text, workspaces, editingWorkspaceId = workspace.id)
+    val isSaveEnabled = currentValidationErr == null
+
+    fun submit() {
+        if (currentValidationErr != null) {
+            errorMessage = when (currentValidationErr) {
+                WorkspaceError.NameEmpty -> emptyError
+                WorkspaceError.NameTooLong -> lengthError
+                WorkspaceError.NameDuplicate -> duplicateError
+                WorkspaceError.NameReserved -> reservedError
+                else -> emptyError
+            }
+            return
+        }
+        onSave(textValue.text, selectedIconKey)
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = HomeCardSurface,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = stringResource(R.string.dialog_edit_workspace_title),
+                color = Color.White,
+                fontFamily = ElmsSans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = textValue,
+                    onValueChange = {
+                        textValue = it
+                        errorMessage = null
+                    },
+                    label = { Text(stringResource(R.string.workspace_name_label), color = HomeSubtitleGray, fontFamily = ElmsSans) },
+                    singleLine = true,
+                    isError = errorMessage != null,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (isSaveEnabled) submit() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = HomeMainButtonBlue,
+                        unfocusedBorderColor = HomeCardBorder,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        errorBorderColor = TagCrimson
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                )
+                if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = errorMessage!!,
+                        color = TagCrimson,
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = stringResource(R.string.workspace_icon_label),
+                    color = HomeSubtitleGray,
+                    fontFamily = ElmsSans,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(6),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(WorkspaceIcons.ALL_ICONS) { iconItem ->
+                        val isSelected = selectedIconKey == iconItem.key
+                        val iconCd = stringResource(R.string.cd_workspace_icon, iconItem.label)
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) HomeMainButtonBlue.copy(alpha = 0.25f) else Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) HomeMainButtonBlue else HomeCardBorder.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable { selectedIconKey = iconItem.key }
+                                .semantics { contentDescription = iconCd },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(iconItem.resId),
+                                contentDescription = null,
+                                tint = if (isSelected) HomeMainButtonBlue else Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { submit() },
+                enabled = isSaveEnabled,
+                colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.action_save),
                     color = Color.White,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.SemiBold
@@ -191,107 +424,11 @@ fun RenameWorkspaceDialog(
     onDismiss: () -> Unit,
     onRename: (String) -> Unit
 ) {
-    var textValue by remember {
-        mutableStateOf(TextFieldValue(workspace.name, TextRange(0, workspace.name.length)))
-    }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    val focusRequester = remember { FocusRequester() }
-
-    val emptyError = stringResource(R.string.workspace_error_name_empty)
-    val lengthError = stringResource(R.string.workspace_error_name_length)
-    val duplicateError = stringResource(R.string.workspace_error_name_duplicate)
-    val reservedError = stringResource(R.string.workspace_error_reserved)
-
-    fun submit() {
-        val err = WorkspaceValidator.validateName(textValue.text, workspaces, editingWorkspaceId = workspace.id)
-        if (err != null) {
-            errorMessage = when (err) {
-                WorkspaceError.NameEmpty -> emptyError
-                WorkspaceError.NameTooLong -> lengthError
-                WorkspaceError.NameDuplicate -> duplicateError
-                WorkspaceError.NameReserved -> reservedError
-                else -> emptyError
-            }
-            return
-        }
-        onRename(textValue.text)
-    }
-
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = HomeCardSurface,
-        shape = RoundedCornerShape(20.dp),
-        title = {
-            Text(
-                text = stringResource(R.string.dialog_rename_workspace_title),
-                color = Color.White,
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-        },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = textValue,
-                    onValueChange = {
-                        textValue = it
-                        errorMessage = null
-                    },
-                    label = { Text(stringResource(R.string.workspace_name_label), color = HomeSubtitleGray, fontFamily = ElmsSans) },
-                    singleLine = true,
-                    isError = errorMessage != null,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = HomeMainButtonBlue,
-                        unfocusedBorderColor = HomeCardBorder,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        errorBorderColor = TagCrimson
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                )
-                if (errorMessage != null) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = errorMessage!!,
-                        color = TagCrimson,
-                        fontSize = 13.sp,
-                        fontFamily = ElmsSans
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { submit() },
-                colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.action_save),
-                    color = Color.White,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = stringResource(R.string.confirm_cancel),
-                    color = HomeSubtitleGray,
-                    fontFamily = ElmsSans
-                )
-            }
-        }
+    EditWorkspaceDialog(
+        workspace = workspace,
+        workspaces = workspaces,
+        onDismiss = onDismiss,
+        onSave = { newName, _ -> onRename(newName) }
     )
 }
 
@@ -349,7 +486,7 @@ fun MoveToWorkspaceDialog(
             Column(modifier = Modifier.fillMaxWidth()) {
                 orderedWorkspaces.forEach { ws ->
                     val isCurrent = commonWorkspaceId != null && ws.id == commonWorkspaceId
-                    val displayName = ws.getDisplayName()
+                    val wsDisplay = ws.getDisplay()
                     val isSelected = selectedId == ws.id
 
                     Row(
@@ -373,8 +510,15 @@ fun MoveToWorkspaceDialog(
                             )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            painter = painterResource(wsDisplay.iconResId),
+                            contentDescription = null,
+                            tint = if (isCurrent) HomeSubtitleGray.copy(alpha = 0.5f) else Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = displayName,
+                            text = wsDisplay.name,
                             color = if (isCurrent) HomeSubtitleGray.copy(alpha = 0.5f) else Color.White,
                             fontFamily = ElmsSans,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
@@ -793,7 +937,7 @@ fun RestoreWorkspaceDestinationDialog(
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 orderedWorkspaces.forEach { ws ->
-                    val displayName = ws.getDisplayName()
+                    val wsDisplay = ws.getDisplay()
                     val isSelected = selectedId == ws.id
 
                     Row(
@@ -812,8 +956,15 @@ fun RestoreWorkspaceDestinationDialog(
                             )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            painter = painterResource(wsDisplay.iconResId),
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = displayName,
+                            text = wsDisplay.name,
                             color = Color.White,
                             fontFamily = ElmsSans,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,

@@ -33,7 +33,8 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 kind TEXT NOT NULL,
                 name TEXT NOT NULL,
                 position INTEGER NOT NULL,
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                icon_key TEXT
             )
             """.trimIndent()
         )
@@ -318,6 +319,36 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
             )
             """.trimIndent()
         )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS pdf_page_pins (
+                document_id INTEGER NOT NULL,
+                page_index INTEGER NOT NULL,
+                pinned_at INTEGER NOT NULL,
+                PRIMARY KEY (document_id, page_index),
+                FOREIGN KEY(document_id) REFERENCES document_notes(id) ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pdf_page_pins_doc_id ON pdf_page_pins(document_id)")
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS pdf_page_drawings (
+                document_id INTEGER NOT NULL,
+                page_index INTEGER NOT NULL,
+                data BLOB NOT NULL,
+                page_width REAL NOT NULL,
+                page_height REAL NOT NULL,
+                is_visible INTEGER NOT NULL DEFAULT 1,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (document_id, page_index),
+                FOREIGN KEY(document_id) REFERENCES document_notes(id) ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pdf_page_drawings_doc_id ON pdf_page_drawings(document_id)")
 
         createFtsTable(db)
     }
@@ -707,12 +738,67 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v17 failed: ${e.message}")
             }
         }
+        if (oldVersion < 18) {
+            try {
+                db.execSQL("ALTER TABLE workspaces ADD COLUMN icon_key TEXT")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v18 (icon_key) failed: ${e.message}")
+            }
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS pdf_page_pins (
+                        document_id INTEGER NOT NULL,
+                        page_index INTEGER NOT NULL,
+                        pinned_at INTEGER NOT NULL,
+                        PRIMARY KEY (document_id, page_index),
+                        FOREIGN KEY(document_id) REFERENCES document_notes(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_pdf_page_pins_doc_id ON pdf_page_pins(document_id)")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v18 (pdf_page_pins) failed: ${e.message}")
+            }
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS pdf_page_drawings (
+                        document_id INTEGER NOT NULL,
+                        page_index INTEGER NOT NULL,
+                        data BLOB NOT NULL,
+                        page_width REAL NOT NULL,
+                        page_height REAL NOT NULL,
+                        is_visible INTEGER NOT NULL DEFAULT 1,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (document_id, page_index),
+                        FOREIGN KEY(document_id) REFERENCES document_notes(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_pdf_page_drawings_doc_id ON pdf_page_drawings(document_id)")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v18 (pdf_page_drawings) failed: ${e.message}")
+            }
+            try {
+                db.execSQL("DELETE FROM pdf_page_pins WHERE document_id NOT IN (SELECT id FROM document_notes)")
+                db.execSQL("DELETE FROM pdf_page_drawings WHERE document_id NOT IN (SELECT id FROM document_notes)")
+            } catch (_: Exception) {}
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
         super.onConfigure(db)
         try {
             db.setForeignKeyConstraintsEnabled(true)
+        } catch (_: Exception) {}
+    }
+
+    override fun onOpen(db: SQLiteDatabase) {
+        super.onOpen(db)
+        try {
+            db.execSQL("DELETE FROM pdf_page_pins WHERE document_id NOT IN (SELECT id FROM document_notes)")
+            db.execSQL("DELETE FROM pdf_page_drawings WHERE document_id NOT IN (SELECT id FROM document_notes)")
         } catch (_: Exception) {}
     }
 
@@ -742,7 +828,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 17
+        const val DATABASE_VERSION = 18
         const val HOME_WORKSPACE_ID = 1L
         const val ARCHIVE_WORKSPACE_ID = 2L
         const val HOME_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000001"

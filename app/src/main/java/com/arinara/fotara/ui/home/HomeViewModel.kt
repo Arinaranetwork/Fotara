@@ -1166,10 +1166,10 @@ class HomeViewModel(
         _uiState.update { it.copy(workspaceToRename = null) }
     }
 
-    fun createWorkspace(name: String, onCreated: ((Long) -> Unit)? = null) {
+    fun createWorkspace(name: String, iconKey: String? = null, onCreated: ((Long) -> Unit)? = null) {
         viewModelScope.launch {
             val repo = workspaceRepository ?: return@launch
-            when (val result = repo.createWorkspace(name)) {
+            when (val result = repo.createWorkspace(name, iconKey)) {
                 is WorkspaceResult.Success -> {
                     selectWorkspace(result.data.id)
                     closeAddWorkspaceDialog()
@@ -1190,10 +1190,10 @@ class HomeViewModel(
         }
     }
 
-    fun renameWorkspace(workspaceId: Long, newName: String) {
+    fun updateWorkspace(workspaceId: Long, newName: String, iconKey: String? = null) {
         viewModelScope.launch {
             val repo = workspaceRepository ?: return@launch
-            when (val result = repo.renameWorkspace(workspaceId, newName)) {
+            when (val result = repo.updateWorkspace(workspaceId, newName, iconKey)) {
                 is WorkspaceResult.Success -> {
                     closeRenameWorkspaceDialog()
                 }
@@ -1203,12 +1203,16 @@ class HomeViewModel(
                         WorkspaceError.NameTooLong -> "Name must be between 1 and 20 characters"
                         WorkspaceError.NameDuplicate -> "A workspace with this name already exists"
                         WorkspaceError.NameReserved -> "Name is reserved for built-in workspaces"
-                        else -> "Failed to rename workspace"
+                        else -> "Failed to update workspace"
                     }
                     _uiState.update { it.copy(userMessage = msg) }
                 }
             }
         }
+    }
+
+    fun renameWorkspace(workspaceId: Long, newName: String) {
+        updateWorkspace(workspaceId, newName, null)
     }
 
     fun reorderWorkspaces(workspaceIds: List<Long>) {

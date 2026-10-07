@@ -322,15 +322,17 @@ fun PhotoDrawingEditor(
                                 } else if (pressedChanges.size == 1 && currentIsDrawingVisible) {
                                     // 1-finger Drawing / Erasing
                                     val change = pressedChanges.first()
-                                    val touchPos = change.position
-
-                                    val viewCenterX = containerW / 2f
-                                    val viewCenterY = containerH / 2f
-                                    val contentX = (touchPos.x - viewCenterX - panOffset.x) / userScale + viewCenterX
-                                    val contentY = (touchPos.y - viewCenterY - panOffset.y) / userScale + viewCenterY
-
-                                    val photoX = ((contentX - fitLeft) / fitScale).coerceIn(0f, photoWidth.toFloat())
-                                    val photoY = ((contentY - fitTop) / fitScale).coerceIn(0f, photoHeight.toFloat())
+                                    val transformParams = com.arinara.fotara.canvas.engine.DrawingViewTransform.createParams(
+                                        viewportWidth = containerW,
+                                        viewportHeight = containerH,
+                                        contentWidth = photoWidth.toFloat(),
+                                        contentHeight = photoHeight.toFloat(),
+                                        scale = userScale,
+                                        panOffset = panOffset
+                                    )
+                                    val photoPt = transformParams.localToContent(change.position)
+                                    val photoX = photoPt.x
+                                    val photoY = photoPt.y
                                     val pressure = StrokeProcessor.normalizePressure(change.pressure)
 
                                     if (dragStrokesSnapshot == null) {

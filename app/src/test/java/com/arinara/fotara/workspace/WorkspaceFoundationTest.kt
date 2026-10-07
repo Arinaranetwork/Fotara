@@ -10,6 +10,7 @@ import com.arinara.fotara.data.db.FotaraDbHelper
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.model.getDisplay
 import com.arinara.fotara.data.repository.WorkspaceError
 import com.arinara.fotara.data.repository.WorkspaceResult
 import com.arinara.fotara.data.repository.WorkspaceValidator
@@ -424,5 +425,79 @@ class WorkspaceFoundationTest {
         val created = folderRepo.getFolders().first().firstOrNull { it.name == "Painting" }
         assertNotNull(created)
         assertEquals("Folder must be created with selected workspace id", customWs.id, created!!.workspaceId)
+    }
+
+    // =========================================================================
+    // Task 2 - Workspace Icons Tests
+    // =========================================================================
+
+    @Test
+    fun testWorkspaceIcons_RegistryLookup_Fallback() {
+        assertEquals(24, com.arinara.fotara.data.model.WorkspaceIcons.ALL_ICONS.size)
+        // Known keys
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_folder, com.arinara.fotara.data.model.WorkspaceIcons.getIconResId("folder"))
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_book, com.arinara.fotara.data.model.WorkspaceIcons.getIconResId("book"))
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_palette, com.arinara.fotara.data.model.WorkspaceIcons.getIconResId("palette"))
+        // Case insensitive
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_palette, com.arinara.fotara.data.model.WorkspaceIcons.getIconResId("PALETTE"))
+        // Fallback for null
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_folder, com.arinara.fotara.data.model.WorkspaceIcons.getIconResId(null))
+        // Fallback for unknown key
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_folder, com.arinara.fotara.data.model.WorkspaceIcons.getIconResId("non_existent_key_123"))
+    }
+
+    @Test
+    fun testWorkspaceRepository_CreateAndEditWithIcon() = runTest(testDispatcher) {
+        val workspaceRepo = FakeWorkspaceRepository()
+        // Create with valid icon
+        val createRes = workspaceRepo.createWorkspace("Music Studies", "music")
+        assertTrue(createRes is WorkspaceResult.Success)
+        val created = (createRes as WorkspaceResult.Success).data
+        assertEquals("music", created.iconKey)
+
+        // Edit with another valid icon
+        val editRes = workspaceRepo.updateWorkspace(created.id, "Audio Production", "code")
+        assertTrue(editRes is WorkspaceResult.Success)
+        val updated = workspaceRepo.getWorkspacesSync().first { it.id == created.id }
+        assertEquals("Audio Production", updated.name)
+        assertEquals("code", updated.iconKey)
+
+        // Reject unknown icon key on create
+        val invalidCreate = workspaceRepo.createWorkspace("Bad Icon", "not_a_real_icon")
+        assertTrue(invalidCreate is WorkspaceResult.Error)
+        assertEquals(WorkspaceError.InvalidIconKey, (invalidCreate as WorkspaceResult.Error).error)
+
+        // Reject unknown icon key on edit
+        val invalidEdit = workspaceRepo.updateWorkspace(created.id, "Audio Production", "bogus_icon")
+        assertTrue(invalidEdit is WorkspaceResult.Error)
+        assertEquals(WorkspaceError.InvalidIconKey, (invalidEdit as WorkspaceResult.Error).error)
+    }
+
+    @Test
+    fun testWorkspaceDisplayFunction_TabsAndChipsWiring() {
+        val homeWs = Workspace(id = 1L, uuid = "uuid1", kind = WorkspaceKind.HOME, name = "", position = 0)
+        val archiveWs = Workspace(id = 2L, uuid = "uuid2", kind = WorkspaceKind.ARCHIVE, name = "", position = 1)
+        val customWsWithIcon = Workspace(id = 3L, uuid = "uuid3", kind = WorkspaceKind.CUSTOM, name = "Science", position = 2, iconKey = "science")
+        val customWsDefaultIcon = Workspace(id = 4L, uuid = "uuid4", kind = WorkspaceKind.CUSTOM, name = "General", position = 3, iconKey = null)
+
+        val homeDisplay = homeWs.getDisplay(homeLabel = "Home", archiveLabel = "Archive")
+        assertEquals(WorkspaceKind.HOME, homeDisplay.kind)
+        assertEquals("Home", homeDisplay.name)
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_grid, homeDisplay.iconResId)
+
+        val archiveDisplay = archiveWs.getDisplay(homeLabel = "Home", archiveLabel = "Archive")
+        assertEquals(WorkspaceKind.ARCHIVE, archiveDisplay.kind)
+        assertEquals("Archive", archiveDisplay.name)
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_archive, archiveDisplay.iconResId)
+
+        val customDisplay = customWsWithIcon.getDisplay(homeLabel = "Home", archiveLabel = "Archive")
+        assertEquals(WorkspaceKind.CUSTOM, customDisplay.kind)
+        assertEquals("Science", customDisplay.name)
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_science, customDisplay.iconResId)
+
+        val defaultDisplay = customWsDefaultIcon.getDisplay(homeLabel = "Home", archiveLabel = "Archive")
+        assertEquals(WorkspaceKind.CUSTOM, defaultDisplay.kind)
+        assertEquals("General", defaultDisplay.name)
+        assertEquals(com.arinara.fotara.R.drawable.ic_ws_folder, defaultDisplay.iconResId)
     }
 }

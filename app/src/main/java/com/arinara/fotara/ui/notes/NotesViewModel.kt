@@ -331,10 +331,10 @@ class NotesViewModel(
         _uiState.update { it.copy(showAddWorkspaceDialog = false) }
     }
 
-    fun createWorkspace(name: String) {
+    fun createWorkspace(name: String, iconKey: String? = null) {
         viewModelScope.launch {
             val repo = workspaceRepository ?: return@launch
-            when (val result = repo.createWorkspace(name)) {
+            when (val result = repo.createWorkspace(name, iconKey)) {
                 is WorkspaceResult.Success -> {
                     closeAddWorkspaceDialog()
                     selectWorkspace(result.data.id)
@@ -362,10 +362,10 @@ class NotesViewModel(
         _uiState.update { it.copy(workspaceToRename = null) }
     }
 
-    fun renameWorkspace(workspaceId: Long, newName: String) {
+    fun updateWorkspace(workspaceId: Long, newName: String, iconKey: String? = null) {
         viewModelScope.launch {
             val repo = workspaceRepository ?: return@launch
-            when (val result = repo.renameWorkspace(workspaceId, newName)) {
+            when (val result = repo.updateWorkspace(workspaceId, newName, iconKey)) {
                 is WorkspaceResult.Success -> {
                     closeRenameWorkspaceDialog()
                 }
@@ -375,12 +375,16 @@ class NotesViewModel(
                         is WorkspaceError.NameTooLong -> "Workspace name is too long."
                         is WorkspaceError.NameDuplicate -> "A workspace with this name already exists."
                         is WorkspaceError.NameReserved -> "This name is reserved."
-                        else -> "Failed to rename workspace."
+                        else -> "Failed to update workspace."
                     }
                     _uiState.update { it.copy(userMessage = msg) }
                 }
             }
         }
+    }
+
+    fun renameWorkspace(workspaceId: Long, newName: String) {
+        updateWorkspace(workspaceId, newName, null)
     }
 
     fun reorderWorkspaces(workspaceIds: List<Long>) {

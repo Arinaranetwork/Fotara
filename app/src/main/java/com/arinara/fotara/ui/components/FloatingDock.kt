@@ -52,6 +52,45 @@ import com.arinara.fotara.theme.HomeSearchBarSurface
  * Features a dark full-pill search field and a circular blue action button
  * opening an upward-anchored menu with "New folder" and "Capture notes".
  */
+/**
+ * Search bar pill component (~52dp tall) used in the bottom dock.
+ */
+@Composable
+fun FloatingSearchBarPill(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .height(52.dp)
+            .clip(RoundedCornerShape(26.dp))
+            .background(HomeSearchBarSurface)
+            .border(1.dp, HomeSearchBarBorder, RoundedCornerShape(26.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search",
+                tint = Color(0xFF6B7280),
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = stringResource(R.string.search_hint),
+                color = Color(0xFF6B7280),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Light,
+                fontFamily = ElmsSans
+            )
+        }
+    }
+}
+
 @Composable
 fun FloatingDock(
     onSearchClick: () -> Unit,
@@ -65,37 +104,10 @@ fun FloatingDock(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Dark full-pill search bar (~52dp tall)
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(52.dp)
-                .clip(RoundedCornerShape(26.dp))
-                .background(HomeSearchBarSurface)
-                .border(1.dp, HomeSearchBarBorder, RoundedCornerShape(26.dp))
-                .clickable(onClick = onSearchClick)
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Search",
-                    tint = Color(0xFF6B7280),
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = stringResource(R.string.search_hint),
-                    color = Color(0xFF6B7280),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Light,
-                    fontFamily = ElmsSans
-                )
-            }
-        }
+        FloatingSearchBarPill(
+            onClick = onSearchClick,
+            modifier = Modifier.weight(1f)
+        )
 
         // Circular '+' Button (52dp, #2563EB) opens New Folder directly
         SharedFloatingAddButton(

@@ -952,6 +952,8 @@ class SqlitePhotoRepository(
             db.execSQL("DELETE FROM folders WHERE is_trashed = 1")
             try {
                 db.execSQL("DELETE FROM photo_drawings WHERE photo_id NOT IN (SELECT id FROM photos)")
+                db.execSQL("DELETE FROM pdf_page_pins WHERE document_id NOT IN (SELECT id FROM document_notes)")
+                db.execSQL("DELETE FROM pdf_page_drawings WHERE document_id NOT IN (SELECT id FROM document_notes)")
             } catch (_: Exception) {}
             db.setTransactionSuccessful()
         } finally {
@@ -985,6 +987,8 @@ class SqlitePhotoRepository(
             db.execSQL("DELETE FROM folders WHERE is_trashed = 1 AND deleted_at < $cutoff")
             try {
                 db.execSQL("DELETE FROM photo_drawings WHERE photo_id NOT IN (SELECT id FROM photos)")
+                db.execSQL("DELETE FROM pdf_page_pins WHERE document_id NOT IN (SELECT id FROM document_notes)")
+                db.execSQL("DELETE FROM pdf_page_drawings WHERE document_id NOT IN (SELECT id FROM document_notes)")
             } catch (_: Exception) {}
             db.setTransactionSuccessful()
         } finally {

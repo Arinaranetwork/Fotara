@@ -52,6 +52,8 @@ interface AppContainer {
     val canvasAssetManager: com.arinara.fotara.canvas.persistence.CanvasAssetManager
     val noteScheduleManager: com.arinara.fotara.util.NoteScheduleManager
     val photoDrawingRepository: com.arinara.fotara.data.repository.PhotoDrawingRepository
+    val pdfPagePinRepository: com.arinara.fotara.data.repository.PdfPagePinRepository
+    val pdfPageDrawingRepository: com.arinara.fotara.data.repository.PdfPageDrawingRepository
     val updateManager: UpdateManager
     val feedbackManager: FeedbackManager
     val context: Context
@@ -146,6 +148,14 @@ class DefaultAppContainer(override val context: Context) : AppContainer {
 
     override val photoDrawingRepository: com.arinara.fotara.data.repository.PhotoDrawingRepository by lazy {
         com.arinara.fotara.data.repository.SqlitePhotoDrawingRepository(dbHelper)
+    }
+
+    override val pdfPagePinRepository: com.arinara.fotara.data.repository.PdfPagePinRepository by lazy {
+        com.arinara.fotara.data.repository.SqlitePdfPagePinRepository(dbHelper)
+    }
+
+    override val pdfPageDrawingRepository: com.arinara.fotara.data.repository.PdfPageDrawingRepository by lazy {
+        com.arinara.fotara.data.repository.SqlitePdfPageDrawingRepository(dbHelper)
     }
 
     override val updateManager: UpdateManager by lazy {

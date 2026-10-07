@@ -98,6 +98,32 @@ import com.arinara.fotara.data.model.DocumentNote
 import com.arinara.fotara.data.model.DocumentPage
 import com.arinara.fotara.ui.components.NoteDetailScheduleChip
 import com.arinara.fotara.ui.components.ScheduleNoteDialog
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import com.arinara.fotara.canvas.render.PhotoDrawingRenderer
+import com.arinara.fotara.data.model.PdfPageDrawing
+import com.arinara.fotara.data.repository.PdfPageDrawingRepository
+import com.arinara.fotara.data.repository.PdfPagePinRepository
+import com.arinara.fotara.data.repository.SettingsRepository
+import com.arinara.fotara.util.PdfPageGalleryExporter
+import com.arinara.fotara.util.PdfSearchHighlighter
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flowOf
 import com.arinara.fotara.util.NoteScheduleManager
 import com.arinara.fotara.util.PdfCorruptException
 import com.arinara.fotara.util.PdfLayoutMath
@@ -131,9 +157,15 @@ fun PdfViewerScreen(
     onSplitToImages: () -> Unit,
     onDelete: () -> Unit,
     initialPageIndex: Int = 0,
-    highlightPageIndex: Int? = null
+    highlightPageIndex: Int? = null,
+    pdfPagePinRepository: PdfPagePinRepository? = null,
+    pdfPageDrawingRepository: PdfPageDrawingRepository? = null,
+    settingsRepository: SettingsRepository? = null,
+    searchQuery: String? = null,
+    onNavigateToEditor: ((Long, Int) -> Unit)? = null
 ) {
     var showSplitConfirmDialog by remember { mutableStateOf(false) }
+    var pageToClearDrawing by remember { mutableStateOf<Int?>(null) }
     var isReadingMode by rememberSaveable { mutableStateOf(false) }
     var pdfRenderer by remember { mutableStateOf<PdfPageRenderer?>(null) }
     var openErrorMessage by remember { mutableStateOf<String?>(null) }
@@ -141,10 +173,53 @@ fun PdfViewerScreen(
     var currentAlertType by remember { mutableStateOf(documentNote.alertType) }
     var currentScheduleTitle by remember { mutableStateOf(documentNote.scheduleTitle) }
     var showScheduleDialog by remember { mutableStateOf(false) }
+    var flashingPageIndex by remember { mutableStateOf<Int?>(null) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     val file = remember(documentNote.originFileUri) { File(documentNote.originFileUri) }
+
+    // Observe pinned pages
+    val pinnedPages: List<Int> by (pdfPagePinRepository?.observePinnedPages(documentNote.id)
+        ?: flowOf(emptyList<Int>())).collectAsState(initial = emptyList<Int>())
+    val pinnedPageIndices = remember(pinnedPages) { pinnedPages.toSet() }
+
+    // Observe drawings
+    val drawingsMap: Map<Int, PdfPageDrawing> by (pdfPageDrawingRepository?.observeDocumentDrawings(documentNote.id)
+        ?: flowOf(emptyMap<Int, PdfPageDrawing>())).collectAsState(initial = emptyMap<Int, PdfPageDrawing>())
+
+    // SAF launcher for Android 7-9 gallery save
+    var pendingSafSavePageIndex by remember { mutableStateOf<Int?>(null) }
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("image/jpeg")
+    ) { uri ->
+        val pIndex = pendingSafSavePageIndex
+        pendingSafSavePageIndex = null
+        if (uri != null && pIndex != null && pdfRenderer != null) {
+            coroutineScope.launch {
+                val drawing = drawingsMap[pIndex]
+                val bitmap = PdfPageGalleryExporter.renderPageBitmap(pdfRenderer!!, pIndex, drawing)
+                if (bitmap != null) {
+                    try {
+                        context.contentResolver.openOutputStream(uri)?.use { out ->
+                            PdfPageGalleryExporter.writeBitmapToStream(bitmap, out)
+                        }
+                        Toast.makeText(context, context.getString(R.string.msg_saved), Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, context.getString(R.string.msg_save_failed), Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, context.getString(R.string.msg_save_failed), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    DisposableEffect(documentNote.id) {
+        onDispose {
+            PdfSearchHighlighter.clearCache()
+        }
+    }
 
     DisposableEffect(file) {
         try {
@@ -194,6 +269,53 @@ fun PdfViewerScreen(
     LaunchedEffect(zoomState.isZoomed) {
         if (!zoomState.isZoomed) {
             pdfRenderer?.evictHighResCache()
+        }
+    }
+
+    val handleSavePageToGallery: (Int) -> Unit = { pageIndex ->
+        val renderer = pdfRenderer
+        if (renderer != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                coroutineScope.launch {
+                    val drawing = drawingsMap[pageIndex]
+                    val bitmap = PdfPageGalleryExporter.renderPageBitmap(renderer, pageIndex, drawing)
+                    if (bitmap != null) {
+                        try {
+                            val settings = settingsRepository?.settingsFlow?.value
+                            val relPath = settings?.getEffectiveSavedImageRelativePath() ?: "Pictures/Fotara"
+                            val fileName = PdfPageGalleryExporter.buildFileName(documentNote.name, pageIndex + 1)
+                            PdfPageGalleryExporter.saveToMediaStore(context, bitmap, fileName, relPath)
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.msg_saved_to_path, relPath),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, context.getString(R.string.msg_save_failed), Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, context.getString(R.string.msg_save_failed), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                pendingSafSavePageIndex = pageIndex
+                val defaultFileName = PdfPageGalleryExporter.buildFileName(documentNote.name, pageIndex + 1)
+                createDocumentLauncher.launch(defaultFileName)
+            }
+        }
+    }
+
+    val handleTogglePin: (Int) -> Unit = { pageIndex ->
+        coroutineScope.launch {
+            if (pinnedPageIndices.contains(pageIndex)) {
+                pdfPagePinRepository?.unpinPage(documentNote.id, pageIndex)
+            } else {
+                if (pinnedPages.size >= 3) {
+                    Toast.makeText(context, context.getString(R.string.pdf_pin_limit_reached), Toast.LENGTH_SHORT).show()
+                } else {
+                    pdfPagePinRepository?.pinPage(documentNote.id, pageIndex)
+                }
+            }
         }
     }
 
@@ -382,6 +504,96 @@ fun PdfViewerScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
         )
 
+        // Pinned Pages Chip Row (Task 3)
+        if (pinnedPages.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                for (pinPageIndex in pinnedPages) {
+                    var showPinMenu by remember(pinPageIndex) { mutableStateOf(false) }
+                    val isFlashing = flashingPageIndex == pinPageIndex
+                    Box {
+                        Surface(
+                            onClick = {
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(pinPageIndex)
+                                    flashingPageIndex = pinPageIndex
+                                    delay(600L)
+                                    if (flashingPageIndex == pinPageIndex) {
+                                        flashingPageIndex = null
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            color = CardBg,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isFlashing) AccentGold else BorderColor
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .pointerInput(pinPageIndex) {
+                                        detectTapGestures(
+                                            onTap = {
+                                                coroutineScope.launch {
+                                                    listState.animateScrollToItem(pinPageIndex)
+                                                    flashingPageIndex = pinPageIndex
+                                                    delay(600L)
+                                                    if (flashingPageIndex == pinPageIndex) {
+                                                        flashingPageIndex = null
+                                                    }
+                                                }
+                                            },
+                                            onLongPress = { showPinMenu = true }
+                                        )
+                                    },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PushPin,
+                                    contentDescription = null,
+                                    tint = AccentGold,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = stringResource(R.string.pdf_pinned_page_chip, pinPageIndex + 1),
+                                    color = TabCream,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = showPinMenu,
+                            onDismissRequest = { showPinMenu = false },
+                            modifier = Modifier
+                                .background(CardBg)
+                                .border(1.dp, BorderColor, RoundedCornerShape(8.dp))
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_unpin), color = TabCream) },
+                                leadingIcon = { Icon(Icons.Default.PushPin, null, tint = AccentGold) },
+                                onClick = {
+                                    showPinMenu = false
+                                    coroutineScope.launch {
+                                        pdfPagePinRepository?.unpinPage(documentNote.id, pinPageIndex)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         val err = openErrorMessage
         val renderer = pdfRenderer
 
@@ -518,6 +730,7 @@ fun PdfViewerScreen(
                     ) {
                         items(totalCount, key = { index -> "${documentNote.id}_page_$index" }) { pageIndex ->
                             val placeholderPage = pages.getOrNull(pageIndex)
+                            val drawing = drawingsMap[pageIndex]
                             VirtualizedPdfPageView(
                                 pageIndex = pageIndex,
                                 totalPages = totalCount,
@@ -527,7 +740,22 @@ fun PdfViewerScreen(
                                 isZoomed = zoomState.isZoomed,
                                 currentZoomScale = zoomState.scale,
                                 isHighlighted = pageIndex == highlightPageIndex && highlightAlpha.value > 0.01f,
-                                highlightAlpha = highlightAlpha.value
+                                highlightAlpha = highlightAlpha.value,
+                                isPinned = pinnedPageIndices.contains(pageIndex),
+                                isFlashing = flashingPageIndex == pageIndex,
+                                drawing = drawing,
+                                file = file,
+                                documentId = documentNote.id,
+                                searchQuery = searchQuery,
+                                onPinToggle = { handleTogglePin(pageIndex) },
+                                onSaveToGallery = { handleSavePageToGallery(pageIndex) },
+                                onDraw = { onNavigateToEditor?.invoke(documentNote.id, pageIndex) },
+                                onToggleDrawingVisibility = { isVisible ->
+                                    coroutineScope.launch {
+                                        pdfPageDrawingRepository?.setVisible(documentNote.id, pageIndex, isVisible)
+                                    }
+                                },
+                                onClearDrawing = { pageToClearDrawing = pageIndex }
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                         }
@@ -569,6 +797,47 @@ fun PdfViewerScreen(
             dismissButton = {
                 TextButton(onClick = { showSplitConfirmDialog = false }) {
                     Text("Cancel", color = TabCream)
+                }
+            },
+            containerColor = CardBg,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    pageToClearDrawing?.let { targetPage ->
+        AlertDialog(
+            onDismissRequest = { pageToClearDrawing = null },
+            title = {
+                Text(
+                    text = stringResource(R.string.pdf_clear_drawing_confirm_title),
+                    fontWeight = FontWeight.Bold,
+                    color = TabCream
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.pdf_clear_drawing_confirm_msg),
+                    color = TabCream.copy(alpha = 0.85f),
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val p = targetPage
+                        pageToClearDrawing = null
+                        coroutineScope.launch {
+                            pdfPageDrawingRepository?.clearDrawing(documentNote.id, p)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+                ) {
+                    Text(stringResource(R.string.pdf_page_menu_clear_drawing), color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pageToClearDrawing = null }) {
+                    Text(stringResource(R.string.confirm_cancel), color = TabCream)
                 }
             },
             containerColor = CardBg,
@@ -624,13 +893,36 @@ private fun VirtualizedPdfPageView(
     isZoomed: Boolean = false,
     currentZoomScale: Float = 1.0f,
     isHighlighted: Boolean = false,
-    highlightAlpha: Float = 0f
+    highlightAlpha: Float = 0f,
+    isPinned: Boolean = false,
+    isFlashing: Boolean = false,
+    drawing: PdfPageDrawing? = null,
+    file: File,
+    documentId: Long,
+    searchQuery: String? = null,
+    onPinToggle: () -> Unit = {},
+    onSaveToGallery: () -> Unit = {},
+    onDraw: () -> Unit = {},
+    onToggleDrawingVisibility: (Boolean) -> Unit = {},
+    onClearDrawing: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var baseBitmap by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
     var highResBitmap by remember(pageIndex) { mutableStateOf<Bitmap?>(null) }
     var renderError by remember(pageIndex) { mutableStateOf(false) }
     var retryCount by remember(pageIndex) { mutableIntStateOf(0) }
+    var showCardMenu by remember { mutableStateOf(false) }
+
+    // Search highlights
+    var highlightData by remember(searchQuery, pageIndex) { mutableStateOf<com.arinara.fotara.util.PageHighlightData?>(null) }
+    LaunchedEffect(searchQuery, pageIndex) {
+        if (!searchQuery.isNullOrBlank()) {
+            highlightData = PdfSearchHighlighter.getHighlightBoxes(context, documentId, pageIndex, file, searchQuery)
+        } else {
+            highlightData = null
+        }
+    }
 
     // Read true aspect ratio synchronously from renderer cache (no default 0.707f race)
     val aspectRatio = remember(pageIndex) { renderer.getPageAspectRatio(pageIndex) }
@@ -680,14 +972,19 @@ private fun VirtualizedPdfPageView(
         }
     }
 
+    val cardBorder = when {
+        isFlashing -> BorderStroke(2.dp, AccentGold)
+        isHighlighted && highlightAlpha > 0.01f -> BorderStroke(2.5.dp, TagAmber.copy(alpha = highlightAlpha))
+        else -> null
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (isHighlighted && highlightAlpha > 0.01f) {
+                if (cardBorder != null) {
                     Modifier.border(
-                        width = 2.5.dp,
-                        color = TagAmber.copy(alpha = highlightAlpha),
+                        border = cardBorder,
                         shape = RoundedCornerShape(12.dp)
                     )
                 } else Modifier
@@ -709,6 +1006,15 @@ private fun VirtualizedPdfPageView(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 )
+                if (isPinned) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.PushPin,
+                        contentDescription = "Pinned",
+                        tint = AccentGold,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.weight(1f))
                 if (isZoomed && highResBitmap == null && !renderError) {
                     Text(
@@ -716,6 +1022,107 @@ private fun VirtualizedPdfPageView(
                         color = TabCream.copy(alpha = 0.5f),
                         fontSize = 10.sp
                     )
+                }
+
+                // 3-dot page menu (hidden while zoomed)
+                if (!isZoomed) {
+                    Box {
+                        IconButton(
+                            onClick = { showCardMenu = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = stringResource(R.string.cd_page_options),
+                                tint = TabCream,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showCardMenu,
+                            onDismissRequest = { showCardMenu = false },
+                            modifier = Modifier
+                                .background(CardBg)
+                                .border(1.dp, BorderColor, RoundedCornerShape(8.dp))
+                        ) {
+                            // 1. Save to gallery
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.pdf_page_menu_save_to_gallery), color = TabCream) },
+                                leadingIcon = { Icon(Icons.Default.Download, null, tint = TabCream) },
+                                onClick = {
+                                    showCardMenu = false
+                                    onSaveToGallery()
+                                }
+                            )
+
+                            // 2. Pin / Unpin page
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(if (isPinned) R.string.pdf_page_menu_unpin_page else R.string.pdf_page_menu_pin_page),
+                                        color = TabCream
+                                    )
+                                },
+                                leadingIcon = { Icon(Icons.Default.PushPin, null, tint = AccentGold) },
+                                onClick = {
+                                    showCardMenu = false
+                                    onPinToggle()
+                                }
+                            )
+
+                            HorizontalDivider(color = BorderColor, modifier = Modifier.padding(vertical = 4.dp))
+
+                            // 3. Draw on page / Edit drawing
+                            val hasStrokes = drawing?.hasStrokes == true
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(if (hasStrokes) R.string.pdf_page_menu_edit_drawing else R.string.pdf_page_menu_draw_on_page),
+                                        color = TabCream
+                                    )
+                                },
+                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = TabCream) },
+                                onClick = {
+                                    showCardMenu = false
+                                    onDraw()
+                                }
+                            )
+
+                            if (hasStrokes) {
+                                val isDrawingVisible = drawing.isVisible
+                                // 4. Hide / Show drawing
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(if (isDrawingVisible) R.string.pdf_page_menu_hide_drawing else R.string.pdf_page_menu_show_drawing),
+                                            color = TabCream
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            if (isDrawingVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            null,
+                                            tint = TabCream
+                                        )
+                                    },
+                                    onClick = {
+                                        showCardMenu = false
+                                        onToggleDrawingVisibility(!isDrawingVisible)
+                                    }
+                                )
+
+                                // 5. Clear drawing
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.pdf_page_menu_clear_drawing), color = DangerRed) },
+                                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = DangerRed) },
+                                    onClick = {
+                                        showCardMenu = false
+                                        onClearDrawing()
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -772,12 +1179,33 @@ private fun VirtualizedPdfPageView(
                         }
                     }
                     currentBitmap != null && !currentBitmap.isRecycled -> {
-                        Image(
-                            bitmap = currentBitmap.asImageBitmap(),
-                            contentDescription = "Page ${pageIndex + 1}",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        // If drawing is present and visible, render bitmap + strokes together onto the same canvas
+                        // to guarantee Multiply blending directly onto the page surface.
+                        val hasVisibleDrawing = drawing != null && drawing.isVisible && drawing.hasStrokes
+                        if (hasVisibleDrawing) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                drawIntoCanvas { composeCanvas ->
+                                    val nativeCanvas = composeCanvas.nativeCanvas
+                                    val srcRect = android.graphics.Rect(0, 0, currentBitmap.width, currentBitmap.height)
+                                    val dstRect = android.graphics.RectF(0f, 0f, size.width, size.height)
+                                    nativeCanvas.drawBitmap(currentBitmap, srcRect, dstRect, null)
+
+                                    val scale = if (drawing.pageWidth > 0f) size.width / drawing.pageWidth else 1f
+                                    PhotoDrawingRenderer.renderStrokes(
+                                        canvas = nativeCanvas,
+                                        strokes = drawing.strokes,
+                                        scale = scale
+                                    )
+                                }
+                            }
+                        } else {
+                            Image(
+                                bitmap = currentBitmap.asImageBitmap(),
+                                contentDescription = "Page ${pageIndex + 1}",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                     placeholderUri != null && File(placeholderUri).exists() -> {
                         AsyncImage(
@@ -795,7 +1223,32 @@ private fun VirtualizedPdfPageView(
                         )
                     }
                 }
+
+                // Search highlights overlay (translucent rounded rectangles with 2dp corner radius, 35% alpha)
+                val hData = highlightData
+                if (hData != null && hData.boxes.isNotEmpty()) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val w = size.width
+                        val h = size.height
+                        val cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                        for (box in hData.boxes) {
+                            val rect = androidx.compose.ui.geometry.Rect(
+                                left = box.left * w,
+                                top = box.top * h,
+                                right = box.right * w,
+                                bottom = box.bottom * h
+                            )
+                            drawRoundRect(
+                                color = TagAmber.copy(alpha = 0.35f),
+                                topLeft = rect.topLeft,
+                                size = rect.size,
+                                cornerRadius = cornerRadius
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
+

@@ -60,6 +60,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -103,6 +104,11 @@ import com.arinara.fotara.ui.note.editor.LineToolType
 import com.arinara.fotara.ui.note.editor.MarkdownVisualTransformation
 import com.arinara.fotara.ui.note.editor.TextEditorOps
 import com.arinara.fotara.ui.note.editor.rememberEditorState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import com.arinara.fotara.theme.TagAmber
+import kotlinx.coroutines.delay
 import com.arinara.fotara.util.NoteScheduleManager
 import com.arinara.fotara.util.ScheduleAlertType
 import com.arinara.fotara.util.ScheduleNoteType
@@ -123,7 +129,8 @@ fun TextNoteEditorScreen(
     subfolderId: Long?,
     textNoteRepository: TextNoteRepository,
     onBack: () -> Unit,
-    onShare: (TextNote) -> Unit
+    onShare: (TextNote) -> Unit,
+    highlightQuery: String? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val state = rememberEditorState(
@@ -135,6 +142,10 @@ fun TextNoteEditorScreen(
     )
 
     var isPreviewMode by remember { mutableStateOf(false) }
+    var activeHighlightQuery by remember { mutableStateOf(highlightQuery) }
+    val searchHighlightAlpha = remember { Animatable(0f) }
+    var hasHandledInitialHighlight by remember { mutableStateOf(false) }
+    val editorScrollState = rememberScrollState()
 
     val handleExit = {
         coroutineScope.launch {
@@ -476,14 +487,20 @@ fun TextNoteEditorScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(editorScrollState)
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Title Input
                 BasicTextField(
                     value = state.title,
-                    onValueChange = { state.onTitleChange(it) },
+                    onValueChange = {
+                        if (activeHighlightQuery != null || searchHighlightAlpha.value > 0f) {
+                            activeHighlightQuery = null
+                            coroutineScope.launch { searchHighlightAlpha.snapTo(0f) }
+                        }
+                        state.onTitleChange(it)
+                    },
                     textStyle = TextStyle(
                         color = TabCream,
                         fontSize = 22.sp,
@@ -535,6 +552,26 @@ fun TextNoteEditorScreen(
 
                 var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
+                LaunchedEffect(activeHighlightQuery, textLayoutResult) {
+                    val query = activeHighlightQuery
+                    val layout = textLayoutResult
+                    if (!hasHandledInitialHighlight && !query.isNullOrBlank() && layout != null) {
+                        hasHandledInitialHighlight = true
+                        val doc = state.bodyValue.text
+                        val matchIndex = doc.indexOf(query, ignoreCase = true)
+                        if (matchIndex != -1) {
+                            val tStart = visualTransformation.lastOffsetMapping.originalToTransformed(matchIndex)
+                            val line = layout.getLineForOffset(tStart.coerceIn(0, (layout.layoutInput.text.length - 1).coerceAtLeast(0)))
+                            val lineTop = layout.getLineTop(line)
+                            editorScrollState.animateScrollTo(lineTop.toInt())
+                            searchHighlightAlpha.snapTo(0.35f)
+                            delay(3000L)
+                            searchHighlightAlpha.animateTo(0f, tween(1000, easing = FastOutSlowInEasing))
+                            activeHighlightQuery = null
+                        }
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -542,6 +579,10 @@ fun TextNoteEditorScreen(
                         .pointerInput(state.bodyValue.text) {
                             detectTapGestures(
                                 onTap = { offset ->
+                                    if (activeHighlightQuery != null || searchHighlightAlpha.value > 0f) {
+                                        activeHighlightQuery = null
+                                        coroutineScope.launch { searchHighlightAlpha.snapTo(0f) }
+                                    }
                                     val layout = textLayoutResult ?: return@detectTapGestures
                                     val line = layout.getLineForVerticalPosition(offset.y)
                                     if (line in 0 until layout.lineCount) {
@@ -607,6 +648,10 @@ fun TextNoteEditorScreen(
                     BasicTextField(
                         value = state.bodyValue,
                         onValueChange = { newBody ->
+                            if (activeHighlightQuery != null || searchHighlightAlpha.value > 0f) {
+                                activeHighlightQuery = null
+                                coroutineScope.launch { searchHighlightAlpha.snapTo(0f) }
+                            }
                             val processed = EditorChangeHandler.processChange(state.bodyValue, newBody)
                             state.onBodyChange(processed)
                         },
@@ -628,6 +673,27 @@ fun TextNoteEditorScreen(
                             .drawBehind {
                                 val layout = textLayoutResult ?: return@drawBehind
                                 val doc = state.bodyValue.text
+
+                                // Render transient search highlight overlay (4s fading highlight at 35% alpha)
+                                if (searchHighlightAlpha.value > 0.005f) {
+                                    val q = highlightQuery
+                                    if (!q.isNullOrBlank()) {
+                                        var mPos = 0
+                                        while (mPos <= doc.length - q.length) {
+                                            val found = doc.indexOf(q, mPos, ignoreCase = true)
+                                            if (found == -1) break
+                                            val tStart = visualTransformation.lastOffsetMapping.originalToTransformed(found)
+                                            val tEnd = visualTransformation.lastOffsetMapping.originalToTransformed(found + q.length)
+                                            val maxLen = layout.layoutInput.text.length
+                                            if (tStart in 0..maxLen && tEnd in 0..maxLen && tStart < tEnd) {
+                                                val path = layout.getPathForRange(tStart, tEnd)
+                                                drawPath(path, color = TagAmber.copy(alpha = searchHighlightAlpha.value))
+                                            }
+                                            mPos = found + q.length.coerceAtLeast(1)
+                                        }
+                                    }
+                                }
+
                                 val boxSize = 18.dp.toPx()
                                 val cornerRadius = CornerRadius(4.dp.toPx())
                                 val strokeWidth = 1.8.dp.toPx()

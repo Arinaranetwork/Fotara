@@ -68,7 +68,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.model.WorkspaceKind
+import com.arinara.fotara.data.model.getDisplay
 import com.arinara.fotara.data.model.getDisplayName
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -923,7 +925,7 @@ fun ActiveSearchBar(
 
                 sortedWorkspaces.forEach { ws ->
                     val isWsSelected = selectedWorkspaceScopeId == ws.id
-                    val displayName = ws.getDisplayName()
+                    val wsDisplay = ws.getDisplay()
                     Surface(
                         color = if (isWsSelected) HomeMainButtonBlue else HomeSearchBarSurface,
                         shape = RoundedCornerShape(12.dp),
@@ -934,29 +936,15 @@ fun ActiveSearchBar(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            when (ws.kind) {
-                                WorkspaceKind.HOME -> {
-                                    Icon(
-                                        imageVector = Icons.Default.GridView,
-                                        contentDescription = null,
-                                        tint = if (isWsSelected) Color.White else TextSecondary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                }
-                                WorkspaceKind.ARCHIVE -> {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Archive,
-                                        contentDescription = null,
-                                        tint = if (isWsSelected) Color.White else TextSecondary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                }
-                                WorkspaceKind.CUSTOM -> {}
-                            }
+                            Icon(
+                                painter = painterResource(wsDisplay.iconResId),
+                                contentDescription = null,
+                                tint = if (isWsSelected) Color.White else TextSecondary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = displayName,
+                                text = wsDisplay.name,
                                 style = TextStyle(
                                     fontFamily = ElmsSans,
                                     fontSize = 13.sp,
