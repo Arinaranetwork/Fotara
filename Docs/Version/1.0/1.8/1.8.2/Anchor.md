@@ -1,0 +1,8 @@
+# Anchor - Fotara 1.8.2
+Status: Finished    Opened: 2026-10-07    Finished: 2026-10-07
+
+| ID    | Request                                                                                                         | Phase | Acceptance                                                                 | Status   | Evidence                                                                      |
+|-------|-----------------------------------------------------------------------------------------------------------------|-------|----------------------------------------------------------------------------|----------|-------------------------------------------------------------------------------|
+| H-001 | Terms of Service and Privacy Policy text cut off behind floating bottom navigation bar and system navigation     | 39    | Dynamic bottom spacing via LocalBottomOverlayPadding clears bottom pill     | Verified | LegalDocumentScreen.kt (LocalBottomOverlayPadding + 32dp clearance); unit test pass |
+| H-002 | Workspace tab reordering holds and releases, replays animation instead of sitting without further animation     | 39    | Optimistic localWorkspaces and clean drop commit prevents animation replay  | Verified | WorkspaceTabBar.kt (localWorkspaces, key(workspace.id), translationX = 0f); testReorderHelper_OptimisticDropCommitPreservesIdentityAndIds pass |
+| H-003 | Version bump to 1.8.2 Beta, changelogs, full unit test run, APK assembly, and GitHub release publication        | 39    | Version 1.8.2 Beta (code 31), 100% tests pass, APK built and published     | Verified | build.gradle.kts (31 / 1.8.2 Beta), Fotara_1.8.2_Beta.apk, GitHub Release     |

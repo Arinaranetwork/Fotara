@@ -88,6 +88,21 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
+        version = "1.8.2",
+        channel = "Beta",
+        releaseDate = "2026-10-07",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.8.2_Beta",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Legal Document Full Bottom Clearance: Terms of Service and Privacy Policy reader text now scrolls cleanly above the floating bottom navigation bar and system navigation insets.",
+            "Smooth Workspace Tab Reordering: Reordering tabs by dragging now commits cleanly upon release with zero animation replay, visual jumping, or snap-back."
+        ),
+        patchesAndFixes = listOf(
+            "Integrated LocalBottomOverlayPadding with dynamic clearance in LegalDocumentScreen.",
+            "Synchronously committed reordered list to local state and reset translation on drop in WorkspaceTabBar."
+        )
+    ),
+    ReleaseChangelogEntry(
         version = "1.8.1",
         channel = "Beta",
         releaseDate = "2026-10-07",

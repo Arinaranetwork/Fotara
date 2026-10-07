@@ -2,7 +2,7 @@
 Last Updated: 2026-10-07
 
 ## Current Phase
-Phase 38 - Release181BetaHotfix [Completed]
+Phase 39 - Release182BetaHotfix [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -45,6 +45,7 @@ Phase 38 - Release181BetaHotfix [Completed]
 | 36    | WorkspaceIconsPdfPageMenuAndDrawingEditor | Completed   |
 | 37    | Release180AddendumBugfixes        | Completed   |
 | 38    | Release181BetaHotfix              | Completed   |
+| 39    | Release182BetaHotfix              | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -70,11 +71,11 @@ Phase 38 - Release181BetaHotfix [Completed]
 - [x] Task 2: Banner resolution & scaling in AnimatedBannerView (onSizeChanged, ContentScale.Crop fallback) - Phase 38
 - [x] Task 3: Banner blink prevention across Profile navigation (ProfileBannerMemoryCache, no-crossfade Coil) - Phase 38
 - [x] Task 4: Version bump to 1.8.1 Beta, changelogs, unit tests, and GitHub release - Phase 38
+- [x] Task 1: Legal document reader bottom clearance (`LegalDocumentScreen.kt`, `LocalBottomOverlayPadding`) - Phase 39
+- [x] Task 2: Stable workspace tab reorder drop commit with zero animation replay (`WorkspaceTabBar.kt`) - Phase 39
+- [x] Task 3: Version bump to 1.8.2 Beta, changelogs, unit tests, and GitHub release - Phase 39
 
 ## In Progress
-None.
-
-## Pending
 None.
 
 ## Blocked

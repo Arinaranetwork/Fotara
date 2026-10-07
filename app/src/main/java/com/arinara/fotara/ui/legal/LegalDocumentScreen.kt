@@ -38,6 +38,7 @@ import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.MidnightNavy
+import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
 import com.arinara.fotara.ui.components.ReleaseNotesRenderer
 
 /**
@@ -51,6 +52,8 @@ fun LegalDocumentScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val bottomOverlayPadding = LocalBottomOverlayPadding.current
+    val effectiveBottomSpacer = if (bottomOverlayPadding > 0.dp) bottomOverlayPadding + 32.dp else 120.dp
 
     Column(
         modifier = modifier
@@ -88,7 +91,7 @@ fun LegalDocumentScreen(
                 )
 
                 // Bottom padding respecting bottom overlay bar
-                Spacer(modifier = Modifier.height(64.dp))
+                Spacer(modifier = Modifier.height(effectiveBottomSpacer))
             }
         }
     }

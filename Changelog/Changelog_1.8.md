@@ -1,6 +1,10 @@
 # Fotara 1.8 - Workspace Icons, PDF Tools & Page Drawing
 Released: 2026-10-07   Status: Released (Beta)
 
+## 1.8.2 Beta - 2026-10-07
+- **Legal Document Reader Bottom Clearance**: Fixed text cut-off in Terms of Service and Privacy Policy readers where the last paragraph was obscured behind the floating navigation bar and 3-button navigation insets by dynamically computing clearance via `LocalBottomOverlayPadding`.
+- **Workspace Tab Reorder Drop Stability**: Fixed tab reorder animation replay bug where releasing a dragged tab caused it to snap back and replay the swap animation; implemented optimistic local state tracking and immediate translation reset on drop commit.
+
 ## 1.8.1 Beta - 2026-10-07
 - **Instant Photo Picker Return**: Restored seamless navigation when returning from the system photo picker without flashing or redirecting to the Home screen by persisting tab selection (`selectedNavTab`) and settings section (`activeSection`) across Activity recreation via `rememberSaveable`.
 - **Animated Banner Resolution & Scaling**: Fixed tiny unscaled GIF banners rendered in the top-left corner by recomputing crop transforms upon View size allocation (`onSizeChanged`) and adding centered `ContentScale.Crop` fallback scaling in `AnimatedBannerView`.

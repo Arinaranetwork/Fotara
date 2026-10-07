@@ -288,6 +288,21 @@ class WorkspaceFoundationTest {
         assertEquals(3, reordered[3].position)
     }
 
+    @Test
+    fun testReorderHelper_OptimisticDropCommitPreservesIdentityAndIds() {
+        val list = listOf(
+            Workspace(1L, "u1", WorkspaceKind.HOME, "", 0),
+            Workspace(2L, "u2", WorkspaceKind.CUSTOM, "TabA", 1),
+            Workspace(3L, "u3", WorkspaceKind.CUSTOM, "TabB", 2)
+        )
+        // Moving TabA (id 2) to target slot 2 (swapping with TabB)
+        val reordered = WorkspaceReorderHelper.reorderList(list, movingWorkspaceId = 2L, targetSlot = 2)
+        assertEquals(listOf(1L, 3L, 2L), reordered.map { it.id })
+        assertEquals(0, reordered[0].position)
+        assertEquals(1, reordered[1].position)
+        assertEquals(2, reordered[2].position)
+    }
+
     // =========================================================================
     // 4. Migration Safety & v16 Schema
     // =========================================================================
