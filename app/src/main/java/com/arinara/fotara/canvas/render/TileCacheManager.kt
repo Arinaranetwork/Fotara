@@ -26,6 +26,8 @@ import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.StrokeBlendMode
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokeToolType
+import com.arinara.fotara.canvas.model.TextBackgroundStyle
+import com.arinara.fotara.canvas.model.TextLayerElement
 import com.arinara.fotara.canvas.persistence.CanvasAssetManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -298,6 +300,33 @@ class TileCacheManager(
                         }
                     } catch (_: Exception) {}
                 }
+            }
+            is TextLayerElement -> {
+                canvas.save()
+                canvas.translate(element.x, element.y)
+                if (element.rotationDegrees != 0f) {
+                    canvas.rotate(element.rotationDegrees, element.width / 2f, element.height / 2f)
+                }
+                when (element.backgroundStyle) {
+                    TextBackgroundStyle.TRANSPARENT -> {}
+                    TextBackgroundStyle.FROSTED_DARK -> {
+                        imagePaint.style = Paint.Style.FILL
+                        imagePaint.color = 0xD91E293B.toInt()
+                        canvas.drawRoundRect(RectF(0f, 0f, element.width, element.height), 12f, 12f, imagePaint)
+                    }
+                    TextBackgroundStyle.SOLID_LIGHT -> {
+                        imagePaint.style = Paint.Style.FILL
+                        imagePaint.color = 0xFFFFFFFF.toInt()
+                        canvas.drawRoundRect(RectF(0f, 0f, element.width, element.height), 12f, 12f, imagePaint)
+                    }
+                }
+                strokePaint.style = Paint.Style.FILL
+                strokePaint.color = element.color.toInt()
+                strokePaint.alpha = (255 * layerOpacity).toInt().coerceIn(0, 255)
+                strokePaint.textSize = element.fontSizeSp * 2.0f
+                strokePaint.isFakeBoldText = element.fontWeight >= 700
+                canvas.drawText(element.text, 16f, element.fontSizeSp * 2.0f + 16f, strokePaint)
+                canvas.restore()
             }
         }
     }

@@ -16,11 +16,12 @@ data class PdfPageDrawing(
     val documentId: Long,
     val pageIndex: Int,
     val strokes: List<StrokeElement>,
+    val textLayers: List<com.arinara.fotara.canvas.model.TextLayerElement> = emptyList(),
     val pageWidth: Float,
     val pageHeight: Float,
     val isVisible: Boolean = true,
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     val hasStrokes: Boolean
-        get() = strokes.isNotEmpty()
+        get() = strokes.isNotEmpty() || textLayers.isNotEmpty()
 }

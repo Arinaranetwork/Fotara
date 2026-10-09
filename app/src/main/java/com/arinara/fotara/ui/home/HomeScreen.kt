@@ -86,6 +86,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.animation.core.animateFloatAsState
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -133,6 +134,7 @@ import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagCrimson
+import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.ui.components.ActiveSearchBar
 import com.arinara.fotara.ui.components.BatchRenameDialog
 import com.arinara.fotara.ui.components.FeedbackDialog
@@ -216,6 +218,14 @@ fun HomeScreen(
 
     var selectedNavTab by rememberSaveable { mutableStateOf(HomeNavTab.HOME) }
 
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    val homeGridState = rememberLazyGridState()
+    val notesListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val settingsScrollState = androidx.compose.foundation.rememberScrollState()
+    var settingsResetToRootTrigger by rememberSaveable { mutableIntStateOf(0) }
+    var isSettingsSubScreenOpen by rememberSaveable { mutableStateOf(false) }
+    val saveableStateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+
     var activeContextFolder by remember { mutableStateOf<Folder?>(null) }
     var folderToRename by remember { mutableStateOf<Folder?>(null) }
     var renameInputText by remember { mutableStateOf("") }
@@ -241,7 +251,9 @@ fun HomeScreen(
                         )
                     )
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.w("HomeScreen", "Background update check failed", e)
+            }
         }
     }
 
@@ -368,58 +380,64 @@ fun HomeScreen(
                 .background(HomeNearBlack)
                 .padding(top = 0.dp)
         ) {
-            // Tab Contents
-            when (selectedNavTab) {
-                HomeNavTab.SETTINGS -> {
-                    if (settingsViewModel != null) {
-                        SettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBackClick = { selectedNavTab = HomeNavTab.HOME },
-                            onNavigateToTrash = onOpenTrash,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(0.dp)
-                        )
-                    } else {
-                        // Fallback if settingsViewModel was not passed
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(HomeNearBlack)
-                                .padding(18.dp)
-                        ) {
-                            Text(
-                                text = "Settings",
-                                color = Color.White,
-                                fontSize = 38.sp,
-                                fontFamily = ElmsSans,
-                                fontWeight = FontWeight.Medium
+            // Tab Contents (Wrapped with SaveableStateHolder to preserve sub-screen states across tabs)
+            saveableStateHolder.SaveableStateProvider(selectedNavTab) {
+                when (selectedNavTab) {
+                    HomeNavTab.SETTINGS -> {
+                        if (settingsViewModel != null) {
+                            SettingsScreen(
+                                viewModel = settingsViewModel,
+                                onBackClick = { selectedNavTab = HomeNavTab.HOME },
+                                onNavigateToTrash = onOpenTrash,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(0.dp),
+                                resetToRootTrigger = settingsResetToRootTrigger,
+                                onSubScreenStateChanged = { isSettingsSubScreenOpen = it },
+                                scrollState = settingsScrollState
                             )
+                        } else {
+                            // Fallback if settingsViewModel was not passed
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(HomeNearBlack)
+                                    .padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "Settings",
+                                    color = TextPrimary,
+                                    fontSize = 22.sp,
+                                    lineHeight = 28.sp,
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
-                }
 
-                HomeNavTab.NOTES -> {
-                    if (notesViewModel != null) {
-                        com.arinara.fotara.ui.notes.NotesScreen(
-                            viewModel = notesViewModel,
-                            onNavigateToPhoto = onNavigateToPhoto,
-                            onNavigateToDocument = { fId, sId, dId, pIdx -> onNavigateToDocument(fId, sId, dId, pIdx, null) },
-                            onNavigateToTextNote = { fId, sId, nId -> onNavigateToTextNote(fId, sId, nId, null) },
-                            onNavigateToCanvasNote = onNavigateToCanvasNote,
-                            onOpenDocx = onOpenDocx,
-                            onFolderClick = onFolderClick,
-                            onCreatePhotoNote = { folder -> onFolderClick(folder) },
-                            onCreateTextNote = { folder -> onNavigateToTextNote(folder.id, null, -1L, null) },
-                            onCreateCanvasNote = { folder -> onNavigateToCanvasNote(folder.id, null, -1L) },
-                            onImportDocument = { folder -> onFolderClick(folder) },
-                            onOpenSettings = { selectedNavTab = HomeNavTab.SETTINGS },
-                            onOpenTrash = onOpenTrash,
-                            onOpenUpdates = onOpenUpdates,
-                            onOpenWhatsNew = onOpenWhatsNew,
-                            onOpenFeedback = { showFeedbackDialog = true },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
+                    HomeNavTab.NOTES -> {
+                        if (notesViewModel != null) {
+                            com.arinara.fotara.ui.notes.NotesScreen(
+                                viewModel = notesViewModel,
+                                onNavigateToPhoto = onNavigateToPhoto,
+                                onNavigateToDocument = { fId, sId, dId, pIdx -> onNavigateToDocument(fId, sId, dId, pIdx, null) },
+                                onNavigateToTextNote = { fId, sId, nId -> onNavigateToTextNote(fId, sId, nId, null) },
+                                onNavigateToCanvasNote = onNavigateToCanvasNote,
+                                onOpenDocx = onOpenDocx,
+                                onFolderClick = onFolderClick,
+                                onCreatePhotoNote = { folder -> onFolderClick(folder) },
+                                onCreateTextNote = { folder -> onNavigateToTextNote(folder.id, null, -1L, null) },
+                                onCreateCanvasNote = { folder -> onNavigateToCanvasNote(folder.id, null, -1L) },
+                                onImportDocument = { folder -> onFolderClick(folder) },
+                                onOpenSettings = { selectedNavTab = HomeNavTab.SETTINGS },
+                                onOpenTrash = onOpenTrash,
+                                onOpenUpdates = onOpenUpdates,
+                                onOpenWhatsNew = onOpenWhatsNew,
+                                onOpenFeedback = { showFeedbackDialog = true },
+                                modifier = Modifier.fillMaxSize(),
+                                listState = notesListState
+                            )
+                        } else {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -478,7 +496,7 @@ fun HomeScreen(
                                                     .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
                                             ) {
                                                 DropdownMenuItem(
-                                                    text = { Text("Select Folders", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Select Folders", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.SelectAll,
@@ -493,7 +511,7 @@ fun HomeScreen(
                                                 )
                                                 HorizontalDivider(color = HomeCardBorder)
                                                 DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_add_workspace), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text(stringResource(R.string.menu_add_workspace), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.Add,
@@ -508,7 +526,7 @@ fun HomeScreen(
                                                 )
                                                 HorizontalDivider(color = HomeCardBorder)
                                                 DropdownMenuItem(
-                                                    text = { Text("What's New", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("What's New", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.NewReleases,
@@ -522,12 +540,12 @@ fun HomeScreen(
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Check for Updates", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Check for Updates", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.SystemUpdate,
                                                             contentDescription = null,
-                                                            tint = Color.White
+                                                            tint = TextPrimary
                                                         )
                                                     },
                                                     onClick = {
@@ -536,12 +554,12 @@ fun HomeScreen(
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Send Feedback", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Send Feedback", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.Feedback,
                                                             contentDescription = null,
-                                                            tint = Color.White
+                                                            tint = TextPrimary
                                                         )
                                                     },
                                                     onClick = {
@@ -550,7 +568,7 @@ fun HomeScreen(
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Support Fotara", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Support Fotara", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.VolunteerActivism,
@@ -565,7 +583,7 @@ fun HomeScreen(
                                                 )
                                                 HorizontalDivider(color = HomeCardBorder)
                                                 DropdownMenuItem(
-                                                    text = { Text("Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Trash", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.Delete,
@@ -589,7 +607,7 @@ fun HomeScreen(
                                 Row(
                                     modifier = Modifier
                                         .matchParentSize()
-                                        .padding(horizontal = 14.dp),
+                                        .padding(horizontal = 16.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     IconButton(
@@ -599,18 +617,19 @@ fun HomeScreen(
                                         Icon(
                                             imageVector = Icons.Default.Close,
                                             contentDescription = "Exit Multi-Select",
-                                            tint = Color.White
+                                            tint = TextPrimary
                                         )
                                     }
                                     Text(
                                         text = "${uiState.selectedFolderIds.size} Selected",
-                                        color = Color.White,
-                                        fontSize = 18.sp,
+                                        color = TextPrimary,
+                                        fontSize = 16.sp,
+                                        lineHeight = 22.sp,
                                         fontFamily = ElmsSans,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier
                                             .weight(1f)
-                                            .padding(start = 6.dp)
+                                            .padding(start = 8.dp)
                                     )
                                     if (uiState.selectedFolderIds.size in 2..4) {
                                         IconButton(
@@ -620,7 +639,7 @@ fun HomeScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Link,
                                                 contentDescription = "Link Folders",
-                                                tint = Color.White
+                                                tint = TextPrimary
                                             )
                                         }
                                     }
@@ -632,7 +651,7 @@ fun HomeScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Edit,
                                                 contentDescription = "Rename Selected Folders",
-                                                tint = Color.White
+                                                tint = TextPrimary
                                             )
                                         }
                                         IconButton(
@@ -645,7 +664,7 @@ fun HomeScreen(
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
                                                 contentDescription = stringResource(R.string.folder_menu_move_to_workspace),
-                                                tint = Color.White
+                                                tint = TextPrimary
                                             )
                                         }
                                     }
@@ -656,7 +675,7 @@ fun HomeScreen(
                                         Icon(
                                             imageVector = Icons.Default.SelectAll,
                                             contentDescription = "Select All",
-                                            tint = Color.White
+                                            tint = TextPrimary
                                         )
                                     }
                                     IconButton(
@@ -666,7 +685,7 @@ fun HomeScreen(
                                         Icon(
                                             imageVector = Icons.Default.FlipToBack,
                                             contentDescription = stringResource(R.string.action_invert_selection),
-                                            tint = Color.White
+                                            tint = TextPrimary
                                         )
                                     }
                                     IconButton(
@@ -701,7 +720,7 @@ fun HomeScreen(
                             if (uiState.photosDueTomorrow.isNotEmpty()) {
                                 HomeHeader(
                                     dueCount = uiState.photosDueTomorrow.size,
-                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                                 )
                             }
 
@@ -713,7 +732,6 @@ fun HomeScreen(
                             fallbackPaddingDp = 170f
                         ).dp
 
-                        val homeGridState = rememberLazyGridState()
                         val isOverlayOpen = folderToUnlock != null || activeContextFolder != null || folderToLock != null || folderToResetPin != null || uiState.showNewFolderDialog || uiState.showBulkDeleteDialog || uiState.showAddWorkspaceDialog || uiState.workspaceToRename != null || uiState.foldersToMoveWorkspace != null || uiState.workspaceDeleteStep != WorkspaceDeleteStep.NONE || pendingNotesCreateAction != null
                         val canRefresh = PullToRefreshHelper.canTriggerRefresh(
                             isAtTop = homeGridState.firstVisibleItemIndex == 0 && homeGridState.firstVisibleItemScrollOffset == 0,
@@ -748,7 +766,7 @@ fun HomeScreen(
                                     ) {
                                         Text(
                                             text = stringResource(R.string.workspace_empty_state_title, wsDisplayName),
-                                            color = Color.White,
+                                            color = TextPrimary,
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             fontFamily = ElmsSans,
@@ -768,13 +786,13 @@ fun HomeScreen(
                                     columns = GridCells.Fixed(folderColumns),
                                     state = homeGridState,
                                     contentPadding = PaddingValues(
-                                        start = 18.dp,
-                                        end = 18.dp,
+                                        start = 16.dp,
+                                        end = 16.dp,
                                         top = 20.dp,
                                         bottom = dynamicBottomPadding
                                     ),
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .verticalEdgeFade(top = 20.dp)
@@ -843,8 +861,9 @@ fun HomeScreen(
                     }
                 }
             }
+        }
 
-            // Bottom Stack: Persistent Floating Dock & Bottom Navigation Bar
+        // Bottom Stack: Persistent Floating Dock & Bottom Navigation Bar
             // Kept measured with graphicsLayer alpha to prevent content padding shifts
             val fabAlpha by animateFloatAsState(
                 targetValue = if (selectedNavTab == HomeNavTab.SETTINGS) 0f else 1f,
@@ -882,14 +901,14 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 6.dp),
+                        .padding(bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Unified Floating Action Row: search pill (Home) + single persistent (+) button
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 18.dp),
+                            .padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -943,10 +962,10 @@ fun HomeScreen(
                                 onDismissRequest = { showNotesCreateMenu = false },
                                 modifier = Modifier
                                     .background(HomeCardSurface)
-                                    .border(1.dp, HomeCardBorder, RoundedCornerShape(14.dp))
+                                    .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.menu_new_photo_note), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                    text = { Text(stringResource(R.string.menu_new_photo_note), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                     leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         showNotesCreateMenu = false
@@ -954,7 +973,7 @@ fun HomeScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.menu_new_text_note), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                    text = { Text(stringResource(R.string.menu_new_text_note), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                     leadingIcon = { Icon(Icons.AutoMirrored.Outlined.NoteAdd, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         showNotesCreateMenu = false
@@ -962,7 +981,7 @@ fun HomeScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.menu_new_canvas_note), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                    text = { Text(stringResource(R.string.menu_new_canvas_note), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                     leadingIcon = { Icon(Icons.Outlined.Draw, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         showNotesCreateMenu = false
@@ -970,7 +989,7 @@ fun HomeScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.menu_import_document), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                    text = { Text(stringResource(R.string.menu_import_document), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                     leadingIcon = { Icon(Icons.Outlined.UploadFile, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp)) },
                                     onClick = {
                                         showNotesCreateMenu = false
@@ -985,7 +1004,36 @@ fun HomeScreen(
                     if (!isImeVisible) {
                         HomeBottomNavBar(
                             selectedTab = selectedNavTab,
-                            onTabSelected = { if (!uiState.isMultiSelectMode) selectedNavTab = it }
+                            onTabSelected = { if (!uiState.isMultiSelectMode) selectedNavTab = it },
+                            onTabReSelected = { tab ->
+                                when (tab) {
+                                    HomeNavTab.SETTINGS -> {
+                                        if (isSettingsSubScreenOpen) {
+                                            settingsResetToRootTrigger++
+                                        } else {
+                                            coroutineScope.launch {
+                                                settingsScrollState.animateScrollTo(0)
+                                            }
+                                        }
+                                    }
+                                    HomeNavTab.NOTES -> {
+                                        coroutineScope.launch {
+                                            notesListState.animateScrollToItem(0)
+                                        }
+                                    }
+                                    HomeNavTab.HOME -> {
+                                        if (uiState.isMultiSelectMode) {
+                                            viewModel.exitMultiSelectMode()
+                                        } else if (uiState.isSearchActive) {
+                                            viewModel.deactivateSearch()
+                                        } else {
+                                            coroutineScope.launch {
+                                                homeGridState.animateScrollToItem(0)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         )
                     }
                 }
@@ -1011,10 +1059,11 @@ fun HomeScreen(
                     title = {
                         Text(
                             text = "Rename Folder",
-                            color = Color.White,
+                            color = TextPrimary,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontSize = 16.sp,
+                            lineHeight = 22.sp
                         )
                     },
                     text = {
@@ -1026,8 +1075,8 @@ fun HomeScreen(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = HomeMainButtonBlue,
                                 unfocusedBorderColor = HomeCardBorder,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1040,7 +1089,7 @@ fun HomeScreen(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue)
                         ) {
-                            Text("Save", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
+                            Text("Save", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
                         }
                     },
                     dismissButton = {
@@ -1061,10 +1110,11 @@ fun HomeScreen(
                     title = {
                         Text(
                             text = folder.name,
-                            color = Color.White,
+                            color = TextPrimary,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontSize = 16.sp,
+                            lineHeight = 22.sp
                         )
                     },
                     text = {
@@ -1087,12 +1137,13 @@ fun HomeScreen(
                                         tint = Color(0xFF60A5FA),
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = if (folder.isPinned) "Unpin from Top" else "Pin to Top",
-                                        color = Color.White,
+                                        color = TextPrimary,
                                         fontFamily = ElmsSans,
-                                        fontSize = 15.sp
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
                                     )
                                 }
                             }
@@ -1116,12 +1167,13 @@ fun HomeScreen(
                                         tint = Color(0xFF60A5FA),
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = "Rename Folder",
-                                        color = Color.White,
+                                        color = TextPrimary,
                                         fontFamily = ElmsSans,
-                                        fontSize = 15.sp
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
                                     )
                                 }
                             }
@@ -1145,12 +1197,13 @@ fun HomeScreen(
                                         tint = FolderBodyBlue,
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = "Select",
-                                        color = Color.White,
+                                        color = TextPrimary,
                                         fontFamily = ElmsSans,
-                                        fontSize = 15.sp
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
                                     )
                                 }
                             }
@@ -1179,12 +1232,13 @@ fun HomeScreen(
                                         tint = if (folder.isLocked) TagAmber else Color(0xFF60A5FA),
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = if (folder.isLocked) "Remove Folder Lock" else "Lock Folder (PIN)",
-                                        color = Color.White,
+                                        color = TextPrimary,
                                         fontFamily = ElmsSans,
-                                        fontSize = 15.sp
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
                                     )
                                 }
                             }
@@ -1194,14 +1248,14 @@ fun HomeScreen(
                                 Surface(
                                     color = Color.Transparent,
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            val f = folder
-                                            activeContextFolder = null
-                                            isResettingPin = true
-                                            folderToUnlock = f
-                                        }
-                                        .padding(vertical = 12.dp)
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val f = folder
+                                        activeContextFolder = null
+                                        isResettingPin = true
+                                        folderToUnlock = f
+                                    }
+                                    .padding(vertical = 12.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
@@ -1210,12 +1264,13 @@ fun HomeScreen(
                                             tint = Color(0xFF60A5FA),
                                             modifier = Modifier.size(20.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(14.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
                                         Text(
                                             text = "Change Folder PIN",
-                                            color = Color.White,
+                                            color = TextPrimary,
                                             fontFamily = ElmsSans,
-                                            fontSize = 15.sp
+                                            fontSize = 14.sp,
+                                            lineHeight = 20.sp
                                         )
                                     }
                                 }
@@ -1240,12 +1295,13 @@ fun HomeScreen(
                                             tint = TagCrimson,
                                             modifier = Modifier.size(20.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(14.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
                                         Text(
                                             text = "Unlink Folder",
                                             color = TagCrimson,
                                             fontFamily = ElmsSans,
-                                            fontSize = 15.sp
+                                            fontSize = 14.sp,
+                                            lineHeight = 20.sp
                                         )
                                     }
                                 }
@@ -1268,12 +1324,13 @@ fun HomeScreen(
                                             tint = Color(0xFF60A5FA),
                                             modifier = Modifier.size(20.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(14.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
                                         Text(
                                             text = "Link to another folder",
-                                            color = Color.White,
+                                            color = TextPrimary,
                                             fontFamily = ElmsSans,
-                                            fontSize = 15.sp
+                                            fontSize = 14.sp,
+                                            lineHeight = 20.sp
                                         )
                                     }
                                 }
@@ -1298,12 +1355,13 @@ fun HomeScreen(
                                         tint = TagCrimson,
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = "Move to Trash",
                                         color = TagCrimson,
                                         fontFamily = ElmsSans,
-                                        fontSize = 15.sp
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
                                     )
                                 }
                             }
@@ -1453,8 +1511,9 @@ fun HomeScreen(
                     title = {
                         Text(
                             text = "Move ${stats.folderCount} Folder${if (stats.folderCount > 1) "s" else ""} to Trash?",
-                            color = Color.White,
-                            fontSize = 18.sp,
+                            color = TextPrimary,
+                            fontSize = 16.sp,
+                            lineHeight = 22.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold
                         )
@@ -1463,7 +1522,7 @@ fun HomeScreen(
                         Column {
                             Text(
                                 text = "Total Notes & Photos: ${stats.photoCount}",
-                                color = Color.White,
+                                color = TextPrimary,
                                 fontSize = 14.sp,
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Medium
@@ -1472,7 +1531,8 @@ fun HomeScreen(
                             Text(
                                 text = "Storage occupied: $formattedMb",
                                 color = HomeSubtitleGray,
-                                fontSize = 13.sp,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
                                 fontFamily = ElmsSans
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -1490,7 +1550,7 @@ fun HomeScreen(
                             onClick = { viewModel.confirmBulkDelete() },
                             colors = ButtonDefaults.buttonColors(containerColor = TagCrimson)
                         ) {
-                            Text("Move to Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
+                            Text("Move to Trash", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
                         }
                     },
                     dismissButton = {
@@ -1730,10 +1790,11 @@ fun HomeScreen(
             title = {
                 Text(
                     text = stringResource(R.string.select_destination_folder),
-                    color = Color.White,
+                    color = TextPrimary,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp
                 )
             },
             text = {
@@ -1750,14 +1811,14 @@ fun HomeScreen(
                         ) { folder ->
                             Surface(
                                 color = Color.Transparent,
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
                                         pendingNotesCreateAction = null
                                         action(folder)
                                     }
-                                    .padding(vertical = 10.dp, horizontal = 12.dp)
+                                    .padding(vertical = 8.dp, horizontal = 12.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
@@ -1769,9 +1830,10 @@ fun HomeScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = folder.name,
-                                        color = Color.White,
+                                        color = TextPrimary,
                                         fontFamily = ElmsSans,
-                                        fontSize = 15.sp
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
                                     )
                                 }
                             }
@@ -1799,25 +1861,26 @@ private fun HomeHeader(
         Column(modifier = modifier.fillMaxWidth()) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = TagAmber.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, TagAmber.copy(alpha = 0.35f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.Schedule,
                         contentDescription = "Due Tomorrow",
                         tint = TagAmber,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "$dueCount note${if (dueCount > 1) "s" else ""} due tomorrow",
                         color = TagAmber,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Medium
                     )

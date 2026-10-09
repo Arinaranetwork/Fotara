@@ -1,8 +1,8 @@
 # Progress - Fotara
-Last Updated: 2026-10-07
+Last Updated: 2026-10-09
 
 ## Current Phase
-Phase 41 - UpdateLifecycleAndAppResidueCleaner [Completed]
+Phase 46 - SpaceHierarchyAndAlphaFoundation (2.0.0 Alpha) [Pending]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -48,6 +48,16 @@ Phase 41 - UpdateLifecycleAndAppResidueCleaner [Completed]
 | 39    | Release182BetaHotfix              | Completed   |
 | 40    | Release183BetaHotfix              | Completed   |
 | 41    | UpdateLifecycleAndAppResidueCleaner | Completed   |
+| 42    | ClassScheduleAndNotesCapsule      | Completed   |
+| 43    | TabPersistenceAndNavigation       | Completed   |
+| 44    | StemNoteAndCanvasSuperpowers      | Completed   |
+| 45    | WidgetsAudioAndRelease190         | Completed   |
+| 46    | SpaceHierarchyAndAlphaFoundation  | Pending     |
+| 47    | ThreeTierStealthPrivacy           | Pending     |
+| 48    | AcademicEvaluationAndBundles      | Pending     |
+| 49    | FotaraPackageManager             | Pending     |
+| 50    | FriendsSystemAndSettings          | Pending     |
+| 51    | LiveCollabCanvasAndRelease200     | Pending     |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -81,6 +91,28 @@ Phase 41 - UpdateLifecycleAndAppResidueCleaner [Completed]
 - [x] Task 1: Update download lifecycle cancellation on skip, install, and newer release arrival - Phase 41
 - [x] Task 2: App residue and trash cleaner in Settings with disk usage counter and live progress bar - Phase 41
 - [x] Task 3: 1.8 image banner integration, version bump to 1.8.4 Beta, test pass, packaging, and Stable tag Confirm Gate - Phase 41
+- [x] Task 1: SQLite persistence for class_schedules (schema v19), DAO & ScheduleRepository - Phase 42
+- [x] Task 2: Lightweight zero-dependency Excel (.xlsx) & Word (.docx) Table Parser & Mapping Dialog - Phase 42
+- [x] Task 3: Next-Day Rollover Cutoff Engine & Proactive Alarm Reminders - Phase 42
+- [x] Task 4: 1-Line Dynamic Schedule Capsule in NotesScreen.kt & Timetable Management Sheet - Phase 42
+- [x] Task 1: Bottom tab state persistence across sub-screens via SaveableStateHolder in HomeScreen.kt - Phase 43
+- [x] Task 2: Canonical Re-Tap Pop-to-Root and Scroll-to-Top in HomeBottomNavBar.kt & HomeScreen.kt - Phase 43
+- [x] Task 1: LaTeX Mathematical Typesetting in Text Notes ($ inline, $$ display block) - Phase 44
+- [x] Task 2: Markdown Tables with Formatting Constraints (Block tools disabled in cells) - Phase 44
+- [x] Task 3: Shape & Curve Auto-Correct (Draw & Hold 400ms) with Bézier Smoothing - Phase 44
+- [x] Task 4: Text Layers Tool (`[ T ]`) on Drawing Canvas and PDF Editor - Phase 44
+- [x] Task 5: Multi-Sheet Drawing Canvas (Up to 10 Sheets) with Multi-Page Export - Phase 44
+- [x] Task 1: Initialize FotaraDesktop workspace (React 19, TS, Vite) & verify build - Fotara Desktop
+- [x] Task 2: Implement 3-Pane Studio UI (Side Activity Toolbar, Tabs, Split PDF & KaTeX, Scrubber) - Fotara Desktop
+- [x] Task 3: Launch live dev server (http://localhost:5173) & register Desktop Agent 1 - Fotara Desktop
+
+- [x] Task 4: Integrate KaTeX live math engine, PDF.js canvas renderer, and .fotara drag-and-drop bundle parser - Fotara Desktop
+- [x] Task 5: Canonical Desktop UI Realization (IMAGE A replica: Home dashboard, folders grid with accent tiles, recent notes list with folded doc badges, and split study studio) - Fotara Desktop
+- [x] Task 1: Android Home Screen Timetable Widget (4x2 / 4x4) with Rollover Sync (Agent-1) - Phase 45
+- [x] Task 2: Android Home Screen Photo Widgets (Single Specific Photo & Carousel) (Agent-1) - Phase 45
+- [x] Task 3: Synchronized Audio Annotations with Optional PDF Drag/Number Anchoring (Agent-2) - Phase 45
+- [x] Task 4: Urgent Anti-Procrastination Alarm with Photo Proof Dismiss Challenge (Agent-2) - Phase 45
+- [x] Task 5: Fotara 1.9.0 Beta Build Assembly, Verification & Packaging (Joint / Supervisor) - Phase 45
 
 ## In Progress
 None.
@@ -88,9 +120,24 @@ None.
 ## Blocked
 None.
 
-
-
-
+## Pending
+### Stage 2: Fotara 2.0.0 Alpha (Local-First Academic Operating System)
+- [ ] Task 1: Space Super-Hierarchy & SQLite Schema v20 Migration - Phase 46
+- [ ] Task 2: Top Header Space Switcher Dropdown (`Fotara ▾ [Space Name]`) - Phase 46
+- [ ] Task 1: Private Folder Vault (Pull-to-refresh & hold 2s + Biometrics) - Phase 47
+- [ ] Task 2: Private Workspace Ghost Mode (Home tab long-press 1.5s) - Phase 47
+- [ ] Task 3: Private Space Stealth Vault (Brand title long-press 2s + .nomedia shielding) - Phase 47
+- [ ] Task 1: Course Syllabus Weight & Target Exam Grade Evaluator - Phase 48
+- [ ] Task 2: Active Recall Masking & Diagnostic Occlusion Tape - Phase 48
+- [ ] Task 3: Document Perspective Rectification & Optical Enhancement Filter - Phase 48
+- [ ] Task 4: Coursework Archive & Interchange Bundle (`.fotara`) Export/Import - Phase 48
+- [ ] Task 1: Standalone Signed `.fpkg` Dynamic Package Loader Engine - Phase 49
+- [ ] Task 2: Just-In-Time (JIT) Download Interception Dialogs & Package Settings Hub - Phase 49
+- [ ] Task 1: Dedicated Friends Entry Card in Settings (Below Profile, Above General) - Phase 50
+- [ ] Task 2: FriendsScreen, User Tags (`@tag`), and QR Code Scanner - Phase 50
+- [ ] Task 1: Live Collaborative Study Canvas with 6-Digit Room Codes (`FT-XXXX`) - Phase 51
+- [ ] Task 2: Real-Time Vector Stroke Merging & Peer Cursors - Phase 51
+- [ ] Task 3: Fotara 2.0.0 Release Verification, APK Build Assembly & Documentation - Phase 51
 - [x] Task 1: LinkIt cluster glow for groups of 3 or 4 converging on center point (pure anchor function & renderer) - Phase 24
 - [x] Task 2: Profile picture and banner loading defect fix (WebP encode check, API 24-36 format, cache invalidation timestamps) - Phase 24
 - [x] Task 3: Fullscreen aspect-locked crop editor with region decoding (pan, corner resize, pinch zoom, reset) - Phase 24

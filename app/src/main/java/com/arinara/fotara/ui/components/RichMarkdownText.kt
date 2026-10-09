@@ -38,11 +38,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.theme.FolderTabCream
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,7 +85,9 @@ private val INLINE_TOKEN_REGEX = Regex(
     """(_(?:[^_])+_)|""" +                       // 6: _italic_
     """(`[^`\n]+`)|""" +                         // 7: `code`
     """(~~(?:[^~])+~~)|""" +                     // 8: ~~strikethrough~~
-    """(\[([^\]]+)\]\(([^)]+)\))"""              // 9: [link](url)
+    """(\[([^\]]+)\]\(([^)]+)\))|""" +           // 9: [link](url)
+    """(\$\$[\s\S]+?\$\$)|""" +                  // 10: $$ block math $$
+    """((?<!\$)\$(?!\$)[^$\n]+?(?<!\$)\$)"""     // 11: $ inline math $
 )
 
 private fun AnnotatedString.Builder.appendRichMarkdownInternal(
@@ -158,10 +161,11 @@ private fun AnnotatedString.Builder.appendRichMarkdownInternal(
                 val inner = fullMatch.substring(1, fullMatch.length - 1)
                 pushStyle(
                     SpanStyle(
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = ElmsSans,
                         background = codeBackground,
                         color = codeColor,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp
                     )
                 )
                 append(" $inner ")
@@ -180,8 +184,42 @@ private fun AnnotatedString.Builder.appendRichMarkdownInternal(
             fullMatch.startsWith("[") && fullMatch.contains("](") && fullMatch.endsWith(")") -> {
                 val closeBracket = fullMatch.indexOf("](")
                 val linkText = fullMatch.substring(1, closeBracket)
-                pushStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline))
+                pushStyle(SpanStyle(fontFamily = ElmsSans, color = linkColor, textDecoration = TextDecoration.Underline))
                 append(linkText)
+                pop()
+            }
+
+            // $$ block math $$
+            fullMatch.startsWith("$$") && fullMatch.endsWith("$$") && fullMatch.length >= 4 -> {
+                val inner = fullMatch.substring(2, fullMatch.length - 2).trim()
+                val readable = com.arinara.fotara.ui.note.editor.KatexMathRenderer.formatToReadableMath(inner)
+                pushStyle(
+                    SpanStyle(
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold,
+                        background = codeBackground,
+                        color = linkColor,
+                        fontSize = 16.sp
+                    )
+                )
+                append("  $readable  ")
+                pop()
+            }
+
+            // $ inline math $
+            fullMatch.startsWith("$") && fullMatch.endsWith("$") && fullMatch.length >= 2 -> {
+                val inner = fullMatch.substring(1, fullMatch.length - 1).trim()
+                val readable = com.arinara.fotara.ui.note.editor.KatexMathRenderer.formatToReadableMath(inner)
+                pushStyle(
+                    SpanStyle(
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium,
+                        background = codeBackground,
+                        color = linkColor,
+                        fontSize = 14.sp
+                    )
+                )
+                append(" $readable ")
                 pop()
             }
 
@@ -305,9 +343,9 @@ fun RichMarkdownCodeBlock(
         Text(
             text = code,
             color = codeColor,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = ElmsSans,
             fontSize = 12.sp,
-            lineHeight = 17.sp
+            lineHeight = 16.sp
         )
     }
 }

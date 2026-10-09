@@ -22,7 +22,9 @@ enum class MarkdownSpanType {
     CHECKLIST_UNCHECKED,
     CHECKLIST_CHECKED,
     LINK,
-    HORIZONTAL_RULE
+    HORIZONTAL_RULE,
+    MATH_INLINE,
+    MATH_BLOCK
 }
 
 data class MarkdownSpan(
@@ -95,6 +97,8 @@ object MarkdownParser {
     private val STRIKETHROUGH_REGEX = Regex("""~~([^~\n]+?)~~""")
     private val INLINE_CODE_REGEX = Regex("""`([^`\n]+?)`""")
     private val LINK_REGEX = Regex("""\[([^\]\n]+?)\]\(([^)\n]+?)\)""")
+    private val MATH_BLOCK_REGEX = Regex("""(?ms)^\$\$\n?([\s\S]*?)\n?\$\$$""")
+    private val MATH_INLINE_REGEX = Regex("""(?<!\$)\$(?!\$)([^$\n]+?)(?<!\$)\$(?!\$)""")
 
     fun parse(text: String): MarkdownDocument {
         if (text.isEmpty()) {
@@ -126,6 +130,28 @@ object MarkdownParser {
         // Helper to check if a range overlaps an already-parsed code block
         fun isInsideCodeBlock(start: Int, end: Int): Boolean {
             return spans.any { it.type == MarkdownSpanType.CODE_BLOCK && (start in it.start until it.end || end in (it.start + 1)..it.end) }
+        }
+
+        // 1b. Block: Math Display Blocks ($$ ... $$)
+        for (match in MATH_BLOCK_REGEX.findAll(text)) {
+            val totalStart = match.range.first
+            val totalEnd = match.range.last + 1
+            if (!isInsideCodeBlock(totalStart, totalEnd)) {
+                val contentGroup = match.groups[1]
+                val contentStart = contentGroup?.range?.first ?: (totalStart + 2)
+                val contentEnd = contentGroup?.range?.last?.plus(1) ?: (totalEnd - 2)
+                spans.add(
+                    MarkdownSpan(
+                        type = MarkdownSpanType.MATH_BLOCK,
+                        start = totalStart,
+                        end = totalEnd,
+                        contentStart = contentStart,
+                        contentEnd = contentEnd,
+                        markerStartLen = contentStart - totalStart,
+                        markerEndLen = totalEnd - contentEnd
+                    )
+                )
+            }
         }
 
         // 2. Block: Horizontal Rules
@@ -373,6 +399,28 @@ object MarkdownParser {
                         markerStartLen = 1,
                         markerEndLen = end - cEnd,
                         extra = url
+                    )
+                )
+            }
+        }
+
+        // Inline Math ($ ... $)
+        for (match in MATH_INLINE_REGEX.findAll(text)) {
+            val start = match.range.first
+            val end = match.range.last + 1
+            if (!isInsideCodeBlock(start, end) && spans.none { it.type == MarkdownSpanType.MATH_BLOCK && start >= it.start && end <= it.end }) {
+                val contentGroup = match.groups[1]
+                val cStart = contentGroup?.range?.first ?: (start + 1)
+                val cEnd = contentGroup?.range?.last?.plus(1) ?: (end - 1)
+                spans.add(
+                    MarkdownSpan(
+                        type = MarkdownSpanType.MATH_INLINE,
+                        start = start,
+                        end = end,
+                        contentStart = cStart,
+                        contentEnd = cEnd,
+                        markerStartLen = 1,
+                        markerEndLen = 1
                     )
                 )
             }

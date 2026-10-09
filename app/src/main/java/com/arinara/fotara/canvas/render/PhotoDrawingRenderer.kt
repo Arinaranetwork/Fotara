@@ -17,9 +17,11 @@ import com.arinara.fotara.canvas.model.StrokeBlendMode
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokePoint
 import com.arinara.fotara.canvas.model.StrokeToolType
+import com.arinara.fotara.canvas.model.TextBackgroundStyle
+import com.arinara.fotara.canvas.model.TextLayerElement
 
 /**
- * Shared renderer for drawing strokes onto a photo in read-only overlay,
+ * Shared renderer for drawing strokes and vector text annotations onto a photo in read-only overlay,
  * interactive drawing canvas, and export flattener.
  */
 object PhotoDrawingRenderer {
@@ -141,5 +143,65 @@ object PhotoDrawingRenderer {
                 StrokeBlendMode.SCREEN -> PorterDuffXfermode(PorterDuff.Mode.SCREEN)
             }
         }
+    }
+
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val textBgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    fun renderTextLayers(
+        canvas: Canvas,
+        textLayers: List<TextLayerElement>,
+        scale: Float = 1f,
+        offsetX: Float = 0f,
+        offsetY: Float = 0f
+    ) {
+        if (textLayers.isEmpty()) return
+        canvas.save()
+        if (offsetX != 0f || offsetY != 0f) {
+            canvas.translate(offsetX, offsetY)
+        }
+        if (scale != 1f) {
+            canvas.scale(scale, scale)
+        }
+
+        for (tl in textLayers) {
+            drawTextLayer(canvas, tl)
+        }
+        canvas.restore()
+    }
+
+    fun drawTextLayer(canvas: Canvas, element: TextLayerElement) {
+        canvas.save()
+        canvas.translate(element.x, element.y)
+        if (element.rotationDegrees != 0f) {
+            canvas.rotate(element.rotationDegrees, element.width / 2f, element.height / 2f)
+        }
+
+        when (element.backgroundStyle) {
+            TextBackgroundStyle.TRANSPARENT -> {}
+            TextBackgroundStyle.FROSTED_DARK -> {
+                textBgPaint.style = Paint.Style.FILL
+                textBgPaint.color = 0xD91E293B.toInt()
+                val bgRect = android.graphics.RectF(0f, 0f, element.width, element.height)
+                canvas.drawRoundRect(bgRect, 8f, 8f, textBgPaint)
+            }
+            TextBackgroundStyle.SOLID_LIGHT -> {
+                textBgPaint.style = Paint.Style.FILL
+                textBgPaint.color = 0xFFFFFFFF.toInt()
+                val bgRect = android.graphics.RectF(0f, 0f, element.width, element.height)
+                canvas.drawRoundRect(bgRect, 8f, 8f, textBgPaint)
+            }
+        }
+
+        textPaint.color = element.color.toInt()
+        textPaint.textSize = element.fontSizeSp * 1.5f
+        val typefaceStyle = if (element.fontWeight >= 700) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif", typefaceStyle)
+
+        val fontMetrics = textPaint.fontMetrics
+        val textY = ((element.height - fontMetrics.bottom - fontMetrics.top) / 2f).coerceAtLeast(fontMetrics.descent)
+        canvas.drawText(element.text, 12f, textY, textPaint)
+
+        canvas.restore()
     }
 }

@@ -375,6 +375,20 @@ class CanvasHistoryManager(
         }
     }
 
+    data class HistorySnapshot(
+        val undoStack: List<CanvasCommand>,
+        val redoStack: List<CanvasCommand>
+    )
+
+    fun exportSnapshot(): HistorySnapshot = HistorySnapshot(undoStack.toList(), redoStack.toList())
+
+    fun restoreSnapshot(snapshot: HistorySnapshot) {
+        undoStack.clear()
+        undoStack.addAll(snapshot.undoStack)
+        redoStack.clear()
+        redoStack.addAll(snapshot.redoStack)
+    }
+
     fun clear() {
         undoStack.clear()
         redoStack.clear()

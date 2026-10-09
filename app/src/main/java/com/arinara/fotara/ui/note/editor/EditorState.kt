@@ -99,6 +99,12 @@ class EditorState(
         private set
     var isChecklist by mutableStateOf(false)
         private set
+    var isInlineMath by mutableStateOf(false)
+        private set
+    var isBlockMath by mutableStateOf(false)
+        private set
+    var isInsideTable by mutableStateOf(false)
+        private set
     var canIndent by mutableStateOf(false)
         private set
     var canOutdent by mutableStateOf(false)
@@ -277,6 +283,9 @@ class EditorState(
         isBulletList = syntax.isBulletList
         isNumberedList = syntax.isNumberedList
         isChecklist = syntax.isChecklist
+        isInlineMath = syntax.isInlineMath
+        isBlockMath = syntax.isBlockMath
+        isInsideTable = syntax.isInsideTable
 
         canIndent = TextEditorOps.canIndent(value.text, value.selection.start, value.selection.end)
         canOutdent = TextEditorOps.canOutdent(value.text, value.selection.start, value.selection.end)

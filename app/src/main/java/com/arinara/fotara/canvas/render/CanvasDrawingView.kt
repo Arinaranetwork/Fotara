@@ -83,6 +83,44 @@ class CanvasDrawingView(
         }
     }
 
+    private val shapeHoldHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var shapeHoldAnchorX = 0f
+    private var shapeHoldAnchorY = 0f
+    private var isShapeSnapped = false
+    private val shapeHoldRunnable = Runnable {
+        if (toolController.toolState.activeTool == CanvasToolType.PEN) {
+            val snapped = toolController.autoCorrectActiveStroke()
+            if (snapped) {
+                isShapeSnapped = true
+                performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                invalidate()
+            }
+        }
+    }
+
+    private fun scheduleShapeHold(x: Float, y: Float) {
+        shapeHoldHandler.removeCallbacks(shapeHoldRunnable)
+        if (toolController.toolState.activeTool == CanvasToolType.PEN && !isShapeSnapped) {
+            shapeHoldAnchorX = x
+            shapeHoldAnchorY = y
+            shapeHoldHandler.postDelayed(shapeHoldRunnable, com.arinara.fotara.canvas.engine.ShapeAutoCorrectEngine.HOLD_THRESHOLD_MS)
+        }
+    }
+
+    private fun cancelShapeHold() {
+        shapeHoldHandler.removeCallbacks(shapeHoldRunnable)
+        isShapeSnapped = false
+    }
+
+    private fun checkShapeHoldMovement(x: Float, y: Float) {
+        if (!isShapeSnapped) {
+            val slopPx = 18f * resources.displayMetrics.density
+            if (kotlin.math.hypot(x - shapeHoldAnchorX, y - shapeHoldAnchorY) > slopPx) {
+                scheduleShapeHold(x, y)
+            }
+        }
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val actionMasked = event.actionMasked
         val pointerIndex = event.actionIndex
@@ -97,6 +135,8 @@ class CanvasDrawingView(
         val pointerInputEvent: PointerInputEvent = when (actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 scroller.forceFinished(true)
+                isShapeSnapped = false
+                scheduleShapeHold(event.getX(pointerIndex), event.getY(pointerIndex))
                 PointerInputEvent.Down(
                     pointerId = pointerId,
                     x = event.getX(pointerIndex),
@@ -107,6 +147,7 @@ class CanvasDrawingView(
                 )
             }
             MotionEvent.ACTION_MOVE -> {
+                checkShapeHoldMovement(event.getX(pointerIndex), event.getY(pointerIndex))
                 val historical = mutableListOf<PointerPoint>()
                 val historySize = event.historySize
                 for (h in 0 until historySize) {
@@ -130,6 +171,7 @@ class CanvasDrawingView(
                 )
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                cancelShapeHold()
                 PointerInputEvent.Up(
                     pointerId = pointerId,
                     x = event.getX(pointerIndex),
@@ -137,6 +179,7 @@ class CanvasDrawingView(
                 )
             }
             MotionEvent.ACTION_CANCEL -> {
+                cancelShapeHold()
                 PointerInputEvent.Cancel(pointerId = pointerId)
             }
             else -> return super.onTouchEvent(event)

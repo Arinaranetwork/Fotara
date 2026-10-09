@@ -2,6 +2,12 @@
     <string name="app_name">Fotara</string>
     <string name="widget_due_tomorrow_name">Due Tomorrow</string>
     <string name="widget_due_tomorrow_description">Displays notes and coursework due tomorrow.</string>
+    <string name="widget_timetable_name">Fotara Timetable</string>
+    <string name="widget_timetable_description">Displays today\'s classes and next-day rollover schedule.</string>
+    <string name="widget_photo_pin_name">Fotara Pinned Coursework</string>
+    <string name="widget_photo_pin_description">Pin a formula sheet or study photo to your home screen.</string>
+    <string name="widget_photo_carousel_name">Fotara Photo Carousel</string>
+    <string name="widget_photo_carousel_description">Cycle through your recent coursework slides and captures.</string>
     <string name="widget_no_deadlines">No deadlines due tomorrow</string>
     <string name="widget_all_caught_up">All caught up with coursework</string>
     <string name="tagline">Your notes, organized</string>

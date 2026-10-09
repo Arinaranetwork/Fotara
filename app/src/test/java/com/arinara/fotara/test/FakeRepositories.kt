@@ -783,6 +783,10 @@ class FakeSettingsRepository : SettingsRepository {
         _profileFlow.value = _profileFlow.value.copy(name = trimmed)
     }
 
+    override suspend fun updateScheduleRolloverTime(time: String) {
+        _settingsFlow.value = _settingsFlow.value.copy(scheduleRolloverTime = time)
+    }
+
     override suspend fun updateProfileEmail(email: String) {
         val trimmed = email.trim().take(60)
         _profileFlow.value = _profileFlow.value.copy(email = trimmed)
@@ -1711,5 +1715,82 @@ class FakePdfPageDrawingRepository : com.arinara.fotara.data.repository.PdfPageD
         updateFlow(documentId)
     }
 }
+
+class FakeScheduleRepository(
+    initialSchedules: List<com.arinara.fotara.feature.schedule.model.ClassSchedule> = emptyList()
+) : com.arinara.fotara.data.repository.ScheduleRepository {
+    private val schedules = mutableListOf<com.arinara.fotara.feature.schedule.model.ClassSchedule>()
+    private val flow = kotlinx.coroutines.flow.MutableStateFlow<List<com.arinara.fotara.feature.schedule.model.ClassSchedule>>(emptyList())
+    private var nextId = 1L
+
+    init {
+        initialSchedules.forEach { insertSync(it) }
+    }
+
+    private fun updateFlow() {
+        flow.value = schedules.toList().sortedWith(compareBy({ it.dayOfWeek }, { it.startMinute }))
+    }
+
+    private fun insertSync(schedule: com.arinara.fotara.feature.schedule.model.ClassSchedule): Long {
+        val id = if (schedule.id > 0) schedule.id else nextId++
+        val entry = schedule.copy(id = id)
+        schedules.removeAll { it.id == id }
+        schedules.add(entry)
+        updateFlow()
+        return id
+    }
+
+    override fun getAllSchedules(): kotlinx.coroutines.flow.Flow<List<com.arinara.fotara.feature.schedule.model.ClassSchedule>> = flow
+
+    override fun getSchedulesByDay(dayOfWeek: Int): kotlinx.coroutines.flow.Flow<List<com.arinara.fotara.feature.schedule.model.ClassSchedule>> {
+        return flow.map { list -> list.filter { it.dayOfWeek == dayOfWeek }.sortedBy { it.startMinute } }
+    }
+
+    override suspend fun getAllSchedulesOnce(): List<com.arinara.fotara.feature.schedule.model.ClassSchedule> = schedules.toList()
+
+    override suspend fun getSchedulesByDayOnce(dayOfWeek: Int): List<com.arinara.fotara.feature.schedule.model.ClassSchedule> {
+        return schedules.filter { it.dayOfWeek == dayOfWeek }.sortedBy { it.startMinute }
+    }
+
+    override suspend fun getScheduleById(id: Long): com.arinara.fotara.feature.schedule.model.ClassSchedule? = schedules.firstOrNull { it.id == id }
+
+    override suspend fun insertSchedule(schedule: com.arinara.fotara.feature.schedule.model.ClassSchedule): Long = insertSync(schedule)
+
+    override suspend fun updateSchedule(schedule: com.arinara.fotara.feature.schedule.model.ClassSchedule): Boolean {
+        val idx = schedules.indexOfFirst { it.id == schedule.id }
+        if (idx >= 0) {
+            schedules[idx] = schedule
+            updateFlow()
+            return true
+        }
+        return false
+    }
+
+    override suspend fun deleteSchedule(id: Long): Boolean {
+        val removed = schedules.removeAll { it.id == id }
+        if (removed) updateFlow()
+        return removed
+    }
+
+    override suspend fun batchInsert(schedulesList: List<com.arinara.fotara.feature.schedule.model.ClassSchedule>): Int {
+        var count = 0
+        schedulesList.forEach {
+            insertSync(it)
+            count++
+        }
+        return count
+    }
+
+    override suspend fun deleteAllSchedules(): Boolean {
+        schedules.clear()
+        updateFlow()
+        return true
+    }
+
+    override suspend fun refresh() {
+        updateFlow()
+    }
+}
+
 
 

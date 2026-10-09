@@ -30,6 +30,12 @@ object EditorActions {
     fun toggleInlineCode(value: TextFieldValue): TextFieldValue =
         applyOp(value) { text, s, e -> TextEditorOps.toggleInlineCode(text, s, e) }
 
+    fun toggleInlineMath(value: TextFieldValue): TextFieldValue =
+        applyOp(value) { text, s, e -> TextEditorOps.toggleInlineMath(text, s, e) }
+
+    fun insertBlockMath(value: TextFieldValue): TextFieldValue =
+        applyOp(value) { text, s, e -> TextEditorOps.insertBlockMath(text, s, e) }
+
     // --- Line-Based Formatting (Headings, Blockquotes, Lists, Checklists) ---
 
     fun toggleHeading(value: TextFieldValue, level: Int): TextFieldValue =
@@ -79,6 +85,29 @@ object EditorActions {
 
     fun insertDivider(value: TextFieldValue): TextFieldValue =
         applyOp(value) { text, s, e -> TextEditorOps.insertHorizontalRule(text, s, e) }
+
+    // --- Markdown Table Operations ---
+
+    fun insertTable(value: TextFieldValue, rows: Int = 2, cols: Int = 3): TextFieldValue =
+        applyOp(value) { text, s, e -> TextEditorOps.insertTable(text, s, e, rows, cols) }
+
+    fun addTableRowAbove(value: TextFieldValue): TextFieldValue =
+        applyOp(value) { text, s, e -> TextEditorOps.addTableRowAbove(text, s, e) }
+
+    fun addTableRowBelow(value: TextFieldValue): TextFieldValue =
+        applyOp(value) { text, s, e -> TextEditorOps.addTableRowBelow(text, s, e) }
+
+    fun deleteCurrentTableRow(value: TextFieldValue): TextFieldValue =
+        applyOp(value) { text, s, e -> TextEditorOps.deleteCurrentTableRow(text, s, e) }
+
+    fun addTableColumnLeft(value: TextFieldValue): TextFieldValue =
+        applyOp(value) { text, s, e -> TextEditorOps.addTableColumnLeft(text, s, e) }
+
+    fun addTableColumnRight(value: TextFieldValue): TextFieldValue =
+        applyOp(value) { text, s, e -> TextEditorOps.addTableColumnRight(text, s, e) }
+
+    fun deleteCurrentTableColumn(value: TextFieldValue): TextFieldValue =
+        applyOp(value) { text, s, e -> TextEditorOps.deleteCurrentTableColumn(text, s, e) }
 
     // --- Links ---
 

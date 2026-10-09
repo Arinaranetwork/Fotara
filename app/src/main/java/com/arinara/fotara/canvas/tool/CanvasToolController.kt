@@ -36,7 +36,8 @@ enum class CanvasToolType {
     PEN,
     HIGHLIGHTER,
     ERASER,
-    SELECT;
+    SELECT,
+    TEXT;
 
     companion object {
         @Deprecated("Consolidated into ERASER")
@@ -56,7 +57,11 @@ data class CanvasToolState(
     val highlighterBlendMode: StrokeBlendMode = StrokeBlendMode.MULTIPLY,
     val eraserRadius: Float = 24.0f,
     val stylusOnlyDrawing: Boolean = false,
-    val selection: CanvasSelection = CanvasSelection.Empty
+    val selection: CanvasSelection = CanvasSelection.Empty,
+    val textFontSizeSp: Float = 18f,
+    val textColor: Long = 0xFFF4F0E6,
+    val textFontWeight: Int = 400,
+    val textBackgroundStyle: com.arinara.fotara.canvas.model.TextBackgroundStyle = com.arinara.fotara.canvas.model.TextBackgroundStyle.TRANSPARENT
 ) {
     val selectedElementIds: Set<String> get() = selection.elementIds
 }
@@ -124,6 +129,26 @@ class CanvasToolController(
             val normalizedP = StrokeProcessor.normalizePressure(p.pressure)
             activeStrokePoints.add(StrokePoint(wx, wy, normalizedP))
         }
+    }
+
+    fun replaceCurrentStrokePoints(newPoints: List<StrokePoint>) {
+        activeStrokePoints.clear()
+        activeStrokePoints.addAll(newPoints)
+    }
+
+    /**
+     * Attempts shape auto-correction and Bézier smoothing on the active in-progress stroke.
+     * Returns true if a shape was snapped and stroke points replaced.
+     */
+    fun autoCorrectActiveStroke(): Boolean {
+        if (toolState.activeTool != CanvasToolType.PEN || activeStrokePoints.size < 5) return false
+        val result = com.arinara.fotara.canvas.engine.ShapeAutoCorrectEngine.recognizeAndSnap(activeStrokePoints)
+        if (result.shape !is com.arinara.fotara.canvas.engine.RecognizedShape.None) {
+            activeStrokePoints.clear()
+            activeStrokePoints.addAll(result.snappedPoints)
+            return true
+        }
+        return false
     }
 
     fun nextZIndexForLayer(document: CanvasDocument, layerId: String): Int {
@@ -355,6 +380,7 @@ class CanvasToolController(
                 when (el) {
                     is StrokeElement -> StrokeProcessor.hitTestStroke(worldX, worldY, el, hitRadius = 8f / viewport.scale)
                     is ImageElement -> hitTestImage(worldX, worldY, el)
+                    else -> false
                 }
             }
 
@@ -419,6 +445,11 @@ class CanvasToolController(
                     val ref = CanvasSelectionEngine.sliceStrokeWithLasso(el, worldPolygon, viewport.scale, density)
                     if (ref != null) {
                         selectedRefs[el.id] = ref
+                    }
+                }
+                else -> {
+                    if (CanvasSelectionEngine.isPointInPolygonWinding(el.bounds.centerX, el.bounds.centerY, worldPolygon)) {
+                        selectedRefs[el.id] = SelectedElementReference.Whole(el.id)
                     }
                 }
             }
@@ -519,6 +550,7 @@ class CanvasToolController(
                     originalImageRotations[id] = el.rotationDegrees
                     originalImages[id] = el
                 }
+                else -> {}
             }
         }
 
@@ -602,6 +634,9 @@ class CanvasToolController(
                         isOnlyImages = onlyImages
                     )
                     preview.add(transformed)
+                }
+                else -> {
+                    preview.add(el)
                 }
             }
         }
@@ -722,6 +757,10 @@ class CanvasToolController(
                     afterElements.add(transformedImage)
                     newReferences[transformedImage.id] = SelectedElementReference.Whole(transformedImage.id)
                 }
+                else -> {
+                    afterElements.add(el)
+                    newReferences[el.id] = SelectedElementReference.Whole(el.id)
+                }
             }
         }
 
@@ -820,6 +859,9 @@ class CanvasToolController(
                 is ImageElement -> {
                     // Fully deleted
                 }
+                else -> {
+                    // Fully deleted
+                }
             }
         }
 
@@ -898,6 +940,11 @@ class CanvasToolController(
                     newElements.add(dup)
                     newReferences[dup.id] = SelectedElementReference.Whole(dup.id)
                 }
+                else -> {
+                    val dup = el.translated(offsetWorld, offsetWorld).withZIndex(nextZ(el.layerId))
+                    newElements.add(dup)
+                    newReferences[dup.id] = SelectedElementReference.Whole(dup.id)
+                }
             }
         }
 
@@ -956,6 +1003,9 @@ class CanvasToolController(
                     }
                 }
                 is ImageElement -> {
+                    elementsToMove.add(el)
+                }
+                else -> {
                     elementsToMove.add(el)
                 }
             }

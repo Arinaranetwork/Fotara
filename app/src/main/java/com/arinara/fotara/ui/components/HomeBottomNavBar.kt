@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -60,17 +61,18 @@ val LocalBottomOverlayPadding = androidx.compose.runtime.compositionLocalOf { 0.
 fun HomeBottomNavBar(
     selectedTab: HomeNavTab,
     onTabSelected: (HomeNavTab) -> Unit,
+    onTabReSelected: ((HomeNavTab) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .height(66.dp)
-            .clip(RoundedCornerShape(33.dp))
+            .height(64.dp)
+            .clip(CircleShape)
             .background(HomeBottomNavSurface)
-            .border(1.dp, HomeBottomNavBorder, RoundedCornerShape(33.dp))
-            .padding(horizontal = 6.dp, vertical = 6.dp)
+            .border(1.dp, HomeBottomNavBorder, CircleShape)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -81,7 +83,13 @@ fun HomeBottomNavBar(
                 icon = Icons.Filled.Home,
                 label = stringResource(R.string.nav_home),
                 isSelected = selectedTab == HomeNavTab.HOME,
-                onClick = { onTabSelected(HomeNavTab.HOME) },
+                onClick = {
+                    if (selectedTab == HomeNavTab.HOME) {
+                        onTabReSelected?.invoke(HomeNavTab.HOME) ?: onTabSelected(HomeNavTab.HOME)
+                    } else {
+                        onTabSelected(HomeNavTab.HOME)
+                    }
+                },
                 modifier = Modifier.weight(1f)
             )
 
@@ -90,7 +98,13 @@ fun HomeBottomNavBar(
                 icon = Icons.Outlined.Description,
                 label = stringResource(R.string.nav_notes),
                 isSelected = selectedTab == HomeNavTab.NOTES,
-                onClick = { onTabSelected(HomeNavTab.NOTES) },
+                onClick = {
+                    if (selectedTab == HomeNavTab.NOTES) {
+                        onTabReSelected?.invoke(HomeNavTab.NOTES) ?: onTabSelected(HomeNavTab.NOTES)
+                    } else {
+                        onTabSelected(HomeNavTab.NOTES)
+                    }
+                },
                 modifier = Modifier.weight(1f)
             )
 
@@ -99,7 +113,13 @@ fun HomeBottomNavBar(
                 icon = Icons.Outlined.Settings,
                 label = stringResource(R.string.nav_settings),
                 isSelected = selectedTab == HomeNavTab.SETTINGS,
-                onClick = { onTabSelected(HomeNavTab.SETTINGS) },
+                onClick = {
+                    if (selectedTab == HomeNavTab.SETTINGS) {
+                        onTabReSelected?.invoke(HomeNavTab.SETTINGS) ?: onTabSelected(HomeNavTab.SETTINGS)
+                    } else {
+                        onTabSelected(HomeNavTab.SETTINGS)
+                    }
+                },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -120,7 +140,7 @@ private fun HomeNavItem(
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .clip(RoundedCornerShape(26.dp))
+            .clip(CircleShape)
             .then(
                 if (isSelected) {
                     Modifier.background(HomeBottomNavActiveHighlight)
@@ -137,13 +157,14 @@ private fun HomeNavItem(
                 imageVector = icon,
                 contentDescription = label,
                 tint = if (isSelected) activeBlue else inactiveGray,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
                 color = if (isSelected) activeBlue else inactiveGray,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
                 fontWeight = FontWeight.Medium,
                 fontFamily = ElmsSans
             )

@@ -568,4 +568,66 @@ class TextEditorOpsTest {
             assertTrue("Original offset must not be inside brackets: $o", o == 6)
         }
     }
+
+    @Test
+    fun testToggleInlineMath_wrapsAndUnwraps() {
+        val original = "E = mc^2"
+        val wrapped = TextEditorOps.toggleInlineMath(original, 0, original.length)
+        assertEquals("\$E = mc^2\$", wrapped.text)
+
+        val unwrapped = TextEditorOps.toggleInlineMath(wrapped.text, 0, wrapped.text.length)
+        assertEquals("E = mc^2", unwrapped.text)
+    }
+
+    @Test
+    fun testInsertBlockMath_wrapsSelection() {
+        val equation = "\\int_0^\\infty e^{-x} dx = 1"
+        val res = TextEditorOps.insertBlockMath(equation, 0, equation.length)
+        assertEquals("$$\n\\int_0^\\infty e^{-x} dx = 1\n$$", res.text)
+    }
+
+    @Test
+    fun testInsertTable_generatesCorrectStructure() {
+        val empty = ""
+        val res = TextEditorOps.insertTable(empty, 0, 0, rows = 2, cols = 3)
+        assertTrue(res.text.contains("| Header 1 | Header 2 | Header 3 |"))
+        assertTrue(res.text.contains("| --- | --- | --- |"))
+        assertTrue(res.text.contains("| Cell | Cell | Cell |"))
+        assertTrue(TextEditorOps.isInsideTable(res.text, res.selectionStart, res.selectionEnd))
+    }
+
+    @Test
+    fun testTableOperations_addAndRemoveRows() {
+        val initial = TextEditorOps.insertTable("", 0, 0, rows = 1, cols = 2).text
+        val offsetInside = initial.indexOf("Cell")
+        assertTrue("Cursor must be in table", TextEditorOps.isInsideTable(initial, offsetInside, offsetInside))
+
+        // Add row below
+        val withExtraRow = TextEditorOps.addTableRowBelow(initial, offsetInside, offsetInside)
+        val lineCountBefore = initial.lines().count { it.trim().startsWith("|") }
+        val lineCountAfter = withExtraRow.text.lines().count { it.trim().startsWith("|") }
+        assertEquals(lineCountBefore + 1, lineCountAfter)
+
+        // Delete row
+        val afterDelete = TextEditorOps.deleteCurrentTableRow(withExtraRow.text, withExtraRow.selectionStart, withExtraRow.selectionStart)
+        val lineCountDeleted = afterDelete.text.lines().count { it.trim().startsWith("|") }
+        assertEquals(lineCountBefore, lineCountDeleted)
+    }
+
+    @Test
+    fun testTableOperations_addAndRemoveColumns() {
+        val initial = TextEditorOps.insertTable("", 0, 0, rows = 1, cols = 2).text
+        val offsetInside = initial.indexOf("Header 1")
+
+        // Add column right
+        val withExtraCol = TextEditorOps.addTableColumnRight(initial, offsetInside, offsetInside)
+        val headerLine = withExtraCol.text.lines().first { it.trim().startsWith("|") }
+        val pipes = headerLine.count { it == '|' }
+        assertEquals(4, pipes) // 3 cols -> 4 pipes: | Col 1 | Col 2 | Col 3 |
+
+        // Delete column
+        val afterDel = TextEditorOps.deleteCurrentTableColumn(withExtraCol.text, offsetInside, offsetInside)
+        val headerAfterDel = afterDel.text.lines().first { it.trim().startsWith("|") }
+        assertEquals(3, headerAfterDel.count { it == '|' }) // Back to 2 cols: | Col 1 | Col 2 |
+    }
 }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arinara Network (c) 2026
+  Exclusive property of Arinara Network.
+  Unauthorized use, reproduction, distribution, or modification of this code,
+  in whole or in part, for any purpose, is strictly prohibited without prior
+  written consent from Arinara Network as sole legal owner of this codebase.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="140dp"
+    android:minHeight="140dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_photo_pin"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:configure="com.arinara.fotara.widget.PhotoPinConfigActivity"
+    android:description="@string/widget_photo_pin_description" />

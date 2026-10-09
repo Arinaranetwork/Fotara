@@ -44,16 +44,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.AutoFixNormal
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.LayersClear
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Redo
+import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.outlined.AutoFixNormal
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.LayersClear
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -100,20 +100,34 @@ import androidx.compose.ui.unit.sp
 import com.arinara.fotara.R
 import com.arinara.fotara.canvas.engine.DrawingConstants
 import com.arinara.fotara.canvas.engine.DrawingTool
+import com.arinara.fotara.canvas.engine.RecognizedShape
+import com.arinara.fotara.canvas.engine.ShapeAutoCorrectEngine
 import com.arinara.fotara.canvas.engine.StrokeProcessor
 import com.arinara.fotara.canvas.model.StrokeBlendMode
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokePoint
 import com.arinara.fotara.canvas.model.StrokeToolType
+import com.arinara.fotara.canvas.model.TextBackgroundStyle
+import com.arinara.fotara.canvas.model.TextLayerElement
 import com.arinara.fotara.canvas.render.PhotoDrawingRenderer
 import com.arinara.fotara.data.model.DocumentNote
 import com.arinara.fotara.data.model.PdfPageDrawing
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import com.arinara.fotara.data.repository.DocumentRepository
 import com.arinara.fotara.data.repository.PdfPageDrawingRepository
 import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.MidnightCardOutline
 import com.arinara.fotara.theme.MidnightNavy
+import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.MidnightSurface
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TextMuted
@@ -121,8 +135,9 @@ import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
 import com.arinara.fotara.util.PdfLayoutMath
 import com.arinara.fotara.util.PdfPageRenderer
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -139,20 +154,49 @@ fun PdfPageEditorScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val factory = remember(documentId, pageIndex, documentRepository, pdfPageDrawingRepository) {
+        PdfPageEditorViewModelFactory(
+            documentId = documentId,
+            pageIndex = pageIndex,
+            documentRepository = documentRepository,
+            pdfPageDrawingRepository = pdfPageDrawingRepository
+        )
+    }
+    val viewModel: PdfPageEditorViewModel = viewModel(
+        key = "pdf_page_editor_${documentId}_$pageIndex",
+        factory = factory
+    )
+    PdfPageEditorScreen(
+        viewModel = viewModel,
+        onBack = onBack,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun PdfPageEditorScreen(
+    viewModel: PdfPageEditorViewModel,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    var documentNote by remember { mutableStateOf<DocumentNote?>(null) }
-    var totalPages by remember { mutableIntStateOf(1) }
-    var pdfRenderer by remember { mutableStateOf<PdfPageRenderer?>(null) }
-    var pagePointsWidth by remember { mutableFloatStateOf(595.28f) }
-    var pagePointsHeight by remember { mutableFloatStateOf(841.89f) }
+    val documentId = viewModel.documentId
+    val pageIndex = viewModel.pageIndex
+    val totalPages = uiState.totalPages
+    val pagePointsWidth = uiState.pagePointsWidth
+    val pagePointsHeight = uiState.pagePointsHeight
+    val isDrawingVisible = uiState.isDrawingVisible
 
     // Drawing state
     val strokes = remember { mutableStateListOf<StrokeElement>() }
-    val undoStack = remember { ArrayDeque<List<StrokeElement>>() }
-    val redoStack = remember { ArrayDeque<List<StrokeElement>>() }
+    LaunchedEffect(uiState.strokes) {
+        strokes.clear()
+        strokes.addAll(uiState.strokes)
+    }
 
     var activeTool by remember { mutableStateOf(DrawingTool.PEN) }
     var activeColor by remember { mutableLongStateOf(DrawingConstants.CURATED_PALETTE.first()) }
@@ -161,11 +205,19 @@ fun PdfPageEditorScreen(
     var eraserSizeDp by remember { mutableFloatStateOf(DrawingConstants.DEFAULT_ERASER_SIZE_DP) }
     var highlighterBlendMode by remember { mutableStateOf(StrokeBlendMode.MULTIPLY) }
 
-    var isDrawingVisible by remember { mutableStateOf(true) }
     var showColorPalette by remember { mutableStateOf(false) }
     var showSizeSlider by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
+
+    val textLayers = uiState.textLayers
+    var showTextOptions by remember { mutableStateOf(false) }
+    var textInput by remember { mutableStateOf("Text Annotation") }
+    var textFontSizeSp by remember { mutableFloatStateOf(18f) }
+    var textFontWeight by remember { mutableIntStateOf(400) }
+    var textColor by remember { mutableLongStateOf(DrawingConstants.CURATED_PALETTE.first()) }
+    var textBackgroundStyle by remember { mutableStateOf(TextBackgroundStyle.TRANSPARENT) }
+    var pendingTextPlacementPt by remember { mutableStateOf<Offset?>(null) }
 
     // Live gesture state
     var livePoints by remember { mutableStateOf<List<StrokePoint>?>(null) }
@@ -176,126 +228,15 @@ fun PdfPageEditorScreen(
     var baseBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var highResBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // Autosave tracking
-    var lastEditTimestamp by remember { mutableLongStateOf(0L) }
-
-    // Load document, PDF renderer, page sizes, and initial drawing
-    LaunchedEffect(documentId, pageIndex) {
-        val doc = withContext(Dispatchers.IO) {
-            documentRepository?.getDocumentNoteById(documentId)
-        }
-        documentNote = doc
-
-        if (doc != null) {
-            val file = File(doc.originFileUri)
-            if (file.exists()) {
-                val renderer = try {
-                    PdfPageRenderer(file)
-                } catch (_: Exception) {
-                    null
-                }
-                pdfRenderer = renderer
-                if (renderer != null) {
-                    totalPages = renderer.pageCount.coerceAtLeast(1)
-                    val (wPts, hPts) = renderer.getPageSizePoints(pageIndex)
-                    if (wPts > 0f && hPts > 0f) {
-                        pagePointsWidth = wPts
-                        pagePointsHeight = hPts
-                    }
-                }
-            }
-        }
-
-        // Load existing drawing
-        val initialDrawing = withContext(Dispatchers.IO) {
-            pdfPageDrawingRepository?.getDrawing(documentId, pageIndex)
-        }
-        if (initialDrawing != null) {
-            strokes.clear()
-            strokes.addAll(initialDrawing.strokes)
-            isDrawingVisible = initialDrawing.isVisible
-            // Check size mismatch
-            if (initialDrawing.pageWidth > 0f && initialDrawing.pageHeight > 0f) {
-                val wDelta = Math.abs(initialDrawing.pageWidth - pagePointsWidth)
-                val hDelta = Math.abs(initialDrawing.pageHeight - pagePointsHeight)
-                if (wDelta > 10f || hDelta > 10f) {
-                    Toast.makeText(context, context.getString(R.string.pdf_drawing_size_mismatch), Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            pdfRenderer?.close()
-            pdfRenderer = null
-        }
-    }
-
-    fun getCurrentDrawing(): PdfPageDrawing {
-        return PdfPageDrawing(
-            documentId = documentId,
-            pageIndex = pageIndex,
-            strokes = strokes.toList(),
-            pageWidth = pagePointsWidth,
-            pageHeight = pagePointsHeight,
-            isVisible = isDrawingVisible,
-            updatedAt = System.currentTimeMillis()
-        )
-    }
-
-    fun flushSave() {
-        val drawing = getCurrentDrawing()
-        scope.launch(Dispatchers.IO) {
-            try {
-                pdfPageDrawingRepository?.saveDrawing(drawing)
-            } catch (_: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, context.getString(R.string.pdf_drawing_save_failed), Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    // Debounced autosave (600ms)
-    LaunchedEffect(lastEditTimestamp) {
-        if (lastEditTimestamp > 0L) {
-            delay(DrawingConstants.AUTOSAVE_DEBOUNCE_MS)
-            flushSave()
-        }
-    }
-
-    fun pushUndoSnapshot() {
-        undoStack.addLast(strokes.toList())
-        if (undoStack.size > DrawingConstants.MAX_UNDO_STEPS) {
-            undoStack.removeFirst()
-        }
-        redoStack.clear()
-        lastEditTimestamp = System.currentTimeMillis()
-    }
-
-    fun handleUndo() {
-        if (undoStack.isNotEmpty()) {
-            redoStack.addLast(strokes.toList())
-            val previous = undoStack.removeLast()
-            strokes.clear()
-            strokes.addAll(previous)
-            lastEditTimestamp = System.currentTimeMillis()
-        }
-    }
-
-    fun handleRedo() {
-        if (redoStack.isNotEmpty()) {
-            undoStack.addLast(strokes.toList())
-            val next = redoStack.removeLast()
-            strokes.clear()
-            strokes.addAll(next)
-            lastEditTimestamp = System.currentTimeMillis()
+    LaunchedEffect(uiState.sizeMismatchWarning) {
+        if (uiState.sizeMismatchWarning) {
+            Toast.makeText(context, context.getString(R.string.pdf_drawing_size_mismatch), Toast.LENGTH_SHORT).show()
+            viewModel.clearSizeMismatchWarning()
         }
     }
 
     BackHandler {
-        flushSave()
+        viewModel.flushSave()
         onBack()
     }
 
@@ -342,35 +283,29 @@ fun PdfPageEditorScreen(
             val currentIsDrawingVisible by rememberUpdatedState(isDrawingVisible)
 
             // 1. Initial base fit render
-            LaunchedEffect(pdfRenderer, pageIndex, targetWidthPx, targetHeightPx) {
-                val renderer = pdfRenderer ?: return@LaunchedEffect
-                if (targetWidthPx > 0 && targetHeightPx > 0) {
-                    val b = withContext(Dispatchers.IO) {
-                        renderer.renderPage(
-                            pageIndex = pageIndex,
-                            destWidth = targetWidthPx,
-                            destHeight = targetHeightPx,
-                            renderScale = 1.0f
-                        )
-                    }
+            LaunchedEffect(uiState.pageIndex, uiState.isLoading, targetWidthPx, targetHeightPx) {
+                if (!uiState.isLoading && targetWidthPx > 0 && targetHeightPx > 0) {
+                    val b = viewModel.renderPage(
+                        pageIndex = uiState.pageIndex,
+                        destWidth = targetWidthPx,
+                        destHeight = targetHeightPx,
+                        renderScale = 1.0f
+                    )
                     if (b != null) baseBitmap = b
                 }
             }
 
             // 2. Sharper re-render when zoom settles (120ms debounce)
-            LaunchedEffect(userScale, pdfRenderer, targetWidthPx, targetHeightPx) {
-                val renderer = pdfRenderer ?: return@LaunchedEffect
+            LaunchedEffect(userScale, uiState.pageIndex, targetWidthPx, targetHeightPx) {
                 if (userScale > 1.25f && targetWidthPx > 0 && targetHeightPx > 0) {
                     delay(120)
                     val scaleToUse = userScale.coerceAtMost(3.0f)
-                    val hiRes = withContext(Dispatchers.IO) {
-                        renderer.renderPage(
-                            pageIndex = pageIndex,
-                            destWidth = (targetWidthPx * scaleToUse).toInt(),
-                            destHeight = (targetHeightPx * scaleToUse).toInt(),
-                            renderScale = scaleToUse
-                        )
-                    }
+                    val hiRes = viewModel.renderPage(
+                        pageIndex = uiState.pageIndex,
+                        destWidth = (targetWidthPx * scaleToUse).toInt(),
+                        destHeight = (targetHeightPx * scaleToUse).toInt(),
+                        renderScale = scaleToUse
+                    )
                     if (hiRes != null) highResBitmap = hiRes
                 } else {
                     highResBitmap = null
@@ -388,10 +323,13 @@ fun PdfPageEditorScreen(
                     }
                     .pointerInput(Unit) {
                         awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
+                            val firstDown = awaitFirstDown(requireUnconsumed = false)
                             var dragStrokesSnapshot: List<StrokeElement>? = null
                             val currentPathPoints = mutableListOf<StrokePoint>()
                             var prevPtPts: Offset? = null
+                            var isShapeSnapped = false
+                            var shapeHoldAnchorPt = firstDown.position
+                            var shapeHoldStartTime = System.currentTimeMillis()
 
                             do {
                                 val event = awaitPointerEvent()
@@ -402,6 +340,7 @@ fun PdfPageEditorScreen(
                                     livePoints = null
                                     currentPathPoints.clear()
                                     prevPtPts = null
+                                    isShapeSnapped = false
 
                                     val zoom = event.calculateZoom()
                                     val pan = event.calculatePan()
@@ -443,6 +382,13 @@ fun PdfPageEditorScreen(
                                     val ptY = pagePt.y
                                     val pressure = StrokeProcessor.normalizePressure(change.pressure)
 
+                                    if (currentActiveTool == DrawingTool.TEXT) {
+                                        pendingTextPlacementPt = pagePt
+                                        showTextOptions = true
+                                        change.consume()
+                                        break
+                                    }
+
                                     if (dragStrokesSnapshot == null) {
                                         dragStrokesSnapshot = strokes.toList()
                                     }
@@ -452,6 +398,25 @@ fun PdfPageEditorScreen(
                                             val pt = StrokePoint(ptX, ptY, pressure)
                                             currentPathPoints.add(pt)
                                             livePoints = currentPathPoints.toList()
+
+                                            if (currentActiveTool == DrawingTool.PEN && !isShapeSnapped) {
+                                                val slopPx = 18f * densityPx
+                                                val moveDist = (change.position - shapeHoldAnchorPt).getDistance()
+                                                val now = System.currentTimeMillis()
+                                                if (moveDist > slopPx) {
+                                                    shapeHoldAnchorPt = change.position
+                                                    shapeHoldStartTime = now
+                                                } else if (now - shapeHoldStartTime >= ShapeAutoCorrectEngine.HOLD_THRESHOLD_MS && currentPathPoints.size >= 5) {
+                                                    val snapRes = ShapeAutoCorrectEngine.recognizeAndSnap(currentPathPoints)
+                                                    if (snapRes.shape !is RecognizedShape.None) {
+                                                        isShapeSnapped = true
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        currentPathPoints.clear()
+                                                        currentPathPoints.addAll(snapRes.snappedPoints)
+                                                        livePoints = currentPathPoints.toList()
+                                                    }
+                                                }
+                                            }
                                         }
                                         DrawingTool.ERASER -> {
                                             val currentPt = Offset(ptX, ptY)
@@ -473,6 +438,7 @@ fun PdfPageEditorScreen(
                                             strokes.addAll(updated)
                                             prevPtPts = currentPt
                                         }
+                                        DrawingTool.TEXT -> {}
                                     }
                                     change.consume()
                                 }
@@ -481,12 +447,9 @@ fun PdfPageEditorScreen(
                             // Gesture Finished (Finger Lift)
                             if (currentActiveTool == DrawingTool.ERASER) {
                                 if (dragStrokesSnapshot != null && dragStrokesSnapshot != strokes.toList()) {
-                                    undoStack.addLast(dragStrokesSnapshot)
-                                    if (undoStack.size > DrawingConstants.MAX_UNDO_STEPS) undoStack.removeFirst()
-                                    redoStack.clear()
-                                    lastEditTimestamp = System.currentTimeMillis()
+                                    viewModel.updateStrokesAfterEraser(strokes.toList(), dragStrokesSnapshot)
                                 }
-                            } else if (currentPathPoints.isNotEmpty()) {
+                            } else if (currentPathPoints.isNotEmpty() && currentActiveTool != DrawingTool.TEXT) {
                                 val toolType = if (currentActiveTool == DrawingTool.PEN) StrokeToolType.PEN else StrokeToolType.HIGHLIGHTER
                                 val sizeDp = if (currentActiveTool == DrawingTool.PEN) currentPenSizeDp else currentHighlighterSizeDp
                                 val strokeWidthPts = DrawingConstants.computeStoredWidth(
@@ -497,10 +460,15 @@ fun PdfPageEditorScreen(
                                 val blendMode = if (currentActiveTool == DrawingTool.PEN) StrokeBlendMode.NORMAL else currentHighlighterBlendMode
 
                                 val decimated = StrokeProcessor.decimatePoints(currentPathPoints, strokeWidthPts)
-                                val bounds = StrokeProcessor.computeBounds(decimated, strokeWidthPts)
+                                val pointsToUse = if (currentActiveTool == DrawingTool.PEN && !isShapeSnapped) {
+                                    ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
+                                } else {
+                                    decimated
+                                }
+                                val bounds = StrokeProcessor.computeBounds(pointsToUse, strokeWidthPts)
                                 val newStroke = StrokeElement(
                                     layerId = "pdf_page_${documentId}_$pageIndex",
-                                    points = decimated,
+                                    points = pointsToUse,
                                     color = currentActiveColor,
                                     width = strokeWidthPts,
                                     toolType = toolType,
@@ -508,14 +476,9 @@ fun PdfPageEditorScreen(
                                     bounds = bounds
                                 )
 
-                                if (dragStrokesSnapshot != null) {
-                                    undoStack.addLast(dragStrokesSnapshot)
-                                    if (undoStack.size > DrawingConstants.MAX_UNDO_STEPS) undoStack.removeFirst()
-                                    redoStack.clear()
-                                }
                                 strokes.add(newStroke)
+                                viewModel.addStroke(newStroke, dragStrokesSnapshot)
                                 livePoints = null
-                                lastEditTimestamp = System.currentTimeMillis()
                             }
                             livePoints = null
                         }
@@ -543,6 +506,17 @@ fun PdfPageEditorScreen(
                             PhotoDrawingRenderer.renderStrokes(
                                 canvas = native,
                                 strokes = strokes,
+                                scale = fitScale,
+                                offsetX = fitLeft,
+                                offsetY = fitTop
+                            )
+                        }
+
+                        // 2b. Draw text layers
+                        if (isDrawingVisible && textLayers.isNotEmpty()) {
+                            PhotoDrawingRenderer.renderTextLayers(
+                                canvas = native,
+                                textLayers = textLayers,
                                 scale = fitScale,
                                 offsetX = fitLeft,
                                 offsetY = fitTop
@@ -593,15 +567,15 @@ fun PdfPageEditorScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = {
-                    flushSave()
+                    viewModel.flushSave()
                     onBack()
                 }) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                         contentDescription = stringResource(R.string.cd_back),
                         tint = FolderTabCream
                     )
@@ -610,54 +584,49 @@ fun PdfPageEditorScreen(
                 Text(
                     text = stringResource(R.string.pdf_editor_title, pageIndex + 1, totalPages),
                     color = TextPrimary,
-                    fontSize = 17.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 6.dp)
+                        .padding(horizontal = 8.dp)
                 )
 
                 // Undo
                 IconButton(
-                    onClick = { handleUndo() },
-                    enabled = undoStack.isNotEmpty()
+                    onClick = { viewModel.undo() },
+                    enabled = uiState.canUndo
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Undo,
+                        imageVector = Icons.AutoMirrored.Outlined.Undo,
                         contentDescription = stringResource(R.string.cd_draw_undo),
-                        tint = if (undoStack.isNotEmpty()) FolderTabCream else TextMuted.copy(alpha = 0.35f)
+                        tint = if (uiState.canUndo) FolderTabCream else TextMuted.copy(alpha = 0.35f)
                     )
                 }
 
                 // Redo
                 IconButton(
-                    onClick = { handleRedo() },
-                    enabled = redoStack.isNotEmpty()
+                    onClick = { viewModel.redo() },
+                    enabled = uiState.canRedo
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Redo,
+                        imageVector = Icons.AutoMirrored.Outlined.Redo,
                         contentDescription = stringResource(R.string.cd_draw_redo),
-                        tint = if (redoStack.isNotEmpty()) FolderTabCream else TextMuted.copy(alpha = 0.35f)
+                        tint = if (uiState.canRedo) FolderTabCream else TextMuted.copy(alpha = 0.35f)
                     )
                 }
 
                 // Eye button: show / hide drawing
                 IconButton(onClick = {
-                    val newVisibility = !isDrawingVisible
-                    isDrawingVisible = newVisibility
-                    lastEditTimestamp = System.currentTimeMillis()
-                    scope.launch(Dispatchers.IO) {
-                        pdfPageDrawingRepository?.setVisible(documentId, pageIndex, newVisibility)
-                    }
+                    viewModel.setVisible(!uiState.isDrawingVisible)
                 }) {
                     Icon(
-                        imageVector = if (isDrawingVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        imageVector = if (uiState.isDrawingVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
                         contentDescription = stringResource(
-                            if (isDrawingVisible) R.string.pdf_page_menu_hide_drawing else R.string.pdf_page_menu_show_drawing
+                            if (uiState.isDrawingVisible) R.string.pdf_page_menu_hide_drawing else R.string.pdf_page_menu_show_drawing
                         ),
-                        tint = if (isDrawingVisible) FolderTabCream else TagAmber
+                        tint = if (uiState.isDrawingVisible) FolderTabCream else TagAmber
                     )
                 }
 
@@ -665,7 +634,7 @@ fun PdfPageEditorScreen(
                 Box {
                     IconButton(onClick = { showOverflowMenu = true }) {
                         Icon(
-                            imageVector = Icons.Default.MoreVert,
+                            imageVector = Icons.Outlined.MoreVert,
                             contentDescription = stringResource(R.string.cd_more_options),
                             tint = FolderTabCream
                         )
@@ -678,7 +647,7 @@ fun PdfPageEditorScreen(
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.pdf_page_menu_clear_drawing), color = DangerRed) },
                             leadingIcon = {
-                                Icon(Icons.Default.LayersClear, contentDescription = null, tint = DangerRed)
+                                Icon(Icons.Outlined.LayersClear, contentDescription = null, tint = DangerRed)
                             },
                             onClick = {
                                 showOverflowMenu = false
@@ -710,11 +679,11 @@ fun PdfPageEditorScreen(
                     color = MidnightSurface.copy(alpha = 0.96f),
                     shape = RoundedCornerShape(20.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
-                    modifier = Modifier.padding(bottom = 10.dp)
+                    modifier = Modifier.padding(bottom = 12.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         for (colorLong in DrawingConstants.CURATED_PALETTE) {
                             val isSelected = activeColor == colorLong
@@ -724,8 +693,8 @@ fun PdfPageEditorScreen(
                                     .clip(CircleShape)
                                     .background(Color(colorLong.toInt()))
                                     .border(
-                                        width = if (isSelected) 2.5.dp else 1.dp,
-                                        color = if (isSelected) Color.White else MidnightCardOutline,
+                                        width = 2.dp,
+                                        color = if (isSelected) TextPrimary else MidnightCardOutline,
                                         shape = CircleShape
                                     )
                                     .clickable {
@@ -736,9 +705,9 @@ fun PdfPageEditorScreen(
                             ) {
                                 if (isSelected) {
                                     Icon(
-                                        imageVector = Icons.Default.Check,
+                                        imageVector = Icons.Outlined.Check,
                                         contentDescription = null,
-                                        tint = if (colorLong == 0xFFFFFFFF) Color.Black else Color.White,
+                                        tint = if (colorLong == 0xFFFFFFFF) HomeNearBlack else TextPrimary,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -760,7 +729,7 @@ fun PdfPageEditorScreen(
                     border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
                     modifier = Modifier
                         .fillMaxWidth(0.88f)
-                        .padding(bottom = 10.dp)
+                        .padding(bottom = 12.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -769,11 +738,13 @@ fun PdfPageEditorScreen(
                             DrawingTool.PEN -> penSizeDp
                             DrawingTool.HIGHLIGHTER -> highlighterSizeDp
                             DrawingTool.ERASER -> eraserSizeDp
+                            DrawingTool.TEXT -> textFontSizeSp
                         }
                         val valueRange = when (activeTool) {
                             DrawingTool.PEN -> DrawingConstants.MIN_PEN_SIZE_DP..DrawingConstants.MAX_PEN_SIZE_DP
                             DrawingTool.HIGHLIGHTER -> DrawingConstants.MIN_HIGHLIGHTER_SIZE_DP..DrawingConstants.MAX_HIGHLIGHTER_SIZE_DP
                             DrawingTool.ERASER -> DrawingConstants.MIN_ERASER_SIZE_DP..DrawingConstants.MAX_ERASER_SIZE_DP
+                            DrawingTool.TEXT -> 12f..48f
                         }
 
                         Row(
@@ -786,13 +757,14 @@ fun PdfPageEditorScreen(
                                     DrawingTool.PEN -> stringResource(R.string.tool_pen)
                                     DrawingTool.HIGHLIGHTER -> stringResource(R.string.tool_highlighter)
                                     DrawingTool.ERASER -> stringResource(R.string.tool_eraser)
+                                    DrawingTool.TEXT -> "Text Size"
                                 },
                                 color = TextPrimary,
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "${currentVal.toInt()} dp",
+                                text = if (activeTool == DrawingTool.TEXT) "${currentVal.toInt()} sp" else "${currentVal.toInt()} dp",
                                 color = TextSecondary,
                                 fontSize = 12.sp
                             )
@@ -805,6 +777,7 @@ fun PdfPageEditorScreen(
                                     DrawingTool.PEN -> penSizeDp = newSize
                                     DrawingTool.HIGHLIGHTER -> highlighterSizeDp = newSize
                                     DrawingTool.ERASER -> eraserSizeDp = newSize
+                                    DrawingTool.TEXT -> textFontSizeSp = newSize
                                 }
                             },
                             valueRange = valueRange,
@@ -827,7 +800,7 @@ fun PdfPageEditorScreen(
                                 color = TextSecondary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(bottom = 6.dp)
+                                modifier = Modifier.padding(bottom = 8.dp)
                             )
                             Row(
                                 modifier = Modifier
@@ -849,7 +822,7 @@ fun PdfPageEditorScreen(
                                         label = { Text(label, fontSize = 11.sp) },
                                         colors = FilterChipDefaults.filterChipColors(
                                             selectedContainerColor = FolderTabCream,
-                                            selectedLabelColor = Color.Black,
+                                            selectedLabelColor = HomeNearBlack,
                                             containerColor = MidnightNavy,
                                             labelColor = TextSecondary
                                         ),
@@ -875,7 +848,7 @@ fun PdfPageEditorScreen(
                 shadowElevation = 8.dp
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -892,7 +865,7 @@ fun PdfPageEditorScreen(
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Edit,
+                            imageVector = Icons.Outlined.Edit,
                             contentDescription = stringResource(R.string.tool_pen),
                             tint = if (activeTool == DrawingTool.PEN) FolderTabCream else TextMuted
                         )
@@ -911,7 +884,7 @@ fun PdfPageEditorScreen(
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AutoFixNormal,
+                            imageVector = Icons.Outlined.AutoFixNormal,
                             contentDescription = stringResource(R.string.tool_highlighter),
                             tint = if (activeTool == DrawingTool.HIGHLIGHTER) FolderTabCream else TextMuted
                         )
@@ -931,13 +904,44 @@ fun PdfPageEditorScreen(
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.LayersClear,
+                            imageVector = Icons.Outlined.LayersClear,
                             contentDescription = stringResource(R.string.tool_eraser),
                             tint = if (activeTool == DrawingTool.ERASER) FolderTabCream else TextMuted
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(2.dp))
+                    // Text Layers Tool [ T ]
+                    IconButton(
+                        onClick = {
+                            if (activeTool == DrawingTool.TEXT) {
+                                showTextOptions = !showTextOptions
+                                showSizeSlider = false
+                                showColorPalette = false
+                            } else {
+                                activeTool = DrawingTool.TEXT
+                                showTextOptions = true
+                                showSizeSlider = false
+                                showColorPalette = false
+                            }
+                        }
+                    ) {
+                        Surface(
+                            color = if (activeTool == DrawingTool.TEXT) FolderTabCream else Color.Transparent,
+                            shape = CircleShape,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "T",
+                                    color = if (activeTool == DrawingTool.TEXT) MidnightNavy else FolderTabCream,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
 
                     // Color Swatch Button (hidden when Eraser is selected)
                     if (activeTool != DrawingTool.ERASER) {
@@ -955,12 +959,190 @@ fun PdfPageEditorScreen(
                                     .size(24.dp)
                                     .clip(CircleShape)
                                     .background(Color(activeColor.toInt()))
-                                    .border(1.5.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                                    .border(2.dp, TextPrimary.copy(alpha = 0.8f), CircleShape)
                             )
                         }
                     }
                 }
             }
+        }
+
+        // Text Options / Placement Dialog
+        if (showTextOptions) {
+            AlertDialog(
+                onDismissRequest = { showTextOptions = false },
+                title = {
+                    Text(
+                        text = "Text Annotation",
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = textInput,
+                            onValueChange = { textInput = it },
+                            label = { Text("Annotation Text") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                focusedBorderColor = FolderTabCream,
+                                unfocusedBorderColor = MidnightCardOutline,
+                                cursorColor = FolderTabCream
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Font Size", color = TextSecondary, fontSize = 14.sp)
+                            Text("${textFontSizeSp.toInt()} sp", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = textFontSizeSp,
+                            onValueChange = { textFontSizeSp = it },
+                            valueRange = 12f..48f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = FolderTabCream,
+                                activeTrackColor = FolderTabCream,
+                                inactiveTrackColor = MidnightNavy
+                            )
+                        )
+
+                        Text("Font Weight", color = TextSecondary, fontSize = 14.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val weights = listOf(400 to "Regular", 500 to "Medium", 700 to "Bold")
+                            for ((w, label) in weights) {
+                                val isSel = textFontWeight == w
+                                FilterChip(
+                                    selected = isSel,
+                                    onClick = { textFontWeight = w },
+                                    label = { Text(label, fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = FolderTabCream,
+                                        selectedLabelColor = HomeNearBlack,
+                                        containerColor = MidnightNavy,
+                                        labelColor = TextSecondary
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = isSel,
+                                        borderColor = MidnightCardOutline,
+                                        selectedBorderColor = FolderTabCream
+                                    )
+                                )
+                            }
+                        }
+
+                        Text("Card Background", color = TextSecondary, fontSize = 14.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val styles = listOf(
+                                TextBackgroundStyle.TRANSPARENT to "Transparent",
+                                TextBackgroundStyle.FROSTED_DARK to "Frosted Dark",
+                                TextBackgroundStyle.SOLID_LIGHT to "Solid Light"
+                            )
+                            for ((s, label) in styles) {
+                                val isSel = textBackgroundStyle == s
+                                FilterChip(
+                                    selected = isSel,
+                                    onClick = { textBackgroundStyle = s },
+                                    label = { Text(label, fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = FolderTabCream,
+                                        selectedLabelColor = HomeNearBlack,
+                                        containerColor = MidnightNavy,
+                                        labelColor = TextSecondary
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = isSel,
+                                        borderColor = MidnightCardOutline,
+                                        selectedBorderColor = FolderTabCream
+                                    )
+                                )
+                            }
+                        }
+
+                        Text("Text Color", color = TextSecondary, fontSize = 14.sp)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(DrawingConstants.CURATED_PALETTE) { colLong ->
+                                val isSel = textColor == colLong
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(colLong.toInt()))
+                                        .border(
+                                            width = if (isSel) 2.dp else 1.dp,
+                                            color = if (isSel) TextPrimary else MidnightCardOutline,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { textColor = colLong },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSel) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Check,
+                                            contentDescription = null,
+                                            tint = if (colLong == 0xFFFFFFFF) HomeNearBlack else TextPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showTextOptions = false
+                            val placement = pendingTextPlacementPt ?: Offset(pagePointsWidth / 2f, pagePointsHeight / 2f)
+                            val estW = maxOf(120f, textInput.length * textFontSizeSp * 0.9f + 24f)
+                            val estH = maxOf(40f, textFontSizeSp * 2.2f)
+                            val newLayer = TextLayerElement(
+                                id = "text_${System.currentTimeMillis()}",
+                                layerId = "pdf_page_${documentId}_$pageIndex",
+                                text = textInput.ifBlank { "Text" },
+                                x = (placement.x - estW / 2f).coerceAtLeast(0f),
+                                y = (placement.y - estH / 2f).coerceAtLeast(0f),
+                                width = estW,
+                                height = estH,
+                                fontSizeSp = textFontSizeSp,
+                                color = textColor,
+                                fontWeight = textFontWeight,
+                                backgroundStyle = textBackgroundStyle,
+                                bounds = com.arinara.fotara.canvas.engine.CanvasRect(
+                                    left = placement.x - estW / 2f,
+                                    top = placement.y - estH / 2f,
+                                    right = placement.x + estW / 2f,
+                                    bottom = placement.y + estH / 2f
+                                )
+                            )
+                            viewModel.addTextLayer(newLayer)
+                            pendingTextPlacementPt = null
+                        }
+                    ) {
+                        Text("Place", color = FolderTabCream, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showTextOptions = false }) {
+                        Text(stringResource(R.string.action_cancel), color = TextSecondary)
+                    }
+                },
+                containerColor = MidnightSurface,
+                shape = RoundedCornerShape(20.dp)
+            )
         }
 
         // Clear Drawing Confirmation Dialog
@@ -984,11 +1166,8 @@ fun PdfPageEditorScreen(
                     TextButton(
                         onClick = {
                             showClearConfirmDialog = false
-                            pushUndoSnapshot()
                             strokes.clear()
-                            scope.launch(Dispatchers.IO) {
-                                pdfPageDrawingRepository?.clearDrawing(documentId, pageIndex)
-                            }
+                            viewModel.clearDrawing()
                         }
                     ) {
                         Text(
@@ -1006,6 +1185,45 @@ fun PdfPageEditorScreen(
                 containerColor = MidnightSurface,
                 shape = RoundedCornerShape(20.dp)
             )
+        }
+
+        // Error message dialog (surface PDF renderer/document errors)
+        if (uiState.errorMessage != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.clearErrorMessage() },
+                title = {
+                    Text(
+                        text = "PDF Error",
+                        fontWeight = FontWeight.Bold,
+                        color = DangerRed,
+                        fontSize = 16.sp
+                    )
+                },
+                text = {
+                    Text(
+                        text = uiState.errorMessage ?: "Failed to open PDF document",
+                        color = TextSecondary,
+                        fontSize = 14.sp
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.clearErrorMessage(); onBack() }) {
+                        Text("Go Back", color = FolderTabCream, fontWeight = FontWeight.Bold)
+                    }
+                },
+                containerColor = MidnightSurface,
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+
+        // Loading state
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.material3.CircularProgressIndicator(color = FolderTabCream)
+            }
         }
     }
 }

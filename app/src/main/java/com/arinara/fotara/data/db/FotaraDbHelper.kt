@@ -350,6 +350,27 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_pdf_page_drawings_doc_id ON pdf_page_drawings(document_id)")
 
+        // v19 Class Schedules table for Phase 42 Timetable & Dynamic Capsule
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS class_schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                day_of_week INTEGER NOT NULL,
+                start_minute INTEGER NOT NULL,
+                end_minute INTEGER NOT NULL,
+                subject_name TEXT NOT NULL,
+                room_name TEXT,
+                instructor_name TEXT,
+                linked_folder_id INTEGER,
+                color_hex TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY(linked_folder_id) REFERENCES folders(id) ON DELETE SET NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_class_schedules_day ON class_schedules(day_of_week, start_minute)")
+
         createFtsTable(db)
     }
 
@@ -785,6 +806,31 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 db.execSQL("DELETE FROM pdf_page_drawings WHERE document_id NOT IN (SELECT id FROM document_notes)")
             } catch (_: Exception) {}
         }
+        if (oldVersion < 19) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS class_schedules (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        day_of_week INTEGER NOT NULL,
+                        start_minute INTEGER NOT NULL,
+                        end_minute INTEGER NOT NULL,
+                        subject_name TEXT NOT NULL,
+                        room_name TEXT,
+                        instructor_name TEXT,
+                        linked_folder_id INTEGER,
+                        color_hex TEXT,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        FOREIGN KEY(linked_folder_id) REFERENCES folders(id) ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_class_schedules_day ON class_schedules(day_of_week, start_minute)")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v19 (class_schedules) failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -828,7 +874,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 18
+        const val DATABASE_VERSION = 19
         const val HOME_WORKSPACE_ID = 1L
         const val ARCHIVE_WORKSPACE_ID = 2L
         const val HOME_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000001"

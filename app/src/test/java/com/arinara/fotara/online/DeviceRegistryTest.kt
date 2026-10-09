@@ -85,6 +85,10 @@ class DeviceRegistryTest {
             _settingsFlow.value = _settingsFlow.value.copy(isDeviceCountEnabled = enabled)
         }
 
+        override suspend fun updateScheduleRolloverTime(time: String) {
+            _settingsFlow.value = _settingsFlow.value.copy(scheduleRolloverTime = time)
+        }
+
         override suspend fun updateProfileName(name: String) {}
         override suspend fun updateProfileEmail(email: String) {}
         override suspend fun updateProfileBorder(borderId: String) {}

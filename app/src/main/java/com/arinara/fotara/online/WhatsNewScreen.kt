@@ -88,6 +88,24 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
+        version = "1.9.0",
+        channel = "Beta",
+        releaseDate = "2026-10-09",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.9.0_Beta",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Android Home Screen Timetable & Photo Widgets: 4x2/4x4 Timetable widget with automatic next-day cutoff rollover, single coursework photo pin widget, and recent lecture photo carousel.",
+            "Synchronized Audio Annotations: Record and attach 5-minute AAC voice notes to notes and anchor them to individual PDF pages.",
+            "Urgent Anti-Procrastination Alarm: Looping study alarm that can only be dismissed by capturing photo proof of your desk/homework (or entering an emergency PIN).",
+            "STEM Superpowers: Inline and display KaTeX math formulas in Text Notes, structured Markdown tables, shape auto-correct (draw-and-hold), text layers, and multi-sheet canvas."
+        ),
+        patchesAndFixes = listOf(
+            "Optimized widget bitmap downsampling (max 512px) preventing Android TransactionTooLargeException.",
+            "Enforced strict exception logging across Glance widgets and background schedule tasks.",
+            "Bottom navigation tab state persistence across sub-screens via SaveableStateHolder and canonical re-tap pop-to-root."
+        )
+    ),
+    ReleaseChangelogEntry(
         version = "1.8.4",
         channel = "Beta",
         releaseDate = "2026-10-07",

@@ -42,6 +42,7 @@ import org.json.JSONObject
 
 interface SettingsRepository {
     companion object {
+        const val PREFS_NAME = "fotara_settings"
         const val DEVICE_COUNT_DEFAULT_ENABLED = true
         const val KEY_DEVICE_COUNT_ENABLED = "key_device_count_enabled"
         const val MAX_BANNER_GIF_BYTES = 8 * 1024 * 1024L // 8 MB
@@ -49,9 +50,12 @@ interface SettingsRepository {
         const val KEY_SAVED_IMAGE_CUSTOM_NAME = "key_saved_image_custom_name"
         const val DEFAULT_SAVED_IMAGE_LOCATION = "pictures_fotara"
         const val DEFAULT_SAVED_IMAGE_CUSTOM_NAME = ""
+        const val KEY_SCHEDULE_ROLLOVER_TIME = "key_schedule_rollover_time"
+        const val DEFAULT_SCHEDULE_ROLLOVER_TIME = "18:00"
     }
     val settingsFlow: StateFlow<UserSettings>
     val profileFlow: StateFlow<UserProfile>
+    suspend fun updateScheduleRolloverTime(time: String)
     suspend fun updateDeviceCountEnabled(enabled: Boolean)
     suspend fun updateProfileName(name: String)
     suspend fun updateProfileEmail(email: String)
@@ -180,8 +184,15 @@ class DefaultSettingsRepository(
             combineFileNamePreset = prefs.getString(KEY_COMBINE_NAME_PRESET, "{folder}_{date}") ?: "{folder}_{date}",
             isDeviceCountEnabled = prefs.getBoolean(KEY_DEVICE_COUNT_ENABLED, DEVICE_COUNT_DEFAULT_ENABLED),
             savedImageLocation = prefs.getString(KEY_SAVED_IMAGE_LOCATION, DEFAULT_SAVED_IMAGE_LOCATION) ?: DEFAULT_SAVED_IMAGE_LOCATION,
-            savedImageCustomName = prefs.getString(KEY_SAVED_IMAGE_CUSTOM_NAME, DEFAULT_SAVED_IMAGE_CUSTOM_NAME) ?: DEFAULT_SAVED_IMAGE_CUSTOM_NAME
+            savedImageCustomName = prefs.getString(KEY_SAVED_IMAGE_CUSTOM_NAME, DEFAULT_SAVED_IMAGE_CUSTOM_NAME) ?: DEFAULT_SAVED_IMAGE_CUSTOM_NAME,
+            scheduleRolloverTime = prefs.getString(KEY_SCHEDULE_ROLLOVER_TIME, DEFAULT_SCHEDULE_ROLLOVER_TIME) ?: DEFAULT_SCHEDULE_ROLLOVER_TIME
         )
+    }
+
+    override suspend fun updateScheduleRolloverTime(time: String) = withContext(Dispatchers.IO) {
+        val sanitized = time.trim()
+        prefs.edit().putString(KEY_SCHEDULE_ROLLOVER_TIME, sanitized).apply()
+        _settingsFlow.value = _settingsFlow.value.copy(scheduleRolloverTime = sanitized)
     }
 
     override suspend fun updateSavedImageLocation(locationKey: String, customName: String) = withContext(Dispatchers.IO) {
@@ -851,5 +862,7 @@ class DefaultSettingsRepository(
         private const val KEY_SAVED_IMAGE_CUSTOM_NAME = SettingsRepository.KEY_SAVED_IMAGE_CUSTOM_NAME
         private const val DEFAULT_SAVED_IMAGE_LOCATION = SettingsRepository.DEFAULT_SAVED_IMAGE_LOCATION
         private const val DEFAULT_SAVED_IMAGE_CUSTOM_NAME = SettingsRepository.DEFAULT_SAVED_IMAGE_CUSTOM_NAME
+        private const val KEY_SCHEDULE_ROLLOVER_TIME = SettingsRepository.KEY_SCHEDULE_ROLLOVER_TIME
+        private const val DEFAULT_SCHEDULE_ROLLOVER_TIME = SettingsRepository.DEFAULT_SCHEDULE_ROLLOVER_TIME
     }
 }

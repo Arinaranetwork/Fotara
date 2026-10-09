@@ -35,6 +35,10 @@ import kotlinx.coroutines.launch
 
 import com.arinara.fotara.data.repository.WorkspaceRepository
 import com.arinara.fotara.data.repository.SqliteWorkspaceRepository
+import com.arinara.fotara.data.repository.ScheduleRepository
+import com.arinara.fotara.data.repository.SqliteScheduleRepository
+import com.arinara.fotara.feature.schedule.engine.ScheduleCutoffEngine
+import com.arinara.fotara.feature.schedule.notification.ScheduleNotificationScheduler
 
 interface AppContainer {
     val workspaceRepository: WorkspaceRepository
@@ -54,6 +58,10 @@ interface AppContainer {
     val photoDrawingRepository: com.arinara.fotara.data.repository.PhotoDrawingRepository
     val pdfPagePinRepository: com.arinara.fotara.data.repository.PdfPagePinRepository
     val pdfPageDrawingRepository: com.arinara.fotara.data.repository.PdfPageDrawingRepository
+    val audioAnnotationRepository: com.arinara.fotara.audio.repository.AudioAnnotationRepository
+    val scheduleRepository: ScheduleRepository
+    val scheduleCutoffEngine: ScheduleCutoffEngine
+    val scheduleNotificationScheduler: ScheduleNotificationScheduler
     val updateManager: UpdateManager
     val feedbackManager: FeedbackManager
     val context: Context
@@ -158,6 +166,10 @@ class DefaultAppContainer(override val context: Context) : AppContainer {
         com.arinara.fotara.data.repository.SqlitePdfPageDrawingRepository(dbHelper)
     }
 
+    override val audioAnnotationRepository: com.arinara.fotara.audio.repository.AudioAnnotationRepository by lazy {
+        com.arinara.fotara.audio.repository.SqliteAudioAnnotationRepository(dbHelper)
+    }
+
     override val updateManager: UpdateManager by lazy {
         UpdateManager(context)
     }
@@ -175,6 +187,18 @@ class DefaultAppContainer(override val context: Context) : AppContainer {
             context = context,
             settingsRepository = settingsRepository
         )
+    }
+
+    override val scheduleRepository: ScheduleRepository by lazy {
+        SqliteScheduleRepository(dbHelper)
+    }
+
+    override val scheduleCutoffEngine: ScheduleCutoffEngine by lazy {
+        ScheduleCutoffEngine()
+    }
+
+    override val scheduleNotificationScheduler: ScheduleNotificationScheduler by lazy {
+        ScheduleNotificationScheduler(context)
     }
 
     init {

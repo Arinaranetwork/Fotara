@@ -10,14 +10,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.sp
+import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.theme.FolderTabCream
+import com.arinara.fotara.theme.HomeAddButtonBlue
+import com.arinara.fotara.theme.HomeSearchBarSurface
+import com.arinara.fotara.theme.TextMuted
+import com.arinara.fotara.theme.TextPrimary
 
 /**
  * VisualTransformation providing "Notion-lite" live interactive preview in the Markdown editor:
@@ -36,12 +40,12 @@ class MarkdownVisualTransformation(
     val cursorStart: Int,
     val cursorEnd: Int,
     val hideUntouchedMarkers: Boolean = true,
-    val textColor: Color = Color(0xFFEAE3D2),
-    val accentColor: Color = Color(0xFFF77F00),
-    val codeBgColor: Color = Color(0xFF1E254A),
-    val codeTextColor: Color = Color(0xFFE2E8F0),
-    val linkColor: Color = Color(0xFF64B5F6),
-    val mutedColor: Color = Color(0xFF8E9AAF)
+    val textColor: Color = FolderTabCream,
+    val accentColor: Color = HomeAddButtonBlue,
+    val codeBgColor: Color = HomeSearchBarSurface,
+    val codeTextColor: Color = TextPrimary,
+    val linkColor: Color = HomeAddButtonBlue,
+    val mutedColor: Color = TextMuted
 ) : VisualTransformation {
 
     var lastOffsetMapping: OffsetMapping = OffsetMapping.Identity
@@ -100,10 +104,10 @@ class MarkdownVisualTransformation(
                 chunks.add(TextMappingChunk(lineStart, lineEnd, tLineStart, sb.length))
                 styles.add(
                     SpanStyle(
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = ElmsSans,
                         background = codeBgColor,
                         color = codeTextColor,
-                        fontSize = 13.sp
+                        fontSize = 14.sp
                     ) to (tLineStart until sb.length)
                 )
             } else {
@@ -215,7 +219,12 @@ class MarkdownVisualTransformation(
                         chunks.add(TextMappingChunk(span.start, span.contentStart, tSpanStart, tSpanStart))
 
                         // 2. Visible content
-                        val spanContent = raw.substring(span.contentStart, span.contentEnd)
+                        val rawContent = raw.substring(span.contentStart, span.contentEnd)
+                        val spanContent = if (span.type == MarkdownSpanType.MATH_INLINE) {
+                            KatexMathRenderer.formatToReadableMath(rawContent)
+                        } else {
+                            rawContent
+                        }
                         val tVisibleStart = sb.length
                         sb.append(spanContent)
                         val tVisibleEnd = sb.length
@@ -302,18 +311,33 @@ class MarkdownVisualTransformation(
         linkColor: Color
     ): SpanStyle? = when (type) {
         MarkdownSpanType.BOLD -> SpanStyle(fontWeight = FontWeight.Bold, color = textColor)
-        MarkdownSpanType.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
-        MarkdownSpanType.BOLD_ITALIC -> SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic, color = textColor)
+        MarkdownSpanType.ITALIC -> SpanStyle(fontWeight = FontWeight.Medium, color = FolderTabCream)
+        MarkdownSpanType.BOLD_ITALIC -> SpanStyle(fontWeight = FontWeight.Bold, color = FolderTabCream)
         MarkdownSpanType.STRIKETHROUGH -> SpanStyle(textDecoration = TextDecoration.LineThrough)
         MarkdownSpanType.INLINE_CODE -> SpanStyle(
-            fontFamily = FontFamily.Monospace,
+            fontFamily = ElmsSans,
             background = codeBgColor,
             color = codeTextColor,
-            fontSize = 13.5.sp
+            fontSize = 14.sp
         )
         MarkdownSpanType.LINK -> SpanStyle(
+            fontFamily = ElmsSans,
             color = linkColor,
             textDecoration = TextDecoration.Underline
+        )
+        MarkdownSpanType.MATH_INLINE -> SpanStyle(
+            fontFamily = ElmsSans,
+            fontWeight = FontWeight.Medium,
+            background = codeBgColor,
+            color = linkColor,
+            fontSize = 14.sp
+        )
+        MarkdownSpanType.MATH_BLOCK -> SpanStyle(
+            fontFamily = ElmsSans,
+            fontWeight = FontWeight.Bold,
+            background = codeBgColor,
+            color = linkColor,
+            fontSize = 16.sp
         )
         else -> null
     }
@@ -324,5 +348,6 @@ class MarkdownVisualTransformation(
                 this == MarkdownSpanType.BOLD_ITALIC ||
                 this == MarkdownSpanType.STRIKETHROUGH ||
                 this == MarkdownSpanType.INLINE_CODE ||
-                this == MarkdownSpanType.LINK
+                this == MarkdownSpanType.LINK ||
+                this == MarkdownSpanType.MATH_INLINE
 }

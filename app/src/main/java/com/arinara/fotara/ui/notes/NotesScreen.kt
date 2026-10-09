@@ -119,6 +119,9 @@ import com.arinara.fotara.theme.HomeMainButtonBlue
 import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.TagCrimson
+import com.arinara.fotara.theme.TextPrimary
+import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.ui.components.SharedFloatingAddButton
 import com.arinara.fotara.ui.components.verticalEdgeFade
 
@@ -140,7 +143,8 @@ fun NotesScreen(
     onOpenUpdates: () -> Unit = {},
     onOpenWhatsNew: () -> Unit = {},
     onOpenFeedback: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -203,7 +207,7 @@ fun NotesScreen(
                                 .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
                         ) {
                             DropdownMenuItem(
-                                text = { Text("What's New", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                text = { Text("What's New", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                 leadingIcon = { Icon(Icons.Default.NewReleases, contentDescription = null, tint = Color(0xFFF59E0B)) },
                                 onClick = {
                                     showHeaderOverflowMenu = false
@@ -211,16 +215,16 @@ fun NotesScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Check for Updates", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = Color.White) },
+                                text = { Text("Check for Updates", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = TextPrimary) },
                                 onClick = {
                                     showHeaderOverflowMenu = false
                                     onOpenUpdates()
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Send Feedback", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                leadingIcon = { Icon(Icons.Default.Feedback, contentDescription = null, tint = Color.White) },
+                                text = { Text("Send Feedback", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                leadingIcon = { Icon(Icons.Default.Feedback, contentDescription = null, tint = TextPrimary) },
                                 onClick = {
                                     showHeaderOverflowMenu = false
                                     onOpenFeedback()
@@ -228,7 +232,7 @@ fun NotesScreen(
                             )
                             HorizontalDivider(color = HomeCardBorder)
                             DropdownMenuItem(
-                                text = { Text("Trash", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                text = { Text("Trash", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = TagCrimson) },
                                 onClick = {
                                     showHeaderOverflowMenu = false
@@ -253,6 +257,13 @@ fun NotesScreen(
                 onReorderWorkspaces = { ids -> viewModel.reorderWorkspaces(ids) }
             )
 
+            // 1-Line Dynamic Schedule Capsule (Phase 42)
+            // Location Invariant: Positioned strictly below WorkspaceTabBar and immediately above NotesFilterChipsRow
+            com.arinara.fotara.feature.schedule.ui.ScheduleCapsule(
+                state = uiState.scheduleCapsuleState,
+                onClick = { viewModel.openScheduleSheet() }
+            )
+
             // 2. Horizontally scrollable Pill Filter Chips (toggled on demand)
             AnimatedVisibility(
                 visible = uiState.isFiltersVisible,
@@ -272,7 +283,6 @@ fun NotesScreen(
                     workspaceName = uiState.selectedWorkspaceName
                 )
             } else {
-                val listState = rememberLazyListState()
                 val isOverlayOpen = itemToDelete != null || itemToRename != null || itemToMove != null || showHeaderOverflowMenu || showFabCreateMenu || pendingCreateAction != null || uiState.showAddWorkspaceDialog || uiState.workspaceToRename != null || uiState.workspaceDeleteStep != WorkspaceDeleteStep.NONE
                 val canRefresh = PullToRefreshHelper.canTriggerRefresh(
                     isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0,
@@ -289,8 +299,8 @@ fun NotesScreen(
                 ) {
                     LazyColumn(
                         state = listState,
-                        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 20.dp, bottom = bottomOverlayPadding + 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = bottomOverlayPadding + 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalEdgeFade(top = 20.dp)
@@ -334,18 +344,20 @@ fun NotesScreen(
             title = {
                 Text(
                     text = stringResource(R.string.confirm_delete_title),
-                    color = Color.White,
+                    color = TextPrimary,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp
                 )
             },
             text = {
                 Text(
                     text = stringResource(R.string.confirm_delete_message, item.title),
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = TextSecondary,
                     fontFamily = ElmsSans,
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
                 )
             },
             confirmButton = {
@@ -355,9 +367,9 @@ fun NotesScreen(
                         itemToDelete = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = TagCrimson),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text(stringResource(R.string.confirm_delete_confirm), color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.confirm_delete_confirm), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -377,10 +389,11 @@ fun NotesScreen(
             title = {
                 Text(
                     text = stringResource(R.string.action_rename),
-                    color = Color.White,
+                    color = TextPrimary,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp
                 )
             },
             text = {
@@ -393,8 +406,8 @@ fun NotesScreen(
                         unfocusedContainerColor = Color.Transparent,
                         focusedBorderColor = HomeMainButtonBlue,
                         unfocusedBorderColor = HomeCardBorder,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -407,9 +420,9 @@ fun NotesScreen(
                         itemToRename = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Save", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+                    Text("Save", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -429,10 +442,11 @@ fun NotesScreen(
             title = {
                 Text(
                     text = stringResource(R.string.action_move),
-                    color = Color.White,
+                    color = TextPrimary,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp
                 )
             },
             text = {
@@ -449,14 +463,14 @@ fun NotesScreen(
                         ) { folder ->
                             Surface(
                                 color = if (folder.id == item.folderId) HomeMainButtonBlue.copy(alpha = 0.2f) else Color.Transparent,
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
                                         viewModel.moveNote(item, folder.id)
                                         itemToMove = null
                                     }
-                                    .padding(vertical = 10.dp, horizontal = 12.dp)
+                                    .padding(vertical = 8.dp, horizontal = 12.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
@@ -468,9 +482,10 @@ fun NotesScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = folder.name,
-                                        color = Color.White,
+                                        color = TextPrimary,
                                         fontFamily = ElmsSans,
-                                        fontSize = 15.sp,
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp,
                                         fontWeight = if (folder.id == item.folderId) FontWeight.Bold else FontWeight.Normal
                                     )
                                 }
@@ -497,10 +512,11 @@ fun NotesScreen(
             title = {
                 Text(
                     text = stringResource(R.string.select_destination_folder),
-                    color = Color.White,
+                    color = TextPrimary,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp
                 )
             },
             text = {
@@ -517,14 +533,14 @@ fun NotesScreen(
                         ) { folder ->
                             Surface(
                                 color = Color.Transparent,
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
                                         pendingCreateAction = null
                                         action(folder)
                                     }
-                                    .padding(vertical = 10.dp, horizontal = 12.dp)
+                                    .padding(vertical = 8.dp, horizontal = 12.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
@@ -536,9 +552,10 @@ fun NotesScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = folder.name,
-                                        color = Color.White,
+                                        color = TextPrimary,
                                         fontFamily = ElmsSans,
-                                        fontSize = 15.sp
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
                                     )
                                 }
                             }
@@ -631,6 +648,19 @@ fun NotesScreen(
         }
         WorkspaceDeleteStep.NONE -> { /* No delete dialog */ }
     }
+
+    // Schedule Management Sheet (Phase 42)
+    com.arinara.fotara.feature.schedule.ui.ScheduleManagementSheet(
+        isOpen = uiState.isScheduleSheetOpen,
+        schedules = uiState.schedules,
+        folders = uiState.folders,
+        cutoffTimeStr = uiState.scheduleRolloverTime,
+        onDismissRequest = { viewModel.closeScheduleSheet() },
+        onSaveSchedule = { viewModel.saveSchedule(it) },
+        onDeleteSchedule = { viewModel.deleteSchedule(it) },
+        onBatchImportSchedules = { viewModel.batchImportSchedules(it) },
+        onUpdateCutoffTime = { viewModel.updateScheduleRolloverTime(it) }
+    )
 }
 
 private fun handleFabCreateSelection(
@@ -683,7 +713,7 @@ private fun NotesFilterChipsRow(
         modifier = modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -702,13 +732,14 @@ private fun NotesFilterChipsRow(
                         }
                     )
                     .clickable { onFilterSelected(chip) }
-                    .padding(horizontal = 18.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = stringResource(chip.labelRes),
-                    color = if (isSelected) Color.White else Color(0xFF94A3B8),
-                    fontSize = 13.5.sp,
+                    color = if (isSelected) TextPrimary else Color(0xFF94A3B8),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     fontFamily = ElmsSans,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                 )
@@ -748,8 +779,9 @@ private fun DateGroupSection(
                 // Uppercase Pill Label
                 Text(
                     text = group.label,
-                    color = Color.White,
-                    fontSize = 13.sp,
+                    color = TextPrimary,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = ElmsSans,
                     letterSpacing = 0.5.sp
@@ -765,7 +797,8 @@ private fun DateGroupSection(
             Text(
                 text = countText,
                 color = HomeSubtitleGray,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Normal
             )
@@ -792,7 +825,7 @@ private fun DateGroupSection(
                         HorizontalDivider(
                             color = Color(0xFF1C273C),
                             thickness = 0.5.dp,
-                            modifier = Modifier.padding(start = 82.dp, end = 14.dp)
+                            modifier = Modifier.padding(start = 80.dp, end = 16.dp)
                         )
                     }
                 }
@@ -817,28 +850,29 @@ private fun NoteItemRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Left Thumbnail (~60dp)
         NoteThumbnailTile(item = item)
 
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         // Middle (3 lines): Title, Folder, Timestamp
         Column(modifier = Modifier.weight(1f)) {
             // Line 1: Title (bold white, single line, ellipsize)
             Text(
                 text = item.title,
-                color = Color.White,
-                fontSize = 15.sp,
+                color = TextPrimary,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Line 2: Small folder icon + subject/folder name
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -846,13 +880,14 @@ private fun NoteItemRow(
                     imageVector = Icons.Outlined.Folder,
                     contentDescription = null,
                     tint = Color(0xFF94A3B8),
-                    modifier = Modifier.size(13.dp)
+                    modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = item.folderName,
                     color = Color(0xFF94A3B8),
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Normal,
                     maxLines = 1,
@@ -860,13 +895,14 @@ private fun NoteItemRow(
                 )
             }
 
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Line 3: Time (formatted according to today/yesterday/older)
             Text(
                 text = NotesDateUtils.formatNoteTimestamp(item.addedAt, context),
                 color = HomeSubtitleGray,
                 fontSize = 12.sp,
+                lineHeight = 16.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Light
             )
@@ -894,24 +930,24 @@ private fun NoteItemRow(
                     .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
             ) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_open), color = Color.White, fontFamily = ElmsSans) },
-                    leadingIcon = { Icon(Icons.Outlined.Description, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp)) },
+                    text = { Text(stringResource(R.string.action_open), color = TextPrimary, fontFamily = ElmsSans) },
+                    leadingIcon = { Icon(Icons.Outlined.Description, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(20.dp)) },
                     onClick = {
                         showMenu = false
                         onClick()
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_rename), color = Color.White, fontFamily = ElmsSans) },
-                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(18.dp)) },
+                    text = { Text(stringResource(R.string.action_rename), color = TextPrimary, fontFamily = ElmsSans) },
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(20.dp)) },
                     onClick = {
                         showMenu = false
                         onRenameClick()
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_move), color = Color.White, fontFamily = ElmsSans) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(18.dp)) },
+                    text = { Text(stringResource(R.string.action_move), color = TextPrimary, fontFamily = ElmsSans) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(20.dp)) },
                     onClick = {
                         showMenu = false
                         onMoveClick()
@@ -920,7 +956,7 @@ private fun NoteItemRow(
                 HorizontalDivider(color = HomeCardBorder)
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_delete), color = TagCrimson, fontFamily = ElmsSans) },
-                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = TagCrimson, modifier = Modifier.size(18.dp)) },
+                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = TagCrimson, modifier = Modifier.size(20.dp)) },
                     onClick = {
                         showMenu = false
                         onDeleteClick()
@@ -976,11 +1012,12 @@ private fun NoteThumbnailTile(
                         tint = Color(0xFF3B82F6),
                         modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = docLabel,
                         color = Color(0xFF3B82F6),
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = ElmsSans
                     )
@@ -1006,11 +1043,12 @@ private fun NoteThumbnailTile(
                         tint = Color(0xFF60A5FA),
                         modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "TXT",
                         color = Color(0xFF60A5FA),
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = ElmsSans
                     )
@@ -1052,11 +1090,12 @@ private fun NoteThumbnailTile(
                             tint = Color(0xFFA78BFA),
                             modifier = Modifier.size(24.dp)
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "CANVAS",
                             color = Color(0xFFA78BFA),
-                            fontSize = 8.5.sp,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = ElmsSans
                         )
@@ -1097,20 +1136,22 @@ private fun NotesEmptyState(
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = stringResource(R.string.empty_notes_title),
-            color = Color.White,
-            fontSize = 18.sp,
+            color = TextPrimary,
+            fontSize = 16.sp,
+            lineHeight = 22.sp,
             fontFamily = ElmsSans,
             fontWeight = FontWeight.Bold
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = if (isFiltering) {
                 stringResource(R.string.empty_notes_filter_subtitle)
             } else {
                 stringResource(R.string.workspace_notes_empty_state, workspaceName)
             },
-            color = HomeSubtitleGray,
-            fontSize = 13.5.sp,
+            color = TextSecondary,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
             fontFamily = ElmsSans,
             fontWeight = FontWeight.Light,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center

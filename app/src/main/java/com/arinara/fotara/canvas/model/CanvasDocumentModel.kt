@@ -124,6 +124,61 @@ data class ImageElement(
     }
 }
 
+enum class TextBackgroundStyle {
+    TRANSPARENT,
+    FROSTED_DARK,
+    SOLID_LIGHT
+}
+
+/**
+ * Movable, resizable, rotatable vector text layer element with typography, color, and background styling.
+ */
+data class TextLayerElement(
+    override val id: String = UUID.randomUUID().toString(),
+    override val layerId: String,
+    val text: String = "Text",
+    val x: Float,
+    val y: Float,
+    val width: Float = 200f,
+    val height: Float = 80f,
+    val fontSizeSp: Float = 18f,
+    val color: Long = 0xFFF4F0E6, // ARGB 32-bit packed
+    val fontWeight: Int = 400, // 400 = Regular, 500 = Medium, 700 = Bold
+    val backgroundStyle: TextBackgroundStyle = TextBackgroundStyle.TRANSPARENT,
+    val rotationDegrees: Float = 0.0f,
+    override val bounds: CanvasRect,
+    override val zIndex: Int = 0
+) : CanvasElement() {
+
+    override fun withLayerId(newLayerId: String): TextLayerElement {
+        return copy(layerId = newLayerId)
+    }
+
+    override fun withZIndex(newZIndex: Int): TextLayerElement {
+        return copy(zIndex = newZIndex)
+    }
+
+    override fun translated(dx: Float, dy: Float): TextLayerElement {
+        val movedBounds = CanvasRect(
+            left = bounds.left + dx,
+            top = bounds.top + dy,
+            right = bounds.right + dx,
+            bottom = bounds.bottom + dy
+        )
+        return copy(x = x + dx, y = y + dy, bounds = movedBounds)
+    }
+}
+
+/**
+ * Individual sheet within a multi-sheet canvas document (capped at 10 sheets).
+ */
+data class CanvasSheet(
+    val id: String = UUID.randomUUID().toString(),
+    val title: String = "Sheet 1",
+    val elements: List<CanvasElement> = emptyList(),
+    val backgroundStyle: CanvasBackgroundStyle = CanvasBackgroundStyle.GRID
+)
+
 /**
  * Canvas layer organizing elements in rendering order.
  */
@@ -138,6 +193,7 @@ data class CanvasLayer(
 
 /**
  * Document model holding full state of an infinite study canvas.
+ * Supports up to 10 sheets with per-sheet undo/redo and multi-page export.
  */
 data class CanvasDocument(
     val id: Long = 0L,
@@ -147,8 +203,33 @@ data class CanvasDocument(
     val updatedAt: Long = System.currentTimeMillis(),
     val formatVersion: Int = 1,
     val layers: List<CanvasLayer> = listOf(CanvasLayer(id = "layer_default", name = "Layer 1", order = 0)),
-    val elements: List<CanvasElement> = emptyList()
+    val elements: List<CanvasElement> = emptyList(),
+    val sheets: List<CanvasSheet> = emptyList(),
+    val activeSheetIndex: Int = 0
 ) {
+    companion object {
+        const val MAX_SHEETS = 10
+    }
+
+    /**
+     * Returns the active sheet list, defaulting to 1 sheet derived from [elements] if empty.
+     */
+    fun getResolvedSheets(): List<CanvasSheet> {
+        return if (sheets.isNotEmpty()) {
+            sheets
+        } else {
+            listOf(CanvasSheet(id = "sheet_default", title = "Sheet 1", elements = elements, backgroundStyle = backgroundStyle))
+        }
+    }
+
+    /**
+     * Resolves the elements of the currently active sheet.
+     */
+    fun getActiveSheetElements(): List<CanvasElement> {
+        val resolved = getResolvedSheets()
+        val safeIndex = activeSheetIndex.coerceIn(0, resolved.lastIndex)
+        return resolved[safeIndex].elements
+    }
 
     /**
      * Resolves the active layer, defaulting to the top-most visible unlocked layer.
@@ -168,13 +249,14 @@ data class CanvasDocument(
      * Computes the bounding rectangle encompassing all elements in the document.
      */
     fun computeOverallBounds(): CanvasRect {
-        if (elements.isEmpty()) return CanvasRect.Empty
+        val targetElements = if (elements.isNotEmpty()) elements else getActiveSheetElements()
+        if (targetElements.isEmpty()) return CanvasRect.Empty
         var left = Float.MAX_VALUE
         var top = Float.MAX_VALUE
         var right = -Float.MAX_VALUE
         var bottom = -Float.MAX_VALUE
 
-        for (el in elements) {
+        for (el in targetElements) {
             val b = el.bounds
             if (b.left < left) left = b.left
             if (b.top < top) top = b.top

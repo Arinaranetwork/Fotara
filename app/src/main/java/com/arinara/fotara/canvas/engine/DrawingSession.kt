@@ -17,7 +17,8 @@ import com.arinara.fotara.canvas.model.StrokeElement
 enum class DrawingTool {
     PEN,
     HIGHLIGHTER,
-    ERASER
+    ERASER,
+    TEXT
 }
 
 object DrawingConstants {
@@ -38,14 +39,14 @@ object DrawingConstants {
     const val MAX_ERASER_SIZE_DP = 60f
 
     val CURATED_PALETTE = listOf(
-        0xFFEBD8B8, // FolderTabCream
-        0xFFF4D03F, // TagAmber
-        0xFFE74C3C, // TagCrimson
-        0xFF2ECC71, // SageGreen
-        0xFF3498DB, // RoyalBlue
-        0xFFFFFFFF, // PureWhite
-        0xFF95A5A6, // SlateGray
-        0xFF0D1B2A  // MidnightNavy
+        0xFFEFE8DA, // FolderTabCream
+        0xFFF4A261, // TagAmber
+        0xFFE63946, // TagCrimson
+        0xFF2A9D8F, // TagEmerald
+        0xFF2563EB, // Primary (HomeAddButtonBlue)
+        0xFFFFFFFF, // TextPrimary
+        0xFF6F7491, // TextMuted
+        0xFF0A0D14  // HomeNearBlack
     )
 
     /**

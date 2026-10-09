@@ -183,7 +183,10 @@ fun SettingsScreen(
     onBackClick: (() -> Unit)? = null,
     onNavigateToTrash: () -> Unit,
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp)
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    resetToRootTrigger: Int = 0,
+    onSubScreenStateChanged: ((Boolean) -> Unit)? = null,
+    scrollState: androidx.compose.foundation.ScrollState? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -191,6 +194,17 @@ fun SettingsScreen(
     val context = LocalContext.current
     var activeSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
     var activeLegalDocument by remember { mutableStateOf<com.arinara.fotara.legal.ParsedLegalDocument?>(null) }
+
+    androidx.compose.runtime.LaunchedEffect(resetToRootTrigger) {
+        if (resetToRootTrigger > 0) {
+            activeLegalDocument = null
+            activeSection = null
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(activeSection, activeLegalDocument) {
+        onSubScreenStateChanged?.invoke(activeSection != null || activeLegalDocument != null)
+    }
 
     BackHandler(enabled = activeLegalDocument != null || activeSection != null) {
         if (activeLegalDocument != null) {
@@ -510,7 +524,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxSize()
             )
         } else if (activeSection == null) {
-            val rootScrollState = rememberScrollState()
+            val rootScrollState = scrollState ?: rememberScrollState()
             var headerHeightPx by remember { mutableIntStateOf(0) }
             val density = LocalDensity.current
             val bannerHeightPx = with(density) { 230.dp.roundToPx() }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arinara Network (c) 2026
+  Exclusive property of Arinara Network.
+  Unauthorized use, reproduction, distribution, or modification of this code,
+  in whole or in part, for any purpose, is strictly prohibited without prior
+  written consent from Arinara Network as sole legal owner of this codebase.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_midnight_card_bg"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/widget_photo_pin_placeholder"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="Fotara Coursework"
+        android:textColor="#EFE8DA"
+        android:textSize="12sp" />
+</FrameLayout>

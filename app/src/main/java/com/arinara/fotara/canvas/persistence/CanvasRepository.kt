@@ -14,6 +14,8 @@ import com.arinara.fotara.canvas.model.CanvasElement
 import com.arinara.fotara.canvas.model.CanvasLayer
 import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.StrokeElement
+import com.arinara.fotara.canvas.model.TextBackgroundStyle
+import com.arinara.fotara.canvas.model.TextLayerElement
 import com.arinara.fotara.data.db.FotaraDbHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -196,6 +198,9 @@ class DefaultCanvasRepository(
             "IMAGE" -> {
                 decodeImageElement(entity)
             }
+            "TEXT" -> {
+                decodeTextLayerElement(entity)
+            }
             else -> null
         }
     }
@@ -247,6 +252,72 @@ class DefaultCanvasRepository(
             out.writeFloat(element.width)
             out.writeFloat(element.height)
             out.writeFloat(element.scale)
+            out.writeFloat(element.rotationDegrees)
+        }
+        return baos.toByteArray()
+    }
+
+    private fun decodeTextLayerElement(entity: CanvasElementEntity): TextLayerElement? {
+        return try {
+            val bais = ByteArrayInputStream(entity.dataChunk)
+            DataInputStream(bais).use { input ->
+                val text = input.readUTF()
+                val x = input.readFloat()
+                val y = input.readFloat()
+                val w = input.readFloat()
+                val h = input.readFloat()
+                val fontSizeSp = input.readFloat()
+                val color = input.readLong()
+                val fontWeight = input.readInt()
+                val styleName = input.readUTF()
+                val rot = input.readFloat()
+                val bgStyle = try {
+                    TextBackgroundStyle.valueOf(styleName)
+                } catch (_: Exception) {
+                    TextBackgroundStyle.TRANSPARENT
+                }
+
+                val bounds = CanvasRect(
+                    left = entity.boundsLeft,
+                    top = entity.boundsTop,
+                    right = entity.boundsRight,
+                    bottom = entity.boundsBottom
+                )
+
+                TextLayerElement(
+                    id = entity.id,
+                    layerId = entity.layerId,
+                    text = text,
+                    x = x,
+                    y = y,
+                    width = w,
+                    height = h,
+                    fontSizeSp = fontSizeSp,
+                    color = color,
+                    fontWeight = fontWeight,
+                    backgroundStyle = bgStyle,
+                    rotationDegrees = rot,
+                    bounds = bounds,
+                    zIndex = entity.zIndex
+                )
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun encodeTextLayerElement(element: TextLayerElement): ByteArray {
+        val baos = ByteArrayOutputStream()
+        DataOutputStream(baos).use { out ->
+            out.writeUTF(element.text)
+            out.writeFloat(element.x)
+            out.writeFloat(element.y)
+            out.writeFloat(element.width)
+            out.writeFloat(element.height)
+            out.writeFloat(element.fontSizeSp)
+            out.writeLong(element.color)
+            out.writeInt(element.fontWeight)
+            out.writeUTF(element.backgroundStyle.name)
             out.writeFloat(element.rotationDegrees)
         }
         return baos.toByteArray()
@@ -310,6 +381,23 @@ class DefaultCanvasRepository(
                             canvasId = canvasId,
                             layerId = el.layerId,
                             elementType = "IMAGE",
+                            boundsLeft = el.bounds.left,
+                            boundsTop = el.bounds.top,
+                            boundsRight = el.bounds.right,
+                            boundsBottom = el.bounds.bottom,
+                            zIndex = el.zIndex,
+                            dataChunk = chunk
+                        )
+                    )
+                }
+                is TextLayerElement -> {
+                    val chunk = encodeTextLayerElement(el)
+                    elementEntities.add(
+                        CanvasElementEntity(
+                            id = el.id,
+                            canvasId = canvasId,
+                            layerId = el.layerId,
+                            elementType = "TEXT",
                             boundsLeft = el.bounds.left,
                             boundsTop = el.bounds.top,
                             boundsRight = el.bounds.right,

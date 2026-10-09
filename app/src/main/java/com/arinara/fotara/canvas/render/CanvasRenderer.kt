@@ -32,6 +32,8 @@ import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokePoint
 import com.arinara.fotara.canvas.model.StrokeToolType
+import com.arinara.fotara.canvas.model.TextBackgroundStyle
+import com.arinara.fotara.canvas.model.TextLayerElement
 import com.arinara.fotara.canvas.persistence.CanvasAssetManager
 import kotlin.math.max
 
@@ -463,7 +465,55 @@ class CanvasRenderer(
                     }
                 }
             }
+            is TextLayerElement -> {
+                drawTextLayerElement(canvas, element, layerOpacity)
+            }
         }
+    }
+
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val textBgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    private fun drawTextLayerElement(canvas: Canvas, element: TextLayerElement, layerOpacity: Float) {
+        canvas.save()
+        canvas.translate(element.x, element.y)
+        if (element.rotationDegrees != 0f) {
+            canvas.rotate(element.rotationDegrees, element.width / 2f, element.height / 2f)
+        }
+
+        // 1. Draw background style
+        when (element.backgroundStyle) {
+            TextBackgroundStyle.TRANSPARENT -> {}
+            TextBackgroundStyle.FROSTED_DARK -> {
+                textBgPaint.style = Paint.Style.FILL
+                textBgPaint.color = 0xD91E293B.toInt() // Frosted dark #1E293B (~85% alpha)
+                val bgRect = RectF(0f, 0f, element.width, element.height)
+                canvas.drawRoundRect(bgRect, 12f, 12f, textBgPaint)
+            }
+            TextBackgroundStyle.SOLID_LIGHT -> {
+                textBgPaint.style = Paint.Style.FILL
+                textBgPaint.color = 0xFFFFFFFF.toInt()
+                val bgRect = RectF(0f, 0f, element.width, element.height)
+                canvas.drawRoundRect(bgRect, 12f, 12f, textBgPaint)
+            }
+        }
+
+        // 2. Draw text using typeface (ElmsSans / Sans-Serif)
+        textPaint.color = element.color.toInt()
+        textPaint.alpha = (255 * layerOpacity).toInt().coerceIn(0, 255)
+        textPaint.textSize = element.fontSizeSp * 2.2f
+        val typefaceStyle = when {
+            element.fontWeight >= 700 -> android.graphics.Typeface.BOLD
+            else -> android.graphics.Typeface.NORMAL
+        }
+        textPaint.typeface = android.graphics.Typeface.create("sans-serif", typefaceStyle)
+
+        val paddingX = 16f
+        val fontMetrics = textPaint.fontMetrics
+        val textY = ((element.height - fontMetrics.bottom - fontMetrics.top) / 2f).coerceAtLeast(fontMetrics.descent)
+        canvas.drawText(element.text, paddingX, textY, textPaint)
+
+        canvas.restore()
     }
 
     private fun drawInProgressStrokeDirect(

@@ -115,7 +115,8 @@ data class UserSettings(
     val combineFileNamePreset: String = "{folder}_{date}",
     val isDeviceCountEnabled: Boolean = true,
     val savedImageLocation: String = "pictures_fotara",
-    val savedImageCustomName: String = ""
+    val savedImageCustomName: String = "",
+    val scheduleRolloverTime: String = "18:00"
 ) {
     fun getEffectiveSavedImageRelativePath(): String {
         return when (savedImageLocation) {

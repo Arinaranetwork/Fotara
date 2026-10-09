@@ -45,6 +45,8 @@ import com.arinara.fotara.canvas.model.CanvasSelection
 import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.SelectedElementReference
 import com.arinara.fotara.canvas.model.StrokeElement
+import com.arinara.fotara.canvas.model.TextBackgroundStyle
+import com.arinara.fotara.canvas.model.TextLayerElement
 import com.arinara.fotara.canvas.model.StrokeInsideSegment
 import com.arinara.fotara.canvas.model.StrokeToolType
 import com.arinara.fotara.canvas.persistence.CanvasAssetInfo
@@ -64,6 +66,8 @@ import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.data.repository.WorkspaceRepository
 import com.arinara.fotara.util.NoteScheduleManager
+import com.arinara.fotara.util.ScheduleAlertType
+import com.arinara.fotara.util.ScheduleNoteType
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -98,14 +102,14 @@ data class CanvasUiState(
     val activeLayerId: String = "layer_default",
     val toolState: CanvasToolState = CanvasToolState(),
     val recentColors: List<Long> = listOf(
-        0xFFEBD8B8, // FolderTabCream
-        0xFFF4D03F, // TagAmber
-        0xFFE74C3C, // TagCrimson
-        0xFF2ECC71, // SageGreen
-        0xFF3498DB, // RoyalBlue
-        0xFFFFFFFF, // PureWhite
-        0xFF95A5A6, // SlateGray
-        0xFF0D1B2A  // MidnightNavy
+        0xFFEFE8DA, // FolderTabCream
+        0xFFF4A261, // TagAmber
+        0xFFE63946, // TagCrimson
+        0xFF2A9D8F, // TagEmerald
+        0xFF2563EB, // Primary (HomeAddButtonBlue)
+        0xFFFFFFFF, // TextPrimary
+        0xFF6F7491, // TextMuted
+        0xFF0A0D14  // HomeNearBlack
     ),
     val zoomPercentage: Int = 100,
     val saveState: SaveState = SaveState.SAVED,
@@ -132,6 +136,8 @@ data class CanvasUiState(
     val scheduledAt: Long? = null,
     val alertType: String? = null,
     val userMessage: String? = null,
+    val showTextOptions: Boolean = false,
+    val editingTextLayer: com.arinara.fotara.canvas.model.TextLayerElement? = null,
     val folders: List<Folder> = emptyList(),
     val workspaces: List<Workspace> = emptyList()
 )
@@ -730,6 +736,326 @@ class CanvasViewModel(
     }
 
     // ==========================================
+    // Multi-Sheet Canvas Management (Max 10)
+    // ==========================================
+    private val sheetHistorySnapshots = mutableMapOf<String, com.arinara.fotara.canvas.engine.CanvasHistoryManager.HistorySnapshot>()
+
+    fun addSheet() {
+        val currentDoc = _uiState.value.document
+        val sheets = currentDoc.getResolvedSheets().toMutableList()
+        if (sheets.size >= com.arinara.fotara.canvas.model.CanvasDocument.MAX_SHEETS) {
+            _uiState.update { it.copy(userMessage = "Maximum limit of ${com.arinara.fotara.canvas.model.CanvasDocument.MAX_SHEETS} sheets reached.") }
+            return
+        }
+
+        val activeIdx = currentDoc.activeSheetIndex.coerceIn(0, sheets.lastIndex)
+        val activeSheetId = sheets[activeIdx].id
+        sheets[activeIdx] = sheets[activeIdx].copy(
+            elements = currentDoc.elements,
+            backgroundStyle = currentDoc.backgroundStyle
+        )
+        sheetHistorySnapshots[activeSheetId] = historyManager.exportSnapshot()
+
+        val newSheetNumber = sheets.size + 1
+        val newSheet = com.arinara.fotara.canvas.model.CanvasSheet(
+            id = "sheet_${UUID.randomUUID()}",
+            title = "Sheet $newSheetNumber",
+            elements = emptyList(),
+            backgroundStyle = currentDoc.backgroundStyle
+        )
+        sheets.add(newSheet)
+        val newIndex = sheets.lastIndex
+
+        historyManager.clear()
+        spatialIndex.rebuild(emptyList())
+        tileCacheManager.invalidateAll()
+
+        val updatedDoc = currentDoc.copy(
+            sheets = sheets,
+            activeSheetIndex = newIndex,
+            elements = emptyList()
+        )
+        _uiState.update {
+            it.copy(
+                document = updatedDoc,
+                canUndo = false,
+                canRedo = false
+            )
+        }
+        triggerDebouncedAutosave()
+    }
+
+    fun selectSheet(targetIndex: Int) {
+        val currentDoc = _uiState.value.document
+        val sheets = currentDoc.getResolvedSheets().toMutableList()
+        if (targetIndex !in sheets.indices || targetIndex == currentDoc.activeSheetIndex) return
+
+        val currentIdx = currentDoc.activeSheetIndex.coerceIn(0, sheets.lastIndex)
+        val currentSheetId = sheets[currentIdx].id
+        sheets[currentIdx] = sheets[currentIdx].copy(
+            elements = currentDoc.elements,
+            backgroundStyle = currentDoc.backgroundStyle
+        )
+        sheetHistorySnapshots[currentSheetId] = historyManager.exportSnapshot()
+
+        val targetSheet = sheets[targetIndex]
+        val targetSnapshot = sheetHistorySnapshots[targetSheet.id]
+        if (targetSnapshot != null) {
+            historyManager.restoreSnapshot(targetSnapshot)
+        } else {
+            historyManager.clear()
+        }
+
+        spatialIndex.rebuild(targetSheet.elements)
+        tileCacheManager.invalidateAll()
+
+        val updatedDoc = currentDoc.copy(
+            sheets = sheets,
+            activeSheetIndex = targetIndex,
+            elements = targetSheet.elements,
+            backgroundStyle = targetSheet.backgroundStyle
+        )
+        _uiState.update {
+            it.copy(
+                document = updatedDoc,
+                canUndo = historyManager.canUndo,
+                canRedo = historyManager.canRedo
+            )
+        }
+        triggerDebouncedAutosave()
+    }
+
+    fun deleteSheet(sheetIndex: Int) {
+        val currentDoc = _uiState.value.document
+        val sheets = currentDoc.getResolvedSheets().toMutableList()
+        if (sheets.size <= 1) {
+            _uiState.update { it.copy(userMessage = "Cannot delete the only sheet.") }
+            return
+        }
+        if (sheetIndex !in sheets.indices) return
+
+        val removedSheet = sheets.removeAt(sheetIndex)
+        sheetHistorySnapshots.remove(removedSheet.id)
+
+        val newActiveIndex = if (currentDoc.activeSheetIndex >= sheets.size) sheets.lastIndex else currentDoc.activeSheetIndex
+        val targetSheet = sheets[newActiveIndex]
+        val targetSnapshot = sheetHistorySnapshots[targetSheet.id]
+        if (targetSnapshot != null) {
+            historyManager.restoreSnapshot(targetSnapshot)
+        } else {
+            historyManager.clear()
+        }
+
+        spatialIndex.rebuild(targetSheet.elements)
+        tileCacheManager.invalidateAll()
+
+        val updatedDoc = currentDoc.copy(
+            sheets = sheets,
+            activeSheetIndex = newActiveIndex,
+            elements = targetSheet.elements,
+            backgroundStyle = targetSheet.backgroundStyle
+        )
+        _uiState.update {
+            it.copy(
+                document = updatedDoc,
+                canUndo = historyManager.canUndo,
+                canRedo = historyManager.canRedo
+            )
+        }
+        triggerDebouncedAutosave()
+    }
+
+    // ==========================================
+    // Text Layer [ T ] Placement and Editing
+    // ==========================================
+    fun showTextOptions(element: com.arinara.fotara.canvas.model.TextLayerElement? = null) {
+        _uiState.update {
+            it.copy(
+                showTextOptions = true,
+                editingTextLayer = element
+            )
+        }
+    }
+
+    fun dismissTextOptions() {
+        _uiState.update {
+            it.copy(
+                showTextOptions = false,
+                editingTextLayer = null
+            )
+        }
+    }
+
+    fun setTextFontSize(sizeSp: Float) {
+        toolController.toolState = toolController.toolState.copy(textFontSizeSp = sizeSp)
+        _uiState.update { it.copy(toolState = toolController.toolState) }
+    }
+
+    fun setTextColor(color: Long) {
+        toolController.toolState = toolController.toolState.copy(textColor = color)
+        val updatedRecent = (listOf(color) + _uiState.value.recentColors.filter { it != color }).take(8)
+        _uiState.update {
+            it.copy(
+                toolState = toolController.toolState,
+                recentColors = updatedRecent
+            )
+        }
+    }
+
+    fun setTextFontWeight(weight: Int) {
+        toolController.toolState = toolController.toolState.copy(textFontWeight = weight)
+        _uiState.update { it.copy(toolState = toolController.toolState) }
+    }
+
+    fun setTextBackgroundStyle(style: com.arinara.fotara.canvas.model.TextBackgroundStyle) {
+        toolController.toolState = toolController.toolState.copy(textBackgroundStyle = style)
+        _uiState.update { it.copy(toolState = toolController.toolState) }
+    }
+
+    fun addOrUpdateTextLayer(
+        text: String,
+        fontSizeSp: Float,
+        color: Long,
+        fontWeight: Int,
+        backgroundStyle: com.arinara.fotara.canvas.model.TextBackgroundStyle,
+        viewport: ViewportState,
+        screenWidth: Float,
+        screenHeight: Float
+    ) {
+        val currentDoc = _uiState.value.document
+        val targetLayerId = _uiState.value.activeLayerId.ifEmpty { currentDoc.getPrimaryLayerId() }
+        val editing = _uiState.value.editingTextLayer
+
+        if (editing != null) {
+            val updatedElement = editing.copy(
+                text = text,
+                fontSizeSp = fontSizeSp,
+                color = color,
+                fontWeight = fontWeight,
+                backgroundStyle = backgroundStyle
+            )
+            val updatedDoc = historyManager.execute(
+                com.arinara.fotara.canvas.engine.ReplaceElementsCommand(listOf(editing), listOf(updatedElement), description = "Edit Text"),
+                currentDoc
+            )
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(updatedElement.bounds)
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    showTextOptions = false,
+                    editingTextLayer = null,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
+        } else {
+            val (worldX, worldY) = ViewportTransform.screenToWorld(screenWidth / 2f, screenHeight / 2f, viewport)
+            val estWidth = maxOf(140f, text.length * fontSizeSp * 0.9f + 32f)
+            val estHeight = maxOf(48f, fontSizeSp * 2.4f)
+            val nextZ = CanvasToolController.nextZIndexForLayer(currentDoc, targetLayerId)
+
+            val textElement = com.arinara.fotara.canvas.model.TextLayerElement(
+                id = UUID.randomUUID().toString(),
+                layerId = targetLayerId,
+                text = text.ifBlank { "Text" },
+                x = worldX - estWidth / 2f,
+                y = worldY - estHeight / 2f,
+                width = estWidth,
+                height = estHeight,
+                fontSizeSp = fontSizeSp,
+                color = color,
+                fontWeight = fontWeight,
+                backgroundStyle = backgroundStyle,
+                bounds = CanvasRect(
+                    left = worldX - estWidth / 2f,
+                    top = worldY - estHeight / 2f,
+                    right = worldX + estWidth / 2f,
+                    bottom = worldY + estHeight / 2f
+                ),
+                zIndex = nextZ
+            )
+
+            val updatedDoc = historyManager.execute(
+                AddElementsCommand(listOf(textElement), description = "Add Text Layer"),
+                currentDoc
+            )
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(textElement.bounds)
+
+            val selRef = SelectedElementReference.Whole(textElement.id)
+            val sel = CanvasSelection(
+                references = mapOf(textElement.id to selRef),
+                bounds = textElement.bounds,
+                rotationDegrees = textElement.rotationDegrees
+            )
+            toolController.selection = sel
+            toolController.toolState = toolController.toolState.copy(activeTool = CanvasToolType.SELECT)
+
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    showTextOptions = false,
+                    editingTextLayer = null,
+                    toolState = toolController.toolState,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
+        }
+    }
+
+    fun exportMultiSheetPdf(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isExporting = true, exportProgress = 0.2f) }
+            try {
+                val currentDoc = _uiState.value.document
+                val sheets = currentDoc.getResolvedSheets().toMutableList()
+                val activeIdx = currentDoc.activeSheetIndex.coerceIn(0, sheets.lastIndex)
+                sheets[activeIdx] = sheets[activeIdx].copy(
+                    elements = currentDoc.elements,
+                    backgroundStyle = currentDoc.backgroundStyle
+                )
+                val docToExport = currentDoc.copy(sheets = sheets)
+
+                val exportDir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
+                val exportFile = File(exportDir, "${currentDoc.title.replace(" ", "_")}_MultiSheet_${System.currentTimeMillis()}.pdf")
+
+                val success = com.arinara.fotara.canvas.export.CanvasImageExporter.exportMultiSheetPdf(
+                    document = docToExport,
+                    outputFile = exportFile,
+                    assetManager = canvasAssetManager
+                )
+
+                _uiState.update { it.copy(isExporting = false, exportProgress = 1.0f) }
+
+                if (success) {
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        exportFile
+                    )
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    val chooser = Intent.createChooser(shareIntent, "Share Multi-Sheet PDF").apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(chooser)
+                } else {
+                    _uiState.update { it.copy(userMessage = "Failed to export multi-sheet PDF.") }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isExporting = false, userMessage = "Export error: ${e.message}") }
+            }
+        }
+    }
+
+    // ==========================================
     // Z8: Contextual Object Actions
     // ==========================================
     fun updateSelection(selection: CanvasSelection) {
@@ -1123,8 +1449,42 @@ class CanvasViewModel(
                                         canvas.restore()
                                         img.recycle()
                                     }
-                                } catch (_: Exception) {}
+                                } catch (e: Exception) {
+                                    android.util.Log.e("CanvasViewModel", "Failed to decode/render image element during export", e)
+                                }
                             }
+                        }
+                        is TextLayerElement -> {
+                            canvas.save()
+                            canvas.translate(el.x, el.y)
+                            if (el.rotationDegrees != 0f) {
+                                canvas.rotate(el.rotationDegrees, el.width / 2f, el.height / 2f)
+                            }
+                            when (el.backgroundStyle) {
+                                TextBackgroundStyle.TRANSPARENT -> {}
+                                TextBackgroundStyle.FROSTED_DARK -> {
+                                    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.FILL
+                                        color = 0xD91E293B.toInt()
+                                    }
+                                    canvas.drawRoundRect(RectF(0f, 0f, el.width, el.height), 12f, 12f, bgPaint)
+                                }
+                                TextBackgroundStyle.SOLID_LIGHT -> {
+                                    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.FILL
+                                        color = 0xFFFFFFFF.toInt()
+                                    }
+                                    canvas.drawRoundRect(RectF(0f, 0f, el.width, el.height), 12f, 12f, bgPaint)
+                                }
+                            }
+                            val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                color = el.color.toInt()
+                                alpha = (255 * layer.opacity).toInt().coerceIn(0, 255)
+                                textSize = el.fontSizeSp * 2.0f
+                                isFakeBoldText = el.fontWeight >= 700
+                            }
+                            canvas.drawText(el.text, 16f, el.fontSizeSp * 2.0f + 16f, textPaint)
+                            canvas.restore()
                         }
                     }
                 }
@@ -1175,6 +1535,40 @@ class CanvasViewModel(
     fun setBackgroundPickerVisible(visible: Boolean) = _uiState.update { it.copy(showBackgroundPicker = visible) }
     fun setSettingsDialogVisible(visible: Boolean) = _uiState.update { it.copy(showSettingsDialog = visible) }
     fun setScheduleDialogVisible(visible: Boolean) = _uiState.update { it.copy(showScheduleDialog = visible) }
+
+    fun saveSchedule(scheduledAt: Long, alertType: ScheduleAlertType, scheduleTitle: String?) {
+        val canvasId = _uiState.value.canvasId ?: return
+        val folderId = _uiState.value.folderId
+        val title = _uiState.value.title
+        scheduleManager?.scheduleNote(
+            noteType = ScheduleNoteType.CANVAS_NOTE,
+            noteId = canvasId,
+            folderId = folderId,
+            title = title,
+            triggerAtMillis = scheduledAt,
+            alertType = alertType,
+            scheduleTitle = scheduleTitle
+        )
+        _uiState.update {
+            it.copy(
+                scheduledAt = scheduledAt,
+                alertType = alertType.name,
+                showScheduleDialog = false
+            )
+        }
+    }
+
+    fun clearSchedule() {
+        val canvasId = _uiState.value.canvasId ?: return
+        scheduleManager?.cancelSchedule(ScheduleNoteType.CANVAS_NOTE, canvasId)
+        _uiState.update {
+            it.copy(
+                scheduledAt = null,
+                alertType = null,
+                showScheduleDialog = false
+            )
+        }
+    }
     fun setInfoDialogVisible(visible: Boolean) = _uiState.update { it.copy(showInfoDialog = visible) }
     fun setExportDialogVisible(visible: Boolean) = _uiState.update { it.copy(showExportDialog = visible) }
     fun setMoveDialogVisible(visible: Boolean) = _uiState.update { it.copy(showMoveDialog = visible) }

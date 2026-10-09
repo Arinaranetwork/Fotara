@@ -14,6 +14,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.pdf.PdfDocument
 import com.arinara.fotara.canvas.engine.StrokePathBuilder
 import com.arinara.fotara.canvas.model.CanvasDocument
 import com.arinara.fotara.canvas.model.CanvasElement
@@ -21,8 +22,12 @@ import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.StrokeBlendMode
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokeToolType
+import com.arinara.fotara.canvas.model.TextBackgroundStyle
+import com.arinara.fotara.canvas.model.TextLayerElement
 import com.arinara.fotara.canvas.persistence.CanvasAssetManager
 import com.arinara.fotara.canvas.render.CanvasRenderer
+import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Renders full canvas note content (or selected elements) at 1x scale into a Bitmap for document export / combine.
@@ -173,6 +178,84 @@ object CanvasImageExporter {
                     }
                 }
             }
+            is TextLayerElement -> {
+                canvas.save()
+                canvas.translate(element.x, element.y)
+                if (element.rotationDegrees != 0f) {
+                    canvas.rotate(element.rotationDegrees, element.width / 2f, element.height / 2f)
+                }
+
+                when (element.backgroundStyle) {
+                    TextBackgroundStyle.TRANSPARENT -> {}
+                    TextBackgroundStyle.FROSTED_DARK -> {
+                        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            style = Paint.Style.FILL
+                            color = 0xD91E293B.toInt()
+                        }
+                        canvas.drawRoundRect(RectF(0f, 0f, element.width, element.height), 12f, 12f, bgPaint)
+                    }
+                    TextBackgroundStyle.SOLID_LIGHT -> {
+                        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            style = Paint.Style.FILL
+                            color = 0xFFFFFFFF.toInt()
+                        }
+                        canvas.drawRoundRect(RectF(0f, 0f, element.width, element.height), 12f, 12f, bgPaint)
+                    }
+                }
+
+                val tPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = element.color.toInt()
+                    alpha = (255 * layerOpacity).toInt().coerceIn(0, 255)
+                    textSize = element.fontSizeSp * 2.2f
+                    val tfStyle = if (element.fontWeight >= 700) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL
+                    typeface = android.graphics.Typeface.create("sans-serif", tfStyle)
+                }
+                val fm = tPaint.fontMetrics
+                val textY = ((element.height - fm.bottom - fm.top) / 2f).coerceAtLeast(fm.descent)
+                canvas.drawText(element.text, 16f, textY, tPaint)
+                canvas.restore()
+            }
+        }
+    }
+
+    /**
+     * Exports all sheets in a multi-sheet canvas document to a combined multi-page PDF.
+     */
+    fun exportMultiSheetPdf(
+        document: CanvasDocument,
+        outputFile: File,
+        assetManager: CanvasAssetManager? = null
+    ): Boolean {
+        val sheets = document.getResolvedSheets()
+        if (sheets.isEmpty()) return false
+
+        val pdfDoc = PdfDocument()
+        return try {
+            for ((idx, sheet) in sheets.withIndex()) {
+                val sheetDoc = document.copy(elements = sheet.elements, backgroundStyle = sheet.backgroundStyle)
+                val bitmap = renderCanvasToBitmap(sheetDoc, assetManager)
+                val pageW = bitmap?.width ?: 1200
+                val pageH = bitmap?.height ?: 1600
+                val pageInfo = PdfDocument.PageInfo.Builder(pageW, pageH, idx + 1).create()
+                val page = pdfDoc.startPage(pageInfo)
+                val canvas = page.canvas
+
+                if (bitmap != null) {
+                    canvas.drawBitmap(bitmap, 0f, 0f, null)
+                    bitmap.recycle()
+                } else {
+                    canvas.drawColor(Color.WHITE)
+                }
+                pdfDoc.finishPage(page)
+            }
+            FileOutputStream(outputFile).use { out ->
+                pdfDoc.writeTo(out)
+            }
+            true
+        } catch (_: Exception) {
+            false
+        } finally {
+            pdfDoc.close()
         }
     }
 }

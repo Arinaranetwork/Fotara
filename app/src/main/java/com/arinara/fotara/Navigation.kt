@@ -124,7 +124,11 @@ fun MainNavigation(
                         textNoteRepository = appContainer.textNoteRepository,
                         canvasNoteRepository = appContainer.canvasNoteRepository,
                         folderRepository = appContainer.folderRepository,
-                        workspaceRepository = appContainer.workspaceRepository
+                        workspaceRepository = appContainer.workspaceRepository,
+                        scheduleRepository = appContainer.scheduleRepository,
+                        scheduleCutoffEngine = appContainer.scheduleCutoffEngine,
+                        scheduleNotificationScheduler = appContainer.scheduleNotificationScheduler,
+                        settingsRepository = appContainer.settingsRepository
                     )
                 )
                 HomeScreen(

@@ -38,6 +38,14 @@ import com.arinara.fotara.data.repository.WorkspaceResult
 import com.arinara.fotara.data.repository.WorkspaceValidator
 import com.arinara.fotara.ui.home.WorkspaceDeleteStep
 
+import com.arinara.fotara.feature.schedule.engine.ScheduleCapsuleState
+import com.arinara.fotara.feature.schedule.engine.ScheduleCutoffEngine
+import com.arinara.fotara.feature.schedule.model.ClassSchedule
+import com.arinara.fotara.feature.schedule.notification.ScheduleNotificationScheduler
+import com.arinara.fotara.data.repository.ScheduleRepository
+import com.arinara.fotara.data.repository.SettingsRepository
+import kotlinx.coroutines.flow.map
+
 data class NotesUiState(
     val dateGroups: List<DateGroup> = emptyList(),
     val totalItemCount: Int = 0,
@@ -57,7 +65,11 @@ data class NotesUiState(
     val workspaceToDelete: Workspace? = null,
     val workspaceDeleteStep: WorkspaceDeleteStep = WorkspaceDeleteStep.NONE,
     val workspaceDeleteStats: WorkspaceContentStats? = null,
-    val workspaceDeleteProgress: Pair<Int, Int>? = null
+    val workspaceDeleteProgress: Pair<Int, Int>? = null,
+    val schedules: List<ClassSchedule> = emptyList(),
+    val scheduleCapsuleState: ScheduleCapsuleState = ScheduleCapsuleState.Empty(),
+    val scheduleRolloverTime: String = "18:00",
+    val isScheduleSheetOpen: Boolean = false
 )
 
 private data class RawNotesBundle(
@@ -73,7 +85,11 @@ class NotesViewModel(
     private val textNoteRepository: TextNoteRepository,
     private val canvasNoteRepository: CanvasNoteRepository,
     private val folderRepository: FolderRepository,
-    private val workspaceRepository: WorkspaceRepository? = null
+    private val workspaceRepository: WorkspaceRepository? = null,
+    private val scheduleRepository: ScheduleRepository? = null,
+    private val scheduleCutoffEngine: ScheduleCutoffEngine? = null,
+    private val scheduleNotificationScheduler: ScheduleNotificationScheduler? = null,
+    private val settingsRepository: SettingsRepository? = null
 ) : ViewModel() {
 
     private val selectedFilter = MutableStateFlow(NoteFilterChip.ALL)
@@ -291,6 +307,29 @@ class NotesViewModel(
                     )
                 }
             }.collect {}
+        }
+
+        if (scheduleRepository != null && scheduleCutoffEngine != null) {
+            viewModelScope.launch {
+                val rolloverFlow: Flow<String> = settingsRepository?.settingsFlow?.map { it.scheduleRolloverTime }
+                    ?: MutableStateFlow("18:00")
+                combine(
+                    scheduleRepository.getAllSchedules(),
+                    rolloverFlow
+                ) { scheds, cutoffTime ->
+                    val state = scheduleCutoffEngine.evaluateCapsuleState(scheds, cutoffTime)
+                    Pair(scheds, Pair(state, cutoffTime))
+                }.collect { (scheds, stateAndCutoff) ->
+                    val (state, cutoff) = stateAndCutoff
+                    _uiState.update { prev ->
+                        prev.copy(
+                            schedules = scheds,
+                            scheduleCapsuleState = state,
+                            scheduleRolloverTime = cutoff
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -533,6 +572,7 @@ class NotesViewModel(
                         documentRepository.refresh()
                         textNoteRepository.refresh()
                         canvasNoteRepository.refresh()
+                        scheduleRepository?.refresh()
                     }
                 }
             } catch (_: Exception) {
@@ -543,6 +583,52 @@ class NotesViewModel(
         }
     }
 
+    fun openScheduleSheet() {
+        _uiState.update { it.copy(isScheduleSheetOpen = true) }
+    }
+
+    fun closeScheduleSheet() {
+        _uiState.update { it.copy(isScheduleSheetOpen = false) }
+    }
+
+    fun saveSchedule(schedule: ClassSchedule) {
+        viewModelScope.launch {
+            if (schedule.id == 0L) {
+                scheduleRepository?.insertSchedule(schedule)
+            } else {
+                scheduleRepository?.updateSchedule(schedule)
+            }
+            triggerNotificationReschedule()
+        }
+    }
+
+    fun deleteSchedule(id: Long) {
+        viewModelScope.launch {
+            scheduleRepository?.deleteSchedule(id)
+            triggerNotificationReschedule()
+        }
+    }
+
+    fun batchImportSchedules(schedules: List<ClassSchedule>) {
+        viewModelScope.launch {
+            scheduleRepository?.batchInsert(schedules)
+            triggerNotificationReschedule()
+        }
+    }
+
+    fun updateScheduleRolloverTime(timeStr: String) {
+        viewModelScope.launch {
+            settingsRepository?.updateScheduleRolloverTime(timeStr)
+            triggerNotificationReschedule()
+        }
+    }
+
+    private suspend fun triggerNotificationReschedule() {
+        val all = scheduleRepository?.getAllSchedulesOnce() ?: emptyList()
+        val cutoff = _uiState.value.scheduleRolloverTime
+        scheduleNotificationScheduler?.rescheduleAll(all, cutoff)
+    }
+
     companion object {
         fun provideFactory(
             photoRepository: PhotoRepository,
@@ -550,7 +636,11 @@ class NotesViewModel(
             textNoteRepository: TextNoteRepository,
             canvasNoteRepository: CanvasNoteRepository,
             folderRepository: FolderRepository,
-            workspaceRepository: WorkspaceRepository? = null
+            workspaceRepository: WorkspaceRepository? = null,
+            scheduleRepository: ScheduleRepository? = null,
+            scheduleCutoffEngine: ScheduleCutoffEngine? = null,
+            scheduleNotificationScheduler: ScheduleNotificationScheduler? = null,
+            settingsRepository: SettingsRepository? = null
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -560,7 +650,11 @@ class NotesViewModel(
                     textNoteRepository = textNoteRepository,
                     canvasNoteRepository = canvasNoteRepository,
                     folderRepository = folderRepository,
-                    workspaceRepository = workspaceRepository
+                    workspaceRepository = workspaceRepository,
+                    scheduleRepository = scheduleRepository,
+                    scheduleCutoffEngine = scheduleCutoffEngine,
+                    scheduleNotificationScheduler = scheduleNotificationScheduler,
+                    settingsRepository = settingsRepository
                 ) as T
             }
         }

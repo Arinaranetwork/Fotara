@@ -35,6 +35,9 @@ data class ActiveEditorSyntax(
     val isItalic: Boolean = false,
     val isStrikethrough: Boolean = false,
     val isInlineCode: Boolean = false,
+    val isInlineMath: Boolean = false,
+    val isBlockMath: Boolean = false,
+    val isInsideTable: Boolean = false,
     val isH1: Boolean = false,
     val isH2: Boolean = false,
     val isH3: Boolean = false,
@@ -65,6 +68,9 @@ object TextEditorOps {
 
     fun toggleInlineCode(text: String, selStart: Int, selEnd: Int): TextEditResult =
         toggleInlineWrap(text, selStart, selEnd, "`", "`")
+
+    fun toggleInlineMath(text: String, selStart: Int, selEnd: Int): TextEditResult =
+        toggleInlineWrap(text, selStart, selEnd, "$", "$")
 
     fun toggleInlineWrap(
         text: String,
@@ -869,7 +875,293 @@ object TextEditorOps {
         return TextEditResult(newText, selStart.coerceIn(0, newText.length), selEnd.coerceIn(0, newText.length))
     }
 
-    // --- 12. Active Toolbar States Detection ---
+    // --- 12. LaTeX Math & Markdown Table Operations ---
+
+    fun insertBlockMath(text: String, selStart: Int, selEnd: Int): TextEditResult {
+        val min = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val max = maxOf(selStart, selEnd).coerceIn(0, text.length)
+
+        if (min < max) {
+            val selected = text.substring(min, max)
+            val newText = text.substring(0, min) + "$$\n" + selected + "\n$$" + text.substring(max)
+            val newCursor = min + 3 + selected.length
+            return TextEditResult(newText, min + 3, newCursor)
+        } else {
+            val prefixPad = if (min > 0 && text[min - 1] != '\n') "\n\n" else ""
+            val suffixPad = if (min < text.length && text[min] != '\n') "\n\n" else "\n"
+            val snippet = prefixPad + "$$\n\n$$" + suffixPad
+            val newText = text.substring(0, min) + snippet + text.substring(min)
+            val targetCursor = min + prefixPad.length + 3
+            return TextEditResult(newText, targetCursor, targetCursor)
+        }
+    }
+
+    fun isTableLine(line: String): Boolean {
+        val trimmed = line.trim()
+        return trimmed.length >= 3 && trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.count { it == '|' } >= 2
+    }
+
+    fun isInsideTable(text: String, selStart: Int, selEnd: Int): Boolean {
+        if (text.isEmpty()) return false
+        val min = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val max = maxOf(selStart, selEnd).coerceIn(0, text.length)
+
+        val touched = getTouchedLines(text, min, max)
+        if (touched.isEmpty()) return false
+        return touched.all { isTableLine(it.text) }
+    }
+
+    fun insertTable(text: String, selStart: Int, selEnd: Int, rows: Int = 2, cols: Int = 3): TextEditResult {
+        val min = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val max = maxOf(selStart, selEnd).coerceIn(0, text.length)
+
+        val actualCols = cols.coerceAtLeast(1)
+        val actualRows = rows.coerceAtLeast(1)
+
+        val sb = StringBuilder()
+        if (min > 0 && text[min - 1] != '\n') {
+            sb.append("\n\n")
+        }
+
+        // Header row
+        sb.append("|")
+        for (c in 1..actualCols) {
+            sb.append(" Header $c |")
+        }
+        sb.append("\n")
+
+        // Delimiter row
+        sb.append("|")
+        for (c in 1..actualCols) {
+            sb.append(" --- |")
+        }
+        sb.append("\n")
+
+        // Data rows
+        for (r in 1..actualRows) {
+            sb.append("|")
+            for (c in 1..actualCols) {
+                sb.append(" Cell |")
+            }
+            if (r < actualRows) {
+                sb.append("\n")
+            }
+        }
+
+        if (max < text.length && text[max] != '\n') {
+            sb.append("\n\n")
+        }
+
+        val tableStr = sb.toString()
+        val newText = text.substring(0, min) + tableStr + text.substring(max)
+        val firstCellOffset = tableStr.indexOf("Header 1")
+        val cursor = if (firstCellOffset >= 0) min + firstCellOffset else min + 2
+        return TextEditResult(newText, cursor, cursor + if (firstCellOffset >= 0) "Header 1".length else 0)
+    }
+
+    private data class ParsedTableInfo(
+        val tableStartOffset: Int,
+        val tableEndOffset: Int,
+        val rows: List<List<String>>,
+        val cursorRowIndex: Int,
+        val cursorColIndex: Int
+    )
+
+    private fun parseTableBlockAtOffset(text: String, offset: Int): ParsedTableInfo? {
+        if (text.isEmpty()) return null
+        val clamped = offset.coerceIn(0, text.length)
+        val lines = text.lines()
+
+        var runningLength = 0
+        var lineIdx = -1
+        for (i in lines.indices) {
+            val nextLength = runningLength + lines[i].length + if (i < lines.size - 1) 1 else 0
+            if (clamped in runningLength..nextLength) {
+                lineIdx = i
+                break
+            }
+            runningLength = nextLength
+        }
+        if (lineIdx == -1 || !isTableLine(lines[lineIdx])) return null
+
+        var startIdx = lineIdx
+        while (startIdx > 0 && isTableLine(lines[startIdx - 1])) {
+            startIdx--
+        }
+
+        var endIdx = lineIdx
+        while (endIdx < lines.size - 1 && isTableLine(lines[endIdx + 1])) {
+            endIdx++
+        }
+
+        var tableStartOffset = 0
+        for (i in 0 until startIdx) {
+            tableStartOffset += lines[i].length + 1
+        }
+        var tableEndOffset = tableStartOffset
+        for (i in startIdx..endIdx) {
+            tableEndOffset += lines[i].length + (if (i < lines.size - 1) 1 else 0)
+        }
+
+        val parsedRows = mutableListOf<List<String>>()
+        for (i in startIdx..endIdx) {
+            val trimmed = lines[i].trim()
+            val stripped = trimmed.removePrefix("|").removeSuffix("|")
+            val cells = stripped.split('|').map { it.trim() }
+            parsedRows.add(cells)
+        }
+
+        val cursorRow = lineIdx - startIdx
+        var lineStartChar = 0
+        for (i in 0 until lineIdx) {
+            lineStartChar += lines[i].length + 1
+        }
+        val offsetInLine = (clamped - lineStartChar).coerceIn(0, lines[lineIdx].length)
+        val pipesBefore = lines[lineIdx].take(offsetInLine).count { it == '|' }
+        val cursorCol = (pipesBefore - 1).coerceAtLeast(0)
+
+        return ParsedTableInfo(tableStartOffset, tableEndOffset, parsedRows, cursorRow, cursorCol)
+    }
+
+    private fun formatTable(rows: List<List<String>>): String {
+        if (rows.isEmpty()) return ""
+        val maxCols = rows.maxOfOrNull { it.size } ?: 1
+        val sb = StringBuilder()
+        for ((rIdx, row) in rows.withIndex()) {
+            val paddedRow = row + List((maxCols - row.size).coerceAtLeast(0)) { "" }
+            if (rIdx == 1 && paddedRow.all { it.all { c -> c == '-' || c.isWhitespace() } || it.isEmpty() }) {
+                sb.append("| ").append(paddedRow.joinToString(" | ") { "---" }).append(" |\n")
+            } else {
+                sb.append("| ").append(paddedRow.joinToString(" | ") { it.ifBlank { " " } }).append(" |\n")
+            }
+        }
+        return sb.toString().trimEnd('\n')
+    }
+
+    fun addTableRowBelow(text: String, selStart: Int, selEnd: Int): TextEditResult {
+        val cursor = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val info = parseTableBlockAtOffset(text, cursor) ?: return TextEditResult(text, selStart, selEnd)
+
+        val maxCols = info.rows.maxOfOrNull { it.size } ?: 1
+        val newRow = List(maxCols) { " " }
+        val newRows = info.rows.toMutableList()
+
+        val insertIdx = if (info.cursorRowIndex < 1 && newRows.size >= 2) {
+            2
+        } else {
+            (info.cursorRowIndex + 1).coerceIn(0, newRows.size)
+        }
+        newRows.add(insertIdx, newRow)
+
+        val formatted = formatTable(newRows)
+        val newText = text.substring(0, info.tableStartOffset) + formatted + text.substring(info.tableEndOffset)
+        return TextEditResult(newText, info.tableStartOffset, info.tableStartOffset + formatted.length)
+    }
+
+    fun addTableRowAbove(text: String, selStart: Int, selEnd: Int): TextEditResult {
+        val cursor = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val info = parseTableBlockAtOffset(text, cursor) ?: return TextEditResult(text, selStart, selEnd)
+
+        val maxCols = info.rows.maxOfOrNull { it.size } ?: 1
+        val newRow = List(maxCols) { " " }
+        val newRows = info.rows.toMutableList()
+
+        val insertIdx = if (info.cursorRowIndex <= 1) {
+            if (newRows.size >= 2) 2 else newRows.size
+        } else {
+            info.cursorRowIndex.coerceIn(2, newRows.size)
+        }
+        newRows.add(insertIdx, newRow)
+
+        val formatted = formatTable(newRows)
+        val newText = text.substring(0, info.tableStartOffset) + formatted + text.substring(info.tableEndOffset)
+        return TextEditResult(newText, info.tableStartOffset, info.tableStartOffset + formatted.length)
+    }
+
+    fun deleteCurrentTableRow(text: String, selStart: Int, selEnd: Int): TextEditResult {
+        val cursor = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val info = parseTableBlockAtOffset(text, cursor) ?: return TextEditResult(text, selStart, selEnd)
+
+        if (info.rows.size <= 2) return TextEditResult(text, selStart, selEnd)
+        val targetRow = if (info.cursorRowIndex < 2) 2 else info.cursorRowIndex
+        val newRows = info.rows.toMutableList()
+        if (targetRow in 2 until newRows.size) {
+            newRows.removeAt(targetRow)
+        }
+
+        val formatted = formatTable(newRows)
+        val newText = text.substring(0, info.tableStartOffset) + formatted + text.substring(info.tableEndOffset)
+        return TextEditResult(newText, info.tableStartOffset, info.tableStartOffset + formatted.length)
+    }
+
+    fun addTableColumnRight(text: String, selStart: Int, selEnd: Int): TextEditResult {
+        val cursor = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val info = parseTableBlockAtOffset(text, cursor) ?: return TextEditResult(text, selStart, selEnd)
+
+        val targetCol = (info.cursorColIndex + 1).coerceAtLeast(0)
+        val newRows = info.rows.mapIndexed { rIdx, row ->
+            val mRow = row.toMutableList()
+            val insertCol = targetCol.coerceIn(0, mRow.size)
+            val defaultVal = when (rIdx) {
+                0 -> "Col"
+                1 -> "---"
+                else -> " "
+            }
+            mRow.add(insertCol, defaultVal)
+            mRow
+        }
+
+        val formatted = formatTable(newRows)
+        val newText = text.substring(0, info.tableStartOffset) + formatted + text.substring(info.tableEndOffset)
+        return TextEditResult(newText, info.tableStartOffset, info.tableStartOffset + formatted.length)
+    }
+
+    fun addTableColumnLeft(text: String, selStart: Int, selEnd: Int): TextEditResult {
+        val cursor = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val info = parseTableBlockAtOffset(text, cursor) ?: return TextEditResult(text, selStart, selEnd)
+
+        val targetCol = info.cursorColIndex.coerceAtLeast(0)
+        val newRows = info.rows.mapIndexed { rIdx, row ->
+            val mRow = row.toMutableList()
+            val insertCol = targetCol.coerceIn(0, mRow.size)
+            val defaultVal = when (rIdx) {
+                0 -> "Col"
+                1 -> "---"
+                else -> " "
+            }
+            mRow.add(insertCol, defaultVal)
+            mRow
+        }
+
+        val formatted = formatTable(newRows)
+        val newText = text.substring(0, info.tableStartOffset) + formatted + text.substring(info.tableEndOffset)
+        return TextEditResult(newText, info.tableStartOffset, info.tableStartOffset + formatted.length)
+    }
+
+    fun deleteCurrentTableColumn(text: String, selStart: Int, selEnd: Int): TextEditResult {
+        val cursor = minOf(selStart, selEnd).coerceIn(0, text.length)
+        val info = parseTableBlockAtOffset(text, cursor) ?: return TextEditResult(text, selStart, selEnd)
+
+        val maxCols = info.rows.maxOfOrNull { it.size } ?: 1
+        if (maxCols <= 1) return TextEditResult(text, selStart, selEnd)
+
+        val targetCol = info.cursorColIndex
+        val newRows = info.rows.map { row ->
+            val mRow = row.toMutableList()
+            if (targetCol in mRow.indices) {
+                mRow.removeAt(targetCol)
+            } else if (mRow.isNotEmpty()) {
+                mRow.removeAt(mRow.lastIndex)
+            }
+            mRow
+        }
+
+        val formatted = formatTable(newRows)
+        val newText = text.substring(0, info.tableStartOffset) + formatted + text.substring(info.tableEndOffset)
+        return TextEditResult(newText, info.tableStartOffset, info.tableStartOffset + formatted.length)
+    }
+
+    // --- 13. Active Toolbar States Detection ---
 
     fun getActiveToolbarStates(text: String, selStart: Int, selEnd: Int): ActiveEditorSyntax {
         if (text.isEmpty()) return ActiveEditorSyntax()
@@ -896,6 +1188,9 @@ object TextEditorOps {
             isItalic = MarkdownSpanType.ITALIC in activeSpans || MarkdownSpanType.BOLD_ITALIC in activeSpans,
             isStrikethrough = MarkdownSpanType.STRIKETHROUGH in activeSpans,
             isInlineCode = MarkdownSpanType.INLINE_CODE in activeSpans,
+            isInlineMath = MarkdownSpanType.MATH_INLINE in activeSpans,
+            isBlockMath = MarkdownSpanType.MATH_BLOCK in activeSpans,
+            isInsideTable = isInsideTable(text, min, max),
             isH1 = isH1,
             isH2 = isH2,
             isH3 = isH3,
