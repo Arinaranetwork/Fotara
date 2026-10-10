@@ -9,6 +9,7 @@ package com.arinara.fotara.feature.friends.ui
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -17,19 +18,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Group
@@ -49,7 +53,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -75,7 +78,6 @@ import com.arinara.fotara.feature.friends.model.FriendProfile
 import com.arinara.fotara.feature.friends.model.StudyPresenceStatus
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderTabCream
-import com.arinara.fotara.theme.HomeAddButtonBlue
 import com.arinara.fotara.theme.HomeCardBorder
 import com.arinara.fotara.theme.HomeCardSurface
 import com.arinara.fotara.theme.HomeNearBlack
@@ -84,9 +86,13 @@ import com.arinara.fotara.theme.HomeSearchBarSurface
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.ui.components.SettingsSubScreenHeader
+import com.arinara.fotara.ui.components.SettingsSubScreenHeaderDefaults
 
 /**
  * Dedicated Friends System Screen for academic collaboration and study buddy networking.
+ * Uses SettingsSubScreenHeader and windowInsetsPadding(WindowInsets.statusBars) to ensure
+ * clean separation from phone hardware status bar and battery indicators.
  */
 @Composable
 fun FriendsScreen(
@@ -116,30 +122,66 @@ fun FriendsScreen(
         }
     }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = HomeNearBlack,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            FriendsTopBar(
-                onBackClick = onBackClick,
-                onQrClick = { showQrDialog = true },
-                onAddClick = { showAddFriendDialog = true }
-            )
-        }
-    ) { innerPadding ->
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(HomeNearBlack)
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier = Modifier.fillMaxSize()
         ) {
+            // Standard Settings Sub-Screen Header with back navigation and action tiles
+            SettingsSubScreenHeader(
+                title = "Study Buddies",
+                subtitle = "Academic peer network & presence",
+                onBackClick = onBackClick,
+                modifier = Modifier.padding(horizontal = 16.dp),
+                actions = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconButton(
+                            onClick = { showQrDialog = true },
+                            modifier = Modifier
+                                .size(SettingsSubScreenHeaderDefaults.ButtonSize)
+                                .clip(RoundedCornerShape(SettingsSubScreenHeaderDefaults.ButtonCornerRadius))
+                                .background(SettingsSubScreenHeaderDefaults.ButtonBackgroundColor)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.QrCode,
+                                contentDescription = "Show QR Code",
+                                tint = SettingsSubScreenHeaderDefaults.ButtonIconTint,
+                                modifier = Modifier.size(SettingsSubScreenHeaderDefaults.IconSize)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showAddFriendDialog = true },
+                            modifier = Modifier
+                                .size(SettingsSubScreenHeaderDefaults.ButtonSize)
+                                .clip(RoundedCornerShape(SettingsSubScreenHeaderDefaults.ButtonCornerRadius))
+                                .background(SettingsSubScreenHeaderDefaults.ButtonBackgroundColor)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.PersonAdd,
+                                contentDescription = "Add Friend",
+                                tint = SettingsSubScreenHeaderDefaults.ButtonIconTint,
+                                modifier = Modifier.size(SettingsSubScreenHeaderDefaults.IconSize)
+                            )
+                        }
+                    }
+                }
+            )
+
             // 1. Search Bar (U-31: 16dp horizontal padding)
             FriendsSearchBar(
                 query = uiState.searchQuery,
                 onQueryChange = { viewModel.onSearchQueryChanged(it) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             )
 
             // 2. My Study Presence Status Section
@@ -158,10 +200,10 @@ fun FriendsScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // 3. Buddy List or Empty State
             if (uiState.filteredFriends.isEmpty()) {
@@ -180,7 +222,7 @@ fun FriendsScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     // Active Study Buddies Group
                     if (uiState.activeBuddies.isNotEmpty()) {
@@ -249,6 +291,14 @@ fun FriendsScreen(
                 }
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+                .imePadding()
+        )
     }
 
     // Dialog: QR Code & Share
@@ -354,69 +404,6 @@ fun FriendsScreen(
 }
 
 /**
- * Top App Bar for Friends Screen adhering to U-01 to U-06.
- */
-@Composable
-private fun FriendsTopBar(
-    onBackClick: () -> Unit,
-    onQrClick: () -> Unit,
-    onAddClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
-        ) {
-            IconButton(onClick = onBackClick) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Study Buddies",
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.Bold,
-                fontSize = 22.sp,
-                lineHeight = 28.sp,
-                color = TextPrimary
-            )
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            IconButton(onClick = onQrClick) {
-                Icon(
-                    imageVector = Icons.Outlined.QrCode,
-                    contentDescription = "Show QR Code",
-                    tint = FolderTabCream,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            IconButton(onClick = onAddClick) {
-                Icon(
-                    imageVector = Icons.Outlined.PersonAdd,
-                    contentDescription = "Add Friend",
-                    tint = HomeAddButtonBlue,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-    }
-}
-
-/**
  * Search Bar component.
  */
 @Composable
@@ -516,7 +503,7 @@ private fun MyPresenceStatusSection(
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
-                    color = TextSecondary
+                    color = Color.White
                 )
                 Text(
                     text = myHandle,
@@ -534,7 +521,7 @@ private fun MyPresenceStatusSection(
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Normal,
                     fontSize = 12.sp,
-                    color = Color(0xFF34D399)
+                    color = Color(0xFF60A5FA)
                 )
             }
 
@@ -566,33 +553,15 @@ private fun PresenceChip(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val bg = if (isSelected) {
-        when (status) {
-            StudyPresenceStatus.OFFLINE -> Color(0xFF263238)
-            StudyPresenceStatus.STUDYING -> Color(0xFF1E3A8A)
-            StudyPresenceStatus.IN_LECTURE -> Color(0xFF4C1D95)
-            StudyPresenceStatus.OPEN_TO_COLLAB -> Color(0xFF064E3B)
-        }
-    } else {
-        HomeNearBlack
-    }
-
-    val textColor = if (isSelected) TextPrimary else TextSecondary
-    val borderColor = if (isSelected) {
-        when (status) {
-            StudyPresenceStatus.OFFLINE -> Color(0xFF64748B)
-            StudyPresenceStatus.STUDYING -> HomeAddButtonBlue
-            StudyPresenceStatus.IN_LECTURE -> Color(0xFF8B5CF6)
-            StudyPresenceStatus.OPEN_TO_COLLAB -> Color(0xFF10B981)
-        }
-    } else {
-        HomeCardBorder
-    }
+    val bg = if (isSelected) Color(0xFF1E2638) else Color(0xFF0F1420)
+    val borderColor = if (isSelected) Color(0xFF3B4863) else HomeCardBorder
+    val textColor = if (isSelected) Color.White else TextSecondary
 
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
             .background(bg)
+            .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
@@ -602,18 +571,17 @@ private fun PresenceChip(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Status Dot Indicator
+            val dotColor = when (status) {
+                StudyPresenceStatus.OFFLINE -> Color(0xFF64748B)
+                StudyPresenceStatus.STUDYING -> Color(0xFF60A5FA)
+                StudyPresenceStatus.IN_LECTURE -> Color(0xFFA78BFA)
+                StudyPresenceStatus.OPEN_TO_COLLAB -> Color(0xFF34D399)
+            }
             Box(
                 modifier = Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(
-                        when (status) {
-                            StudyPresenceStatus.OFFLINE -> Color(0xFF64748B)
-                            StudyPresenceStatus.STUDYING -> HomeAddButtonBlue
-                            StudyPresenceStatus.IN_LECTURE -> Color(0xFFA78BFA)
-                            StudyPresenceStatus.OPEN_TO_COLLAB -> Color(0xFF34D399)
-                        }
-                    )
+                    .background(dotColor)
             )
             Text(
                 text = status.displayLabel,
@@ -648,12 +616,12 @@ private fun SectionHeader(
             fontWeight = FontWeight.Medium,
             fontSize = 15.sp,
             lineHeight = 20.sp,
-            color = if (isAccent) FolderTabCream else TextSecondary
+            color = Color.White
         )
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(6.dp))
-                .background(if (isAccent) Color(0xFF14203A) else HomeCardSurface)
+                .background(Color(0xFF1E2638))
                 .padding(horizontal = 8.dp, vertical = 2.dp)
         ) {
             Text(
@@ -661,7 +629,7 @@ private fun SectionHeader(
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Medium,
                 fontSize = 12.sp,
-                color = if (isAccent) HomeAddButtonBlue else TextMuted
+                color = Color(0xFF94A3B8)
             )
         }
     }
@@ -698,7 +666,7 @@ private fun FriendItemCard(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF182236)),
+                        .background(Color(0xFF1E2638)),
                     contentAlignment = Alignment.Center
                 ) {
                     val initials = friend.displayName
@@ -713,23 +681,22 @@ private fun FriendItemCard(
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
-                        color = TextPrimary
+                        color = Color.White
                     )
                 }
 
                 // Presence Dot
+                val dotColor = when (friend.studyStatus) {
+                    StudyPresenceStatus.OFFLINE -> Color(0xFF64748B)
+                    StudyPresenceStatus.STUDYING -> Color(0xFF60A5FA)
+                    StudyPresenceStatus.IN_LECTURE -> Color(0xFFA78BFA)
+                    StudyPresenceStatus.OPEN_TO_COLLAB -> Color(0xFF34D399)
+                }
                 Box(
                     modifier = Modifier
                         .size(12.dp)
                         .clip(CircleShape)
-                        .background(
-                            when (friend.studyStatus) {
-                                StudyPresenceStatus.OFFLINE -> Color(0xFF64748B)
-                                StudyPresenceStatus.STUDYING -> HomeAddButtonBlue
-                                StudyPresenceStatus.IN_LECTURE -> Color(0xFFA78BFA)
-                                StudyPresenceStatus.OPEN_TO_COLLAB -> Color(0xFF34D399)
-                            }
-                        )
+                        .background(dotColor)
                         .align(Alignment.BottomEnd)
                 )
             }
@@ -749,7 +716,7 @@ private fun FriendItemCard(
                         fontWeight = FontWeight.Medium,
                         fontSize = 15.sp,
                         lineHeight = 20.sp,
-                        color = TextPrimary,
+                        color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -781,7 +748,7 @@ private fun FriendItemCard(
                         fontWeight = FontWeight.Light,
                         fontSize = 12.sp,
                         lineHeight = 16.sp,
-                        color = FolderTabCream
+                        color = Color(0xFF94A3B8)
                     )
                 } else if (friend.isActive) {
                     Spacer(modifier = Modifier.height(2.dp))
@@ -791,7 +758,7 @@ private fun FriendItemCard(
                         fontWeight = FontWeight.Light,
                         fontSize = 12.sp,
                         lineHeight = 16.sp,
-                        color = Color(0xFF34D399)
+                        color = Color(0xFF60A5FA)
                     )
                 }
             }
@@ -808,9 +775,9 @@ private fun FriendItemCard(
                     onClick = onInvite,
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = HomeAddButtonBlue
+                        contentColor = Color.White
                     ),
-                    border = BorderStroke(1.dp, HomeAddButtonBlue.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, Color(0xFF28354D)),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
@@ -830,7 +797,7 @@ private fun FriendItemCard(
                     Icon(
                         imageVector = Icons.Outlined.Share,
                         contentDescription = "Share Notes",
-                        tint = TextSecondary,
+                        tint = Color(0xFF94A3B8),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -843,7 +810,7 @@ private fun FriendItemCard(
                     Icon(
                         imageVector = if (friend.isFavorite) Icons.Outlined.Star else Icons.Outlined.StarBorder,
                         contentDescription = "Toggle favorite",
-                        tint = if (friend.isFavorite) Color(0xFFF59E0B) else TextMuted,
+                        tint = if (friend.isFavorite) Color(0xFFF59E0B) else Color(0xFF64748B),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -856,7 +823,7 @@ private fun FriendItemCard(
                     Icon(
                         imageVector = Icons.Outlined.DeleteOutline,
                         contentDescription = "Delete buddy",
-                        tint = TextMuted,
+                        tint = Color(0xFF64748B),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -884,13 +851,13 @@ private fun FriendsEmptyState(
             modifier = Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF14203A)),
+                .background(Color(0xFF1E2638)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Outlined.Group,
                 contentDescription = null,
-                tint = HomeAddButtonBlue,
+                tint = Color(0xFF94A3B8),
                 modifier = Modifier.size(32.dp)
             )
         }
@@ -903,7 +870,7 @@ private fun FriendsEmptyState(
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp,
             lineHeight = 24.sp,
-            color = TextPrimary
+            color = Color.White
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -926,7 +893,8 @@ private fun FriendsEmptyState(
             Button(
                 onClick = onAddFriendClick,
                 shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = HomeAddButtonBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
+                border = BorderStroke(1.dp, Color(0xFF28354D)),
                 modifier = Modifier.height(44.dp)
             ) {
                 Text(
@@ -941,8 +909,8 @@ private fun FriendsEmptyState(
             OutlinedButton(
                 onClick = onShowQrClick,
                 shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, FolderTabCream.copy(alpha = 0.6f)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = FolderTabCream),
+                border = BorderStroke(1.dp, Color(0xFF28354D)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                 modifier = Modifier.height(44.dp)
             ) {
                 Text(
@@ -976,7 +944,7 @@ private fun FriendsSearchEmptyState(
             fontFamily = ElmsSans,
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,
-            color = TextPrimary
+            color = Color.White
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -993,7 +961,7 @@ private fun FriendsSearchEmptyState(
                 text = "Clear Search",
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Medium,
-                color = HomeAddButtonBlue
+                color = Color(0xFF60A5FA)
             )
         }
     }
@@ -1019,7 +987,7 @@ private fun AddFriendDialog(
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
-                color = TextPrimary
+                color = Color.White
             )
         },
         text = {
@@ -1043,12 +1011,12 @@ private fun AddFriendDialog(
                     label = { Text("Academic Handle (@username)") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = HomeAddButtonBlue,
+                        focusedBorderColor = Color(0xFF3B82F6),
                         unfocusedBorderColor = HomeCardBorder,
                         focusedContainerColor = HomeNearBlack,
                         unfocusedContainerColor = HomeNearBlack,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
                     ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -1063,12 +1031,12 @@ private fun AddFriendDialog(
                     label = { Text("Display Name (e.g. Alex Miller)") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = HomeAddButtonBlue,
+                        focusedBorderColor = Color(0xFF3B82F6),
                         unfocusedBorderColor = HomeCardBorder,
                         focusedContainerColor = HomeNearBlack,
                         unfocusedContainerColor = HomeNearBlack,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
                     ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -1101,7 +1069,8 @@ private fun AddFriendDialog(
                     }
                     onConfirm(handle, name)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = HomeAddButtonBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
+                border = BorderStroke(1.dp, Color(0xFF334155)),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
@@ -1144,7 +1113,7 @@ private fun PresenceSubjectDialog(
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
-                color = TextPrimary
+                color = Color.White
             )
         },
         text = {
@@ -1165,12 +1134,12 @@ private fun PresenceSubjectDialog(
                     placeholder = { Text("e.g. Organic Chemistry, Calculus II") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = HomeAddButtonBlue,
+                        focusedBorderColor = Color(0xFF3B82F6),
                         unfocusedBorderColor = HomeCardBorder,
                         focusedContainerColor = HomeNearBlack,
                         unfocusedContainerColor = HomeNearBlack,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
                     ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -1182,7 +1151,8 @@ private fun PresenceSubjectDialog(
         confirmButton = {
             Button(
                 onClick = { onConfirm(subjectInput.trim().ifEmpty { null }) },
-                colors = ButtonDefaults.buttonColors(containerColor = HomeAddButtonBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
+                border = BorderStroke(1.dp, Color(0xFF334155)),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(

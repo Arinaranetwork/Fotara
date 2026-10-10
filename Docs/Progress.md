@@ -2,7 +2,7 @@
 Last Updated: 2026-10-10
 
 ## Current Phase
-Phase 53 - VersionRollbackManager (2.1.0 Alpha) [Completed]
+Phase 54 - FriendsUiThemeAndWindowInsetsPolish (2.1.1 Alpha) [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -60,6 +60,7 @@ Phase 53 - VersionRollbackManager (2.1.0 Alpha) [Completed]
 | 51    | LiveCollabCanvasAndRelease200     | Completed   |
 | 52    | DrawingAudioWidgetPolishHotfixes  | Completed   |
 | 53    | VersionRollbackManager            | Completed   |
+| 54    | FriendsUiThemeAndWindowInsetsPolish | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -150,6 +151,11 @@ Phase 53 - VersionRollbackManager (2.1.0 Alpha) [Completed]
 - [x] Task 3: Rollback APK Download & FileProvider Installer Pipeline - Phase 53
 - [x] Task 4: Interactive Version History & Rollback UI with Safety Backup Guard - Phase 53
 - [x] Task 5: Unit Tests & Regression Verification - Phase 53
+
+- [x] Task 1: Harmonize `FriendsSettingsCard.kt` to match `SettingsCardItem` design tokens (slate tile, muted icon, typography) - Phase 54
+- [x] Task 2: Fix status bar hardware overlap in `FriendsScreen.kt` using `WindowInsets.statusBars` / `Modifier.statusBarsPadding()` - Phase 54
+- [x] Task 3: Unify `FriendsScreen.kt` header with `SettingsSubScreenHeader` and desaturate presence chips & dialogs - Phase 54
+- [x] Task 4: Unit test validation, version bump to 2.1.1 Alpha, release APK assembly - Phase 54
 
 ## In Progress
 None.

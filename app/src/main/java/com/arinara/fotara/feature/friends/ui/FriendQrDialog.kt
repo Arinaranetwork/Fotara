@@ -144,7 +144,7 @@ fun FriendQrDialog(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(if (selectedTab == 0) HomeAddButtonBlue else Color.Transparent)
+                            .background(if (selectedTab == 0) Color(0xFF1E2638) else Color.Transparent)
                             .clickable { selectedTab = 0 }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
@@ -156,7 +156,7 @@ fun FriendQrDialog(
                             Icon(
                                 imageVector = Icons.Outlined.QrCode,
                                 contentDescription = null,
-                                tint = if (selectedTab == 0) TextPrimary else TextSecondary,
+                                tint = if (selectedTab == 0) Color.White else TextSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -165,7 +165,7 @@ fun FriendQrDialog(
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 13.sp,
-                                color = if (selectedTab == 0) TextPrimary else TextSecondary
+                                color = if (selectedTab == 0) Color.White else TextSecondary
                             )
                         }
                     }
@@ -174,7 +174,7 @@ fun FriendQrDialog(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(if (selectedTab == 1) HomeAddButtonBlue else Color.Transparent)
+                            .background(if (selectedTab == 1) Color(0xFF1E2638) else Color.Transparent)
                             .clickable { selectedTab = 1 }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
@@ -186,7 +186,7 @@ fun FriendQrDialog(
                             Icon(
                                 imageVector = Icons.Outlined.PersonAdd,
                                 contentDescription = null,
-                                tint = if (selectedTab == 1) TextPrimary else TextSecondary,
+                                tint = if (selectedTab == 1) Color.White else TextSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -195,7 +195,7 @@ fun FriendQrDialog(
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 13.sp,
-                                color = if (selectedTab == 1) TextPrimary else TextSecondary
+                                color = if (selectedTab == 1) Color.White else TextSecondary
                             )
                         }
                     }
@@ -284,7 +284,7 @@ fun FriendQrDialog(
                                 Icon(
                                     imageVector = Icons.Outlined.ContentCopy,
                                     contentDescription = "Copy code",
-                                    tint = HomeAddButtonBlue,
+                                    tint = Color(0xFF94A3B8),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -322,12 +322,12 @@ fun FriendQrDialog(
                         label = { Text("Peer Handle or Code (@alex or FOTARA-...)") },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = HomeAddButtonBlue,
+                            focusedBorderColor = Color(0xFF3B82F6),
                             unfocusedBorderColor = HomeCardBorder,
                             focusedContainerColor = HomeNearBlack,
                             unfocusedContainerColor = HomeNearBlack,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
                         ),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -344,12 +344,12 @@ fun FriendQrDialog(
                         label = { Text("Full Display Name (e.g. Alex Miller)") },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = HomeAddButtonBlue,
+                            focusedBorderColor = Color(0xFF3B82F6),
                             unfocusedBorderColor = HomeCardBorder,
                             focusedContainerColor = HomeNearBlack,
                             unfocusedContainerColor = HomeNearBlack,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
                         ),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -392,7 +392,8 @@ fun FriendQrDialog(
                             onAddFriendFromCode(handle, name)
                         },
                         shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = HomeAddButtonBlue),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
+                        border = BorderStroke(1.dp, Color(0xFF334155)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
