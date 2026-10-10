@@ -198,9 +198,33 @@ object PhotoDrawingRenderer {
         val typefaceStyle = if (element.fontWeight >= 700) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL
         textPaint.typeface = android.graphics.Typeface.create("sans-serif", typefaceStyle)
 
+        val paddingX = 12f
+        val lines = element.text.split("\n")
         val fontMetrics = textPaint.fontMetrics
-        val textY = ((element.height - fontMetrics.bottom - fontMetrics.top) / 2f).coerceAtLeast(fontMetrics.descent)
-        canvas.drawText(element.text, 12f, textY, textPaint)
+        val lineHeight = fontMetrics.descent - fontMetrics.ascent + 4f
+        val totalTextHeight = lines.size * lineHeight
+        val startY = ((element.height - totalTextHeight) / 2f - fontMetrics.ascent).coerceAtLeast(-fontMetrics.ascent)
+
+        when (element.alignment) {
+            com.arinara.fotara.canvas.model.TextLayerAlignment.LEFT -> {
+                textPaint.textAlign = android.graphics.Paint.Align.LEFT
+                lines.forEachIndexed { i, line ->
+                    canvas.drawText(line, paddingX, startY + i * lineHeight, textPaint)
+                }
+            }
+            com.arinara.fotara.canvas.model.TextLayerAlignment.CENTER -> {
+                textPaint.textAlign = android.graphics.Paint.Align.CENTER
+                lines.forEachIndexed { i, line ->
+                    canvas.drawText(line, element.width / 2f, startY + i * lineHeight, textPaint)
+                }
+            }
+            com.arinara.fotara.canvas.model.TextLayerAlignment.RIGHT -> {
+                textPaint.textAlign = android.graphics.Paint.Align.RIGHT
+                lines.forEachIndexed { i, line ->
+                    canvas.drawText(line, element.width - paddingX, startY + i * lineHeight, textPaint)
+                }
+            }
+        }
 
         canvas.restore()
     }

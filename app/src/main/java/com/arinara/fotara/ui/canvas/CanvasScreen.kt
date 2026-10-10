@@ -751,6 +751,7 @@ fun CanvasScreen(
                                 CanvasToolType.ERASER -> stringResource(R.string.canvas_tool_eraser)
                                 CanvasToolType.SELECT -> stringResource(R.string.canvas_tool_select)
                                 CanvasToolType.TEXT -> "Text Layer"
+                                CanvasToolType.SHAPE -> "Shapes & Smooth"
                             },
                             color = TextPrimary,
                             fontSize = 14.sp,
@@ -835,6 +836,52 @@ fun CanvasScreen(
                                 }
                             }
 
+                            // Auto-Smoothen & Shape Snapping toggles for Pen
+                            if (!isHighlighter) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Auto-Smoothen Strokes", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                        Text("Smooth handwriting & organic lines", color = TextMuted, fontSize = 10.sp)
+                                    }
+                                    Switch(
+                                        checked = uiState.toolState.autoSmoothen,
+                                        onCheckedChange = { viewModel.setAutoSmoothen(it) },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = FolderTabCream,
+                                            checkedTrackColor = MidnightNavy,
+                                            uncheckedThumbColor = TextMuted,
+                                            uncheckedTrackColor = MidnightSurface
+                                        )
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Shape Snapping", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                        Text("Hold at end of stroke to snap shapes", color = TextMuted, fontSize = 10.sp)
+                                    }
+                                    Switch(
+                                        checked = uiState.toolState.shapeSnapping,
+                                        onCheckedChange = { viewModel.setShapeSnapping(it) },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = FolderTabCream,
+                                            checkedTrackColor = MidnightNavy,
+                                            uncheckedThumbColor = TextMuted,
+                                            uncheckedTrackColor = MidnightSurface
+                                        )
+                                    )
+                                }
+                            }
+
                             // Blending Mode Row for Highlighter
                             if (isHighlighter) {
                                 Spacer(modifier = Modifier.height(12.dp))
@@ -897,6 +944,92 @@ fun CanvasScreen(
                                     fontSize = 11.sp,
                                     lineHeight = 14.sp
                                 )
+                            }
+                        }
+                        CanvasToolType.SHAPE -> {
+                            Text("Geometric Shape", color = TextSecondary, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val primitives = listOf(
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.RECTANGLE to "Square / Rect",
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.CIRCLE to "Circle",
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.ARROW to "Arrow",
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.LINE to "Line",
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.AUTO to "Auto Snap"
+                                )
+                                for ((prim, label) in primitives) {
+                                    val isSelected = uiState.toolState.activeShapePrimitive == prim
+                                    Surface(
+                                        color = if (isSelected) FolderTabCream else MidnightNavy,
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, if (isSelected) FolderTabCream else MidnightCardOutline),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(34.dp)
+                                            .clickable { viewModel.setShapePrimitive(prim) }
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 2.dp)) {
+                                            Text(
+                                                text = label,
+                                                fontSize = 10.sp,
+                                                color = if (isSelected) MidnightNavy else FolderTabCream,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Thickness", color = TextSecondary, fontSize = 12.sp)
+                                Text("${uiState.toolState.penSize.toInt()} dp", color = FolderTabCream, fontSize = 12.sp)
+                            }
+                            Slider(
+                                value = uiState.toolState.penSize,
+                                onValueChange = { viewModel.setPenSize(it) },
+                                valueRange = 2f..32f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = FolderTabCream,
+                                    activeTrackColor = FolderTabCream,
+                                    inactiveTrackColor = MidnightNavy
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Palette", color = TextSecondary, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(uiState.recentColors) { colorLong ->
+                                    val isSelected = uiState.toolState.penColor == colorLong
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(colorLong.toInt()))
+                                            .border(
+                                                width = if (isSelected) 2.5.dp else 1.dp,
+                                                color = if (isSelected) TextPrimary else MidnightCardOutline,
+                                                shape = CircleShape
+                                            )
+                                            .clickable { viewModel.setPenColor(colorLong) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = if (colorLong == 0xFFFFFFFF) HomeNearBlack else TextPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         CanvasToolType.ERASER -> {
@@ -1166,6 +1299,35 @@ fun CanvasScreen(
                                 )
                             }
 
+                            Spacer(modifier = Modifier.width(4.dp))
+
+                            // Shapes & Smooth Tool
+                            val isShape = uiState.toolState.activeTool == CanvasToolType.SHAPE
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isShape) FolderTabCream else Color.Transparent)
+                                    .combinedClickable(
+                                        onClick = {
+                                            viewModel.setTool(CanvasToolType.SHAPE)
+                                            viewModel.showShapeOptions()
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.showShapeOptions()
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_shapes),
+                                    contentDescription = "Shapes & Smooth",
+                                    tint = if (isShape) MidnightNavy else FolderTabCream,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
                             Spacer(modifier = Modifier.width(8.dp))
 
                             // Active Color Swatch (Tapping opens Z4)
@@ -1216,6 +1378,26 @@ fun CanvasScreen(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val selectedTextElement = if (hasSelection) {
+                            uiState.document.elements.firstOrNull { el ->
+                                uiState.toolState.selection.elementIds.contains(el.id) && el is com.arinara.fotara.canvas.model.TextLayerElement
+                            } as? com.arinara.fotara.canvas.model.TextLayerElement
+                        } else null
+
+                        if (selectedTextElement != null) {
+                            IconButton(
+                                onClick = { viewModel.showTextOptions(selectedTextElement) },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "Edit Text",
+                                    tint = FolderTabCream,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
                         // Duplicate
                         IconButton(
                             onClick = { viewModel.duplicateSelectedElements() },
@@ -1967,6 +2149,7 @@ fun CanvasScreen(
             var fontWeight by remember(editing) { mutableStateOf(editing?.fontWeight ?: uiState.toolState.textFontWeight) }
             var textColor by remember(editing) { mutableStateOf(editing?.color ?: uiState.toolState.textColor) }
             var bgStyle by remember(editing) { mutableStateOf(editing?.backgroundStyle ?: uiState.toolState.textBackgroundStyle) }
+            var alignment by remember(editing) { mutableStateOf(editing?.alignment ?: com.arinara.fotara.canvas.model.TextLayerAlignment.LEFT) }
 
             AlertDialog(
                 onDismissRequest = { viewModel.dismissTextOptions() },
@@ -1991,6 +2174,30 @@ fun CanvasScreen(
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        Text("Text Alignment", color = TextSecondary, fontSize = 14.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val aligns = listOf(
+                                com.arinara.fotara.canvas.model.TextLayerAlignment.LEFT to "Left",
+                                com.arinara.fotara.canvas.model.TextLayerAlignment.CENTER to "Center",
+                                com.arinara.fotara.canvas.model.TextLayerAlignment.RIGHT to "Right"
+                            )
+                            for ((a, label) in aligns) {
+                                val isSel = alignment == a
+                                Surface(
+                                    color = if (isSel) FolderTabCream else MidnightNavy,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, if (isSel) FolderTabCream else MidnightCardOutline),
+                                    modifier = Modifier
+                                        .height(32.dp)
+                                        .clickable { alignment = a }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 14.dp)) {
+                                        Text(label, fontSize = 12.sp, color = if (isSel) HomeNearBlack else TextSecondary)
+                                    }
+                                }
+                            }
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -2098,6 +2305,7 @@ fun CanvasScreen(
                                 color = textColor,
                                 fontWeight = fontWeight,
                                 backgroundStyle = bgStyle,
+                                alignment = alignment,
                                 viewport = vp,
                                 screenWidth = w,
                                 screenHeight = h
@@ -2108,8 +2316,15 @@ fun CanvasScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { viewModel.dismissTextOptions() }) {
-                        Text("Cancel", color = TextMuted)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (editing != null) {
+                            TextButton(onClick = { viewModel.deleteTextLayer(editing.id) }) {
+                                Text("Delete", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        TextButton(onClick = { viewModel.dismissTextOptions() }) {
+                            Text("Cancel", color = TextMuted)
+                        }
                     }
                 },
                 containerColor = MidnightSurface

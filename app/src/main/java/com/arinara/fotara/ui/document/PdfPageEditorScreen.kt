@@ -67,6 +67,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -103,6 +105,7 @@ import com.arinara.fotara.R
 import com.arinara.fotara.canvas.engine.DrawingConstants
 import com.arinara.fotara.canvas.engine.DrawingTool
 import com.arinara.fotara.canvas.engine.RecognizedShape
+import com.arinara.fotara.canvas.engine.ShapeAutoCorrectResult
 import com.arinara.fotara.canvas.engine.ShapeAutoCorrectEngine
 import com.arinara.fotara.canvas.engine.StrokeProcessor
 import com.arinara.fotara.canvas.model.StrokeBlendMode
@@ -240,6 +243,10 @@ fun PdfPageEditorScreen(
     var textFontWeight by remember { mutableIntStateOf(400) }
     var textColor by remember { mutableLongStateOf(DrawingConstants.CURATED_PALETTE.first()) }
     var textBackgroundStyle by remember { mutableStateOf(TextBackgroundStyle.TRANSPARENT) }
+    var textAlignment by remember { mutableStateOf(com.arinara.fotara.canvas.model.TextLayerAlignment.LEFT) }
+    var autoSmoothen by remember { mutableStateOf(true) }
+    var shapeSnapping by remember { mutableStateOf(true) }
+    var activeShapePrimitive by remember { mutableStateOf(com.arinara.fotara.canvas.tool.ShapePrimitiveType.RECTANGLE) }
     var pendingTextPlacementPt by remember { mutableStateOf<Offset?>(null) }
 
     // Live gesture state
@@ -471,7 +478,7 @@ fun PdfPageEditorScreen(
                                         }
 
                                         when (currentActiveTool) {
-                                            DrawingTool.PEN, DrawingTool.HIGHLIGHTER -> {
+                                            DrawingTool.PEN, DrawingTool.HIGHLIGHTER, DrawingTool.SHAPE -> {
                                                 val pt = StrokePoint(ptX, ptY, pressure)
                                                 currentPathPoints.add(pt)
                                                 livePoints = currentPathPoints.toList()
@@ -536,26 +543,43 @@ fun PdfPageEditorScreen(
                                     viewModel.updateStrokesAfterEraser(strokes.toList(), dragStrokesSnapshot)
                                 }
                             } else if (currentPathPoints.isNotEmpty()) {
-                                val toolType = if (currentActiveTool == DrawingTool.PEN) StrokeToolType.PEN else StrokeToolType.HIGHLIGHTER
-                                val sizeDp = if (currentActiveTool == DrawingTool.PEN) currentPenSizeDp else currentHighlighterSizeDp
+                                val toolType = if (currentActiveTool == DrawingTool.HIGHLIGHTER) StrokeToolType.HIGHLIGHTER else StrokeToolType.PEN
+                                val sizeDp = if (currentActiveTool == DrawingTool.HIGHLIGHTER) currentHighlighterSizeDp else currentPenSizeDp
                                 val strokeWidthPts = DrawingConstants.computeStoredWidth(
                                     sliderDp = sizeDp,
                                     density = densityPx,
                                     fitScale = fitScale
                                 )
-                                val blendMode = if (currentActiveTool == DrawingTool.PEN) StrokeBlendMode.NORMAL else currentHighlighterBlendMode
+                                val blendMode = if (currentActiveTool == DrawingTool.HIGHLIGHTER) currentHighlighterBlendMode else StrokeBlendMode.NORMAL
 
                                 val decimated = StrokeProcessor.decimatePoints(currentPathPoints, strokeWidthPts)
-                                val pointsToUse = if (currentActiveTool == DrawingTool.PEN) {
+                                val pointsToUse = if (currentActiveTool == DrawingTool.SHAPE && decimated.size >= 2) {
+                                    val p0 = decimated.first()
+                                    val pn = decimated.last()
+                                    when (activeShapePrimitive) {
+                                        com.arinara.fotara.canvas.tool.ShapePrimitiveType.RECTANGLE -> ShapeAutoCorrectEngine.generateRectangleFromBounds(p0, pn, 1.0f)
+                                        com.arinara.fotara.canvas.tool.ShapePrimitiveType.CIRCLE -> ShapeAutoCorrectEngine.generateCircleFromBounds(p0, pn, 1.0f)
+                                        com.arinara.fotara.canvas.tool.ShapePrimitiveType.ARROW -> ShapeAutoCorrectEngine.generateArrowFromEndpoints(p0, pn, 1.0f)
+                                        com.arinara.fotara.canvas.tool.ShapePrimitiveType.LINE -> ShapeAutoCorrectEngine.generateLinePoints(p0, pn, 1.0f)
+                                        com.arinara.fotara.canvas.tool.ShapePrimitiveType.AUTO -> {
+                                            val snapRes = ShapeAutoCorrectEngine.recognizeAndSnap(decimated)
+                                            if (snapRes.shape !is RecognizedShape.None) snapRes.snappedPoints else ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
+                                        }
+                                    }
+                                } else if (currentActiveTool == DrawingTool.PEN) {
                                     if (isShapeSnapped) {
                                         decimated
-                                    } else {
-                                        val snapRes = ShapeAutoCorrectEngine.recognizeAndSnap(decimated)
+                                    } else if (autoSmoothen || shapeSnapping) {
+                                        val snapRes = if (shapeSnapping) ShapeAutoCorrectEngine.recognizeAndSnap(decimated) else ShapeAutoCorrectResult(RecognizedShape.None, decimated)
                                         if (snapRes.shape !is RecognizedShape.None) {
                                             snapRes.snappedPoints
-                                        } else {
+                                        } else if (autoSmoothen) {
                                             ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
+                                        } else {
+                                            decimated
                                         }
+                                    } else {
+                                        decimated
                                     }
                                 } else {
                                     decimated
@@ -895,12 +919,14 @@ fun PdfPageEditorScreen(
                             DrawingTool.HIGHLIGHTER -> highlighterSizeDp
                             DrawingTool.ERASER -> eraserSizeDp
                             DrawingTool.TEXT -> textFontSizeSp
+                            DrawingTool.SHAPE -> penSizeDp
                         }
                         val valueRange = when (activeTool) {
                             DrawingTool.PEN -> DrawingConstants.MIN_PEN_SIZE_DP..DrawingConstants.MAX_PEN_SIZE_DP
                             DrawingTool.HIGHLIGHTER -> DrawingConstants.MIN_HIGHLIGHTER_SIZE_DP..DrawingConstants.MAX_HIGHLIGHTER_SIZE_DP
                             DrawingTool.ERASER -> DrawingConstants.MIN_ERASER_SIZE_DP..DrawingConstants.MAX_ERASER_SIZE_DP
                             DrawingTool.TEXT -> 12f..48f
+                            DrawingTool.SHAPE -> DrawingConstants.MIN_PEN_SIZE_DP..DrawingConstants.MAX_PEN_SIZE_DP
                         }
 
                         Row(
@@ -914,6 +940,7 @@ fun PdfPageEditorScreen(
                                     DrawingTool.HIGHLIGHTER -> stringResource(R.string.tool_highlighter)
                                     DrawingTool.ERASER -> stringResource(R.string.tool_eraser)
                                     DrawingTool.TEXT -> "Text Size"
+                                    DrawingTool.SHAPE -> "Shape Thickness"
                                 },
                                 color = TextPrimary,
                                 fontSize = 14.sp,
@@ -934,6 +961,7 @@ fun PdfPageEditorScreen(
                                     DrawingTool.HIGHLIGHTER -> highlighterSizeDp = newSize
                                     DrawingTool.ERASER -> eraserSizeDp = newSize
                                     DrawingTool.TEXT -> textFontSizeSp = newSize
+                                    DrawingTool.SHAPE -> penSizeDp = newSize
                                 }
                             },
                             valueRange = valueRange,
@@ -944,6 +972,104 @@ fun PdfPageEditorScreen(
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        // Pen Auto-Smoothen & Shape Snapping toggles
+                        if (activeTool == DrawingTool.PEN) {
+                            HorizontalDivider(
+                                color = MidnightCardOutline,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Auto-Smoothen Strokes", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Text("Smooth handwriting & organic curves", color = TextMuted, fontSize = 10.sp)
+                                }
+                                Switch(
+                                    checked = autoSmoothen,
+                                    onCheckedChange = { autoSmoothen = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = FolderTabCream,
+                                        checkedTrackColor = MidnightNavy,
+                                        uncheckedThumbColor = TextMuted,
+                                        uncheckedTrackColor = MidnightSurface
+                                    )
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Shape Snapping", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Text("Hold at end of stroke to snap shapes", color = TextMuted, fontSize = 10.sp)
+                                }
+                                Switch(
+                                    checked = shapeSnapping,
+                                    onCheckedChange = { shapeSnapping = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = FolderTabCream,
+                                        checkedTrackColor = MidnightNavy,
+                                        uncheckedThumbColor = TextMuted,
+                                        uncheckedTrackColor = MidnightSurface
+                                    )
+                                )
+                            }
+                        }
+
+                        // Geometric Shape Primitive Chips
+                        if (activeTool == DrawingTool.SHAPE) {
+                            HorizontalDivider(
+                                color = MidnightCardOutline,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                            Text(
+                                text = "Geometric Shape",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val primitives = listOf(
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.RECTANGLE to "Square / Rect",
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.CIRCLE to "Circle",
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.ARROW to "Arrow",
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.LINE to "Line",
+                                    com.arinara.fotara.canvas.tool.ShapePrimitiveType.AUTO to "Auto Snap"
+                                )
+                                for ((prim, label) in primitives) {
+                                    val isSelected = activeShapePrimitive == prim
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { activeShapePrimitive = prim },
+                                        label = { Text(label, fontSize = 11.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = FolderTabCream,
+                                            selectedLabelColor = HomeNearBlack,
+                                            containerColor = MidnightNavy,
+                                            labelColor = TextSecondary
+                                        ),
+                                        border = FilterChipDefaults.filterChipBorder(
+                                            enabled = true,
+                                            selected = isSelected,
+                                            borderColor = MidnightCardOutline,
+                                            selectedBorderColor = FolderTabCream
+                                        )
+                                    )
+                                }
+                            }
+                        }
 
                         // Highlighter Blending Mode Chips
                         if (activeTool == DrawingTool.HIGHLIGHTER) {
@@ -1025,6 +1151,7 @@ fun PdfPageEditorScreen(
                                     textFontWeight = sel.fontWeight
                                     textColor = sel.color
                                     textBackgroundStyle = sel.backgroundStyle
+                                    textAlignment = sel.alignment
                                     showTextOptions = true
                                 }
                             }
@@ -1145,6 +1272,27 @@ fun PdfPageEditorScreen(
                             imageVector = Icons.Outlined.LayersClear,
                             contentDescription = stringResource(R.string.tool_eraser),
                             tint = if (activeTool == DrawingTool.ERASER) FolderTabCream else TextMuted
+                        )
+                    }
+
+                    // Shapes & Auto-Smoothen Tool
+                    IconButton(
+                        onClick = {
+                            selectedTextLayerId = null
+                            if (activeTool == DrawingTool.SHAPE) {
+                                showSizeSlider = !showSizeSlider
+                                showColorPalette = false
+                            } else {
+                                activeTool = DrawingTool.SHAPE
+                                showSizeSlider = true
+                                showColorPalette = false
+                            }
+                        }
+                    ) {
+                        Icon(
+                            painter = androidx.compose.ui.res.painterResource(R.drawable.ic_shapes),
+                            contentDescription = "Shapes & Smooth",
+                            tint = if (activeTool == DrawingTool.SHAPE) FolderTabCream else TextMuted
                         )
                     }
 
@@ -1285,6 +1433,35 @@ fun PdfPageEditorScreen(
                             }
                         }
 
+                        Text("Alignment", color = TextSecondary, fontSize = 14.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val aligns = listOf(
+                                com.arinara.fotara.canvas.model.TextLayerAlignment.LEFT to "Left",
+                                com.arinara.fotara.canvas.model.TextLayerAlignment.CENTER to "Center",
+                                com.arinara.fotara.canvas.model.TextLayerAlignment.RIGHT to "Right"
+                            )
+                            for ((al, label) in aligns) {
+                                val isSel = textAlignment == al
+                                FilterChip(
+                                    selected = isSel,
+                                    onClick = { textAlignment = al },
+                                    label = { Text(label, fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = FolderTabCream,
+                                        selectedLabelColor = HomeNearBlack,
+                                        containerColor = MidnightNavy,
+                                        labelColor = TextSecondary
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = isSel,
+                                        borderColor = MidnightCardOutline,
+                                        selectedBorderColor = FolderTabCream
+                                    )
+                                )
+                            }
+                        }
+
                         Text("Card Background", color = TextSecondary, fontSize = 14.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             val styles = listOf(
@@ -1361,6 +1538,7 @@ fun PdfPageEditorScreen(
                                         color = textColor,
                                         fontWeight = textFontWeight,
                                         backgroundStyle = textBackgroundStyle,
+                                        alignment = textAlignment,
                                         width = estW,
                                         height = estH,
                                         bounds = com.arinara.fotara.canvas.engine.CanvasRect(
@@ -1387,6 +1565,7 @@ fun PdfPageEditorScreen(
                                     color = textColor,
                                     fontWeight = textFontWeight,
                                     backgroundStyle = textBackgroundStyle,
+                                    alignment = textAlignment,
                                     bounds = com.arinara.fotara.canvas.engine.CanvasRect(
                                         left = placement.x - estW / 2f,
                                         top = placement.y - estH / 2f,
@@ -1407,14 +1586,32 @@ fun PdfPageEditorScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(
-                        onClick = {
-                            showTextOptions = false
-                            editingTextLayerId = null
-                            pendingTextPlacementPt = null
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (editingTextLayerId != null) {
+                            TextButton(
+                                onClick = {
+                                    val idToRemove = editingTextLayerId
+                                    if (idToRemove != null) {
+                                        viewModel.removeTextLayer(idToRemove)
+                                        selectedTextLayerId = null
+                                    }
+                                    showTextOptions = false
+                                    editingTextLayerId = null
+                                    pendingTextPlacementPt = null
+                                }
+                            ) {
+                                Text("Delete", color = DangerRed)
+                            }
                         }
-                    ) {
-                        Text(stringResource(R.string.action_cancel), color = TextSecondary)
+                        TextButton(
+                            onClick = {
+                                showTextOptions = false
+                                editingTextLayerId = null
+                                pendingTextPlacementPt = null
+                            }
+                        ) {
+                            Text(stringResource(R.string.action_cancel), color = TextSecondary)
+                        }
                     }
                 },
                 containerColor = MidnightSurface,

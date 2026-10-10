@@ -18,7 +18,8 @@ enum class DrawingTool {
     PEN,
     HIGHLIGHTER,
     ERASER,
-    TEXT
+    TEXT,
+    SHAPE
 }
 
 object DrawingConstants {

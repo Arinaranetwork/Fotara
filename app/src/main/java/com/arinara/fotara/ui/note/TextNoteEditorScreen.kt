@@ -6,7 +6,13 @@
 
 package com.arinara.fotara.ui.note
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -190,6 +196,21 @@ fun TextNoteEditorScreen(
     val searchHighlightAlpha = remember { Animatable(0f) }
     var hasHandledInitialHighlight by remember { mutableStateOf(false) }
     val editorScrollState = rememberScrollState()
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            coroutineScope.launch {
+                if (state.noteId == null) {
+                    state.flushAutosaveNow()
+                }
+                audioViewModel.startRecording()
+            }
+        } else {
+            Toast.makeText(context, "Microphone permission is required to record audio notes", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val handleExit = {
         coroutineScope.launch {
@@ -942,11 +963,19 @@ fun TextNoteEditorScreen(
                         com.arinara.fotara.audio.ui.AudioRecordPill(
                             recorderState = audioUiState.recorderState,
                             onStartRecording = {
-                                coroutineScope.launch {
-                                    if (state.noteId == null) {
-                                        state.flushAutosaveNow()
+                                val hasMic = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (hasMic) {
+                                    coroutineScope.launch {
+                                        if (state.noteId == null) {
+                                            state.flushAutosaveNow()
+                                        }
+                                        audioViewModel.startRecording()
                                     }
-                                    audioViewModel.startRecording()
+                                } else {
+                                    micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 }
                             },
                             onStopRecording = { audioViewModel.stopAndSaveRecording() },

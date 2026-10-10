@@ -247,7 +247,7 @@ object ShapeAutoCorrectEngine {
         )
     }
 
-    private fun generateLinePoints(a: StrokePoint, b: StrokePoint, pressure: Float, segments: Int = 12): List<StrokePoint> {
+    fun generateLinePoints(a: StrokePoint, b: StrokePoint, pressure: Float, segments: Int = 12): List<StrokePoint> {
         val list = mutableListOf<StrokePoint>()
         for (i in 0..segments) {
             val t = i.toFloat() / segments
@@ -256,7 +256,7 @@ object ShapeAutoCorrectEngine {
         return list
     }
 
-    private fun generateCirclePoints(cx: Float, cy: Float, radius: Float, pressure: Float, segments: Int = 40): List<StrokePoint> {
+    fun generateCirclePoints(cx: Float, cy: Float, radius: Float, pressure: Float, segments: Int = 40): List<StrokePoint> {
         val list = mutableListOf<StrokePoint>()
         for (i in 0..segments) {
             val angle = (2.0 * PI * i / segments).toFloat()
@@ -267,7 +267,7 @@ object ShapeAutoCorrectEngine {
         return list
     }
 
-    private fun generateEllipsePoints(cx: Float, cy: Float, rx: Float, ry: Float, pressure: Float, segments: Int = 40): List<StrokePoint> {
+    fun generateEllipsePoints(cx: Float, cy: Float, rx: Float, ry: Float, pressure: Float, segments: Int = 40): List<StrokePoint> {
         val list = mutableListOf<StrokePoint>()
         for (i in 0..segments) {
             val angle = (2.0 * PI * i / segments).toFloat()
@@ -278,7 +278,7 @@ object ShapeAutoCorrectEngine {
         return list
     }
 
-    private fun generatePolygonPoints(vertices: List<StrokePoint>, pressure: Float): List<StrokePoint> {
+    fun generatePolygonPoints(vertices: List<StrokePoint>, pressure: Float): List<StrokePoint> {
         val list = mutableListOf<StrokePoint>()
         for (i in vertices.indices) {
             val v1 = vertices[i]
@@ -286,6 +286,48 @@ object ShapeAutoCorrectEngine {
             list.addAll(generateLinePoints(v1, v2, pressure, segments = 8).dropLast(1))
         }
         list.add(StrokePoint(vertices.first().x, vertices.first().y, pressure))
+        return list
+    }
+
+    fun generateRectangleFromBounds(p0: StrokePoint, pn: StrokePoint, pressure: Float = 1.0f): List<StrokePoint> {
+        val left = minOf(p0.x, pn.x)
+        val top = minOf(p0.y, pn.y)
+        val right = maxOf(p0.x, pn.x)
+        val bottom = maxOf(p0.y, pn.y)
+        val corners = listOf(
+            StrokePoint(left, top, pressure),
+            StrokePoint(right, top, pressure),
+            StrokePoint(right, bottom, pressure),
+            StrokePoint(left, bottom, pressure)
+        )
+        return generatePolygonPoints(corners, pressure)
+    }
+
+    fun generateCircleFromBounds(p0: StrokePoint, pn: StrokePoint, pressure: Float = 1.0f): List<StrokePoint> {
+        val cx = (p0.x + pn.x) / 2f
+        val cy = (p0.y + pn.y) / 2f
+        val radius = maxOf(8f, hypot(pn.x - p0.x, pn.y - p0.y) / 2f)
+        return generateCirclePoints(cx, cy, radius, pressure)
+    }
+
+    fun generateArrowFromEndpoints(p0: StrokePoint, pn: StrokePoint, pressure: Float = 1.0f): List<StrokePoint> {
+        val angle = atan2(pn.y - p0.y, pn.x - p0.x)
+        val headLength = (hypot(pn.x - p0.x, pn.y - p0.y) * 0.25f).coerceIn(12f, 40f)
+        val wingAngle = 0.5f // ~30 deg
+        val wing1 = StrokePoint(
+            pn.x - headLength * cos(angle - wingAngle),
+            pn.y - headLength * sin(angle - wingAngle),
+            pressure
+        )
+        val wing2 = StrokePoint(
+            pn.x - headLength * cos(angle + wingAngle),
+            pn.y - headLength * sin(angle + wingAngle),
+            pressure
+        )
+        val list = mutableListOf<StrokePoint>()
+        list.addAll(generateLinePoints(p0, pn, pressure))
+        list.addAll(generateLinePoints(pn, wing1, pressure))
+        list.addAll(generateLinePoints(pn, wing2, pressure))
         return list
     }
 

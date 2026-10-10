@@ -109,4 +109,22 @@ class KatexMathRendererTest {
         assertTrue(output.contains("y₁"))
         assertTrue(output.contains("a₁₂"))
     }
+
+    @Test
+    fun formatToReadableMath_preservesComplexOperatorsWithoutPrefixCorruption() {
+        val input = "x \\in A \\land n \\to \\infty \\land a \\leq b \\land c \\geq d \\land x \\neq y \\land \\iint_D f dA"
+        val output = KatexMathRenderer.formatToReadableMath(input)
+        // Verify no corruptions like ∈fty, ≤q, ≥q, ≠q, ∫int occur
+        assertFalse("Output must not contain corrupted '∈fty'", output.contains("∈fty"))
+        assertFalse("Output must not contain corrupted '≤q'", output.contains("≤q"))
+        assertFalse("Output must not contain corrupted '≥q'", output.contains("≥q"))
+        assertFalse("Output must not contain corrupted '≠q'", output.contains("≠q"))
+        assertFalse("Output must not contain corrupted '∫int'", output.contains("∫int"))
+        assertTrue("Output should contain ∈", output.contains("∈"))
+        assertTrue("Output should contain ∞", output.contains("∞"))
+        assertTrue("Output should contain ≤", output.contains("≤"))
+        assertTrue("Output should contain ≥", output.contains("≥"))
+        assertTrue("Output should contain ≠", output.contains("≠"))
+        assertTrue("Output should contain ∬", output.contains("∬"))
+    }
 }

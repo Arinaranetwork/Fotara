@@ -12,6 +12,7 @@ import com.arinara.fotara.canvas.engine.CanvasHistoryManager
 import com.arinara.fotara.canvas.engine.CanvasRect
 import com.arinara.fotara.canvas.engine.CanvasSelectionEngine
 import com.arinara.fotara.canvas.engine.RecognizedShape
+import com.arinara.fotara.canvas.engine.ShapeAutoCorrectResult
 import com.arinara.fotara.canvas.engine.RemoveElementsCommand
 import com.arinara.fotara.canvas.engine.ReplaceElementsCommand
 import com.arinara.fotara.canvas.engine.ShapeAutoCorrectEngine
@@ -40,7 +41,8 @@ enum class CanvasToolType {
     HIGHLIGHTER,
     ERASER,
     SELECT,
-    TEXT;
+    TEXT,
+    SHAPE;
 
     companion object {
         @Deprecated("Consolidated into ERASER")
@@ -48,6 +50,14 @@ enum class CanvasToolType {
         @Deprecated("Consolidated into ERASER")
         val ERASER_AREA = ERASER
     }
+}
+
+enum class ShapePrimitiveType {
+    AUTO,
+    RECTANGLE,
+    CIRCLE,
+    ARROW,
+    LINE
 }
 
 data class CanvasToolState(
@@ -64,7 +74,11 @@ data class CanvasToolState(
     val textFontSizeSp: Float = 18f,
     val textColor: Long = 0xFFF4F0E6,
     val textFontWeight: Int = 400,
-    val textBackgroundStyle: com.arinara.fotara.canvas.model.TextBackgroundStyle = com.arinara.fotara.canvas.model.TextBackgroundStyle.TRANSPARENT
+    val textBackgroundStyle: com.arinara.fotara.canvas.model.TextBackgroundStyle = com.arinara.fotara.canvas.model.TextBackgroundStyle.TRANSPARENT,
+    val autoSmoothen: Boolean = true,
+    val shapeSnapping: Boolean = true,
+    val smoothingStrength: Float = 0.5f,
+    val activeShapePrimitive: ShapePrimitiveType = ShapePrimitiveType.RECTANGLE
 ) {
     val selectedElementIds: Set<String> get() = selection.elementIds
 }
@@ -144,7 +158,7 @@ class CanvasToolController(
      * Returns true if a shape was snapped and stroke points replaced.
      */
     fun autoCorrectActiveStroke(): Boolean {
-        if (toolState.activeTool != CanvasToolType.PEN || activeStrokePoints.size < 5) return false
+        if ((toolState.activeTool != CanvasToolType.PEN && toolState.activeTool != CanvasToolType.SHAPE) || activeStrokePoints.size < 5) return false
         val result = com.arinara.fotara.canvas.engine.ShapeAutoCorrectEngine.recognizeAndSnap(activeStrokePoints)
         if (result.shape !is com.arinara.fotara.canvas.engine.RecognizedShape.None) {
             activeStrokePoints.clear()
@@ -181,13 +195,48 @@ class CanvasToolController(
             else -> StrokeToolType.PEN
         }
 
-        // Automatic drawing smoothing & shape recognition on finger lift for Pen strokes
+        // Automatic drawing smoothing & shape recognition on finger lift for Pen and Shape strokes
         val finalPoints = if (toolType == StrokeToolType.PEN) {
-            val snapResult = ShapeAutoCorrectEngine.recognizeAndSnap(decimated)
-            if (snapResult.shape !is RecognizedShape.None) {
-                snapResult.snappedPoints
+            if (toolState.activeTool == CanvasToolType.SHAPE && decimated.size >= 2) {
+                val p0 = decimated.first()
+                val pn = decimated.last()
+                when (toolState.activeShapePrimitive) {
+                    ShapePrimitiveType.RECTANGLE -> {
+                        ShapeAutoCorrectEngine.generateRectangleFromBounds(p0, pn, 1.0f)
+                    }
+                    ShapePrimitiveType.CIRCLE -> {
+                        ShapeAutoCorrectEngine.generateCircleFromBounds(p0, pn, 1.0f)
+                    }
+                    ShapePrimitiveType.ARROW -> {
+                        ShapeAutoCorrectEngine.generateArrowFromEndpoints(p0, pn, 1.0f)
+                    }
+                    ShapePrimitiveType.LINE -> {
+                        ShapeAutoCorrectEngine.generateLinePoints(p0, pn, 1.0f)
+                    }
+                    ShapePrimitiveType.AUTO -> {
+                        val snapResult = ShapeAutoCorrectEngine.recognizeAndSnap(decimated)
+                        if (snapResult.shape !is RecognizedShape.None) {
+                            snapResult.snappedPoints
+                        } else {
+                            ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
+                        }
+                    }
+                }
+            } else if (toolState.autoSmoothen || toolState.shapeSnapping) {
+                val snapResult = if (toolState.shapeSnapping) {
+                    ShapeAutoCorrectEngine.recognizeAndSnap(decimated)
+                } else {
+                    ShapeAutoCorrectResult(RecognizedShape.None, decimated)
+                }
+                if (snapResult.shape !is RecognizedShape.None) {
+                    snapResult.snappedPoints
+                } else if (toolState.autoSmoothen) {
+                    ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
+                } else {
+                    decimated
+                }
             } else {
-                ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
+                decimated
             }
         } else {
             decimated

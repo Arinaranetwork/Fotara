@@ -119,7 +119,7 @@ class PhotoCarouselGlanceWidget : GlanceAppWidget() {
                 Column(modifier = GlanceModifier.defaultWeight()) {
                     val countStr = if (data.items.isNotEmpty()) " (${data.currentIndex + 1}/${data.items.size})" else ""
                     Text(
-                        text = "Fotara Coursework$countStr",
+                        text = "Fotara Study Notes$countStr",
                         style = TextStyle(
                             color = ColorTagAmber,
                             fontSize = 12.sp,
@@ -131,7 +131,7 @@ class PhotoCarouselGlanceWidget : GlanceAppWidget() {
                     val detail = activeItem?.let {
                         val cap = it.caption?.ifBlank { null }
                         if (cap != null) "${it.folderName} • $cap" else it.folderName
-                    } ?: "Coursework notes & formulas"
+                    } ?: "Study notes & lecture photos"
 
                     Text(
                         text = detail,
@@ -182,7 +182,7 @@ class PhotoCarouselGlanceWidget : GlanceAppWidget() {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No coursework photos yet",
+                        text = "No study photos yet",
                         style = TextStyle(color = ColorTextSecondary, fontSize = 11.sp)
                     )
                 }
@@ -198,7 +198,7 @@ class PhotoCarouselGlanceWidget : GlanceAppWidget() {
                     if (data.activeBitmap != null) {
                         Image(
                             provider = ImageProvider(data.activeBitmap),
-                            contentDescription = activeItem.caption ?: "Coursework Photo",
+                            contentDescription = activeItem.caption ?: "Study Photo",
                             contentScale = ContentScale.Crop,
                             modifier = GlanceModifier
                                 .fillMaxSize()
@@ -236,7 +236,7 @@ class PhotoCarouselGlanceWidget : GlanceAppWidget() {
             val db = dbHelper.getSafeReadableDatabase()
             val cursor = db.rawQuery(
                 """
-                SELECT p.id, p.file_uri, p.caption, f.name, p.folder_id
+                SELECT p.id, p.file_path, p.caption, f.name, p.folder_id
                 FROM photos p
                 INNER JOIN folders f ON p.folder_id = f.id
                 WHERE p.is_trashed = 0 AND f.is_trashed = 0

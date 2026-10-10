@@ -130,6 +130,12 @@ enum class TextBackgroundStyle {
     SOLID_LIGHT
 }
 
+enum class TextLayerAlignment {
+    LEFT,
+    CENTER,
+    RIGHT
+}
+
 /**
  * Movable, resizable, rotatable vector text layer element with typography, color, and background styling.
  */
@@ -145,6 +151,7 @@ data class TextLayerElement(
     val color: Long = 0xFFF4F0E6, // ARGB 32-bit packed
     val fontWeight: Int = 400, // 400 = Regular, 500 = Medium, 700 = Bold
     val backgroundStyle: TextBackgroundStyle = TextBackgroundStyle.TRANSPARENT,
+    val alignment: TextLayerAlignment = TextLayerAlignment.LEFT,
     val rotationDegrees: Float = 0.0f,
     override val bounds: CanvasRect,
     override val zIndex: Int = 0

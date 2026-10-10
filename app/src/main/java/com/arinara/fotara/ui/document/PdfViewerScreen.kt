@@ -11,6 +11,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -108,6 +109,10 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
@@ -236,6 +241,16 @@ fun PdfViewerScreen(
                     Toast.makeText(context, context.getString(R.string.msg_save_failed), Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            audioViewModel.startRecording()
+        } else {
+            Toast.makeText(context, "Microphone permission is required to record audio notes", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -764,6 +779,7 @@ fun PdfViewerScreen(
                         items(totalCount, key = { index -> "${documentNote.id}_page_$index" }) { pageIndex ->
                             val placeholderPage = pages.getOrNull(pageIndex)
                             val drawing = drawingsMap[pageIndex]
+                            val pageAudioCount = audioUiState.annotations.count { it.pdfPageIndex == pageIndex }
                             VirtualizedPdfPageView(
                                 pageIndex = pageIndex,
                                 totalPages = totalCount,
@@ -780,6 +796,11 @@ fun PdfViewerScreen(
                                 file = file,
                                 documentId = documentNote.id,
                                 searchQuery = searchQuery,
+                                audioNotesCount = pageAudioCount,
+                                onAudioBadgeClick = {
+                                    audioViewModel.setPdfPageFilter(pageIndex)
+                                    showAudioDock = true
+                                },
                                 onPinToggle = { handleTogglePin(pageIndex) },
                                 onSaveToGallery = { handleSavePageToGallery(pageIndex) },
                                 onDraw = { onNavigateToEditor?.invoke(documentNote.id, pageIndex) },
@@ -828,7 +849,10 @@ fun PdfViewerScreen(
                             fontWeight = FontWeight.Bold
                         )
                         IconButton(
-                            onClick = { showAudioDock = false },
+                            onClick = {
+                                showAudioDock = false
+                                audioViewModel.setPdfPageFilter(null)
+                            },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(Icons.Default.Close, contentDescription = "Close", tint = TabCream.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
@@ -837,8 +861,22 @@ fun PdfViewerScreen(
 
                     com.arinara.fotara.audio.ui.AudioRecordPill(
                         recorderState = audioUiState.recorderState,
-                        onStartRecording = { audioViewModel.startRecording() },
-                        onStopRecording = { audioViewModel.stopAndSaveRecording() },
+                        onStartRecording = {
+                            val hasMic = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.RECORD_AUDIO
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (hasMic) {
+                                audioViewModel.startRecording()
+                            } else {
+                                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
+                        onStopRecording = {
+                            val totalPagesCount = pdfRenderer?.pageCount ?: pages.size
+                            val targetPage = listState.firstVisibleItemIndex.coerceIn(0, (totalPagesCount - 1).coerceAtLeast(0))
+                            audioViewModel.stopAndSaveRecording(targetPdfPageIndex = targetPage)
+                        },
                         onCancelRecording = { audioViewModel.cancelRecording() }
                     )
 
@@ -993,6 +1031,8 @@ private fun VirtualizedPdfPageView(
     file: File,
     documentId: Long,
     searchQuery: String? = null,
+    audioNotesCount: Int = 0,
+    onAudioBadgeClick: () -> Unit = {},
     onPinToggle: () -> Unit = {},
     onSaveToGallery: () -> Unit = {},
     onDraw: () -> Unit = {},
@@ -1107,6 +1147,34 @@ private fun VirtualizedPdfPageView(
                         tint = AccentGold,
                         modifier = Modifier.size(13.dp)
                     )
+                }
+                if (audioNotesCount > 0) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        color = CardBg,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, BorderColor),
+                        modifier = Modifier.clickable { onAudioBadgeClick() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Audio Notes",
+                                tint = TabCream,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "$audioNotesCount",
+                                color = TabCream,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 if (isZoomed && highResBitmap == null && !renderError) {

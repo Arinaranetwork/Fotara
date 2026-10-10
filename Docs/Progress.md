@@ -2,7 +2,7 @@
 Last Updated: 2026-10-10
 
 ## Current Phase
-Phase 51 - LiveCollabCanvasAndRelease200 (2.0.0 Alpha) [Completed]
+Phase 52 - DrawingAudioWidgetPolishHotfixes (2.0.1 Alpha) [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -58,6 +58,7 @@ Phase 51 - LiveCollabCanvasAndRelease200 (2.0.0 Alpha) [Completed]
 | 49    | FotaraPackageManager             | Completed   |
 | 50    | FriendsSystemAndSettings          | Completed   |
 | 51    | LiveCollabCanvasAndRelease200     | Completed   |
+| 52    | DrawingAudioWidgetPolishHotfixes  | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -135,6 +136,13 @@ Phase 51 - LiveCollabCanvasAndRelease200 (2.0.0 Alpha) [Completed]
 - [x] Task 1: Live Collaborative Study Canvas with 6-Digit Room Codes (`FT-XXXX`) - Phase 51
 - [x] Task 2: Real-Time Vector Stroke Merging & Peer Cursors - Phase 51
 - [x] Task 3: Fotara 2.0.0 Release Verification, APK Build Assembly & Documentation - Phase 51
+
+- [x] Task 1: Visible Shape & Auto-Smoothen Tool Controls in Canvas and PDF Editor - Phase 52
+- [x] Task 2: Text Layer Post-Creation Editing, Multi-line & Alignment Controls - Phase 52
+- [x] Task 3: Real PDF Audio Annotations with Runtime Microphone Permission & Page Anchoring - Phase 52
+- [x] Task 4: Photo Widget Database Query Fix (`file_path`) and Universal Terminology - Phase 52
+- [x] Task 5: Universal English Academic Terminology Overhaul across Desktop App - Phase 52
+- [x] Task 6: LaTeX Mathematical Formula Parser Macro Order Repair (`\infty`, `\leq`, `\geq`, `\neq`, `\iint`) - Phase 52
 
 ## In Progress
 None.

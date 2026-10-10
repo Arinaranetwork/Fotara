@@ -56,8 +56,19 @@ object KatexMathRenderer {
         "\\infty" to "∞", "\\partial" to "∂", "\\nabla" to "∇",
         "\\forall" to "∀", "\\exists" to "∃", "\\nexists" to "∄",
         "\\emptyset" to "∅", "\\varnothing" to "∅", "\\angle" to "∠",
-        "\\perp" to "⊥", "\\parallel" to "∥"
     )
+
+    private val SORTED_GREEK = GREEK_MAP.entries
+        .sortedByDescending { it.key.length }
+        .map { (macro, symbol) ->
+            Regex("""\Q$macro\E(?![a-zA-Z])""") to symbol
+        }
+
+    private val SORTED_OPERATORS = OPERATOR_MAP.entries
+        .sortedByDescending { it.key.length }
+        .map { (macro, symbol) ->
+            Regex("""\Q$macro\E(?![a-zA-Z])""") to symbol
+        }
 
     private val SUPERSCRIPT_MAP = mapOf(
         '0' to '⁰', '1' to '¹', '2' to '²', '3' to '³', '4' to '⁴',
@@ -168,7 +179,17 @@ object KatexMathRenderer {
         result = Regex("""\\hat\{([^{}])\}""").replace(result) { "${it.groupValues[1]}\u0302" }
         result = Regex("""\\dot\{([^{}])\}""").replace(result) { "${it.groupValues[1]}\u0307" }
 
-        // 4. Superscripts: ^{12} or ^2
+        // 4. Greek letters (sorted by length descending with negative letter lookahead)
+        for ((regex, symbol) in SORTED_GREEK) {
+            result = regex.replace(result, symbol)
+        }
+
+        // 5. Operators & Relations (sorted by length descending with negative letter lookahead)
+        for ((regex, symbol) in SORTED_OPERATORS) {
+            result = regex.replace(result, symbol)
+        }
+
+        // 6. Superscripts: ^{12} or ^2
         result = Regex("""\^\{([^{}]+)\}""").replace(result) { match ->
             convertToSuperscript(match.groupValues[1])
         }
@@ -176,22 +197,12 @@ object KatexMathRenderer {
             convertToSuperscript(match.groupValues[1])
         }
 
-        // 5. Subscripts: _{12} or _2
+        // 7. Subscripts: _{12} or _2
         result = Regex("""_\{([^{}]+)\}""").replace(result) { match ->
             convertToSubscript(match.groupValues[1])
         }
         result = Regex("""_([0-9a-zA-Z+-])""").replace(result) { match ->
             convertToSubscript(match.groupValues[1])
-        }
-
-        // 6. Greek letters
-        for ((macro, symbol) in GREEK_MAP) {
-            result = result.replace(macro, symbol)
-        }
-
-        // 7. Operators & Relations
-        for ((macro, symbol) in OPERATOR_MAP) {
-            result = result.replace(macro, symbol)
         }
 
         // 8. Functions: \sin -> sin, \cos -> cos, \det -> det, etc.

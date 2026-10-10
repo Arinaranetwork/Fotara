@@ -152,7 +152,7 @@ class PhotoPinGlanceWidget : GlanceAppWidget() {
                     )
                     Spacer(modifier = GlanceModifier.height(8.dp))
                     Text(
-                        text = "Tap to choose a coursework or formula photo",
+                        text = "Tap to pin a study photo or diagram",
                         style = TextStyle(
                             color = ColorTextSecondary,
                             fontSize = 11.sp
@@ -183,7 +183,7 @@ class PhotoPinGlanceWidget : GlanceAppWidget() {
             val db = dbHelper.getSafeReadableDatabase()
             val cursor = db.rawQuery(
                 """
-                SELECT p.id, p.file_uri, p.caption, f.name, p.folder_id
+                SELECT p.id, p.file_path, p.caption, f.name, p.folder_id
                 FROM photos p
                 LEFT JOIN folders f ON p.folder_id = f.id
                 WHERE p.id = ? AND p.is_trashed = 0

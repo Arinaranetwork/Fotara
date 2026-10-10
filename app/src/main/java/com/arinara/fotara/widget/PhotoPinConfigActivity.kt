@@ -133,7 +133,7 @@ fun PhotoPinConfigScreen(
                 val db = dbHelper.getSafeReadableDatabase()
                 val cursor = db.rawQuery(
                     """
-                    SELECT p.id, p.file_uri, p.caption, f.name
+                    SELECT p.id, p.file_path, p.caption, f.name
                     FROM photos p
                     LEFT JOIN folders f ON p.folder_id = f.id
                     WHERE p.is_trashed = 0
@@ -172,7 +172,7 @@ fun PhotoPinConfigScreen(
     ) {
         // Header
         Text(
-            text = "Pin Coursework Photo",
+            text = "Pin Study Photo",
             color = TextPrimary,
             fontSize = 22.sp,
             lineHeight = 28.sp,

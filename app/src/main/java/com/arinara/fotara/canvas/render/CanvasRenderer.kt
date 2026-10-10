@@ -509,9 +509,32 @@ class CanvasRenderer(
         textPaint.typeface = android.graphics.Typeface.create("sans-serif", typefaceStyle)
 
         val paddingX = 16f
+        val lines = element.text.split("\n")
         val fontMetrics = textPaint.fontMetrics
-        val textY = ((element.height - fontMetrics.bottom - fontMetrics.top) / 2f).coerceAtLeast(fontMetrics.descent)
-        canvas.drawText(element.text, paddingX, textY, textPaint)
+        val lineHeight = fontMetrics.descent - fontMetrics.ascent + 4f
+        val totalTextHeight = lines.size * lineHeight
+        val startY = ((element.height - totalTextHeight) / 2f - fontMetrics.ascent).coerceAtLeast(-fontMetrics.ascent)
+
+        when (element.alignment) {
+            com.arinara.fotara.canvas.model.TextLayerAlignment.LEFT -> {
+                textPaint.textAlign = Paint.Align.LEFT
+                lines.forEachIndexed { i, line ->
+                    canvas.drawText(line, paddingX, startY + i * lineHeight, textPaint)
+                }
+            }
+            com.arinara.fotara.canvas.model.TextLayerAlignment.CENTER -> {
+                textPaint.textAlign = Paint.Align.CENTER
+                lines.forEachIndexed { i, line ->
+                    canvas.drawText(line, element.width / 2f, startY + i * lineHeight, textPaint)
+                }
+            }
+            com.arinara.fotara.canvas.model.TextLayerAlignment.RIGHT -> {
+                textPaint.textAlign = Paint.Align.RIGHT
+                lines.forEachIndexed { i, line ->
+                    canvas.drawText(line, element.width - paddingX, startY + i * lineHeight, textPaint)
+                }
+            }
+        }
 
         canvas.restore()
     }

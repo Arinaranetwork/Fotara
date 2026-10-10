@@ -108,7 +108,7 @@ export const App: React.FC = () => {
 
   // Studio Mode State
   const [studioSplitMode, setStudioSplitMode] = useState<'split' | 'pdf' | 'editor'>('split');
-  const [currentDocTitle, setCurrentDocTitle] = useState<string>('Jadwal_PSTS_Ganjil_2026-2027.pdf');
+  const [currentDocTitle, setCurrentDocTitle] = useState<string>('Class_Schedule_Fall_2026.pdf');
   const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
   const [latexFormula, setLatexFormula] = useState<string>(
     '# Calculus II: Fourier Series Synthesis\n\n' +
@@ -148,7 +148,7 @@ export const App: React.FC = () => {
   const [folders, setFolders] = useState<CourseFolder[]>([
     {
       id: 'f-1',
-      name: 'Jadwal Psts',
+      name: 'Class Schedule',
       notesCount: 1,
       color: '#EF4444',
       tileFill: '#6B2A30',
@@ -157,7 +157,7 @@ export const App: React.FC = () => {
     },
     {
       id: 'f-2',
-      name: 'Sejarah',
+      name: 'History',
       notesCount: 3,
       color: '#3B82F6',
       tileFill: '#343C52',
@@ -166,7 +166,7 @@ export const App: React.FC = () => {
     },
     {
       id: 'f-3',
-      name: 'Seni Budaya',
+      name: 'Arts & Culture',
       notesCount: 4,
       color: '#A855F7',
       tileFill: '#3F3270',
@@ -175,29 +175,29 @@ export const App: React.FC = () => {
     },
     {
       id: 'f-4',
-      name: 'Matematika Lanjut',
+      name: 'Advanced Mathematics',
       notesCount: 1,
       color: '#F59E0B',
       tileFill: '#5C4030',
       iconTint: '#FBBF24',
       glowColor: '#F59E0B',
       isLinked: true,
-      linkedFolderName: 'Matematika Wajib',
+      linkedFolderName: 'Calculus',
     },
     {
       id: 'f-5',
-      name: 'Matematika Wajib',
+      name: 'Calculus',
       notesCount: 3,
       color: '#8B5CF6',
       tileFill: '#3F3270',
       iconTint: '#C084FC',
       glowColor: '#8B5CF6',
       isLinked: true,
-      linkedFolderName: 'Matematika Lanjut',
+      linkedFolderName: 'Advanced Mathematics',
     },
     {
       id: 'f-6',
-      name: 'Fisika',
+      name: 'Physics',
       notesCount: 4,
       color: '#10B981',
       tileFill: '#1E4A38',
@@ -211,43 +211,43 @@ export const App: React.FC = () => {
     {
       id: 'n-1',
       title: 'Canvas Note',
-      folder: 'Sejarah',
+      folder: 'History',
       timestamp: '10:21',
       dateGroup: 'today',
       type: 'canvas',
-      content: '# Sejarah Indonesia: Jalur Rempah & Masa Kolonial\n\nPeta rute navigasi rempah kepulauan Maluku abad ke-17.',
+      content: '# World History: Maritime Trade Routes & Global Exploration\n\nNavigational routes and spice trade archipelago maps from the 17th century.',
     },
     {
       id: 'n-2',
       title: 'Canvas Note',
-      folder: 'Seni Budaya',
+      folder: 'Arts & Culture',
       timestamp: 'Yesterday • 19:05',
       dateGroup: 'yesterday',
       type: 'canvas',
-      content: '# Seni Rupa Tradisional & Kontemporer\n\nStudi ornamen ragam hias nusantara dan proporsi geometris.',
+      content: '# Traditional & Contemporary Art\n\nStudy of architectural proportions, ornamentations, and geometric patterns.',
     },
     {
       id: 'n-3',
-      title: 'testb',
-      folder: 'Seni Budaya',
+      title: 'Midterm Study Guide',
+      folder: 'Arts & Culture',
       timestamp: 'Yesterday • 19:05',
       dateGroup: 'yesterday',
       type: 'txt',
-      content: 'Persiapan Penilaian Tengah Semester: Tangga nada diatonis mayor dan minor.',
+      content: 'Midterm Review: Diatonic scales, harmonic intervals, acoustic resonance, and visual arts appreciation.',
     },
     {
       id: 'n-4',
-      title: 'KISI-KISI PSTS GANJIL XI T...',
-      folder: 'Seni Budaya',
+      title: 'Midterm_Syllabus_Fall_2026.docx',
+      folder: 'Arts & Culture',
       timestamp: 'Yesterday • 19:04',
       dateGroup: 'yesterday',
       type: 'docx',
-      content: 'Kisi-kisi soal evaluasi teori musik barat, harmoni vokal, dan apresiasi karya seni rupa.',
+      content: 'Comprehensive syllabus for mid-semester evaluations in acoustics, composition, and studio critique.',
     },
     {
       id: 'n-5',
-      title: 'Jadwal_PSTS_Ganjil_2026-2...',
-      folder: 'Jadwal Psts',
+      title: 'Class_Schedule_Fall_2026.pdf',
+      folder: 'Class Schedule',
       timestamp: 'Yesterday • 18:09',
       dateGroup: 'yesterday',
       type: 'pdf',
@@ -255,7 +255,7 @@ export const App: React.FC = () => {
     {
       id: 'n-6',
       title: 'Fourier_Series_Derivation.md',
-      folder: 'Matematika Lanjut',
+      folder: 'Advanced Mathematics',
       timestamp: 'Yesterday • 16:30',
       dateGroup: 'yesterday',
       type: 'txt',
@@ -263,8 +263,8 @@ export const App: React.FC = () => {
     },
     {
       id: 'n-7',
-      title: 'Fisika_Mekanika_Fluida.pdf',
-      folder: 'Fisika',
+      title: 'Physics_Fluid_Mechanics.pdf',
+      folder: 'Physics',
       timestamp: 'Oct 7 • 14:10',
       dateGroup: 'earlier',
       type: 'pdf',
@@ -1217,7 +1217,7 @@ export const App: React.FC = () => {
                 autoFocus
                 type="text"
                 className="palette-search-field"
-                placeholder="Type a command or search notes (e.g. 'Jadwal', 'Zen', 'Sample')..."
+                placeholder="Type a command or search notes (e.g. 'Calculus', 'Zen', 'Schedule')..."
               />
               <kbd className="kbd-subtle" onClick={() => setIsCommandPaletteOpen(false)}>
                 ESC

@@ -495,6 +495,31 @@ class CanvasViewModel(
         _uiState.update { it.copy(showToolOptions = true) }
     }
 
+    fun showShapeOptions() {
+        setTool(CanvasToolType.SHAPE)
+        _uiState.update { it.copy(showToolOptions = true) }
+    }
+
+    fun setShapePrimitive(primitive: com.arinara.fotara.canvas.tool.ShapePrimitiveType) {
+        toolController.toolState = toolController.toolState.copy(activeShapePrimitive = primitive)
+        _uiState.update { it.copy(toolState = toolController.toolState) }
+    }
+
+    fun setAutoSmoothen(enabled: Boolean) {
+        toolController.toolState = toolController.toolState.copy(autoSmoothen = enabled)
+        _uiState.update { it.copy(toolState = toolController.toolState) }
+    }
+
+    fun setShapeSnapping(enabled: Boolean) {
+        toolController.toolState = toolController.toolState.copy(shapeSnapping = enabled)
+        _uiState.update { it.copy(toolState = toolController.toolState) }
+    }
+
+    fun setSmoothingStrength(strength: Float) {
+        toolController.toolState = toolController.toolState.copy(smoothingStrength = strength)
+        _uiState.update { it.copy(toolState = toolController.toolState) }
+    }
+
     fun setHighlighterBlendMode(mode: com.arinara.fotara.canvas.model.StrokeBlendMode) {
         toolController.setHighlighterBlendMode(mode)
         _uiState.update { it.copy(toolState = toolController.toolState) }
@@ -918,6 +943,7 @@ class CanvasViewModel(
         color: Long,
         fontWeight: Int,
         backgroundStyle: com.arinara.fotara.canvas.model.TextBackgroundStyle,
+        alignment: com.arinara.fotara.canvas.model.TextLayerAlignment = com.arinara.fotara.canvas.model.TextLayerAlignment.LEFT,
         viewport: ViewportState,
         screenWidth: Float,
         screenHeight: Float
@@ -932,7 +958,8 @@ class CanvasViewModel(
                 fontSizeSp = fontSizeSp,
                 color = color,
                 fontWeight = fontWeight,
-                backgroundStyle = backgroundStyle
+                backgroundStyle = backgroundStyle,
+                alignment = alignment
             )
             val updatedDoc = historyManager.execute(
                 com.arinara.fotara.canvas.engine.ReplaceElementsCommand(listOf(editing), listOf(updatedElement), description = "Edit Text"),
@@ -968,6 +995,7 @@ class CanvasViewModel(
                 color = color,
                 fontWeight = fontWeight,
                 backgroundStyle = backgroundStyle,
+                alignment = alignment,
                 bounds = CanvasRect(
                     left = worldX - estWidth / 2f,
                     top = worldY - estHeight / 2f,
@@ -1005,6 +1033,28 @@ class CanvasViewModel(
             }
             triggerDebouncedAutosave()
         }
+    }
+
+    fun deleteTextLayer(elementId: String) {
+        val currentDoc = _uiState.value.document
+        val el = currentDoc.elements.find { it.id == elementId } ?: return
+        val updatedDoc = historyManager.execute(
+            com.arinara.fotara.canvas.engine.RemoveElementsCommand(listOf(el), description = "Delete Text Layer"),
+            currentDoc
+        )
+        spatialIndex.rebuild(updatedDoc.elements)
+        tileCacheManager.invalidateRegion(el.bounds)
+        toolController.selection = com.arinara.fotara.canvas.model.CanvasSelection.Empty
+        _uiState.update {
+            it.copy(
+                document = updatedDoc,
+                showTextOptions = false,
+                editingTextLayer = null,
+                canUndo = historyManager.canUndo,
+                canRedo = historyManager.canRedo
+            )
+        }
+        triggerDebouncedAutosave()
     }
 
     fun exportMultiSheetPdf(context: Context) {
