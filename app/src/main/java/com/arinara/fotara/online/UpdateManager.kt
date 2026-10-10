@@ -52,7 +52,9 @@ data class ReleaseInfo(
     val downloadUrl: String?,
     val bannerUrl: String? = null,
     val htmlUrl: String? = null,
-    val isPrerelease: Boolean = false
+    val isPrerelease: Boolean = false,
+    val publishedAt: String? = null,
+    val apkSize: Long = 0L
 )
 
 class UpdateManager(private val context: Context) {
@@ -62,6 +64,12 @@ class UpdateManager(private val context: Context) {
 
     private val _latestRelease = MutableStateFlow<ReleaseInfo?>(null)
     val latestRelease = _latestRelease.asStateFlow()
+
+    private val _rollbackReleases = MutableStateFlow<List<ReleaseInfo>>(emptyList())
+    val rollbackReleases = _rollbackReleases.asStateFlow()
+
+    private val _activeRollbackTarget = MutableStateFlow<ReleaseInfo?>(null)
+    val activeRollbackTarget = _activeRollbackTarget.asStateFlow()
 
     private val _downloadProgress = MutableStateFlow(0) // 0..100
     val downloadProgress = _downloadProgress.asStateFlow()
@@ -200,8 +208,8 @@ class UpdateManager(private val context: Context) {
                     return@withContext null
                 }
 
-                // Scan all available releases to find the absolute newest release with an APK asset
-                var newestRelease: ReleaseInfo? = null
+                // Scan all available releases to find candidates with APK assets
+                val allReleasesWithApk = mutableListOf<ReleaseInfo>()
                 for (i in 0 until releasesArray.length()) {
                     val json = releasesArray.getJSONObject(i)
                     val tagName = json.optString("tag_name", "")
@@ -209,9 +217,11 @@ class UpdateManager(private val context: Context) {
                     val body = json.optString("body", "Bug fixes and performance improvements.")
                     val htmlUrl = if (json.has("html_url") && !json.isNull("html_url")) json.optString("html_url") else null
                     val isPrerelease = json.optBoolean("prerelease", false)
+                    val publishedAt = if (json.has("published_at") && !json.isNull("published_at")) json.optString("published_at") else null
 
                     var downloadUrl: String? = null
                     var bannerUrl: String? = null
+                    var apkSize = 0L
                     val assets = json.optJSONArray("assets")
                     if (assets != null) {
                         for (j in 0 until assets.length()) {
@@ -220,6 +230,7 @@ class UpdateManager(private val context: Context) {
                             val lowerName = name.lowercase()
                             if (lowerName.endsWith(".apk")) {
                                 downloadUrl = if (asset.has("browser_download_url")) asset.getString("browser_download_url") else null
+                                apkSize = asset.optLong("size", 0L)
                             } else if (bannerUrl == null && lowerName.startsWith("banner") && (lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".webp") || lowerName.endsWith(".gif"))) {
                                 bannerUrl = if (asset.has("browser_download_url")) asset.getString("browser_download_url") else null
                             }
@@ -234,22 +245,36 @@ class UpdateManager(private val context: Context) {
                             downloadUrl = downloadUrl,
                             bannerUrl = bannerUrl,
                             htmlUrl = htmlUrl,
-                            isPrerelease = isPrerelease
+                            isPrerelease = isPrerelease,
+                            publishedAt = publishedAt,
+                            apkSize = apkSize
                         )
-                        if (newestRelease == null || isNewerVersion(candidate.version, newestRelease.version, candidate.isPrerelease, newestRelease.isPrerelease)) {
-                            newestRelease = candidate
-                        }
+                        allReleasesWithApk.add(candidate)
                     }
                 }
 
-                if (newestRelease == null) {
+                if (allReleasesWithApk.isEmpty()) {
                     _updateState.value = UpdateState.NO_UPDATE
+                    _rollbackReleases.value = emptyList()
                     _statusNotice.value = "No APK package found in available releases."
                     return@withContext null
                 }
 
                 // Check version comparison dynamically against installed app version
                 val currentVersion = getCurrentVersionName()
+
+                // Sort all releases by semantic version descending (newest first)
+                val sortedReleases = allReleasesWithApk.sortedWith { a, b ->
+                    UpdateVersionUtils.compareVersions(b.version, a.version, b.isPrerelease, a.isPrerelease)
+                }
+
+                val newestRelease = sortedReleases.first()
+
+                // Filter previous releases available for rollback (strictly older than current installed app)
+                val pastReleases = sortedReleases.filter { candidate ->
+                    UpdateVersionUtils.isOlderVersion(candidate.version, currentVersion, candidate.isPrerelease)
+                }
+                _rollbackReleases.value = pastReleases
 
                 val previousRelease = _latestRelease.value
                 val isNewerThanApp = isNewerVersion(newestRelease.version, currentVersion, newestRelease.isPrerelease)
@@ -291,7 +316,8 @@ class UpdateManager(private val context: Context) {
                 } else {
                     _updateState.value = UpdateState.NO_UPDATE
                     val info = VersionInfo.parse(currentVersion)
-                    _statusNotice.value = "Your application is up to date (${info.displayVersion})."
+                    val rollbackNotice = if (pastReleases.isNotEmpty()) " (${pastReleases.size} previous versions available for rollback)" else ""
+                    _statusNotice.value = "Your application is up to date (${info.displayVersion})$rollbackNotice."
                     null
                 }
             } else {
@@ -443,6 +469,11 @@ class UpdateManager(private val context: Context) {
     }
 
     suspend fun downloadUpdate(release: ReleaseInfo, onComplete: (File) -> Unit) {
+        startDownload(release, onComplete)
+    }
+
+    fun startRollbackDownload(release: ReleaseInfo, onComplete: ((File) -> Unit)? = null) {
+        _activeRollbackTarget.value = release
         startDownload(release, onComplete)
     }
 

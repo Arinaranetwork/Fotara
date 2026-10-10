@@ -157,4 +157,73 @@ class UpdateManagerLogicTest {
             )
         )
     }
+
+    @Test
+    fun isOlderVersion_accuratelyIdentifiesRollbackCandidates() {
+        val currentAppVersion = "2.0.1 Alpha"
+
+        // Past releases should be recognized as older
+        assertTrue(UpdateVersionUtils.isOlderVersion("Fotara_2.0.0_Alpha", currentAppVersion))
+        assertTrue(UpdateVersionUtils.isOlderVersion("1.9.1 Alpha", currentAppVersion))
+        assertTrue(UpdateVersionUtils.isOlderVersion("1.9.0 Beta", currentAppVersion))
+        assertTrue(UpdateVersionUtils.isOlderVersion("1.8.4 Beta", currentAppVersion))
+        assertTrue(UpdateVersionUtils.isOlderVersion("1.0.0", currentAppVersion))
+
+        // Same version is not older
+        assertFalse(UpdateVersionUtils.isOlderVersion("2.0.1 Alpha", currentAppVersion))
+        assertFalse(UpdateVersionUtils.isOlderVersion("Fotara_2.0.1_Alpha", currentAppVersion))
+
+        // Newer version is not older
+        assertFalse(UpdateVersionUtils.isOlderVersion("2.1.0 Alpha", currentAppVersion))
+        assertFalse(UpdateVersionUtils.isOlderVersion("2.0.2 Alpha", currentAppVersion))
+        assertFalse(UpdateVersionUtils.isOlderVersion("3.0.0", currentAppVersion))
+    }
+
+    @Test
+    fun compareVersions_handlesAlphaBetaStableHierarchyAndNumericOrdering() {
+        // Numeric difference wins over channel
+        assertTrue(UpdateVersionUtils.compareVersions("2.0.1 Alpha", "2.0.0") > 0)
+        assertTrue(UpdateVersionUtils.compareVersions("2.0.0", "2.0.1 Alpha") < 0)
+        assertTrue(UpdateVersionUtils.compareVersions("2.1.0", "2.0.1") > 0)
+
+        // Equal numeric version: Stable (3) > Beta (2) > Alpha (1)
+        assertTrue(UpdateVersionUtils.compareVersions("2.0.0", "2.0.0 Beta") > 0)
+        assertTrue(UpdateVersionUtils.compareVersions("2.0.0 Beta", "2.0.0 Alpha") > 0)
+        assertTrue(UpdateVersionUtils.compareVersions("2.0.0 Alpha", "2.0.0") < 0)
+        assertEquals(0, UpdateVersionUtils.compareVersions("2.0.0 Alpha", "Fotara_2.0.0_Alpha"))
+        assertEquals(0, UpdateVersionUtils.compareVersions("2.0.0 Beta", "Fotara_2.0.0_Beta"))
+    }
+
+    @Test
+    fun rollbackFiltering_sortsCandidatesDescending() {
+        val currentVersion = "2.0.1 Alpha"
+        val mockReleases = listOf(
+            ReleaseInfo("1.8.4 Beta", "Fotara 1.8.4 Beta", "Notes", "https://example.com/184.apk"),
+            ReleaseInfo("2.1.0 Alpha", "Fotara 2.1.0 Alpha", "Notes", "https://example.com/210.apk"),
+            ReleaseInfo("1.9.0 Beta", "Fotara 1.9.0 Beta", "Notes", "https://example.com/190.apk"),
+            ReleaseInfo("2.0.0 Alpha", "Fotara 2.0.0 Alpha", "Notes", "https://example.com/200.apk"),
+            ReleaseInfo("2.0.1 Alpha", "Fotara 2.0.1 Alpha", "Notes", "https://example.com/201.apk")
+        )
+
+        // Filter for rollback candidates strictly older than currentVersion
+        val rollbackCandidates = mockReleases
+            .filter { UpdateVersionUtils.isOlderVersion(it.version, currentVersion, it.isPrerelease) }
+            .sortedWith { a, b ->
+                UpdateVersionUtils.compareVersions(b.version, a.version, b.isPrerelease, a.isPrerelease)
+            }
+
+        // Expected order: 2.0.0 Alpha, 1.9.0 Beta, 1.8.4 Beta (2.1.0 Alpha and 2.0.1 Alpha excluded)
+        assertEquals(3, rollbackCandidates.size)
+        assertEquals("2.0.0 Alpha", rollbackCandidates[0].version)
+        assertEquals("1.9.0 Beta", rollbackCandidates[1].version)
+        assertEquals("1.8.4 Beta", rollbackCandidates[2].version)
+    }
+
+    @Test
+    fun cleanVersionString_cleansAlphaAndBetaPrefixes() {
+        assertEquals("2.0.1", UpdateVersionUtils.cleanVersionString("Fotara_2.0.1_Alpha"))
+        assertEquals("2.0.0", UpdateVersionUtils.cleanVersionString("Fotara_2.0.0_Alpha"))
+        assertEquals("1.9.1", UpdateVersionUtils.cleanVersionString("1.9.1-alpha"))
+        assertEquals("1.9.0", UpdateVersionUtils.cleanVersionString("Fotara_1.9.0_Beta"))
+    }
 }

@@ -311,6 +311,7 @@ fun MainNavigation(
                     viewModel = settingsViewModel,
                     onBackClick = { safePopBack() },
                     onNavigateToTrash = { backStack.add(TrashNavKey) },
+                    onOpenUpdateScreen = { backStack.add(UpdateNavKey) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -390,6 +391,7 @@ fun MainNavigation(
             entry<UpdateNavKey> {
                 com.arinara.fotara.online.UpdateScreen(
                     updateManager = appContainer.updateManager,
+                    settingsRepository = appContainer.settingsRepository,
                     onClose = { safePopBack() },
                     onSkipVersion = { safePopBack() }
                 )

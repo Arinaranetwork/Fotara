@@ -2,7 +2,7 @@
 Last Updated: 2026-10-10
 
 ## Current Phase
-Phase 52 - DrawingAudioWidgetPolishHotfixes (2.0.1 Alpha) [Completed]
+Phase 53 - VersionRollbackManager (2.1.0 Alpha) [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -59,6 +59,7 @@ Phase 52 - DrawingAudioWidgetPolishHotfixes (2.0.1 Alpha) [Completed]
 | 50    | FriendsSystemAndSettings          | Completed   |
 | 51    | LiveCollabCanvasAndRelease200     | Completed   |
 | 52    | DrawingAudioWidgetPolishHotfixes  | Completed   |
+| 53    | VersionRollbackManager            | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -143,6 +144,12 @@ Phase 52 - DrawingAudioWidgetPolishHotfixes (2.0.1 Alpha) [Completed]
 - [x] Task 4: Photo Widget Database Query Fix (`file_path`) and Universal Terminology - Phase 52
 - [x] Task 5: Universal English Academic Terminology Overhaul across Desktop App - Phase 52
 - [x] Task 6: LaTeX Mathematical Formula Parser Macro Order Repair (`\infty`, `\leq`, `\geq`, `\neq`, `\iint`) - Phase 52
+
+- [x] Task 1: Multi-Release Query & Parsing in UpdateManager (`rollbackReleases`) - Phase 53
+- [x] Task 2: Semantic Version Categorization & `isOlderVersion` Logic - Phase 53
+- [x] Task 3: Rollback APK Download & FileProvider Installer Pipeline - Phase 53
+- [x] Task 4: Interactive Version History & Rollback UI with Safety Backup Guard - Phase 53
+- [x] Task 5: Unit Tests & Regression Verification - Phase 53
 
 ## In Progress
 None.

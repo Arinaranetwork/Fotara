@@ -136,7 +136,11 @@ class DeviceRegistry(
         }
         val versionInfo = VersionInfo.parse(currentVersion)
         val numericVersion = versionInfo.numericVersion
-        val channel = if (versionInfo.channel == UpdateChannel.BETA) "beta" else "stable"
+        val channel = when (versionInfo.channel) {
+            UpdateChannel.ALPHA -> "alpha"
+            UpdateChannel.BETA -> "beta"
+            UpdateChannel.STABLE -> "stable"
+        }
 
         val lastSentTime = getLastSentTimestamp()
         val lastSentVer = getLastSentVersion()

@@ -409,6 +409,7 @@ fun HomeScreen(
                                 packageManager = packageManager,
                                 onBackClick = { selectedNavTab = HomeNavTab.HOME },
                                 onNavigateToTrash = onOpenTrash,
+                                onOpenUpdateScreen = onOpenUpdates,
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(0.dp),
                                 resetToRootTrigger = settingsResetToRootTrigger,

@@ -51,6 +51,7 @@ import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.MidnightCardOutline
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagEmerald
+import com.arinara.fotara.theme.TagViolet
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
 
@@ -63,9 +64,18 @@ fun ChannelPill(
     channel: String,
     modifier: Modifier = Modifier
 ) {
+    val isAlpha = channel.equals("Alpha", ignoreCase = true)
     val isBeta = channel.equals("Beta", ignoreCase = true)
-    val accentColor = if (isBeta) TagAmber else TagEmerald
-    val label = if (isBeta) "Beta" else "Stable"
+    val accentColor = when {
+        isAlpha -> TagViolet
+        isBeta -> TagAmber
+        else -> TagEmerald
+    }
+    val label = when {
+        isAlpha -> "Alpha"
+        isBeta -> "Beta"
+        else -> "Stable"
+    }
 
     Box(
         modifier = modifier

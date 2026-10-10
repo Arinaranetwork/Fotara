@@ -8,7 +8,8 @@ package com.arinara.fotara.online
 
 enum class UpdateChannel {
     STABLE,
-    BETA
+    BETA,
+    ALPHA
 }
 
 object UpdateVersionUtils {
@@ -16,6 +17,7 @@ object UpdateVersionUtils {
     fun cleanVersionString(raw: String): String {
         return raw
             .replace("Fotara", "", ignoreCase = true)
+            .replace("Alpha", "", ignoreCase = true)
             .replace("Beta", "", ignoreCase = true)
             .trim('_', '-', ' ', 'v', 'V')
             .split("-", "_", " ")[0]
@@ -29,35 +31,65 @@ object UpdateVersionUtils {
         return resolveChannel(rawVersion, isPrerelease) == UpdateChannel.BETA
     }
 
+    fun isAlpha(rawVersion: String, isPrerelease: Boolean = false): Boolean {
+        return resolveChannel(rawVersion, isPrerelease) == UpdateChannel.ALPHA
+    }
+
+    /**
+     * Compares two versions numerically and by channel rank.
+     * Returns:
+     *  > 0 if [tagA] is newer than [tagB]
+     *  < 0 if [tagA] is older than [tagB]
+     *  0 if both are identical in version and channel
+     */
+    fun compareVersions(
+        tagA: String,
+        tagB: String,
+        isPrereleaseA: Boolean = false,
+        isPrereleaseB: Boolean = false
+    ): Int {
+        val infoA = VersionInfo.parse(tagA, isPrereleaseA)
+        val infoB = VersionInfo.parse(tagB, isPrereleaseB)
+
+        val partsA = infoA.numericVersion.split(".").mapNotNull { it.toIntOrNull() }
+        val partsB = infoB.numericVersion.split(".").mapNotNull { it.toIntOrNull() }
+
+        val maxLen = maxOf(partsA.size, partsB.size)
+        for (i in 0 until maxLen) {
+            val a = partsA.getOrElse(i) { 0 }
+            val b = partsB.getOrElse(i) { 0 }
+            if (a > b) return 1
+            if (a < b) return -1
+        }
+
+        // Channels precedence for identical numeric version: STABLE (3) > BETA (2) > ALPHA (1)
+        fun channelRank(channel: UpdateChannel): Int = when (channel) {
+            UpdateChannel.STABLE -> 3
+            UpdateChannel.BETA -> 2
+            UpdateChannel.ALPHA -> 1
+        }
+
+        val rankA = channelRank(infoA.channel)
+        val rankB = channelRank(infoB.channel)
+        return rankA.compareTo(rankB)
+    }
+
     fun isNewerVersion(
         remoteTag: String,
         currentTag: String,
         remoteIsPrerelease: Boolean = false,
         currentIsPrerelease: Boolean = false
     ): Boolean {
-        val remoteInfo = VersionInfo.parse(remoteTag, remoteIsPrerelease)
-        val currentInfo = VersionInfo.parse(currentTag, currentIsPrerelease)
+        return compareVersions(remoteTag, currentTag, remoteIsPrerelease, currentIsPrerelease) > 0
+    }
 
-        val remoteParts = remoteInfo.numericVersion.split(".").mapNotNull { it.toIntOrNull() }
-        val currentParts = currentInfo.numericVersion.split(".").mapNotNull { it.toIntOrNull() }
-
-        val maxLen = maxOf(remoteParts.size, currentParts.size)
-        for (i in 0 until maxLen) {
-            val r = remoteParts.getOrElse(i) { 0 }
-            val c = currentParts.getOrElse(i) { 0 }
-            if (r > c) return true
-            if (r < c) return false
-        }
-
-        // If numeric version is identical, a Stable build is newer than Beta
-        val remoteBeta = remoteInfo.channel == UpdateChannel.BETA
-        val currentBeta = currentInfo.channel == UpdateChannel.BETA
-
-        if (!remoteBeta && currentBeta) {
-            return true
-        }
-
-        return false
+    fun isOlderVersion(
+        remoteTag: String,
+        currentTag: String,
+        remoteIsPrerelease: Boolean = false,
+        currentIsPrerelease: Boolean = false
+    ): Boolean {
+        return compareVersions(remoteTag, currentTag, remoteIsPrerelease, currentIsPrerelease) < 0
     }
 
     fun shouldShowUpdatePopup(
@@ -72,7 +104,7 @@ object UpdateVersionUtils {
 
         if (skippedVersion != null) {
             val isSkippedEqual = cleanVersionString(release.version) == cleanVersionString(skippedVersion) &&
-                    (isBeta(release.version, release.isPrerelease) == isBeta(skippedVersion))
+                    (resolveChannel(release.version, release.isPrerelease) == resolveChannel(skippedVersion))
             if (isSkippedEqual) {
                 return false
             }

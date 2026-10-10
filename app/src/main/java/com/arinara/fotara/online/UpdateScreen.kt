@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +32,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
@@ -47,6 +51,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.ui.components.ReleaseNotesRenderer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,16 +85,23 @@ private val ErrorRed = Color(0xFFE63946)
 @Composable
 fun UpdateScreen(
     updateManager: UpdateManager,
+    settingsRepository: SettingsRepository? = null,
     onClose: () -> Unit,
     onSkipVersion: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val release by updateManager.latestRelease.collectAsState()
+    val rollbackReleases by updateManager.rollbackReleases.collectAsState()
+    val activeRollbackTarget by updateManager.activeRollbackTarget.collectAsState()
     val updateState by updateManager.updateState.collectAsState()
     val downloadProgress by updateManager.downloadProgress.collectAsState()
     val errorMessage by updateManager.errorMessage.collectAsState()
     val statusNotice by updateManager.statusNotice.collectAsState()
+
+    var confirmRollbackRelease by remember { mutableStateOf<ReleaseInfo?>(null) }
+    var isRollbackExpanded by remember { mutableStateOf(false) }
+    var expandedReleaseNotesVersion by remember { mutableStateOf<String?>(null) }
 
     val currentVersion = remember(context) {
         try {
@@ -589,6 +601,111 @@ fun UpdateScreen(
                     Spacer(modifier = Modifier.height(56.dp))
                 }
             }
+
+            // Version History & Rollback Section
+            if (rollbackReleases.isNotEmpty() || updateState == UpdateState.NO_UPDATE) {
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = CardBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardOutline)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { isRollbackExpanded = !isRollbackExpanded }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.History,
+                                contentDescription = null,
+                                tint = AccentGold,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Version History & Rollback",
+                                    color = TabCream,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (rollbackReleases.isNotEmpty()) {
+                                        "${rollbackReleases.size} previous versions available"
+                                    } else {
+                                        "No earlier releases available in repository"
+                                    },
+                                    color = TabCream.copy(alpha = 0.65f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Icon(
+                                imageVector = if (isRollbackExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isRollbackExpanded) "Collapse" else "Expand",
+                                tint = TabCream.copy(alpha = 0.8f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        AnimatedVisibility(visible = isRollbackExpanded) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                if (rollbackReleases.isEmpty()) {
+                                    Text(
+                                        text = "No previous releases available for rollback.",
+                                        color = TabCream.copy(alpha = 0.6f),
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(vertical = 8.dp)
+                                    )
+                                } else {
+                                    rollbackReleases.forEach { pastRel ->
+                                        RollbackReleaseCard(
+                                            release = pastRel,
+                                            isDownloading = updateState == UpdateState.DOWNLOADING && activeRollbackTarget?.version == pastRel.version,
+                                            downloadProgress = downloadProgress,
+                                            isDownloaded = updateState == UpdateState.DOWNLOADED && activeRollbackTarget?.version == pastRel.version,
+                                            isNotesExpanded = expandedReleaseNotesVersion == pastRel.version,
+                                            onToggleNotes = {
+                                                expandedReleaseNotesVersion = if (expandedReleaseNotesVersion == pastRel.version) null else pastRel.version
+                                            },
+                                            onRollbackClick = {
+                                                confirmRollbackRelease = pastRel
+                                            },
+                                            onInstallClick = {
+                                                val apk = updateManager.downloadedApkFile
+                                                if (apk != null) {
+                                                    if (!updateManager.canRequestPackageInstalls()) {
+                                                        showInstallPermissionDialog = true
+                                                    } else {
+                                                        updateManager.triggerApkInstall(apk)
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(56.dp))
         }
     }
 
@@ -675,5 +792,223 @@ fun UpdateScreen(
             containerColor = CardBg,
             shape = RoundedCornerShape(16.dp)
         )
+    }
+
+    // Rollback Cautionary Confirmation Dialog
+    if (confirmRollbackRelease != null) {
+        val target = confirmRollbackRelease!!
+        val targetInfo = remember(target) { VersionInfo.parse(target.version, target.isPrerelease) }
+        AlertDialog(
+            onDismissRequest = { confirmRollbackRelease = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = null,
+                        tint = AccentGold,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Rollback to ${targetInfo.displayVersion}?",
+                        fontWeight = FontWeight.Bold,
+                        color = TabCream
+                    )
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Rolling back downloads and installs an earlier release (${target.version}) over your current installation (${currentVersion}).",
+                        color = TabCream.copy(alpha = 0.9f),
+                        fontSize = 13.5.sp,
+                        lineHeight = 19.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Android package downgrades may carry compatibility differences. We strongly recommend exporting a backup of your study notes and photos first to ensure complete peace of mind.",
+                        color = AccentGold.copy(alpha = 0.9f),
+                        fontSize = 12.5.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val relToDownload = target
+                        confirmRollbackRelease = null
+                        updateManager.startRollbackDownload(relToDownload)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold)
+                ) {
+                    Text("Download & Rollback", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (settingsRepository != null) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val backupJson = settingsRepository.exportDataBackup()
+                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                        val clip = android.content.ClipData.newPlainText("Fotara Backup", backupJson)
+                                        clipboard?.setPrimaryClip(clip)
+                                        android.widget.Toast.makeText(context, "Notes backup copied to clipboard!", android.widget.Toast.LENGTH_LONG).show()
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "Backup failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Backup First", color = Color(0xFF60A5FA))
+                        }
+                    }
+                    TextButton(onClick = { confirmRollbackRelease = null }) {
+                        Text("Cancel", color = TabCream)
+                    }
+                }
+            },
+            containerColor = CardBg,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun RollbackReleaseCard(
+    release: ReleaseInfo,
+    isDownloading: Boolean,
+    downloadProgress: Int,
+    isDownloaded: Boolean,
+    isNotesExpanded: Boolean,
+    onToggleNotes: () -> Unit,
+    onRollbackClick: () -> Unit,
+    onInstallClick: () -> Unit
+) {
+    val relInfo = remember(release) { VersionInfo.parse(release.version, release.isPrerelease) }
+    val formattedDate = remember(release.publishedAt) {
+        release.publishedAt?.take(10) ?: ""
+    }
+
+    Surface(
+        color = Color(0xFF0F142A),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, CardOutline.copy(alpha = 0.7f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Fotara ${relInfo.displayVersion}",
+                            color = TabCream,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        com.arinara.fotara.ui.components.ChannelPill(channel = relInfo.channelLabel)
+                    }
+                    if (formattedDate.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Released: $formattedDate",
+                            color = TabCream.copy(alpha = 0.55f),
+                            fontSize = 11.5.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                if (isDownloading) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = AccentGold,
+                            strokeWidth = 2.dp
+                        )
+                        Text(
+                            text = "$downloadProgress%",
+                            color = AccentGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else if (isDownloaded) {
+                    Button(
+                        onClick = onInstallClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Install", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onRollbackClick,
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentGold.copy(alpha = 0.6f)),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(15.dp), tint = AccentGold)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Rollback", color = AccentGold, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (release.releaseNotes.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .clickable(onClick = onToggleNotes)
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isNotesExpanded) "Hide release notes" else "View release notes",
+                        color = Color(0xFF60A5FA),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Icon(
+                        imageVector = if (isNotesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = Color(0xFF60A5FA),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                if (isNotesExpanded) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        color = Color(0xFF0A0D18),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = release.releaseNotes.trim(),
+                            color = TabCream.copy(alpha = 0.8f),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 }

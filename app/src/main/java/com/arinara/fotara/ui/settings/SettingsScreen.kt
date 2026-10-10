@@ -82,6 +82,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.ViewStream
@@ -194,6 +195,7 @@ fun SettingsScreen(
     packageManager: FotaraPackageManager? = null,
     onBackClick: (() -> Unit)? = null,
     onNavigateToTrash: () -> Unit,
+    onOpenUpdateScreen: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     resetToRootTrigger: Int = 0,
@@ -974,6 +976,15 @@ fun SettingsScreen(
                             SettingsAboutCard(
                                 versionName = appVersionName,
                                 versionCode = appVersionCode
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "App Updates & Version Rollback",
+                                subtitle = "Check for updates or rollback to a previous version",
+                                icon = Icons.Default.SystemUpdate,
+                                onClick = { onOpenUpdateScreen?.invoke() }
                             )
                         }
                         item { SettingsListDivider() }
