@@ -74,7 +74,7 @@ class AntiProcrastinationRingtoneService : Service() {
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("⚠️ URGENT STUDY ALARM")
+            .setContentTitle("URGENT STUDY ALARM")
             .setContentText(title)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)

@@ -60,4 +60,23 @@ class RichMarkdownTest {
         assertTrue(annotated.spanStyles.any { it.item.fontWeight == FontWeight.Bold })
         assertTrue(annotated.spanStyles.any { it.item.fontStyle == FontStyle.Italic })
     }
+
+    @Test
+    fun testParseTableRowCells() {
+        val row = "| Header 1 | Header 2 | Header 3 |"
+        val cells = com.arinara.fotara.ui.components.parseTableRowCells(row)
+        assertEquals(listOf("Header 1", "Header 2", "Header 3"), cells)
+
+        val escapedRow = "| Pipe | a \\| b | c |"
+        val escapedCells = com.arinara.fotara.ui.components.parseTableRowCells(escapedRow)
+        assertEquals(listOf("Pipe", "a | b", "c"), escapedCells)
+    }
+
+    @Test
+    fun testIsTableSeparatorLine() {
+        assertTrue(com.arinara.fotara.ui.components.isTableSeparatorLine("| --- | --- | --- |"))
+        assertTrue(com.arinara.fotara.ui.components.isTableSeparatorLine("| :--- | :---: | ---: |"))
+        assertTrue(!com.arinara.fotara.ui.components.isTableSeparatorLine("| not | a | separator |"))
+        assertTrue(!com.arinara.fotara.ui.components.isTableSeparatorLine("Just plain text"))
+    }
 }

@@ -260,10 +260,10 @@ class FolderDetailViewModel(
                 val allItems = standaloneItems + groupItems + docItems + textNoteItems + canvasNoteItems
 
                 val sortedItems = when (state.sortOption) {
-                    PhotoSortOption.UPLOAD_DATE_DESC -> allItems.sortedByDescending { it.sortCreatedAt }
-                    PhotoSortOption.UPLOAD_DATE_ASC -> allItems.sortedBy { it.sortCreatedAt }
-                    PhotoSortOption.NEAREST_DEADLINE -> allItems.sortedBy { it.sortDeadline ?: Long.MAX_VALUE }
-                    PhotoSortOption.COLOR_LABEL -> allItems.sortedBy { it.sortColor ?: "ZZZ" }
+                    PhotoSortOption.UPLOAD_DATE_DESC -> allItems.sortedWith(compareByDescending<FolderGridItem> { it.isPinned }.thenByDescending { it.sortCreatedAt })
+                    PhotoSortOption.UPLOAD_DATE_ASC -> allItems.sortedWith(compareByDescending<FolderGridItem> { it.isPinned }.thenBy { it.sortCreatedAt })
+                    PhotoSortOption.NEAREST_DEADLINE -> allItems.sortedWith(compareByDescending<FolderGridItem> { it.isPinned }.thenBy { it.sortDeadline ?: Long.MAX_VALUE })
+                    PhotoSortOption.COLOR_LABEL -> allItems.sortedWith(compareByDescending<FolderGridItem> { it.isPinned }.thenBy { it.sortColor ?: "ZZZ" })
                 }
 
                 // Arrange linked items consecutively, anchored to highest-ranking member
@@ -292,10 +292,10 @@ class FolderDetailViewModel(
                 }
 
                 val sortedPhotos = when (state.sortOption) {
-                    PhotoSortOption.UPLOAD_DATE_DESC -> filteredPhotos.sortedByDescending { it.addedAt }
-                    PhotoSortOption.UPLOAD_DATE_ASC -> filteredPhotos.sortedBy { it.addedAt }
-                    PhotoSortOption.NEAREST_DEADLINE -> filteredPhotos.sortedBy { it.linkedDeadline ?: Long.MAX_VALUE }
-                    PhotoSortOption.COLOR_LABEL -> filteredPhotos.sortedBy { it.tagColor ?: "ZZZ" }
+                    PhotoSortOption.UPLOAD_DATE_DESC -> filteredPhotos.sortedWith(compareByDescending<Photo> { it.isPinned }.thenByDescending { it.addedAt })
+                    PhotoSortOption.UPLOAD_DATE_ASC -> filteredPhotos.sortedWith(compareByDescending<Photo> { it.isPinned }.thenBy { it.addedAt })
+                    PhotoSortOption.NEAREST_DEADLINE -> filteredPhotos.sortedWith(compareByDescending<Photo> { it.isPinned }.thenBy { it.linkedDeadline ?: Long.MAX_VALUE })
+                    PhotoSortOption.COLOR_LABEL -> filteredPhotos.sortedWith(compareByDescending<Photo> { it.isPinned }.thenBy { it.tagColor ?: "ZZZ" })
                 }
 
                 GridRenderPayload(sortedPhotos, filteredGroups, filteredDocs, filteredTextNotes, filteredCanvasNotes, finalGridItems)
@@ -702,6 +702,41 @@ class FolderDetailViewModel(
             val set = current.selectedCanvasNoteIds.toMutableSet()
             if (set.contains(canvasId)) set.remove(canvasId) else set.add(canvasId)
             current.copy(selectedCanvasNoteIds = set)
+        }
+    }
+
+    fun togglePin(item: FolderGridItem) {
+        val currentlyPinnedCount = _uiState.value.gridItems.count { it.isPinned }
+        if (!item.isPinned && currentlyPinnedCount >= 4) {
+            _uiState.update { it.copy(userMessage = "Maximum 4 pinned notes reached") }
+            return
+        }
+        val newPinned = !item.isPinned
+        viewModelScope.launch {
+            when (item) {
+                is FolderGridItem.StandalonePhoto -> photoRepository.setPhotoPinned(item.photo.id, newPinned)
+                is FolderGridItem.Group -> photoRepository.setGroupPinned(item.group.id, newPinned)
+                is FolderGridItem.Document -> documentRepository?.setDocumentPinned(item.documentNote.id, newPinned)
+                is FolderGridItem.TextNoteItem -> textNoteRepository?.setNotePinned(item.textNote.id, newPinned)
+                is FolderGridItem.CanvasNoteItem -> canvasNoteRepository?.setCanvasPinned(item.canvasNote.id, newPinned)
+            }
+        }
+    }
+
+    fun togglePin(photo: Photo) {
+        val matchingItem = _uiState.value.gridItems.filterIsInstance<FolderGridItem.StandalonePhoto>().firstOrNull { it.photo.id == photo.id }
+        if (matchingItem != null) {
+            togglePin(matchingItem)
+        } else {
+            val currentlyPinnedCount = _uiState.value.gridItems.count { it.isPinned }
+            if (!photo.isPinned && currentlyPinnedCount >= 4) {
+                _uiState.update { it.copy(userMessage = "Maximum 4 pinned notes reached") }
+                return
+            }
+            val newPinned = !photo.isPinned
+            viewModelScope.launch {
+                photoRepository.setPhotoPinned(photo.id, newPinned)
+            }
         }
     }
 

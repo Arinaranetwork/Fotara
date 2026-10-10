@@ -6,13 +6,14 @@
 
 <div align="center">
 
-![Fotara Banner](Assets/Banners/FotaraBanner_1.5_2026-09-30.jpg)
+![Fotara Banner](Assets/Banners/FotaraBanner_2.2_2026-10-10.jpg)
 
 # Fotara
 ### Intelligent Local-First Coursework & Study Note Organization for Android
 
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%2B)-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
-[![Version](https://img.shields.io/badge/Release-v1.5.2%20Beta-00B4D8?style=flat-square)](https://github.com/Arinaranetwork/Fotara/releases)
+[![Latest Release](https://img.shields.io/github/v/release/Arinaranetwork/Fotara?style=flat-square&color=00B4D8&label=Release)](https://github.com/Arinaranetwork/Fotara/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Arinaranetwork/Fotara/total?style=flat-square&color=2A9D8F)](https://github.com/Arinaranetwork/Fotara/releases)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Distribution](https://img.shields.io/badge/License-Proprietary%20%26%20Educational-2A9D8F?style=flat-square)](#distribution--license)
@@ -22,7 +23,7 @@
   <b>Fotara</b> is a high-performance, private, on-device study organization ecosystem built for students, researchers, and lifelong learners. Effortlessly structure, search, schedule, and review whiteboard captures, textbook excerpts, handwritten equations, rich text notes, multi-page PDFs, Word documents, and infinite drawing canvases with zero cloud lock-in.
 </p>
 
-[Download Latest APK (v1.5.2 Beta)](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.2_Beta) • [Features](#key-features) • [Installation](#installation) • [Architecture](#architecture--tech-stack) • [Issues & Feedback](https://github.com/Arinaranetwork/Fotara/issues)
+[Download Latest APK](https://github.com/Arinaranetwork/Fotara/releases/latest) • [Features](#key-features) • [2.x Feature Matrix](#2x-feature-matrix) • [Installation](#installation) • [Architecture](#architecture--tech-stack) • [Issues & Feedback](https://github.com/Arinaranetwork/Fotara/issues)
 
 </div>
 
@@ -39,14 +40,30 @@ By downloading, installing or using Fotara you acknowledge that you have read, u
 Traditional mobile gallery apps dump educational material alongside casual snapshots without structure, academic deadline awareness, or handwritten text recognition.
 
 **Fotara** delivers a unified, local-first study ecosystem engineered for high-density academic workflows:
+- **Academic Spaces**: Isolated vaults for distinct courses, semesters, and research projects with biometric lock support.
+- **Syllabus Performance Evaluator**: Interactive weighted grade calculator and required final exam benchmark projector.
+- **Universal Note Pinning**: Keep up to 4 critical notes, assignments, or cheat-sheets pinned at the top of any folder.
+- **Rich Markdown Tables**: Render and format GitHub-Flavored Markdown tables natively within rich text notes.
 - **Unlimited Drawing Canvas (Alpha)**: Infinite 2D vector drawing canvas with smooth pan, pinch-to-zoom, pressure-sensitive pen, highlighter, eraser, multi-layer management, image placement, and high-resolution PNG export.
 - **Universal Note Scheduling**: Attach reminder notifications or ringing alarms to any note type (Photos, Photo Groups, PDFs, Word DOCX, Text Notes, and Canvas) with full Doze and device reboot resilience.
-- **Dedicated Glance "Today" Widget**: Rectangular home screen widget displaying coursework due today, newly captured study notes, and upcoming scheduled alerts with instant deep-linking.
-- **Share to Fotara**: Receive up to 30 external images, PDFs, Word documents, Markdown files, or plain text notes directly into Fotara with an intuitive destination placement screen.
-- **Native Rich-Text Notes**: Write and format notes with a live Markdown-backed editor, formatting toolbar (bold, italic, strikethrough, headings, lists, quotes, code, links), and instant debounced autosave.
-- **High-Fidelity Document Viewer**: Direct in-app rendering for Microsoft Word (.docx) and virtualized PDFs with on-demand viewport rasterization, smooth pinch-to-zoom, two-axis panning, and a dedicated photo-style Page Viewer.
+- **Dedicated Glance Widgets**: Rectangular home screen widgets displaying coursework due tomorrow, today's notes, and upcoming scheduled alerts with instant deep-linking.
+- **Share to Fotara**: Receive external images, PDFs, Word documents, Markdown files, or plain text notes directly into Fotara with an intuitive destination placement screen.
 - **On-Device Optical Character Recognition (OCR)**: Google ML Kit extracts text from photo notes locally and populates an SQLite FTS4 full-text search index for sub-second retrieval.
-- **Private & Safe**: Device biometrics, PIN encryption, and a 30-day soft-delete trash retention policy keep study materials secure and recoverable.
+
+---
+
+## 2.x Feature Matrix
+
+| Capability | Module | Highlights |
+|---|---|---|
+| **Academic Spaces** | `feature.space` | Multi-space isolated vaults for different courses, semesters, and projects with biometric locks and custom icons. |
+| **Syllabus Performance Evaluator** | `feature.academic.syllabus` | Dynamic grade standing calculator, weighted coursework projections, and required final exam target slider. |
+| **Universal Note Pinning** | `ui.folder`, `ui.group` | Pin up to 4 vital notes (photos, groups, documents, text notes, canvas) to the top of folder grids with visual badges. |
+| **Rich Markdown Tables** | `ui.note.components` | Native GFM markdown table rendering with zebra striping, auto column sizing, and quick-insert toolbar. |
+| **Glance Coursework Widgets** | `widget` | Real-time home screen widgets for Due Tomorrow alerts, Today's notes, and scheduled exam countdowns. |
+| **Unified Timetable & Reminders** | `util.NoteScheduleManager` | High-priority alarm and notification reminders resilient across device reboots and Doze mode. |
+| **Unlimited Vector Canvas** | `ui.canvas` | Infinite 2D pan/zoom drawing canvas with pressure-sensitive strokes, layers, and high-res PNG export. |
+| **On-Device OCR & FTS4 Search** | `ocr`, `data.db` | Sub-second offline text recognition and indexing powered by Google ML Kit. |
 
 ---
 
@@ -56,6 +73,11 @@ Traditional mobile gallery apps dump educational material alongside casual snaps
 - **Subject Folders**: Color-coded subject folders with live note counts and last-active timestamps.
 - **Subfolder Tabs**: Clean horizontal tab navigation inside folders (e.g., *Lectures*, *Lab Notes*, *Assignments*) featuring inline long-press rename, trash confirmation, and multi-select bulk operations.
 - **Adaptive Grid Density**: Live grid density preferences (2, 3, or 4 columns) with responsive scaling on foldables, landscape, and large-screen tablets (up to 7 columns).
+- **Universal Pinning**: Pin up to 4 critical notes per view to keep urgent coursework permanently at the top of your workspace.
+
+### Academic Spaces & Syllabus Evaluator
+- **Dedicated Space Settings**: Customize space name, icon, accent theme, and vault privacy lock per space.
+- **Embedded Syllabus Evaluator**: Input course components, track weighted earned points, and calculate the exact exam score required to secure your target grade.
 
 ### Unlimited Drawing Canvas (Alpha)
 - **Infinite 2D Viewport**: Freeform two-axis pan and continuous pinch-to-zoom (0.2x to 5.0x) with single-tap zoom reset and fit-to-content.
@@ -64,30 +86,20 @@ Traditional mobile gallery apps dump educational material alongside casual snaps
 - **Background Grids**: Switch seamlessly between blank, graph grid, dot grid, and ruled college-lined paper backgrounds.
 - **High-Resolution Export**: Render visible canvas contents to full-quality PNG images shareable via Android system sheet.
 
-### Universal Note Scheduling & Glance Widget
+### Universal Note Scheduling & Glance Widgets
 - **Ubiquitous Reminders**: Attach reminder schedules to photos, groups, documents, text notes, and canvas drawings.
 - **Dual Alert Channels**: Choose between standard unobtrusive notifications or persistent ringing alarm alerts with snooze (+10 min) and dismiss options.
-- **Glance "Today" Home Widget**: Real-time study dashboard showcasing items due today, newly added notes, and scheduled alert countdowns.
-
-### Share to Fotara Destination Placement
-- **Cross-App Integration**: Share up to 30 items simultaneously from browsers, chat apps, or file managers.
-- **Streaming Sandbox Staging**: Private app cache staging with background thumbnailing and process death recovery.
-- **Placement Interface**: Browse target folders and subfolders with live item counts, collapsible staged preview tray, and single-tap "Place Here" confirmation.
+- **Glance Home Widgets**: Real-time study dashboard showcasing items due today, tomorrow's deadlines, and scheduled alert countdowns.
 
 ### High-Fidelity Documents & Rich Text
-- **In-Viewer PDF Zoom & Photo-Style Page Viewer**: Dedicated fullscreen page viewer with pinch-to-zoom up to 4.0x, two-axis pan, double-tap zoom, zoom-gated swipe navigation, and recognized OCR text drawer, alongside viewport-level list zoom with free two-axis pan.
+- **In-Viewer PDF Zoom & Photo-Style Page Viewer**: Dedicated fullscreen page viewer with pinch-to-zoom up to 4.0x, two-axis pan, double-tap zoom, zoom-gated swipe navigation, and recognized OCR text drawer.
 - **Intelligent Split to Images**: Convert PDF documents into white-canvas photos, automatically grouping documents with 5 or more pages into a Photo Group.
-- **Native Markdown Notes**: Full markdown formatting toolbar with word count, character count, find/replace, and dedicated raw MD / TXT sharing.
+- **Native Markdown Notes & Tables**: Full markdown formatting toolbar with word count, character count, find/replace, interactive tables, and dedicated raw MD / TXT sharing.
 
 ### On-Device OCR & Sub-Second Search
 - **100% Offline Indexing**: ML Kit text recognition extracts text from photos, documents, and notes upon capture or import.
 - **Search Date Filters**: Filter notes instantly by date added with quick chips (Today, Yesterday, This week, This month, This year) and custom date pickers.
-- **Waypoint Navigation**: Search results automatically open the source folder, select the matching subfolder, smooth-scroll to the card, and highlight it for 3 seconds.
-
-### Privacy, Security & Data Safety
-- **Offline-First Architecture**: All note management, OCR, search indexing, document rendering, and exports operate entirely on-device without mandatory network connectivity.
-- **Folder Privacy Lock**: Protect confidential notes behind a 4-digit PIN or Android BiometricPrompt (fingerprint or face authentication).
-- **Recycle Bin**: 30-day soft-delete retention window with individual and bulk permanent purging.
+- **Waypoint Navigation**: Search results automatically open the source folder, select the matching subfolder, smooth-scroll to the card, and highlight it.
 
 ---
 
@@ -95,7 +107,7 @@ Traditional mobile gallery apps dump educational material alongside casual snaps
 
 | Metric | Status |
 |---|---|
-| **Current Build** | `v1.5.1 Beta` (Build Code: `15`) |
+| **Latest Release** | [GitHub Releases](https://github.com/Arinaranetwork/Fotara/releases/latest) |
 | **Release Channel** | Beta |
 | **Supported Devices** | Android 7.0 (API 24) through Android 16 (API 36) |
 | **Issue Tracker** | **Active & Open** — Bug reports and suggestions are welcome via [GitHub Issues](https://github.com/Arinaranetwork/Fotara/issues). |
@@ -115,8 +127,8 @@ Fotara is distributed under the **Arinara Network Proprietary & Educational Soft
 
 ## Installation
 
-1. Navigate to the **[v1.5.1 Beta Release](https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.5.1_Beta)** page.
-2. Under **Assets**, download `Fotara_1.5.1_Beta.apk`.
+1. Navigate to the **[Latest Release](https://github.com/Arinaranetwork/Fotara/releases/latest)** page.
+2. Under **Assets**, download the shippable release APK (`Fotara_*.apk`).
 3. On your Android device, open the downloaded `.apk` file.
 4. If prompted, grant permission to *Install from Unknown Sources* for your browser or file manager.
 5. Launch Fotara, complete the guided first-run onboarding, and organize your study notes!
@@ -129,28 +141,33 @@ Fotara is distributed under the **Arinara Network Proprietary & Educational Soft
 Fotara/
 ├── app/src/main/java/com/arinara/fotara/
 │   ├── data/
-│   │   ├── db/          # SQLite FTS4 virtual table helper & migrations
-│   │   ├── model/       # Domain models (Folder, Photo, Group, Document, TextNote, CanvasNote)
+│   │   ├── db/          # SQLite FTS4 virtual table helper & schema v21
+│   │   ├── model/       # Domain models (Space, Folder, Photo, Group, Document, TextNote, CanvasNote)
 │   │   └── repository/  # Reactive repositories with Kotlin StateFlow & IO coroutines
+│   ├── feature/
+│   │   ├── academic/    # SyllabusEvaluator, SyllabusEvaluatorSheet
+│   │   ├── space/       # ActiveSpaceManager, SpaceSwitcherBottomSheet
+│   │   └── friends/     # Local-first study peer sharing
 │   ├── ocr/             # Google ML Kit on-device text recognition pipeline
 │   ├── theme/           # Premium dark-first palette, typography, and shape tokens
 │   ├── util/            # NoteScheduleManager, PdfExporter, ZipExporter, DocxParser
-│   ├── widget/          # Jetpack Glance "Today" home screen widget
+│   ├── widget/          # Jetpack Glance "Today" & "Due Tomorrow" home screen widgets
 │   ├── online/          # UpdateManager, FeedbackManager, and Supabase client
 │   └── ui/              # Jetpack Compose UI architecture
 │       ├── canvas/      # Unlimited Canvas engine, tools dock, layers sheet, viewport
+│       ├── space/       # SpaceSettingsScreen, SpaceSwitcherBottomSheet
 │       ├── share/       # ShareReceiverActivity, staging, and SharePlacementScreen
-│       ├── folder/      # FolderDetailScreen, subfolder tabs, grid cards, multi-select
+│       ├── folder/      # FolderDetailScreen, subfolder tabs, grid cards, multi-select, pin badges
 │       ├── group/       # Dedicated GroupDetailScreen & GroupDetailViewModel
 │       ├── document/    # Dedicated PdfViewerScreen & DocxViewerScreen
-│       ├── note/        # TextNoteEditorScreen with markdown formatting toolbar
+│       ├── note/        # TextNoteEditorScreen with markdown formatting toolbar & tables
 │       ├── home/        # Home screen, folder grid, active search dock, date filters
 │       ├── onboarding/  # Guided pre-permission and privacy explainer
-│       ├── settings/    # Display density, OCR settings, notification permissions, updates
+│       ├── settings/    # Animated sub-screen navigation, display density, OCR, updates
 │       ├── support/     # QRIS donation and community backing screen
 │       └── trash/       # 30-day soft-delete recycle bin
 ├── Assets/              # Project release banners, logos, and typography
-├── Docs/                # Product Codex, interaction specifications, and progress
+├── Docs/                # Product Codex, interaction specifications, and version records
 └── Output/Release/      # Verified shippable APK release packages
 ```
 

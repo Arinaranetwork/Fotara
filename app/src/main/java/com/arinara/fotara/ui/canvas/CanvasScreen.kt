@@ -2383,7 +2383,7 @@ fun CanvasScreen(
             CollabRoomJoinDialog(
                 onDismissRequest = { showCollabJoinDialog = false },
                 onJoinRoom = { code ->
-                    collabEngine.joinRoom(code, "StudyBuddy", "#2563EB")
+                    collabEngine.joinRoom(code, "Friend", "#2563EB")
                     showCollabJoinDialog = false
                 },
                 onCreateRoom = {

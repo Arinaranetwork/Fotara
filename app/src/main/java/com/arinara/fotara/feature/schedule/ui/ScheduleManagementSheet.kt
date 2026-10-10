@@ -47,8 +47,10 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -60,6 +62,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -82,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.feature.schedule.engine.ScheduleCutoffEngine
 import com.arinara.fotara.feature.schedule.model.ClassSchedule
+import com.arinara.fotara.feature.schedule.notification.ScheduleNotificationScheduler
 import com.arinara.fotara.feature.schedule.parser.RawTableData
 import com.arinara.fotara.feature.schedule.parser.ScheduleColumnMapping
 import com.arinara.fotara.feature.schedule.parser.XlsxDocxScheduleParser
@@ -291,15 +295,14 @@ fun ScheduleManagementSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Anti-Procrastination Study Alarm Card
+            // Anti-Procrastination Study Alarm Card (Temporarily Disabled per A-024)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(HomeCardSurface)
-                    .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
-                    .clickable { showAntiProcrastinationScreen = true }
+                    .background(HomeCardSurface.copy(alpha = 0.5f))
+                    .border(1.dp, HomeCardBorder.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Row(
@@ -314,21 +317,21 @@ fun ScheduleManagementSheet(
                         Icon(
                             imageVector = Icons.Default.Alarm,
                             contentDescription = null,
-                            tint = Color(0xFFF59E0B),
+                            tint = Color(0xFF6B7280),
                             modifier = Modifier.size(16.dp)
                         )
                         Column {
                             Text(
                                 text = "Anti-Procrastination Study Alarm",
-                                color = Color(0xFFE2E8F0),
+                                color = Color(0xFF94A3B8),
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = "Photo proof challenge required to dismiss",
-                                color = HomeSubtitleGray,
+                                text = "Photo proof challenge (Temporarily Disabled)",
+                                color = Color(0xFF6B7280),
                                 fontSize = 11.sp,
                                 lineHeight = 14.sp,
                                 fontFamily = ElmsSans
@@ -337,11 +340,11 @@ fun ScheduleManagementSheet(
                     }
 
                     Text(
-                        text = "Manage",
-                        color = HomeMainButtonBlue,
+                        text = "Disabled",
+                        color = Color(0xFF6B7280),
                         fontSize = 12.sp,
                         fontFamily = ElmsSans,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -443,11 +446,30 @@ fun ScheduleManagementSheet(
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            text = "Tap (+) to add or import from Excel/Word file.",
+                            text = "Tap (+) to add, import files, or load sample schedule.",
                             color = HomeSubtitleGray,
                             fontSize = 12.sp,
                             fontFamily = ElmsSans
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                val samples = com.arinara.fotara.feature.schedule.model.SampleScheduleDataProvider.createSampleSchedules()
+                                onBatchImportSchedules(samples)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = HomeCardSurface),
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, HomeCardBorder),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text(
+                                text = "Load Sample Schedule",
+                                color = HomeMainButtonBlue,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             } else {
@@ -469,11 +491,13 @@ fun ScheduleManagementSheet(
                 }
             }
 
-            // Bottom Actions Bar (Import Timetable)
-            Box(
+            // Bottom Actions Bar (Import Timetable & Settings Pill at Right Bottom)
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
                     onClick = {
@@ -486,7 +510,7 @@ fun ScheduleManagementSheet(
                         )
                     },
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .weight(1f)
                         .height(44.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = HomeCardSurface),
                     shape = RoundedCornerShape(12.dp),
@@ -496,17 +520,47 @@ fun ScheduleManagementSheet(
                         imageVector = Icons.Default.FileUpload,
                         contentDescription = null,
                         tint = Color(0xFF60A5FA),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Import Schedule (.xlsx / .docx)",
+                        text = "Import (.xlsx/.docx)",
                         color = TextPrimary,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
                         fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
                     )
+                }
+
+                // Settings Pill at Right Bottom
+                Surface(
+                    onClick = { isEditingCutoff = true },
+                    modifier = Modifier.height(44.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    color = HomeCardSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, HomeCardBorder)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Schedule Settings",
+                            tint = Color(0xFF818CF8),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Settings",
+                            color = TextPrimary,
+                            fontFamily = ElmsSans,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
@@ -571,13 +625,19 @@ fun ScheduleManagementSheet(
         )
     }
 
-    // Cutoff Time Dialog
+    // Schedule Settings & Cutoff Dialog
     if (isEditingCutoff) {
-        CutoffTimeDialog(
+        ScheduleSettingsDialog(
             currentCutoff = cutoffTimeStr,
             onDismiss = { isEditingCutoff = false },
-            onConfirm = { newTime ->
+            onConfirmCutoff = { newTime ->
                 onUpdateCutoffTime(newTime)
+                isEditingCutoff = false
+            },
+            onLoadSampleData = {
+                val samples = com.arinara.fotara.feature.schedule.model.SampleScheduleDataProvider.createSampleSchedules()
+                onBatchImportSchedules(samples)
+                Toast.makeText(context, "Sample schedule loaded successfully", Toast.LENGTH_SHORT).show()
                 isEditingCutoff = false
             }
         )
@@ -923,60 +983,277 @@ private fun AddEditScheduleDialog(
 }
 
 @Composable
-private fun CutoffTimeDialog(
+private fun ScheduleSettingsDialog(
     currentCutoff: String,
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+    onConfirmCutoff: (String) -> Unit,
+    onLoadSampleData: () -> Unit
 ) {
+    val context = LocalContext.current
+    var startTimeInput by remember { mutableStateOf("07:00") }
+    var endTimeInput by remember { mutableStateOf(currentCutoff) }
+    var reminderHourInput by remember { mutableStateOf("18:00") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var reminderStatusMessage by remember { mutableStateOf<String?>(null) }
+
     val presets = listOf("17:00", "18:00", "19:00", "20:00", "21:00")
-    var selectedTime by remember { mutableStateOf(currentCutoff) }
+
+    fun validateRollover(): Boolean {
+        val s = ClassSchedule.parseTimeToMinutes(startTimeInput)
+        val e = ClassSchedule.parseTimeToMinutes(endTimeInput)
+        if (s == null || e == null) {
+            errorMessage = "Please enter valid times (e.g. 07:00 and 18:00)"
+            return false
+        }
+        val duration = if (e > s) e - s else (1440 - s) + e
+        if (duration == 0 || duration >= 1440) {
+            errorMessage = "Rollover duration cannot be 24 hours. Maximum is 23 hours."
+            return false
+        }
+        if (duration > 23 * 60) {
+            errorMessage = "Rollover duration cannot exceed 23 hours."
+            return false
+        }
+        errorMessage = null
+        return true
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                text = "Next-Day Rollover Cutoff",
-                color = TextPrimary,
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = null,
+                    tint = HomeMainButtonBlue,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Schedule Settings & Reminders",
+                    color = TextPrimary,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp
+                )
+            }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Section 1: Rollover Cutoff
                 Text(
-                    text = "After this time, the schedule capsule will automatically switch to show tomorrow's classes for evening preparation.",
+                    text = "DAY ROLLOVER BOUNDS (MAX 23H)",
+                    color = Color(0xFF818CF8),
+                    fontSize = 12.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Set daily start and ending cutoff times. Setting a 24-hour duration is disabled (max 23 hours).",
                     color = TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                     fontFamily = ElmsSans
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                for (p in presets) {
-                    val isSel = selectedTime == p
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSel) HomeMainButtonBlue else HomeCardBorder)
-                            .clickable { selectedTime = p }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = p,
-                            color = TextPrimary,
-                            fontFamily = ElmsSans,
-                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = startTimeInput,
+                        onValueChange = {
+                            startTimeInput = it
+                            errorMessage = null
+                        },
+                        label = { Text("Start Time", fontFamily = ElmsSans, fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = HomeMainButtonBlue,
+                            unfocusedBorderColor = HomeCardBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
                         )
+                    )
+                    OutlinedTextField(
+                        value = endTimeInput,
+                        onValueChange = {
+                            endTimeInput = it
+                            errorMessage = null
+                        },
+                        label = { Text("End Time", fontFamily = ElmsSans, fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = HomeMainButtonBlue,
+                            unfocusedBorderColor = HomeCardBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        )
+                    )
+                }
+
+                // Quick Presets
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    for (p in presets) {
+                        val isSel = endTimeInput == p
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSel) HomeMainButtonBlue else HomeCardBorder)
+                                .clickable {
+                                    endTimeInput = p
+                                    errorMessage = null
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = p,
+                                color = TextPrimary,
+                                fontFamily = ElmsSans,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
                     }
+                }
+
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage ?: "",
+                        color = TagCrimson,
+                        fontSize = 12.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                HorizontalDivider(color = HomeCardBorder, thickness = 1.dp)
+
+                // Section 2: Class Schedule Reminder
+                Text(
+                    text = "CLASS SCHEDULE REMINDER",
+                    color = Color(0xFF60A5FA),
+                    fontSize = 12.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Configure daily reminder notifications alerting your upcoming classes with <day>.",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    fontFamily = ElmsSans
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = reminderHourInput,
+                        onValueChange = { reminderHourInput = it },
+                        label = { Text("Remind At", fontFamily = ElmsSans, fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = HomeMainButtonBlue,
+                            unfocusedBorderColor = HomeCardBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        )
+                    )
+
+                    Button(
+                        onClick = {
+                            val timeMin = ClassSchedule.parseTimeToMinutes(reminderHourInput) ?: (18 * 60)
+                            val currentDay = ScheduleCutoffEngine.getCurrentDayOfWeek()
+                            val dayText = ClassSchedule.getEnglishDayName(currentDay)
+                            val scheduler = ScheduleNotificationScheduler(context)
+                            scheduler.scheduleConfigurableReminder(
+                                hour = timeMin / 60,
+                                minute = timeMin % 60,
+                                dayText = dayText
+                            )
+                            scheduler.showDigestNotification(
+                                title = "Class Schedule Reminder",
+                                message = dayText
+                            )
+                            reminderStatusMessage = "Notification dispatched for <$dayText>"
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = HomeCardSurface),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, HomeCardBorder),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsActive,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Send Reminder", fontFamily = ElmsSans, fontSize = 12.sp)
+                    }
+                }
+
+                if (reminderStatusMessage != null) {
+                    Text(
+                        text = reminderStatusMessage ?: "",
+                        color = Color(0xFF10B981),
+                        fontSize = 12.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                HorizontalDivider(color = HomeCardBorder, thickness = 1.dp)
+
+                // Section 3: Sample Data
+                Text(
+                    text = "SAMPLE TIMETABLE DATA",
+                    color = Color(0xFFF59E0B),
+                    fontSize = 12.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold
+                )
+                Button(
+                    onClick = {
+                        onLoadSampleData()
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = HomeCardSurface),
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, HomeCardBorder)
+                ) {
+                    Text(
+                        text = "Seed 5-Day Sample Schedule",
+                        color = Color(0xFFF59E0B),
+                        fontFamily = ElmsSans,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         },
         containerColor = HomeCardSurface,
         confirmButton = {
             Button(
-                onClick = { onConfirm(selectedTime) },
+                onClick = {
+                    if (validateRollover()) {
+                        onConfirmCutoff(endTimeInput)
+                        onDismiss()
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue)
             ) {
                 Text("Apply", fontFamily = ElmsSans)

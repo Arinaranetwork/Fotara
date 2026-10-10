@@ -216,6 +216,7 @@ fun HomeScreen(
     onOpenUpdates: () -> Unit = {},
     onOpenSupport: () -> Unit = {},
     onOpenWhatsNew: () -> Unit = {},
+    onOpenSpaceSettings: (spaceId: Long) -> Unit = {},
     feedbackManager: FeedbackManager? = null,
     dialogCoordinator: com.arinara.fotara.coordinator.AppDialogCoordinator? = null,
     spaceRepository: SpaceRepository? = null,
@@ -533,7 +534,7 @@ fun HomeScreen(
                                                     .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
                                             ) {
                                                 DropdownMenuItem(
-                                                    text = { Text("Select Folders", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Select", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.SelectAll,
@@ -544,21 +545,6 @@ fun HomeScreen(
                                                     onClick = {
                                                         showHomeOverflowMenu = false
                                                         viewModel.enterMultiSelectMode(null)
-                                                    }
-                                                )
-                                                HorizontalDivider(color = HomeCardBorder)
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_add_workspace), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Add,
-                                                            contentDescription = null,
-                                                            tint = Color(0xFF60A5FA)
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showHomeOverflowMenu = false
-                                                        viewModel.openAddWorkspaceDialog()
                                                     }
                                                 )
                                                 HorizontalDivider(color = HomeCardBorder)
@@ -574,20 +560,6 @@ fun HomeScreen(
                                                     onClick = {
                                                         showHomeOverflowMenu = false
                                                         onOpenWhatsNew()
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text("Syllabus Evaluator", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Outlined.School,
-                                                            contentDescription = null,
-                                                            tint = Color(0xFF60A5FA)
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showHomeOverflowMenu = false
-                                                        showSyllabusEvaluator = true
                                                     }
                                                 )
                                                 DropdownMenuItem(
@@ -1773,6 +1745,10 @@ fun HomeScreen(
                         isPrivate = isPrivate
                     )
                 }
+            },
+            onOpenSpaceSettings = { sId ->
+                showSpaceSwitcher = false
+                onOpenSpaceSettings(sId)
             },
             onDismiss = { showSpaceSwitcher = false }
         )

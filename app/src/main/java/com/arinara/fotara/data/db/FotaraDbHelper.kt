@@ -123,6 +123,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 scheduled_at INTEGER,
                 alert_type TEXT,
                 schedule_title TEXT,
+                is_pinned INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
                 FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
             )
@@ -158,6 +159,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 scheduled_at INTEGER,
                 alert_type TEXT,
                 schedule_title TEXT,
+                is_pinned INTEGER NOT NULL DEFAULT 0,
                 file_size_bytes INTEGER NOT NULL DEFAULT 0,
                 note TEXT,
                 group_id INTEGER,
@@ -188,6 +190,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 scheduled_at INTEGER,
                 alert_type TEXT,
                 schedule_title TEXT,
+                is_pinned INTEGER NOT NULL DEFAULT 0,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
@@ -225,6 +228,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 scheduled_at INTEGER,
                 alert_type TEXT,
                 schedule_title TEXT,
+                is_pinned INTEGER NOT NULL DEFAULT 0,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
@@ -250,6 +254,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 scheduled_at INTEGER,
                 alert_type TEXT,
                 schedule_title TEXT,
+                is_pinned INTEGER NOT NULL DEFAULT 0,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
@@ -274,6 +279,13 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_scheduled_at ON document_notes(scheduled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_scheduled_at ON text_notes(scheduled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_scheduled_at ON canvas_notes(scheduled_at)")
+
+        // Universal note pinning indexes
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_is_pinned ON photos(is_pinned)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_is_pinned ON photo_groups(is_pinned)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_is_pinned ON document_notes(is_pinned)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_is_pinned ON text_notes(is_pinned)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_is_pinned ON canvas_notes(is_pinned)")
 
         // v14 Infinite Canvas schema: layers, chunked elements, and assets
         db.execSQL(
@@ -888,6 +900,23 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v20 (spaces) failed: ${e.message}")
             }
         }
+        if (oldVersion < 21) {
+            try {
+                db.execSQL("ALTER TABLE photos ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE photo_groups ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE document_notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE text_notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE canvas_notes ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
+
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_is_pinned ON photos(is_pinned)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_is_pinned ON photo_groups(is_pinned)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_is_pinned ON document_notes(is_pinned)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_is_pinned ON text_notes(is_pinned)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_is_pinned ON canvas_notes(is_pinned)")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v21 (is_pinned) failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -931,7 +960,7 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 20
+        const val DATABASE_VERSION = 21
         const val HOME_WORKSPACE_ID = 1L
         const val ARCHIVE_WORKSPACE_ID = 2L
         const val HOME_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000001"

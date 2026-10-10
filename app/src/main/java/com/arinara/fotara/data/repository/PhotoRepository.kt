@@ -78,6 +78,8 @@ interface PhotoRepository {
     fun getGridLinkGroups(): Flow<List<LinkGroup>>
     suspend fun createGridLinkGroup(memberIds: List<Long>): Long
     suspend fun unlinkGridItem(itemId: Long)
+    suspend fun setPhotoPinned(id: Long, isPinned: Boolean)
+    suspend fun setGroupPinned(groupId: Long, isPinned: Boolean)
     suspend fun refresh()
 }
 
@@ -110,7 +112,7 @@ class SqlitePhotoRepository(
                 SELECT id, file_path, thumbnail_path, folder_id, subfolder_id,
                        created_at, added_at, tag_color, caption, ocr_text,
                        source, linked_deadline, file_size_bytes, note,
-                       is_trashed, deleted_at, group_id, tags, scheduled_at, alert_type
+                       is_trashed, deleted_at, group_id, tags, scheduled_at, alert_type, is_pinned
                 FROM photos
                 WHERE is_trashed = 0
                 ORDER BY added_at DESC
@@ -141,7 +143,8 @@ class SqlitePhotoRepository(
                             groupId = if (c.isNull(16)) null else c.getLong(16),
                             tags = if (c.isNull(17)) null else c.getString(17),
                             scheduledAt = if (c.columnCount > 18 && !c.isNull(18)) c.getLong(18) else null,
-                            alertType = if (c.columnCount > 19 && !c.isNull(19)) c.getString(19) else null
+                            alertType = if (c.columnCount > 19 && !c.isNull(19)) c.getString(19) else null,
+                            isPinned = if (c.columnCount > 20 && !c.isNull(20)) c.getInt(20) == 1 else false
                         )
                     )
                 }
@@ -155,7 +158,7 @@ class SqlitePhotoRepository(
                 SELECT id, file_path, thumbnail_path, folder_id, subfolder_id,
                        created_at, added_at, tag_color, caption, ocr_text,
                        source, linked_deadline, file_size_bytes, note,
-                       is_trashed, deleted_at, group_id, tags, scheduled_at, alert_type
+                       is_trashed, deleted_at, group_id, tags, scheduled_at, alert_type, is_pinned
                 FROM photos
                 WHERE is_trashed = 1
                 ORDER BY deleted_at DESC
@@ -185,7 +188,8 @@ class SqlitePhotoRepository(
                             groupId = if (tc.isNull(16)) null else tc.getLong(16),
                             tags = if (tc.isNull(17)) null else tc.getString(17),
                             scheduledAt = if (tc.columnCount > 18 && !tc.isNull(18)) tc.getLong(18) else null,
-                            alertType = if (tc.columnCount > 19 && !tc.isNull(19)) tc.getString(19) else null
+                            alertType = if (tc.columnCount > 19 && !tc.isNull(19)) tc.getString(19) else null,
+                            isPinned = if (tc.columnCount > 20 && !tc.isNull(20)) tc.getInt(20) == 1 else false
                         )
                     )
                 }
@@ -198,7 +202,7 @@ class SqlitePhotoRepository(
                 """
                 SELECT id, folder_id, subfolder_id, name, tag_color,
                        created_at, cover_photo_id, is_trashed, deleted_at,
-                       linked_deadline, added_at, scheduled_at, alert_type
+                       linked_deadline, added_at, scheduled_at, alert_type, is_pinned
                 FROM photo_groups
                 WHERE is_trashed = 0
                 ORDER BY created_at DESC
@@ -223,7 +227,8 @@ class SqlitePhotoRepository(
                             deletedAt = if (gc.isNull(8)) null else gc.getLong(8),
                             linkedDeadline = if (gc.isNull(9)) null else gc.getLong(9),
                             scheduledAt = if (gc.columnCount > 11 && !gc.isNull(11)) gc.getLong(11) else null,
-                            alertType = if (gc.columnCount > 12 && !gc.isNull(12)) gc.getString(12) else null
+                            alertType = if (gc.columnCount > 12 && !gc.isNull(12)) gc.getString(12) else null,
+                            isPinned = if (gc.columnCount > 13 && !gc.isNull(13)) gc.getInt(13) == 1 else false
                         )
                     )
                 }
@@ -1224,5 +1229,19 @@ class SqlitePhotoRepository(
                 db.update("link_groups", vals, "id = ?", arrayOf(id.toString()))
             }
         } catch (_: Exception) {}
+    }
+
+    override suspend fun setPhotoPinned(id: Long, isPinned: Boolean) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        val cv = ContentValues().apply { put("is_pinned", if (isPinned) 1 else 0) }
+        db.update("photos", cv, "id = ?", arrayOf(id.toString()))
+        refreshSync()
+    }
+
+    override suspend fun setGroupPinned(groupId: Long, isPinned: Boolean) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        val cv = ContentValues().apply { put("is_pinned", if (isPinned) 1 else 0) }
+        db.update("photo_groups", cv, "id = ?", arrayOf(groupId.toString()))
+        refreshSync()
     }
 }

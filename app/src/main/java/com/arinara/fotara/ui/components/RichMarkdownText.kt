@@ -351,12 +351,180 @@ fun RichMarkdownCodeBlock(
 }
 
 /**
+ * Dedicated visual Markdown table composable:
+ * - Elevated surface with RoundedCornerShape(8.dp)
+ * - 1dp border with cardBorder
+ * - Tinted header row (Color(0xFF1E254A)) with bold text
+ * - Alternating subtle row backgrounds
+ * - 1dp grid dividers between cells
+ * - Horizontal scroll inside container for wide tables
+ * - Rich Markdown formatting in each cell
+ */
+@Composable
+fun RichMarkdownTable(
+    headers: List<String>,
+    rows: List<List<String>>,
+    modifier: Modifier = Modifier,
+    backgroundColor: Color = Color(0xFF141936),
+    headerBackground: Color = Color(0xFF1E254A),
+    borderColor: Color = Color(0xFF283256),
+    headerTextColor: Color = FolderTabCream,
+    textColor: Color = Color(0xFFEAE3D2),
+    accentColor: Color = Color(0xFFF77F00)
+) {
+    if (headers.isEmpty()) return
+
+    val colWidths = remember(headers, rows) {
+        headers.indices.map { colIndex ->
+            val headerLen = headers.getOrNull(colIndex)?.length ?: 0
+            val maxRowLen = rows.maxOfOrNull { it.getOrNull(colIndex)?.length ?: 0 } ?: 0
+            val maxLen = maxOf(headerLen, maxRowLen)
+            (maxOf(80, maxLen * 9) + 24).dp.coerceIn(80.dp, 300.dp)
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(backgroundColor)
+            .border(BorderStroke(1.dp, borderColor), RoundedCornerShape(8.dp))
+            .horizontalScroll(rememberScrollState())
+    ) {
+        Column {
+            // Header Row
+            Row(
+                modifier = Modifier
+                    .background(headerBackground)
+                    .height(IntrinsicSize.Min),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                headers.forEachIndexed { colIndex, headerText ->
+                    if (colIndex > 0) {
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .fillMaxHeight()
+                                .background(borderColor)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .width(colWidths[colIndex])
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        RichMarkdownText(
+                            text = headerText,
+                            color = headerTextColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp,
+                            accentColor = accentColor
+                        )
+                    }
+                }
+            }
+
+            // Divider between header and body
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(borderColor)
+            )
+
+            // Body Rows
+            rows.forEachIndexed { rowIndex, rowCells ->
+                if (rowIndex > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(borderColor.copy(alpha = 0.6f))
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .background(if (rowIndex % 2 == 1) Color(0xFF101530) else backgroundColor)
+                        .height(IntrinsicSize.Min),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    headers.indices.forEach { colIndex ->
+                        if (colIndex > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .fillMaxHeight()
+                                    .background(borderColor.copy(alpha = 0.6f))
+                            )
+                        }
+                        val cellText = rowCells.getOrNull(colIndex) ?: ""
+                        Box(
+                            modifier = Modifier
+                                .width(colWidths[colIndex])
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            RichMarkdownText(
+                                text = cellText,
+                                color = textColor.copy(alpha = 0.92f),
+                                fontSize = 13.sp,
+                                accentColor = accentColor
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal fun isTableSeparatorLine(line: String): Boolean {
+    val trimmed = line.trim()
+    if (!trimmed.contains('-') || !trimmed.contains('|')) return false
+    val cells = parseTableRowCells(trimmed)
+    if (cells.isEmpty()) return false
+    return cells.all { cell -> cell.matches(Regex("""^:?-+:?$""")) }
+}
+
+internal fun parseTableRowCells(line: String): List<String> {
+    var trimmed = line.trim()
+    if (trimmed.startsWith("|") && trimmed.endsWith("|") && trimmed.length >= 2) {
+        trimmed = trimmed.substring(1, trimmed.length - 1)
+    } else if (trimmed.startsWith("|")) {
+        trimmed = trimmed.substring(1)
+    } else if (trimmed.endsWith("|")) {
+        trimmed = trimmed.substring(0, trimmed.length - 1)
+    }
+    val cells = mutableListOf<String>()
+    val current = StringBuilder()
+    var i = 0
+    while (i < trimmed.length) {
+        val ch = trimmed[i]
+        if (ch == '\\' && i + 1 < trimmed.length && trimmed[i + 1] == '|') {
+            current.append('|')
+            i += 2
+        } else if (ch == '|') {
+            cells.add(current.toString().trim())
+            current.clear()
+            i++
+        } else {
+            current.append(ch)
+            i++
+        }
+    }
+    cells.add(current.toString().trim())
+    return cells
+}
+
+/**
  * High-level markdown document column that parses and renders:
  * - H1, H2, H3 headers
  * - Blockquotes (`> `)
  * - Bullet lists (`- `, `* `)
  * - Numbered lists (`1. `, `2. `)
  * - Code blocks (```)
+ * - Markdown tables (`| ... |`)
  * - Paragraphs with inline bold/italic/code/strikethrough
  */
 @Composable
@@ -375,7 +543,9 @@ fun RichMarkdownColumn(
         var inCodeBlock = false
         val codeBlockBuffer = StringBuilder()
 
-        for ((lineIndex, rawLine) in lines.withIndex()) {
+        var lineIndex = 0
+        while (lineIndex < lines.size) {
+            val rawLine = lines[lineIndex]
             val trimmed = rawLine.trim()
 
             // Code block handling (```)
@@ -392,16 +562,46 @@ fun RichMarkdownColumn(
                     // Start code block
                     inCodeBlock = true
                 }
+                lineIndex++
                 continue
             }
 
             if (inCodeBlock) {
                 codeBlockBuffer.append(rawLine).append("\n")
+                lineIndex++
                 continue
             }
 
             // Skip empty lines or image banners (already handled by hero banner)
             if (trimmed.isEmpty() || trimmed.startsWith("![")) {
+                lineIndex++
+                continue
+            }
+
+            // Table detection
+            if (trimmed.contains('|') && lineIndex + 1 < lines.size && isTableSeparatorLine(lines[lineIndex + 1])) {
+                val headerCells = parseTableRowCells(trimmed)
+                lineIndex += 2 // Skip header line and separator line
+                val dataRows = mutableListOf<List<String>>()
+                while (lineIndex < lines.size) {
+                    val nextRow = lines[lineIndex].trim()
+                    if (nextRow.isEmpty() || !nextRow.contains('|') || nextRow.startsWith("```") || nextRow.startsWith("#")) {
+                        break
+                    }
+                    dataRows.add(parseTableRowCells(nextRow))
+                    lineIndex++
+                }
+                RichMarkdownTable(
+                    headers = headerCells,
+                    rows = dataRows,
+                    backgroundColor = cardBg,
+                    headerBackground = Color(0xFF1E254A),
+                    borderColor = cardBorder,
+                    headerTextColor = FolderTabCream,
+                    textColor = primaryTextColor,
+                    accentColor = accentColor,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
                 continue
             }
 
@@ -457,13 +657,14 @@ fun RichMarkdownColumn(
                     val leadingSpaces = rawLine.takeWhile { it == ' ' }.length
                     val indentLevel = (leadingSpaces / 2).coerceIn(0, 3)
 
+                    val currentLineIdx = lineIndex
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(start = (indentLevel * 24).dp)
                             .clip(RoundedCornerShape(6.dp))
                             .clickable(enabled = onToggleChecklistLine != null) {
-                                onToggleChecklistLine?.invoke(lineIndex)
+                                onToggleChecklistLine?.invoke(currentLineIdx)
                             }
                             .padding(vertical = 4.dp, horizontal = 2.dp),
                         verticalAlignment = Alignment.Top
@@ -587,6 +788,7 @@ fun RichMarkdownColumn(
                     )
                 }
             }
+            lineIndex++
         }
 
         // Flush any unclosed code block

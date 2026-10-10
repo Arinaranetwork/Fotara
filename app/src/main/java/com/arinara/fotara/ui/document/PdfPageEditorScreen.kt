@@ -569,15 +569,8 @@ fun PdfPageEditorScreen(
                                 } else if (currentActiveTool == DrawingTool.PEN) {
                                     if (isShapeSnapped) {
                                         decimated
-                                    } else if (autoSmoothen || shapeSnapping) {
-                                        val snapRes = if (shapeSnapping) ShapeAutoCorrectEngine.recognizeAndSnap(decimated) else ShapeAutoCorrectResult(RecognizedShape.None, decimated)
-                                        if (snapRes.shape !is RecognizedShape.None) {
-                                            snapRes.snappedPoints
-                                        } else if (autoSmoothen) {
-                                            ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
-                                        } else {
-                                            decimated
-                                        }
+                                    } else if (autoSmoothen) {
+                                        ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
                                     } else {
                                         decimated
                                     }

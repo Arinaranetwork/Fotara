@@ -197,6 +197,44 @@ class ScheduleNotificationScheduler(private val context: Context) {
         notificationManager.notify(NOTIFICATION_ID_DIGEST, notification)
     }
 
+    /**
+     * Schedules a configurable class reminder at the specified [hour] and [minute],
+     * which notifies with the active day text (<day>) per A-029.
+     */
+    fun scheduleConfigurableReminder(hour: Int, minute: Int, dayText: String) {
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (cal.timeInMillis <= System.currentTimeMillis()) {
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+        }
+
+        val intent = Intent(context, ScheduleAlarmReceiver::class.java).apply {
+            action = ACTION_SCHEDULE_ALARM
+            putExtra(EXTRA_ALARM_TYPE, TYPE_CONFIGURABLE_REMINDER)
+            putExtra(EXTRA_DAY_TEXT, dayText)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQ_CONFIGURABLE_REMINDER,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
+            } else {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
+            }
+        } catch (_: SecurityException) {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
+        }
+    }
+
     companion object {
         const val CHANNEL_ID = "fotara_class_schedule"
         const val ACTION_SCHEDULE_ALARM = "com.arinara.fotara.ACTION_SCHEDULE_ALARM"
@@ -206,15 +244,18 @@ class ScheduleNotificationScheduler(private val context: Context) {
         const val EXTRA_ROOM_NAME = "room_name"
         const val EXTRA_START_TIME = "start_time"
         const val EXTRA_LINKED_FOLDER_ID = "linked_folder_id"
+        const val EXTRA_DAY_TEXT = "day_text"
 
         const val TYPE_MORNING_DIGEST = "MORNING_DIGEST"
         const val TYPE_PRE_CLASS = "PRE_CLASS"
         const val TYPE_EVENING_ROLLOVER = "EVENING_ROLLOVER"
+        const val TYPE_CONFIGURABLE_REMINDER = "CONFIGURABLE_REMINDER"
 
         const val REQ_MORNING_DIGEST = 5001
         const val REQ_EVENING_ROLLOVER = 5002
         const val REQ_TAP_CLASS = 5003
         const val REQ_TAP_DIGEST = 5004
+        const val REQ_CONFIGURABLE_REMINDER = 5005
 
         const val NOTIFICATION_ID_PRE_CLASS = 6001
         const val NOTIFICATION_ID_DIGEST = 6002
@@ -244,6 +285,13 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
                 scheduler.showDigestNotification(
                     title = "Tomorrow's Class Preparation",
                     message = "Tomorrow's class schedule is ready. Ensure your books and notes are prepared tonight."
+                )
+            }
+            ScheduleNotificationScheduler.TYPE_CONFIGURABLE_REMINDER -> {
+                val dayText = intent.getStringExtra(ScheduleNotificationScheduler.EXTRA_DAY_TEXT) ?: "Today"
+                scheduler.showDigestNotification(
+                    title = "Class Schedule Reminder",
+                    message = dayText
                 )
             }
         }

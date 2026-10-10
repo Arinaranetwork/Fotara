@@ -469,6 +469,12 @@ private class FakeCanvasNoteRepository : CanvasNoteRepository {
     override suspend fun moveCanvasNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?) {
         ids.forEach { moveCanvasNote(it, targetFolderId, targetSubfolderId) }
     }
+    override suspend fun setCanvasPinned(id: Long, isPinned: Boolean) {
+        val index = notes.indexOfFirst { it.id == id }
+        if (index != -1) {
+            notes[index] = notes[index].copy(isPinned = isPinned)
+        }
+    }
     override suspend fun refresh() {}
 }
 

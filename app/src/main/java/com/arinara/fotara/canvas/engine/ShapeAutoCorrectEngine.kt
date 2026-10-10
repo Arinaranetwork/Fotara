@@ -383,10 +383,10 @@ object ShapeAutoCorrectEngine {
         val count = controlPoints.size
 
         for (i in 0 until (if (isClosed) count else count - 1)) {
-            val p0 = controlPoints[(i - 1 + count) % count]
-            val p1 = controlPoints[i % count]
-            val p2 = controlPoints[(i + 1) % count]
-            val p3 = controlPoints[(i + 2) % count]
+            val p0 = if (isClosed) controlPoints[(i - 1 + count) % count] else controlPoints[maxOf(0, i - 1)]
+            val p1 = controlPoints[i]
+            val p2 = controlPoints[minOf(count - 1, i + 1)]
+            val p3 = if (isClosed) controlPoints[(i + 2) % count] else controlPoints[minOf(count - 1, i + 2)]
 
             for (stepIdx in 0 until 6) {
                 val t = stepIdx / 6f

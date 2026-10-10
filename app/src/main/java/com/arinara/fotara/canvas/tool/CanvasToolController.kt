@@ -126,12 +126,15 @@ class CanvasToolController(
     private val eraserActiveSurvivingMap = mutableMapOf<String, StrokeElement>()
     private var lastEraserPoint: Pair<Float, Float>? = null
 
+    var isShapeSnapped: Boolean = false
+
     fun isDrawing(): Boolean = activeStrokePoints.isNotEmpty()
 
     /**
      * Begins an in-progress stroke in world coordinates.
      */
     fun startStroke(worldX: Float, worldY: Float, rawPressure: Float) {
+        isShapeSnapped = false
         activeStrokePoints.clear()
         val normalizedP = StrokeProcessor.normalizePressure(rawPressure)
         activeStrokePoints.add(StrokePoint(worldX, worldY, normalizedP))
@@ -163,6 +166,7 @@ class CanvasToolController(
         if (result.shape !is com.arinara.fotara.canvas.engine.RecognizedShape.None) {
             activeStrokePoints.clear()
             activeStrokePoints.addAll(result.snappedPoints)
+            isShapeSnapped = true
             return true
         }
         return false
@@ -222,19 +226,10 @@ class CanvasToolController(
                         }
                     }
                 }
-            } else if (toolState.autoSmoothen || toolState.shapeSnapping) {
-                val snapResult = if (toolState.shapeSnapping) {
-                    ShapeAutoCorrectEngine.recognizeAndSnap(decimated)
-                } else {
-                    ShapeAutoCorrectResult(RecognizedShape.None, decimated)
-                }
-                if (snapResult.shape !is RecognizedShape.None) {
-                    snapResult.snappedPoints
-                } else if (toolState.autoSmoothen) {
-                    ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
-                } else {
-                    decimated
-                }
+            } else if (isShapeSnapped) {
+                decimated
+            } else if (toolState.autoSmoothen) {
+                ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
             } else {
                 decimated
             }
@@ -265,6 +260,7 @@ class CanvasToolController(
         )
 
         activeStrokePoints.clear()
+        isShapeSnapped = false
 
         val updatedDoc = historyManager.execute(
             AddElementsCommand(listOf(newStroke), description = "Draw Stroke"),
@@ -276,6 +272,7 @@ class CanvasToolController(
 
     fun cancelStroke() {
         activeStrokePoints.clear()
+        isShapeSnapped = false
     }
 
     // ==========================================

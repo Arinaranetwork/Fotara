@@ -23,7 +23,8 @@ data class TextNote(
     val deletedAt: Long? = null,
     override val scheduledAt: Long? = null,
     override val alertType: String? = null,
-    override val scheduleTitle: String? = null
+    override val scheduleTitle: String? = null,
+    override val isPinned: Boolean = false
 ) : SchedulableNote {
     override val noteType: ScheduleNoteType get() = ScheduleNoteType.TEXT_NOTE
     val isBlank: Boolean

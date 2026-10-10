@@ -339,7 +339,7 @@ fun NotesScreen(
     itemToDelete?.let { item ->
         AlertDialog(
             onDismissRequest = { itemToDelete = null },
-            containerColor = HomeCardSurface,
+            containerColor = Color(0xFF0F1422),
             shape = RoundedCornerShape(20.dp),
             title = {
                 Text(
@@ -384,7 +384,7 @@ fun NotesScreen(
     itemToRename?.let { item ->
         AlertDialog(
             onDismissRequest = { itemToRename = null },
-            containerColor = HomeCardSurface,
+            containerColor = Color(0xFF0F1422),
             shape = RoundedCornerShape(20.dp),
             title = {
                 Text(
@@ -437,7 +437,7 @@ fun NotesScreen(
     itemToMove?.let { item ->
         AlertDialog(
             onDismissRequest = { itemToMove = null },
-            containerColor = HomeCardSurface,
+            containerColor = Color(0xFF0F1422),
             shape = RoundedCornerShape(20.dp),
             title = {
                 Text(
@@ -507,7 +507,7 @@ fun NotesScreen(
     pendingCreateAction?.let { action ->
         AlertDialog(
             onDismissRequest = { pendingCreateAction = null },
-            containerColor = HomeCardSurface,
+            containerColor = Color(0xFF0F1422),
             shape = RoundedCornerShape(20.dp),
             title = {
                 Text(
@@ -806,7 +806,7 @@ private fun DateGroupSection(
 
         // Single rounded card container for all items in this group
         Card(
-            colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1220)),
             shape = RoundedCornerShape(20.dp),
             border = BorderStroke(1.dp, HomeCardBorder),
             modifier = Modifier.fillMaxWidth()

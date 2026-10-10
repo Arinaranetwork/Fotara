@@ -110,6 +110,31 @@ class MarkdownVisualTransformation(
                         fontSize = 14.sp
                     ) to (tLineStart until sb.length)
                 )
+            } else if (lineText.contains('|') && (lineText.trim().startsWith('|') || lineText.trim().endsWith('|'))) {
+                // Table row in editor: maintain 1:1 alignment with monospaced styling
+                sb.append(lineText)
+                chunks.add(TextMappingChunk(lineStart, lineEnd, tLineStart, sb.length))
+                styles.add(
+                    SpanStyle(
+                        fontFamily = ElmsSans,
+                        fontSize = 14.sp
+                    ) to (tLineStart until sb.length)
+                )
+                val trimmedTableLine = lineText.trim()
+                if (trimmedTableLine.matches(Regex("""^\|?(\s*:?-+:?\s*\|)+\s*(:?-+:?\s*)?\|?$"""))) {
+                    styles.add(
+                        SpanStyle(color = mutedColor.copy(alpha = 0.6f)) to (tLineStart until sb.length)
+                    )
+                } else {
+                    var pIdx = lineText.indexOf('|')
+                    while (pIdx != -1) {
+                        val tPipePos = tLineStart + pIdx
+                        styles.add(
+                            SpanStyle(color = accentColor.copy(alpha = 0.75f), fontWeight = FontWeight.Bold) to (tPipePos until (tPipePos + 1))
+                        )
+                        pIdx = lineText.indexOf('|', pIdx + 1)
+                    }
+                }
             } else {
                 val parsed = TextEditorOps.parseLine(lineIndex, lineStart, lineEnd, lineText)
 

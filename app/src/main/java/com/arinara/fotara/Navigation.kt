@@ -197,6 +197,9 @@ fun MainNavigation(
                     onOpenWhatsNew = {
                         backStack.add(WhatsNewNavKey)
                     },
+                    onOpenSpaceSettings = { sId ->
+                        backStack.add(SpaceSettingsNavKey(sId))
+                    },
                     feedbackManager = appContainer.feedbackManager,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -420,6 +423,18 @@ fun MainNavigation(
                     onBack = { safePopBack() },
                     modifier = Modifier.fillMaxSize()
                 )
+            }
+
+            entry<SpaceSettingsNavKey> { key ->
+                val spaceRepo = appContainer.spaceRepository
+                if (spaceRepo != null) {
+                    com.arinara.fotara.ui.space.SpaceSettingsScreen(
+                        spaceId = key.spaceId,
+                        spaceRepository = spaceRepo,
+                        onBack = { safePopBack() },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
     )

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -83,6 +84,7 @@ fun SpaceSwitcherBottomSheet(
     activeSpaceId: Long,
     onSelectSpace: (Long) -> Unit,
     onCreateSpace: (name: String, iconKey: String, colorHex: String, isPrivate: Boolean) -> Unit,
+    onOpenSpaceSettings: ((Long) -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -145,6 +147,12 @@ fun SpaceSwitcherBottomSheet(
                         onClick = {
                             onSelectSpace(space.id)
                             onDismiss()
+                        },
+                        onOpenSettings = onOpenSpaceSettings?.let { callback ->
+                            {
+                                onDismiss()
+                                callback(space.id)
+                            }
                         }
                     )
                 }
@@ -194,7 +202,8 @@ fun SpaceSwitcherBottomSheet(
 private fun SpaceItemRow(
     space: Space,
     isActive: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onOpenSettings: (() -> Unit)? = null
 ) {
     val accentColor = try {
         Color(android.graphics.Color.parseColor(space.colorHex))
@@ -254,14 +263,29 @@ private fun SpaceItemRow(
                 }
             }
             Text(
-                text = if (space.id == Space.DEFAULT_SPACE_ID) "Primary coursework vault" else "Dedicated study container",
+                text = if (space.id == Space.DEFAULT_SPACE_ID) "Academic Space (Default)" else "Academic Space #${space.id}",
                 fontFamily = ElmsSans,
                 fontSize = 12.sp,
                 color = SpaceTextSecondary
             )
         }
 
+        if (onOpenSettings != null) {
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Space Settings",
+                    tint = SpaceTextSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
         if (isActive) {
+            Spacer(modifier = Modifier.width(4.dp))
             Box(
                 modifier = Modifier
                     .size(24.dp)

@@ -215,7 +215,7 @@ fun FriendQrDialog(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Scan to add as academic study buddy",
+                        text = "Scan to add as academic friend",
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Normal,
                         fontSize = 13.sp,
@@ -399,7 +399,7 @@ fun FriendQrDialog(
                             .height(48.dp)
                     ) {
                         Text(
-                            text = "Connect Study Buddy",
+                            text = "Connect Friend",
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Medium,
                             fontSize = 14.sp,

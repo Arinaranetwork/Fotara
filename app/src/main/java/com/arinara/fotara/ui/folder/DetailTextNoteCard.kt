@@ -29,9 +29,11 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -52,7 +54,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val CardBg = Color(0xFF141936)
+private val CardBg = Color(0xFF0D1220)
 private val CardBorder = Color(0xFF242C56)
 private val TabCream = Color(0xFFEAE3D2)
 private val AccentGold = Color(0xFFF77F00)
@@ -113,6 +115,23 @@ fun DetailTextNoteCard(
         )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            if (note.isPinned) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF1E254A),
+                    modifier = Modifier
+                        .align(if (isBatchMode) Alignment.TopCenter else Alignment.TopStart)
+                        .padding(8.dp)
+                        .size(22.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PushPin,
+                        contentDescription = "Pinned note",
+                        tint = Color(0xFF6C8CFF),
+                        modifier = Modifier.padding(4.dp)
+                    )
+                }
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()

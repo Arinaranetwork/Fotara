@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -81,6 +82,7 @@ fun PhotoQuickActionSheet(
     isLinked: Boolean = false,
     onUnlink: () -> Unit = {},
     onSchedule: () -> Unit = {},
+    onTogglePin: (() -> Unit)? = null,
     onDeletePhoto: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -100,7 +102,7 @@ fun PhotoQuickActionSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MidnightSurface,
+        containerColor = Color(0xFF0F1422),
         modifier = modifier
     ) {
         Column(
@@ -285,6 +287,18 @@ fun PhotoQuickActionSheet(
             }
 
             // Primary Quick Actions List
+            onTogglePin?.let { toggle ->
+                ActionItem(
+                    icon = Icons.Default.PushPin,
+                    title = if (photo.isPinned) "Unpin Note" else "Pin Note",
+                    tint = FolderTabCream,
+                    onClick = {
+                        toggle()
+                        onDismiss()
+                    }
+                )
+            }
+
             ActionItem(
                 icon = Icons.Default.Edit,
                 title = "Rename Note...",

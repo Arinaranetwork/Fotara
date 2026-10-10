@@ -118,7 +118,8 @@ interface WorkspaceRepository {
 class SqliteWorkspaceRepository(
     private val dbHelper: FotaraDbHelper,
     private val folderRepository: FolderRepository,
-    coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val spaceRepository: SpaceRepository? = null
 ) : WorkspaceRepository {
 
     private val scope = coroutineScope
@@ -136,16 +137,21 @@ class SqliteWorkspaceRepository(
                 repairDanglingWorkspaces()
             } catch (_: Exception) {}
             refreshSync()
+
+            spaceRepository?.activeSpaceId?.collect { _ ->
+                refreshSync()
+            }
         }
     }
 
     private fun refreshSync() {
         try {
             val db = dbHelper.getSafeReadableDatabase()
+            val currentSpaceId = spaceRepository?.activeSpaceId?.value ?: 1L
             val list = mutableListOf<Workspace>()
             val cursor = db.rawQuery(
-                "SELECT id, uuid, kind, name, position, created_at, icon_key FROM workspaces ORDER BY position ASC",
-                null
+                "SELECT id, uuid, kind, name, position, created_at, icon_key FROM workspaces WHERE space_id = ? ORDER BY position ASC",
+                arrayOf(currentSpaceId.toString())
             )
             cursor.use { c ->
                 while (c.moveToNext()) {
@@ -164,21 +170,34 @@ class SqliteWorkspaceRepository(
                 }
             }
 
-            // Invariant guard: if table was empty, seed Home & Archive immediately
+            // Invariant guard: if table was empty for this space, seed Home & Archive immediately
             if (list.none { it.kind == WorkspaceKind.HOME }) {
                 val now = System.currentTimeMillis()
                 val writeDb = dbHelper.getSafeWritableDatabase()
-                writeDb.execSQL(
-                    "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at) VALUES (1, '${FotaraDbHelper.HOME_WORKSPACE_UUID}', 'HOME', '', 0, $now)"
-                )
-                writeDb.execSQL(
-                    "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at) VALUES (2, '${FotaraDbHelper.ARCHIVE_WORKSPACE_UUID}', 'ARCHIVE', '', 1, $now)"
-                )
+                if (currentSpaceId == 1L) {
+                    writeDb.execSQL(
+                        "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at, space_id) VALUES (1, '${FotaraDbHelper.HOME_WORKSPACE_UUID}', 'HOME', '', 0, $now, 1)"
+                    )
+                    writeDb.execSQL(
+                        "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at, space_id) VALUES (2, '${FotaraDbHelper.ARCHIVE_WORKSPACE_UUID}', 'ARCHIVE', '', 1, $now, 1)"
+                    )
+                } else {
+                    writeDb.execSQL(
+                        "INSERT OR IGNORE INTO workspaces (uuid, kind, name, position, created_at, space_id) VALUES ('${UUID.randomUUID()}', 'HOME', '', 0, $now, $currentSpaceId)"
+                    )
+                    writeDb.execSQL(
+                        "INSERT OR IGNORE INTO workspaces (uuid, kind, name, position, created_at, space_id) VALUES ('${UUID.randomUUID()}', 'ARCHIVE', '', 1, $now, $currentSpaceId)"
+                    )
+                }
                 refreshSync()
                 return
             }
 
             workspacesFlow.value = list
+            if (list.none { it.id == _selectedWorkspaceId.value }) {
+                val homeWs = list.firstOrNull { it.kind == WorkspaceKind.HOME }
+                _selectedWorkspaceId.value = homeWs?.id ?: list.firstOrNull()?.id ?: FotaraDbHelper.HOME_WORKSPACE_ID
+            }
         } catch (e: Exception) {
             android.util.Log.e("SqliteWorkspaceRepo", "Error refreshing workspaces: ${e.message}", e)
         }
@@ -232,6 +251,7 @@ class SqliteWorkspaceRepository(
         val uuid = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
 
+        val currentSpaceId = spaceRepository?.activeSpaceId?.value ?: 1L
         val db = dbHelper.getSafeWritableDatabase()
         val values = ContentValues().apply {
             put("uuid", uuid)
@@ -239,6 +259,7 @@ class SqliteWorkspaceRepository(
             put("name", normalizedName)
             put("position", nextPos)
             put("created_at", now)
+            put("space_id", currentSpaceId)
             if (sanitizedIconKey != null) {
                 put("icon_key", sanitizedIconKey)
             } else {

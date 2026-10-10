@@ -44,6 +44,7 @@ interface CanvasNoteRepository {
     suspend fun purgeCanvasNotePermanently(id: Long)
     suspend fun moveCanvasNote(id: Long, targetFolderId: Long, targetSubfolderId: Long?)
     suspend fun moveCanvasNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?)
+    suspend fun setCanvasPinned(id: Long, isPinned: Boolean)
     suspend fun refresh()
 }
 
@@ -73,7 +74,7 @@ class SqliteCanvasNoteRepository(
                 """
                 SELECT id, folder_id, subfolder_id, title, data_blob, thumbnail_path,
                        created_at, updated_at, added_at, tag_color, linked_deadline,
-                       scheduled_at, alert_type, is_trashed, deleted_at
+                       scheduled_at, alert_type, is_trashed, deleted_at, is_pinned
                 FROM canvas_notes
                 ORDER BY updated_at DESC
                 """.trimIndent(),
@@ -97,7 +98,8 @@ class SqliteCanvasNoteRepository(
                         scheduledAt = if (!c.isNull(11)) c.getLong(11) else null,
                         alertType = if (!c.isNull(12)) c.getString(12) else null,
                         isTrashed = c.getInt(13) == 1,
-                        deletedAt = if (c.isNull(14)) null else c.getLong(14)
+                        deletedAt = if (c.isNull(14)) null else c.getLong(14),
+                        isPinned = if (c.columnCount > 15 && !c.isNull(15)) c.getInt(15) == 1 else false
                     )
                     if (note.isTrashed) {
                         trashed.add(note)
@@ -334,6 +336,13 @@ class SqliteCanvasNoteRepository(
         refreshSync()
         folderRepository?.refresh()
         Unit
+    }
+
+    override suspend fun setCanvasPinned(id: Long, isPinned: Boolean) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        val cv = ContentValues().apply { put("is_pinned", if (isPinned) 1 else 0) }
+        db.update("canvas_notes", cv, "id = ?", arrayOf(id.toString()))
+        refreshSync()
     }
 
     override suspend fun refresh() = withContext(Dispatchers.IO) {

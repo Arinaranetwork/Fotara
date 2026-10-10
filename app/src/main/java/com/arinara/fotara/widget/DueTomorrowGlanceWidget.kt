@@ -83,15 +83,10 @@ class DueTomorrowGlanceWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val todayData = queryTodayData(context)
-        val isPreAndroid15 = Build.VERSION.SDK_INT < 35
 
         provideContent {
             GlanceTheme {
-                if (isPreAndroid15) {
-                    StaticFallbackLayout(context, todayData)
-                } else {
-                    InteractiveGlanceLayout(context, todayData)
-                }
+                InteractiveGlanceLayout(context, todayData)
             }
         }
     }
@@ -162,13 +157,37 @@ class DueTomorrowGlanceWidget : GlanceAppWidget() {
             Spacer(modifier = GlanceModifier.height(6.dp))
 
             if (data.items.isEmpty()) {
-                Box(
-                    modifier = GlanceModifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                Column(
+                    modifier = GlanceModifier
+                        .fillMaxSize()
+                        .background(cardBg)
+                        .cornerRadius(12.dp)
+                        .padding(14.dp)
+                        .clickable(actionStartActivity(android.content.ComponentName(context, MainActivity::class.java))),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "No notes scheduled or added today",
-                        style = TextStyle(color = textSecondary, fontSize = 12.sp)
+                        text = "All caught up",
+                        style = TextStyle(
+                            color = textPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Spacer(modifier = GlanceModifier.height(4.dp))
+                    Text(
+                        text = "No notes scheduled today",
+                        style = TextStyle(
+                            color = textSecondary,
+                            fontSize = 11.sp
+                        )
+                    )
+                    Spacer(modifier = GlanceModifier.height(10.dp))
+                    Button(
+                        text = "Open Fotara",
+                        onClick = actionStartActivity(android.content.ComponentName(context, MainActivity::class.java)),
+                        modifier = GlanceModifier.padding(horizontal = 8.dp)
                     )
                 }
             } else {
@@ -446,6 +465,47 @@ class DueTomorrowGlanceWidget : GlanceAppWidget() {
                             isScheduled = activeSchedule != null
                         )
                     )
+                }
+            }
+
+            // 5. Fallback: If no notes added or scheduled today, load 5 most recent active notes
+            if (items.isEmpty()) {
+                val fallbackCursor = db.rawQuery(
+                    """
+                    SELECT id, title, folder_name, added_at FROM (
+                        SELECT p.id as id, p.caption as title, f.name as folder_name, p.added_at as added_at
+                        FROM photos p INNER JOIN folders f ON p.folder_id = f.id
+                        WHERE p.is_trashed = 0 AND f.is_trashed = 0
+                        UNION ALL
+                        SELECT t.id as id, t.title as title, f.name as folder_name, t.added_at as added_at
+                        FROM text_notes t INNER JOIN folders f ON t.folder_id = f.id
+                        WHERE t.is_trashed = 0 AND f.is_trashed = 0
+                        UNION ALL
+                        SELECT d.id as id, d.name as title, f.name as folder_name, d.added_at as added_at
+                        FROM document_notes d INNER JOIN folders f ON d.folder_id = f.id
+                        WHERE d.is_trashed = 0 AND f.is_trashed = 0
+                    )
+                    ORDER BY added_at DESC
+                    LIMIT 5
+                    """.trimIndent(),
+                    null
+                )
+                fallbackCursor.use { fc ->
+                    while (fc.moveToNext()) {
+                        val id = fc.getLong(0)
+                        val title = if (fc.isNull(1) || fc.getString(1).isBlank()) "Recent Note" else fc.getString(1)
+                        val folderName = fc.getString(2)
+                        val addedAt = fc.getLong(3)
+                        items.add(
+                            WidgetTodayItem(
+                                id = id,
+                                title = title,
+                                folderName = folderName,
+                                timestamp = addedAt,
+                                isScheduled = false
+                            )
+                        )
+                    }
                 }
             }
         } catch (_: Exception) {}

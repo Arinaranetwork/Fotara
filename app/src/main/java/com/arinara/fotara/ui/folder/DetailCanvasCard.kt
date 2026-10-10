@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -105,7 +106,7 @@ fun DetailCanvasCard(
                 onLongClick = onCardLongClick
             ),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1220)),
         border = BorderStroke(
             width = if (isSelected) 2.dp else 1.dp,
             color = when {
@@ -117,6 +118,23 @@ fun DetailCanvasCard(
         )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            if (note.isPinned) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF1E254A),
+                    modifier = Modifier
+                        .align(if (isBatchMode) Alignment.TopCenter else Alignment.TopStart)
+                        .padding(8.dp)
+                        .size(22.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PushPin,
+                        contentDescription = "Pinned note",
+                        tint = Color(0xFF6C8CFF),
+                        modifier = Modifier.padding(4.dp)
+                    )
+                }
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()

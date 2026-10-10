@@ -21,6 +21,14 @@ import kotlinx.coroutines.launch
 
 data class FriendsUiState(
     val friends: List<FriendProfile> = emptyList(),
+    val followers: List<FriendProfile> = emptyList(),
+    val following: List<FriendProfile> = emptyList(),
+    val followersCount: Int = 0,
+    val followingCount: Int = 0,
+    val cooldownDaysRemaining: Int = 0,
+    val canChangeUsername: Boolean = true,
+    val cooldownMessage: String? = null,
+    val claimedUsername: String = "@scholar",
     val searchQuery: String = "",
     val myHandle: String = "@scholar",
     val myPresenceStatus: StudyPresenceStatus = StudyPresenceStatus.OFFLINE,
@@ -40,16 +48,16 @@ data class FriendsUiState(
             }
         }
 
-    val activeBuddies: List<FriendProfile>
+    val activeFriends: List<FriendProfile>
         get() = filteredFriends.filter { it.isActive }
 
-    val offlineBuddies: List<FriendProfile>
+    val offlineFriends: List<FriendProfile>
         get() = filteredFriends.filter { !it.isActive }
 
-    val totalBuddiesCount: Int
+    val totalFriendsCount: Int
         get() = friends.size
 
-    val activeBuddiesCount: Int
+    val activeFriendsCount: Int
         get() = friends.count { it.isActive }
 }
 
@@ -59,18 +67,36 @@ class FriendsViewModel(
 
     private val _searchQuery = MutableStateFlow("")
     private val _message = MutableStateFlow<String?>(null)
+    private val _claimVersion = MutableStateFlow(0)
 
     val uiState: StateFlow<FriendsUiState> = combine(
-        repository.getFriendsFlow(),
+        combine(
+            repository.getFriendsFlow(),
+            repository.getFollowersFlow(),
+            repository.getFollowingFlow()
+        ) { friends, followers, following ->
+            Triple(friends, followers, following)
+        },
         repository.getMyPresenceStatusFlow(),
         repository.getMySubjectFlow(),
         _searchQuery,
-        _message
-    ) { friends, presence, subject, query, message ->
+        combine(_message, _claimVersion) { msg, ver -> msg to ver }
+    ) { (friends, followers, following), presence, subject, query, (message, _) ->
+        val (canChange, cooldownMsg) = repository.canChangeUsername()
+        val cooldownDays = repository.getUsernameCooldownDays()
+        val claimed = repository.getClaimedUsername()
         FriendsUiState(
             friends = friends,
+            followers = followers,
+            following = following,
+            followersCount = followers.size,
+            followingCount = following.size,
+            cooldownDaysRemaining = cooldownDays,
+            canChangeUsername = canChange,
+            cooldownMessage = cooldownMsg,
+            claimedUsername = claimed,
             searchQuery = query,
-            myHandle = repository.getMyHandle(),
+            myHandle = claimed,
             myPresenceStatus = presence,
             mySubject = subject,
             isLoading = false,
@@ -78,9 +104,13 @@ class FriendsViewModel(
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.Eagerly,
         initialValue = FriendsUiState(
-            myHandle = repository.getMyHandle()
+            myHandle = repository.getMyHandle(),
+            claimedUsername = repository.getClaimedUsername(),
+            canChangeUsername = repository.canChangeUsername().first,
+            cooldownMessage = repository.canChangeUsername().second,
+            cooldownDaysRemaining = repository.getUsernameCooldownDays()
         )
     )
 
@@ -98,7 +128,7 @@ class FriendsViewModel(
         viewModelScope.launch {
             val result = repository.addFriend(handle, displayName)
             if (result.isSuccess) {
-                _message.value = "Added ${result.getOrNull()?.displayName} to study buddies"
+                _message.value = "Added ${result.getOrNull()?.displayName} to friends"
                 onComplete?.invoke(true, "Successfully added friend")
             } else {
                 val errorMsg = result.exceptionOrNull()?.message ?: "Failed to add friend"
@@ -111,13 +141,47 @@ class FriendsViewModel(
     fun removeFriend(id: String) {
         viewModelScope.launch {
             repository.removeFriend(id)
-            _message.value = "Study buddy removed"
+            _message.value = "Friend removed"
         }
     }
 
     fun toggleFavorite(id: String) {
         viewModelScope.launch {
             repository.toggleFavorite(id)
+        }
+    }
+
+    fun claimUsername(username: String, displayName: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.claimUsername(username, displayName)
+            if (result.isSuccess) {
+                val claimed = result.getOrThrow()
+                _message.value = "Username claimed: $claimed"
+                _claimVersion.value += 1
+                onResult(true, "Username claimed successfully: $claimed")
+            } else {
+                val errorMsg = result.exceptionOrNull()?.message ?: "Failed to claim username"
+                _message.value = errorMsg
+                onResult(false, errorMsg)
+            }
+        }
+    }
+
+    fun followUser(friend: FriendProfile) {
+        viewModelScope.launch {
+            repository.followUser(friend)
+        }
+    }
+
+    fun unfollowUser(id: String) {
+        viewModelScope.launch {
+            repository.unfollowUser(id)
+        }
+    }
+
+    fun removeFollower(id: String) {
+        viewModelScope.launch {
+            repository.removeFollower(id)
         }
     }
 

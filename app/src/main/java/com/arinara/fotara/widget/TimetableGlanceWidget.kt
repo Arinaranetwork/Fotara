@@ -166,8 +166,8 @@ class TimetableGlanceWidget : GlanceAppWidget() {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (data.isRollover) "No classes scheduled tomorrow" else "No classes scheduled today",
-                        style = TextStyle(color = ColorTextSecondary, fontSize = 12.sp)
+                        text = "None",
+                        style = TextStyle(color = ColorTextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     )
                 }
             } else {
@@ -266,13 +266,13 @@ class TimetableGlanceWidget : GlanceAppWidget() {
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = if (data.isRollover) "No classes scheduled tomorrow" else "No classes remaining today",
-                            style = TextStyle(color = ColorTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            text = "None",
+                            style = TextStyle(color = ColorTextSecondary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         )
                         Spacer(modifier = GlanceModifier.height(4.dp))
                         Text(
-                            text = "Tap to open full schedule",
-                            style = TextStyle(color = ColorTextSecondary, fontSize = 10.sp)
+                            text = "No classes scheduled",
+                            style = TextStyle(color = ColorTextMuted, fontSize = 11.sp)
                         )
                     }
                 }

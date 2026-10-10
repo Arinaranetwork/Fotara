@@ -82,6 +82,7 @@ import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.automirrored.filled.MergeType
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
@@ -1554,6 +1555,7 @@ fun FolderDetailScreen(
                         ScheduleAlertType.NOTIFICATION
                     }
                 },
+                onTogglePin = { viewModel.togglePin(photo) },
                 onDeletePhoto = { viewModel.deletePhoto(photo.id) },
                 onDismiss = { quickActionPhoto = null }
             )
@@ -2320,7 +2322,7 @@ fun FolderDetailScreen(
 
         ModalBottomSheet(
             onDismissRequest = { groupActionTarget = null },
-            containerColor = MidnightSurface
+            containerColor = Color(0xFF0F1422)
         ) {
             Column(
                 modifier = Modifier
@@ -2351,6 +2353,28 @@ fun FolderDetailScreen(
                     fontSize = 12.sp
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Action: Pin / Unpin Note
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            val toPin = targetGroup
+                            groupActionTarget = null
+                            viewModel.togglePin(toPin)
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.PushPin, contentDescription = null, tint = FolderTabCream)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = if (g.isPinned) "Unpin Note" else "Pin Note",
+                        color = TextPrimary,
+                        fontSize = 15.sp
+                    )
+                }
 
                 // Action 1: Rename
                 Row(
@@ -2754,7 +2778,7 @@ fun FolderDetailScreen(
         val doc = target.documentNote
         ModalBottomSheet(
             onDismissRequest = { documentActionTarget = null },
-            containerColor = MidnightSurface
+            containerColor = Color(0xFF0F1422)
         ) {
             Column(
                 modifier = Modifier
@@ -2771,6 +2795,15 @@ fun FolderDetailScreen(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
+                DropdownMenuItem(
+                    text = { Text(if (doc.isPinned) "Unpin Note" else "Pin Note", color = TextPrimary) },
+                    leadingIcon = { Icon(Icons.Default.PushPin, null, tint = FolderTabCream) },
+                    onClick = {
+                        val toPin = target
+                        documentActionTarget = null
+                        viewModel.togglePin(toPin)
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("Rename", color = TextPrimary) },
                     leadingIcon = { Icon(Icons.Default.Edit, null, tint = FolderTabCream) },
@@ -3205,6 +3238,7 @@ fun FolderDetailScreen(
                     ScheduleAlertType.NOTIFICATION
                 }
             },
+            onTogglePin = { viewModel.togglePin(target) },
             onSelect = {
                 viewModel.startBatchSelectionWithTextNote(textNote.id)
                 textNoteActionTarget = null
@@ -3360,6 +3394,7 @@ fun FolderDetailScreen(
                     ScheduleAlertType.NOTIFICATION
                 }
             },
+            onTogglePin = { viewModel.togglePin(target) },
             onSelect = {
                 viewModel.startBatchSelectionWithCanvasNote(canvasNote.id)
                 canvasNoteActionTarget = null
@@ -3538,7 +3573,7 @@ private fun DetailDocumentCard(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1220)),
         border = androidx.compose.foundation.BorderStroke(
             if (isSelected) 2.dp else 1.2.dp,
             if (isSelected) FolderBodyBlue else MidnightCardOutline
@@ -3635,6 +3670,23 @@ private fun DetailDocumentCard(
                         }
                     }
 
+                    if (doc.isPinned) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF1E254A),
+                            modifier = Modifier
+                                .align(if (isBatchMode) Alignment.TopCenter else Alignment.TopEnd)
+                                .padding(8.dp)
+                                .size(22.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PushPin,
+                                contentDescription = "Pinned note",
+                                tint = Color(0xFF6C8CFF),
+                                modifier = Modifier.padding(4.dp)
+                            )
+                        }
+                    }
 
                     // Multi-select Checkmark Badge
                     if (isBatchMode) {
@@ -3775,7 +3827,7 @@ internal fun DetailPhotoCard(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1220)),
         border = androidx.compose.foundation.BorderStroke(
             if (isSelected) 2.dp else 1.dp,
             if (isSelected) FolderBodyBlue else MidnightCardOutline
@@ -3832,6 +3884,24 @@ internal fun DetailPhotoCard(
                             tint = TextMuted,
                             modifier = Modifier.size(32.dp)
                         )
+                    }
+
+                    if (photo.isPinned) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF1E254A),
+                            modifier = Modifier
+                                .align(if (isBatchMode) Alignment.TopCenter else Alignment.TopStart)
+                                .padding(8.dp)
+                                .size(22.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PushPin,
+                                contentDescription = "Pinned note",
+                                tint = Color(0xFF6C8CFF),
+                                modifier = Modifier.padding(4.dp)
+                            )
+                        }
                     }
 
                     if (isBatchMode) {
@@ -3946,7 +4016,7 @@ private fun DetailGroupCard(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MidnightSurface),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1220)),
         border = androidx.compose.foundation.BorderStroke(
             if (isSelected) 2.dp else 1.2.dp,
             if (isSelected) FolderBodyBlue else MidnightCardOutline
@@ -4034,6 +4104,23 @@ private fun DetailGroupCard(
                         }
                     }
 
+                    if (group.isPinned) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF1E254A),
+                            modifier = Modifier
+                                .align(if (group.tag != null) Alignment.TopCenter else Alignment.TopEnd)
+                                .padding(8.dp)
+                                .size(22.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PushPin,
+                                contentDescription = "Pinned note",
+                                tint = Color(0xFF6C8CFF),
+                                modifier = Modifier.padding(4.dp)
+                            )
+                        }
+                    }
 
                     // Multi-select Checkmark Badge
                     if (isBatchMode) {

@@ -78,3 +78,6 @@ data class PdfPageEditorNavKey(
     val pageIndex: Int
 ) : NavKey
 
+@Serializable
+data class SpaceSettingsNavKey(val spaceId: Long) : NavKey
+

@@ -23,6 +23,7 @@ data class CanvasNote(
     override val scheduledAt: Long? = null,
     override val alertType: String? = null,
     override val scheduleTitle: String? = null,
+    override val isPinned: Boolean = false,
     val isTrashed: Boolean = false,
     val deletedAt: Long? = null
 ) : SchedulableNote {

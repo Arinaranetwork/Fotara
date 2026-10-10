@@ -47,8 +47,8 @@ import com.arinara.fotara.theme.HomeSubtitleGray
 @Composable
 fun FriendsSettingsCard(
     modifier: Modifier = Modifier,
-    activeBuddiesCount: Int = 0,
-    totalBuddiesCount: Int = 0,
+    activeFriendsCount: Int = 0,
+    totalFriendsCount: Int = 0,
     onClick: () -> Unit
 ) {
     Card(
@@ -85,7 +85,7 @@ fun FriendsSettingsCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Study Buddies",
+                    text = "Friends",
                     color = Color.White,
                     fontSize = 16.sp,
                     fontFamily = ElmsSans,
@@ -95,12 +95,12 @@ fun FriendsSettingsCard(
                 Spacer(modifier = Modifier.height(2.dp))
 
                 val subtitleText = when {
-                    activeBuddiesCount > 0 && totalBuddiesCount > 0 ->
-                        "$activeBuddiesCount online • $totalBuddiesCount study contacts"
-                    totalBuddiesCount > 0 ->
-                        "$totalBuddiesCount study contacts"
+                    activeFriendsCount > 0 && totalFriendsCount > 0 ->
+                        "$activeFriendsCount online • $totalFriendsCount friends"
+                    totalFriendsCount > 0 ->
+                        "$totalFriendsCount friends"
                     else ->
-                        "Connect with classmates, share notes, study presence"
+                        "Connect with friends, share notes, study presence"
                 }
 
                 Text(

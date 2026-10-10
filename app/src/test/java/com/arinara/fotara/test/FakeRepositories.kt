@@ -755,6 +755,18 @@ class FakePhotoRepository(
         }
     }
 
+    override suspend fun setPhotoPinned(id: Long, isPinned: Boolean) {
+        photosFlow.value = photosFlow.value.map {
+            if (it.id == id) it.copy(isPinned = isPinned) else it
+        }
+    }
+
+    override suspend fun setGroupPinned(groupId: Long, isPinned: Boolean) {
+        groupsFlow.value = groupsFlow.value.map {
+            if (it.id == groupId) it.copy(isPinned = isPinned) else it
+        }
+    }
+
     override suspend fun refresh() {}
 }
 
@@ -1119,6 +1131,12 @@ class FakeDocumentRepository(
 
     override suspend fun rebuildSearchIndex(): Int = 0
 
+    override suspend fun setDocumentPinned(id: Long, isPinned: Boolean) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(isPinned = isPinned) else it
+        }
+    }
+
     override suspend fun refresh() {
         // no-op for in-memory fake
     }
@@ -1237,6 +1255,12 @@ class FakeTextNoteRepository(
         }
     }
 
+    override suspend fun setNotePinned(id: Long, isPinned: Boolean) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(isPinned = isPinned) else it
+        }
+    }
+
     override suspend fun refresh() {}
 }
 
@@ -1349,6 +1373,12 @@ class FakeCanvasNoteRepository(
     override suspend fun moveCanvasNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?) {
         notesFlow.value = notesFlow.value.map {
             if (ids.contains(it.id)) it.copy(folderId = targetFolderId, subfolderId = targetSubfolderId) else it
+        }
+    }
+
+    override suspend fun setCanvasPinned(id: Long, isPinned: Boolean) {
+        notesFlow.value = notesFlow.value.map {
+            if (it.id == id) it.copy(isPinned = isPinned) else it
         }
     }
 

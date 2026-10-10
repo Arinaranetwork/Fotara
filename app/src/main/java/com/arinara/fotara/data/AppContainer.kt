@@ -89,7 +89,7 @@ class DefaultAppContainer(override val context: Context) : AppContainer {
     }
 
     override val workspaceRepository: WorkspaceRepository by lazy {
-        SqliteWorkspaceRepository(dbHelper, folderRepository)
+        SqliteWorkspaceRepository(dbHelper, folderRepository, spaceRepository = spaceRepository)
     }
 
     override val photoRepository: PhotoRepository by lazy {

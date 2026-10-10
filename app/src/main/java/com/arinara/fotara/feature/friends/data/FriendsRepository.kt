@@ -25,19 +25,38 @@ interface FriendsRepository {
     suspend fun toggleFavorite(id: String)
     fun getMyPresenceStatusFlow(): Flow<StudyPresenceStatus>
     fun getMySubjectFlow(): Flow<String?>
+
+    fun getClaimedUsername(): String
+    suspend fun claimUsername(username: String, displayName: String): Result<String>
+    fun getUsernameCooldownDays(): Int
+    fun canChangeUsername(): Pair<Boolean, String?>
+    fun getFollowersFlow(): Flow<List<FriendProfile>>
+    fun getFollowingFlow(): Flow<List<FriendProfile>>
+    suspend fun followUser(friend: FriendProfile)
+    suspend fun unfollowUser(id: String)
+    suspend fun removeFollower(id: String)
 }
 
 class LocalFriendsRepository(
-    private val prefs: SharedPreferences
+    private val prefs: SharedPreferences,
+    private val usernameManager: UsernameManager
 ) : FriendsRepository {
 
     constructor(context: Context) : this(
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
+        UsernameManager(context)
+    )
+
+    constructor(prefs: SharedPreferences) : this(
+        prefs,
+        UsernameManager(prefs)
     )
 
     companion object {
         const val PREFS_NAME = "fotara_friends_prefs"
         const val KEY_FRIENDS_LIST = "key_friends_list"
+        const val KEY_FOLLOWERS_LIST = "key_followers_list"
+        const val KEY_FOLLOWING_LIST = "key_following_list"
         const val KEY_MY_HANDLE = "key_my_handle"
         const val KEY_MY_PRESENCE = "key_my_presence"
         const val KEY_MY_SUBJECT = "key_my_subject"
@@ -46,11 +65,12 @@ class LocalFriendsRepository(
     }
 
     private val _friendsFlow = MutableStateFlow<List<FriendProfile>>(loadFriends())
+    private val _followersFlow = MutableStateFlow<List<FriendProfile>>(loadFollowers())
+    private val _followingFlow = MutableStateFlow<List<FriendProfile>>(loadFollowing())
     private val _myPresenceStatusFlow = MutableStateFlow(loadPresenceStatus())
     private val _mySubjectFlow = MutableStateFlow(loadSubject())
 
-    private fun loadFriends(): List<FriendProfile> {
-        val raw = prefs.getString(KEY_FRIENDS_LIST, null) ?: return emptyList()
+    private fun parseList(raw: String): List<FriendProfile> {
         if (raw.isBlank()) return emptyList()
         val items = raw.split(DELIMITER)
         val list = mutableListOf<FriendProfile>()
@@ -66,10 +86,120 @@ class LocalFriendsRepository(
         return list
     }
 
+    private fun loadFriends(): List<FriendProfile> {
+        val raw = prefs.getString(KEY_FRIENDS_LIST, null) ?: return emptyList()
+        return parseList(raw)
+    }
+
+    private fun seedFollowers(): List<FriendProfile> = listOf(
+        FriendProfile(
+            id = "seed-follower-1",
+            handle = "@jordan_b",
+            displayName = "Jordan Baker",
+            studyStatus = StudyPresenceStatus.STUDYING,
+            currentSubject = "Linear Algebra & Vector Spaces",
+            followersCount = 14,
+            followingCount = 12
+        ),
+        FriendProfile(
+            id = "seed-follower-2",
+            handle = "@sarah_k",
+            displayName = "Sarah Kim",
+            studyStatus = StudyPresenceStatus.OPEN_TO_COLLAB,
+            currentSubject = "Microeconomics",
+            followersCount = 28,
+            followingCount = 19
+        ),
+        FriendProfile(
+            id = "seed-follower-3",
+            handle = "@alex_w",
+            displayName = "Alex Wong",
+            studyStatus = StudyPresenceStatus.OFFLINE,
+            currentSubject = null,
+            followersCount = 9,
+            followingCount = 15
+        )
+    )
+
+    private fun seedFollowing(): List<FriendProfile> = listOf(
+        FriendProfile(
+            id = "seed-following-1",
+            handle = "@jordan_b",
+            displayName = "Jordan Baker",
+            studyStatus = StudyPresenceStatus.STUDYING,
+            currentSubject = "Linear Algebra & Vector Spaces",
+            followersCount = 14,
+            followingCount = 12
+        ),
+        FriendProfile(
+            id = "seed-following-2",
+            handle = "@taylor_m",
+            displayName = "Taylor Miller",
+            studyStatus = StudyPresenceStatus.IN_LECTURE,
+            currentSubject = "Computer Architecture",
+            followersCount = 31,
+            followingCount = 24
+        )
+    )
+
+    private fun saveFollowersToPrefs(list: List<FriendProfile>) {
+        val serialized = list.joinToString(DELIMITER) { it.toJson() }
+        prefs.edit().putString(KEY_FOLLOWERS_LIST, serialized).apply()
+    }
+
+    private fun saveFollowingToPrefs(list: List<FriendProfile>) {
+        val serialized = list.joinToString(DELIMITER) { it.toJson() }
+        prefs.edit().putString(KEY_FOLLOWING_LIST, serialized).apply()
+    }
+
+    private fun loadFollowers(): List<FriendProfile> {
+        val raw = prefs.getString(KEY_FOLLOWERS_LIST, null)
+        if (raw.isNullOrBlank()) {
+            val seeded = seedFollowers()
+            saveFollowersToPrefs(seeded)
+            return seeded
+        }
+        val list = parseList(raw)
+        return if (list.isEmpty()) {
+            val seeded = seedFollowers()
+            saveFollowersToPrefs(seeded)
+            seeded
+        } else {
+            list
+        }
+    }
+
+    private fun loadFollowing(): List<FriendProfile> {
+        val raw = prefs.getString(KEY_FOLLOWING_LIST, null)
+        if (raw.isNullOrBlank()) {
+            val seeded = seedFollowing()
+            saveFollowingToPrefs(seeded)
+            return seeded
+        }
+        val list = parseList(raw)
+        return if (list.isEmpty()) {
+            val seeded = seedFollowing()
+            saveFollowingToPrefs(seeded)
+            seeded
+        } else {
+            list
+        }
+    }
+
     private fun persistFriends(list: List<FriendProfile>) {
         val serialized = list.joinToString(DELIMITER) { it.toJson() }
         prefs.edit().putString(KEY_FRIENDS_LIST, serialized).apply()
         _friendsFlow.value = list
+    }
+
+    private fun persistFollowers(list: List<FriendProfile>) {
+        saveFollowersToPrefs(list)
+        _followersFlow.value = list
+    }
+
+    private fun persistFollowing(list: List<FriendProfile>) {
+        saveFollowingToPrefs(list)
+        _followingFlow.value = list
     }
 
     private fun loadPresenceStatus(): StudyPresenceStatus {
@@ -87,6 +217,10 @@ class LocalFriendsRepository(
     }
 
     override fun getFriendsFlow(): Flow<List<FriendProfile>> = _friendsFlow.asStateFlow()
+
+    override fun getFollowersFlow(): Flow<List<FriendProfile>> = _followersFlow.asStateFlow()
+
+    override fun getFollowingFlow(): Flow<List<FriendProfile>> = _followingFlow.asStateFlow()
 
     override fun getMyPresenceStatusFlow(): Flow<StudyPresenceStatus> = _myPresenceStatusFlow.asStateFlow()
 
@@ -138,6 +272,28 @@ class LocalFriendsRepository(
         persistFriends(updated)
     }
 
+    override suspend fun followUser(friend: FriendProfile) {
+        val current = _followingFlow.value
+        val normalizedFriendHandle = if (friend.handle.startsWith("@")) friend.handle.lowercase() else "@${friend.handle.lowercase()}"
+        val exists = current.any { it.id == friend.id || it.handle.lowercase() == normalizedFriendHandle }
+        if (!exists) {
+            val updated = current + friend.copy(handle = normalizedFriendHandle)
+            persistFollowing(updated)
+        }
+    }
+
+    override suspend fun unfollowUser(id: String) {
+        val current = _followingFlow.value
+        val updated = current.filterNot { it.id == id || it.handle.equals(id, ignoreCase = true) }
+        persistFollowing(updated)
+    }
+
+    override suspend fun removeFollower(id: String) {
+        val current = _followersFlow.value
+        val updated = current.filterNot { it.id == id || it.handle.equals(id, ignoreCase = true) }
+        persistFollowers(updated)
+    }
+
     override suspend fun updatePresence(status: StudyPresenceStatus, subject: String?) {
         val cleanSubject = subject?.trim()?.takeIf { it.isNotEmpty() }
         prefs.edit()
@@ -148,15 +304,21 @@ class LocalFriendsRepository(
         _mySubjectFlow.value = cleanSubject
     }
 
-    override fun getMyHandle(): String {
-        val handle = prefs.getString(KEY_MY_HANDLE, null)
-        if (!handle.isNullOrBlank()) {
-            return if (handle.startsWith("@")) handle else "@$handle"
+    override fun getClaimedUsername(): String = usernameManager.getClaimedUsername()
+
+    override suspend fun claimUsername(username: String, displayName: String): Result<String> {
+        val result = usernameManager.claimUsername(username, displayName)
+        if (result.isSuccess) {
+            prefs.edit().putString(KEY_MY_HANDLE, result.getOrThrow()).apply()
         }
-        val defaultHandle = "@$DEFAULT_HANDLE"
-        prefs.edit().putString(KEY_MY_HANDLE, defaultHandle).apply()
-        return defaultHandle
+        return result
     }
+
+    override fun getUsernameCooldownDays(): Int = usernameManager.getRemainingCooldownDays()
+
+    override fun canChangeUsername(): Pair<Boolean, String?> = usernameManager.canChangeUsername()
+
+    override fun getMyHandle(): String = usernameManager.getClaimedUsername()
 
     override fun generateShareCode(): String {
         val myHandle = getMyHandle().removePrefix("@")

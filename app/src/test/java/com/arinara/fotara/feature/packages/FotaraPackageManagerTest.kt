@@ -32,8 +32,14 @@ class FotaraPackageManagerTest {
 
     @Before
     fun setUp() {
+        FotaraPackageManager.testCatalog = FotaraPackageManager.SAMPLE_PACKAGES
         packagesDir = tempFolder.newFolder("packages")
         packageManager = FotaraPackageManager(packagesDir)
+    }
+
+    @Test
+    fun testProductionOfficialPackagesIsEmpty() {
+        assertTrue(FotaraPackageManager.OFFICIAL_PACKAGES.isEmpty())
     }
 
     @Test

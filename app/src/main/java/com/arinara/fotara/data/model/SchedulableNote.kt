@@ -21,6 +21,7 @@ interface SchedulableNote {
     val alertType: String?
     val scheduleTitle: String?
     val noteType: ScheduleNoteType
+    val isPinned: Boolean get() = false
 
     val hasActiveSchedule: Boolean
         get() = scheduledAt != null && scheduledAt!! > System.currentTimeMillis()

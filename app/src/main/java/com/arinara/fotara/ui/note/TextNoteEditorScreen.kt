@@ -170,27 +170,6 @@ fun TextNoteEditorScreen(
     val audioUiState by audioViewModel.uiState.collectAsState()
     var showAudioDock by remember { mutableStateOf(false) }
 
-    val activeMathSpan = remember(state.bodyValue.text, state.bodyValue.selection) {
-        val cursor = state.bodyValue.selection.start
-        val doc = com.arinara.fotara.ui.note.editor.MarkdownParser.parse(state.bodyValue.text)
-        doc.spans.firstOrNull { span ->
-            (span.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_INLINE ||
-             span.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_BLOCK) &&
-            cursor in (span.start - 1)..(span.end + 1)
-        }
-    }
-
-    val rawMathContent = remember(activeMathSpan, state.bodyValue.text) {
-        activeMathSpan?.let { span ->
-            if (span.contentStart in 0..state.bodyValue.text.length &&
-                span.contentEnd in 0..state.bodyValue.text.length &&
-                span.contentStart <= span.contentEnd
-            ) {
-                state.bodyValue.text.substring(span.contentStart, span.contentEnd).trim()
-            } else ""
-        } ?: ""
-    }
-
     var isPreviewMode by remember { mutableStateOf(false) }
     var activeHighlightQuery by remember { mutableStateOf(highlightQuery) }
     val searchHighlightAlpha = remember { Animatable(0f) }
@@ -857,69 +836,6 @@ fun TextNoteEditorScreen(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            // Live Floating Math Preview Card (updates in real-time when cursor is inside or adjacent to LaTeX)
-            AnimatedVisibility(
-                visible = activeMathSpan != null && rawMathContent.isNotEmpty(),
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    color = CardBg,
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ToolbarBorder),
-                    shadowElevation = 6.dp
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .background(Color(0xFF2563EB).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "fx",
-                                    color = Color(0xFF64B5F6),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (activeMathSpan?.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_BLOCK) {
-                                    "Display Math Preview"
-                                } else {
-                                    "Inline Math Preview"
-                                },
-                                color = TextMuted,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        val mathAnnotated = remember(rawMathContent, activeMathSpan?.type) {
-                            com.arinara.fotara.ui.note.editor.KatexMathRenderer.buildMathAnnotatedString(
-                                rawLatex = rawMathContent,
-                                mathColor = TabCream,
-                                isBlock = (activeMathSpan?.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_BLOCK)
-                            )
-                        }
-                        Text(
-                            text = mathAnnotated,
-                            modifier = Modifier.fillMaxWidth(),
-                            fontSize = if (activeMathSpan?.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_BLOCK) 16.sp else 14.5.sp,
-                            lineHeight = 22.sp
-                        )
-                    }
-                }
             }
 
             // Voice / Audio Annotations Dock

@@ -2,7 +2,7 @@
 Last Updated: 2026-10-10
 
 ## Current Phase
-Phase 55 - AndroidVersionDowngradeEngine (2.2.0 Alpha) [Completed]
+Phase 59 - SocialUsernameEcosystemAndScheduleWidgetConsolidation [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -62,6 +62,10 @@ Phase 55 - AndroidVersionDowngradeEngine (2.2.0 Alpha) [Completed]
 | 53    | VersionRollbackManager            | Completed   |
 | 54    | FriendsUiThemeAndWindowInsetsPolish | Completed   |
 | 55    | AndroidVersionDowngradeEngine     | Completed   |
+| 56    | CoreExperienceRepairs             | Completed   |
+| 57    | SpaceArchitectureAndNotePinningOverhaul | Completed   |
+| 58    | AttendanceRegisterSpreadsheet    | Removed     |
+| 59    | SocialUsernameEcosystemAndScheduleWidgetConsolidation | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -164,6 +168,37 @@ Phase 55 - AndroidVersionDowngradeEngine (2.2.0 Alpha) [Completed]
 - [x] Task 4: Sticky post-uninstall notification & uninstall intent trigger in `DowngradeManager` - Phase 55
 - [x] Task 5: Interactive Downgrade Wizard in `UpdateScreen.kt` with Shizuku, Guided Safe Reinstall, and ADB command - Phase 55
 - [x] Task 6: Unit tests, regression verification, version bump to 2.2.0 Alpha, and release packaging - Phase 55
+- [x] Task 1: Fix PDF Voice / Audio Annotations (layout weight, page menu entry, target page routing) - Phase 56
+- [x] Task 2: Fix Draw Mode End Distortion & Shape Snapping (clamp open spline ends, require draw-and-hold for shape snapping) - Phase 56
+- [x] Task 3: Real Academic Space Data Scoping (filter workspaces & folders by active space, replace mock descriptions with live stats) - Phase 56
+- [x] Task 4: Fix Feedback Submission HTTP 400 (prevent `"synced"` property from mutating remote POST payload) - Phase 56
+- [x] Task 5: Remove Obstructive Inline Math Preview in Text Note Editor - Phase 56
+- [x] Task 6: Unit Test Verification (full test pass, omit release build packaging) - Phase 56
+
+- [x] Task 1: Format & render Markdown tables in Text Notes as structured visual tables (Image 1) - Phase 57
+- [x] Task 2: Fix status bar hardware overlap in Modular Add-Ons / PackageManagementHubScreen (Image 2) - Phase 57
+- [x] Task 3: Fix blank Glance Today Widget body rendering in DueTomorrowGlanceWidget (Image 3) - Phase 57
+- [x] Task 4: Universal note pinning in folders & photo groups across all note types (limit 4 pins) - Phase 57
+- [x] Task 5: Restore "Select" (multi-select) action in Home screen 3-dot overflow menu - Phase 57
+- [x] Task 6: Dedicated Space Settings screen and relocate Syllabus Evaluator into it - Phase 57
+- [x] Task 7: Remove "Add Workspace" option from WorkspaceTabBar and HomeScreen - Phase 57
+- [x] Task 8: Eliminate jumping residue text and transition artifacts during Settings back navigation - Phase 57
+- [x] Task 9: In-app release banner recognition (`UpdateManager.kt` `contains("banner")`) and commit `FotaraBanner_2.2_2026-10-10.jpg` - Phase 57
+- [x] Task 10: Dynamically synchronize and polish GitHub `README.md` with latest release badges and 2.x architectural features - Phase 57
+- [x] Task 11: Fix version showing 1.0.0 during rollback release download (`UpdateManager.kt`, `UpdateScreen.kt`) - Phase 57
+- [x] Task 12: Darken note action bottom sheets and note cards across all note types in folders and notes screens (Image 4) - Phase 57
+- [x] Task 13: Unit test validation (no release build) - Phase 57
+- [x] Task 1: Unique username claim with Supabase uniqueness check & 7-day change rate limit - Phase 59
+- [x] Task 2: Terminology update: "Study Buddy" to "Friend", with 3-dot Followers/Following views - Phase 59
+- [x] Task 3: Friends screen empty state vertical centering and height improvement (Photo 1) - Phase 59
+- [x] Task 4: Sample schedule data generation matching format for instant timetable testing - Phase 59
+- [x] Task 5: Temporarily disable Anti-Procrastination Alarm (grayed out but visible) - Phase 59
+- [x] Task 6: Custom day rollover bounds (prevent 24h setting, allow custom start/end up to 23h) - Phase 59
+- [x] Task 7: Fix Modular Add-Ons bottom bar cut-off with content padding (Photo 2) - Phase 59
+- [x] Task 8: Remove official add-ons while maintaining empty Modular Add-Ons screen - Phase 59
+- [x] Task 9: Consolidate widgets into dedicated daily Class Schedule Widget (with None empty state) - Phase 59
+- [x] Task 10: Class schedule reminder setting in settings pill (notification for <day>) - Phase 59
+- [x] Task 11: Unit test validation (no release build) - Phase 59
 
 ## In Progress
 None.

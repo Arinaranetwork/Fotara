@@ -33,6 +33,8 @@ class FriendProfileTest {
         assertNull(profile.currentSubject)
         assertFalse(profile.isFavorite)
         assertFalse(profile.isActive)
+        assertEquals(0, profile.followersCount)
+        assertEquals(0, profile.followingCount)
     }
 
     @Test
@@ -76,7 +78,9 @@ class FriendProfileTest {
             studyStatus = StudyPresenceStatus.STUDYING,
             currentSubject = "Linear Algebra & Vector Spaces",
             joinedAt = 1760000000000L,
-            isFavorite = true
+            isFavorite = true,
+            followersCount = 42,
+            followingCount = 18
         )
 
         val json = original.toJson()
@@ -85,6 +89,8 @@ class FriendProfileTest {
         assertTrue(json.contains("\"handle\":\"@jordan_b\""))
         assertTrue(json.contains("\"studyStatus\":\"STUDYING\""))
         assertTrue(json.contains("\"isFavorite\":true"))
+        assertTrue(json.contains("\"followersCount\":42"))
+        assertTrue(json.contains("\"followingCount\":18"))
 
         val restored = FriendProfile.fromJson(json)
         assertNotNull(restored)
@@ -96,6 +102,19 @@ class FriendProfileTest {
         assertEquals(original.currentSubject, restored.currentSubject)
         assertEquals(original.joinedAt, restored.joinedAt)
         assertEquals(original.isFavorite, restored.isFavorite)
+        assertEquals(original.followersCount, restored.followersCount)
+        assertEquals(original.followingCount, restored.followingCount)
+    }
+
+    @Test
+    fun testJsonDeserializationFallbackForMissingCounts() {
+        val legacyJson = """{"id":"leg-1","handle":"@old","displayName":"Old Peer","avatarUrl":null,"studyStatus":"OFFLINE","currentSubject":null,"joinedAt":1700000000000,"isFavorite":false}"""
+        val restored = FriendProfile.fromJson(legacyJson)
+        assertNotNull(restored)
+        assertEquals("leg-1", restored!!.id)
+        assertEquals("@old", restored.handle)
+        assertEquals(0, restored.followersCount)
+        assertEquals(0, restored.followingCount)
     }
 
     @Test

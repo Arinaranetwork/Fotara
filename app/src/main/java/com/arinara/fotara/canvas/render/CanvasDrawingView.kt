@@ -238,7 +238,9 @@ class CanvasDrawingView(
                 }
                 is PointerAction.FinishStroke -> {
                     toolController.activeLayerId = activeLayerId.ifEmpty { documentSnapshot.getPrimaryLayerId() }
+                    toolController.isShapeSnapped = isShapeSnapped
                     val (updatedDoc, strokeBounds) = toolController.finishStroke(documentSnapshot, historyManager, viewport.scale)
+                    isShapeSnapped = false
                     documentSnapshot = updatedDoc
                     spatialIndex.rebuild(updatedDoc.elements)
                     tileCacheManager.invalidateRegion(strokeBounds)
@@ -246,6 +248,7 @@ class CanvasDrawingView(
                     needsInvalidate = true
                 }
                 is PointerAction.CancelStroke -> {
+                    isShapeSnapped = false
                     toolController.cancelStroke()
                     needsInvalidate = true
                 }

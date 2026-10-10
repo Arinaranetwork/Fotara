@@ -123,69 +123,18 @@
             </intent-filter>
         </receiver>
 
-        <!-- Re-enabled Jetpack Glance Due Tomorrow widget for v1.3 -->
-        <receiver
-            android:name=".widget.DueTomorrowGlanceWidgetReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:label="@string/widget_due_tomorrow_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/due_tomorrow_widget_info" />
-        </receiver>
-
-        <!-- Timetable Glance Widget (Phase 45) -->
+        <!-- Consolidated Schedule Glance Widget (Phase 59 - A-028) -->
         <receiver
             android:name=".widget.TimetableGlanceWidgetReceiver"
             android:enabled="true"
             android:exported="true"
-            android:label="@string/widget_timetable_name">
+            android:label="@string/widget_schedule_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/timetable_widget_info" />
-        </receiver>
-
-        <!-- Photo Pin Glance Widget (Phase 45) -->
-        <receiver
-            android:name=".widget.PhotoPinGlanceWidgetReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:label="@string/widget_photo_pin_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/photo_pin_widget_info" />
-        </receiver>
-
-        <activity
-            android:name=".widget.PhotoPinConfigActivity"
-            android:exported="true"
-            android:theme="@style/Theme.Fotara">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
-            </intent-filter>
-        </activity>
-
-        <!-- Photo Carousel Glance Widget (Phase 45) -->
-        <receiver
-            android:name=".widget.PhotoCarouselGlanceWidgetReceiver"
-            android:enabled="true"
-            android:exported="true"
-            android:label="@string/widget_photo_carousel_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/photo_carousel_widget_info" />
         </receiver>
 
         <!-- Anti-Procrastination Alarm Components (Phase 45) -->

@@ -403,10 +403,11 @@ fun UpdateScreen(
                 }
 
                 UpdateState.UPDATE_AVAILABLE, UpdateState.DOWNLOADING, UpdateState.DOWNLOADED -> {
-                    // Update Available State
-                    val rel = release
+                    // Update Available or Active Rollback Downloading State
+                    val activeTarget = activeRollbackTarget ?: release
+                    val rel = activeTarget
 
-                    val targetInfo = remember(rel) { VersionInfo.parse(rel?.version ?: "", rel?.isPrerelease == true) }
+                    val targetInfo = remember(activeTarget) { VersionInfo.parse(activeTarget?.version ?: "", activeTarget?.isPrerelease == true) }
                     com.arinara.fotara.ui.components.UpdateBanner(
                         version = targetInfo.displayVersion,
                         releaseUrl = rel?.htmlUrl,

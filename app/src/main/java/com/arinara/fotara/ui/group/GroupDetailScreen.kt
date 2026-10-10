@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LayersClear
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -596,7 +597,7 @@ fun GroupDetailScreen(
     contextMenuPhoto?.let { photo ->
         ModalBottomSheet(
             onDismissRequest = { contextMenuPhoto = null },
-            containerColor = MidnightSurface
+            containerColor = Color(0xFF0F1422)
         ) {
             Column(
                 modifier = Modifier
@@ -610,6 +611,28 @@ fun GroupDetailScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(14.dp))
+
+                // Action: Pin / Unpin Note
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            val target = photo
+                            contextMenuPhoto = null
+                            viewModel.togglePhotoPin(target)
+                        }
+                        .padding(vertical = 12.dp, horizontal = 8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.PushPin, contentDescription = null, tint = FolderTabCream)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = if (photo.isPinned) "Unpin note" else "Pin note",
+                        color = TextPrimary,
+                        fontSize = 15.sp
+                    )
+                }
 
                 // Action 1: Set as Cover Photo (2.5)
                 Row(

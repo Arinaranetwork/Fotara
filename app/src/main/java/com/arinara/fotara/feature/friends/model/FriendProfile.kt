@@ -35,7 +35,9 @@ data class FriendProfile(
     val studyStatus: StudyPresenceStatus = StudyPresenceStatus.OFFLINE,
     val currentSubject: String? = null,
     val joinedAt: Long = System.currentTimeMillis(),
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val followersCount: Int = 0,
+    val followingCount: Int = 0
 ) {
     val formattedHandle: String
         get() = if (handle.startsWith("@")) handle else "@$handle"
@@ -64,7 +66,9 @@ data class FriendProfile(
             sb.append("\"currentSubject\":null,")
         }
         sb.append("\"joinedAt\":").append(joinedAt).append(",")
-        sb.append("\"isFavorite\":").append(isFavorite)
+        sb.append("\"isFavorite\":").append(isFavorite).append(",")
+        sb.append("\"followersCount\":").append(followersCount).append(",")
+        sb.append("\"followingCount\":").append(followingCount)
         sb.append("}")
         return sb.toString()
     }
@@ -119,6 +123,8 @@ data class FriendProfile(
                 val currentSubject = extractField("currentSubject")
                 val joinedAt = extractField("joinedAt")?.toLongOrNull() ?: System.currentTimeMillis()
                 val isFavorite = extractField("isFavorite")?.toBooleanStrictOrNull() ?: false
+                val followersCount = extractField("followersCount")?.toIntOrNull() ?: 0
+                val followingCount = extractField("followingCount")?.toIntOrNull() ?: 0
 
                 FriendProfile(
                     id = id,
@@ -128,7 +134,9 @@ data class FriendProfile(
                     studyStatus = studyStatus,
                     currentSubject = currentSubject,
                     joinedAt = joinedAt,
-                    isFavorite = isFavorite
+                    isFavorite = isFavorite,
+                    followersCount = followersCount,
+                    followingCount = followingCount
                 )
             } catch (_: Exception) {
                 null

@@ -54,6 +54,7 @@ sealed interface FolderGridItem {
     val sortCreatedAt: Long
     val sortDeadline: Long?
     val sortColor: String?
+    val isPinned: Boolean get() = false
 
     @Immutable
     data class StandalonePhoto(
@@ -65,6 +66,7 @@ sealed interface FolderGridItem {
         override val sortCreatedAt: Long get() = photo.addedAt
         override val sortDeadline: Long? get() = photo.linkedDeadline
         override val sortColor: String? get() = photo.tagColor
+        override val isPinned: Boolean get() = photo.isPinned
     }
 
     @Immutable
@@ -79,6 +81,7 @@ sealed interface FolderGridItem {
         override val sortCreatedAt: Long get() = group.addedAt
         override val sortDeadline: Long? get() = group.linkedDeadline ?: memberPhotos.mapNotNull { it.linkedDeadline }.minOrNull()
         override val sortColor: String? get() = group.tagColor
+        override val isPinned: Boolean get() = group.isPinned
     }
 
     @Immutable
@@ -92,6 +95,7 @@ sealed interface FolderGridItem {
         override val sortCreatedAt: Long get() = documentNote.addedAt
         override val sortDeadline: Long? get() = documentNote.linkedDeadline
         override val sortColor: String? get() = documentNote.tagColor
+        override val isPinned: Boolean get() = documentNote.isPinned
     }
 
     @Immutable
@@ -104,6 +108,7 @@ sealed interface FolderGridItem {
         override val sortCreatedAt: Long get() = textNote.addedAt
         override val sortDeadline: Long? get() = textNote.linkedDeadline
         override val sortColor: String? get() = textNote.tagColor
+        override val isPinned: Boolean get() = textNote.isPinned
     }
 
     @Immutable
@@ -116,6 +121,7 @@ sealed interface FolderGridItem {
         override val sortCreatedAt: Long get() = canvasNote.addedAt
         override val sortDeadline: Long? get() = canvasNote.linkedDeadline
         override val sortColor: String? get() = canvasNote.tagColor
+        override val isPinned: Boolean get() = canvasNote.isPinned
     }
 }
 

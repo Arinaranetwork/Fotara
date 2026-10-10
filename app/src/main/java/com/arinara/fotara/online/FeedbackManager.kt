@@ -310,7 +310,8 @@ class FeedbackManager(private val context: Context) {
 
         try {
             val url = URL("$supabaseUrl/rest/v1/suggestions")
-            val payloadBytes = payload.toString().toByteArray(Charsets.UTF_8)
+            val sendPayload = JSONObject(payload.toString()).apply { remove("synced") }
+            val payloadBytes = sendPayload.toString().toByteArray(Charsets.UTF_8)
             connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 15000
@@ -489,8 +490,8 @@ class FeedbackManager(private val context: Context) {
         try {
             val currentQueueStr = prefs.getString("feedback_queue", "[]") ?: "[]"
             val array = JSONArray(currentQueueStr)
-            item.put("synced", false)
-            array.put(item)
+            val queueItem = JSONObject(item.toString()).apply { put("synced", false) }
+            array.put(queueItem)
             prefs.edit().putString("feedback_queue", array.toString()).apply()
         } catch (_: Exception) {}
     }

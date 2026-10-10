@@ -46,6 +46,7 @@ interface TextNoteRepository {
     suspend fun purgeTextNotePermanently(id: Long)
     fun getTrashedTextNotes(): Flow<List<TextNote>>
     fun searchNotes(query: String): Flow<List<TextNote>>
+    suspend fun setNotePinned(id: Long, isPinned: Boolean)
     suspend fun refresh()
 }
 
@@ -75,7 +76,7 @@ class SqliteTextNoteRepository(
                 """
                 SELECT id, folder_id, subfolder_id, title, body_markdown,
                        created_at, updated_at, added_at, tag_color, linked_deadline,
-                       is_trashed, deleted_at, scheduled_at, alert_type
+                       is_trashed, deleted_at, scheduled_at, alert_type, is_pinned
                 FROM text_notes
                 ORDER BY updated_at DESC
                 """.trimIndent(),
@@ -98,7 +99,8 @@ class SqliteTextNoteRepository(
                         isTrashed = c.getInt(10) == 1,
                         deletedAt = if (c.isNull(11)) null else c.getLong(11),
                         scheduledAt = if (c.columnCount > 12 && !c.isNull(12)) c.getLong(12) else null,
-                        alertType = if (c.columnCount > 13 && !c.isNull(13)) c.getString(13) else null
+                        alertType = if (c.columnCount > 13 && !c.isNull(13)) c.getString(13) else null,
+                        isPinned = if (c.columnCount > 14 && !c.isNull(14)) c.getInt(14) == 1 else false
                     )
                     if (note.isTrashed) {
                         trashed.add(note)
@@ -294,6 +296,13 @@ class SqliteTextNoteRepository(
                 }
             }
         }
+
+    override suspend fun setNotePinned(id: Long, isPinned: Boolean) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        val cv = ContentValues().apply { put("is_pinned", if (isPinned) 1 else 0) }
+        db.update("text_notes", cv, "id = ?", arrayOf(id.toString()))
+        refreshSync()
+    }
 
     override suspend fun refresh() = withContext(Dispatchers.IO) {
         refreshSync()

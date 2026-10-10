@@ -84,6 +84,7 @@ interface DocumentRepository {
     suspend fun updateDocumentTagColor(id: Long, colorHex: String?)
     suspend fun updateDocumentDeadline(id: Long, deadlineMs: Long?)
     fun getTrashedDocumentNotes(): Flow<List<DocumentNote>>
+    suspend fun setDocumentPinned(id: Long, isPinned: Boolean)
     suspend fun refresh()
     suspend fun backfillPdfOcr(onProgress: ((current: Int, total: Int) -> Unit)? = null): Int
     suspend fun rebuildSearchIndex(): Int
@@ -300,7 +301,7 @@ class SqliteDocumentRepository(
                 """
                 SELECT id, folder_id, subfolder_id, name, doc_type, origin_file_uri,
                        extracted_text, created_at, added_at, tag_color, linked_deadline,
-                       is_trashed, deleted_at, scheduled_at, alert_type
+                       is_trashed, deleted_at, scheduled_at, alert_type, is_pinned
                 FROM document_notes
                 ORDER BY added_at DESC
                 """.trimIndent(),
@@ -324,7 +325,8 @@ class SqliteDocumentRepository(
                         isTrashed = c.getInt(11) == 1,
                         deletedAt = if (c.isNull(12)) null else c.getLong(12),
                         scheduledAt = if (c.columnCount > 13 && !c.isNull(13)) c.getLong(13) else null,
-                        alertType = if (c.columnCount > 14 && !c.isNull(14)) c.getString(14) else null
+                        alertType = if (c.columnCount > 14 && !c.isNull(14)) c.getString(14) else null,
+                        isPinned = if (c.columnCount > 15 && !c.isNull(15)) c.getInt(15) == 1 else false
                     )
                     if (note.isTrashed) {
                         trashedNotes.add(note)
@@ -1141,6 +1143,13 @@ class SqliteDocumentRepository(
             scope.launch { backfillPdfOcr() }
         }
         count
+    }
+
+    override suspend fun setDocumentPinned(id: Long, isPinned: Boolean) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        val cv = ContentValues().apply { put("is_pinned", if (isPinned) 1 else 0) }
+        db.update("document_notes", cv, "id = ?", arrayOf(id.toString()))
+        refreshSync()
     }
 
     override suspend fun refresh() {

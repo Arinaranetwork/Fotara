@@ -144,7 +144,7 @@ class PhotoCarouselGlanceWidget : GlanceAppWidget() {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Previous Button (<)
                         Text(
-                            text = " ◀ ",
+                            text = " < ",
                             style = TextStyle(color = ColorTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold),
                             modifier = GlanceModifier
                                 .background(ColorCardSurface)
@@ -157,7 +157,7 @@ class PhotoCarouselGlanceWidget : GlanceAppWidget() {
 
                         // Next Button (>)
                         Text(
-                            text = " ▶ ",
+                            text = " > ",
                             style = TextStyle(color = ColorTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold),
                             modifier = GlanceModifier
                                 .background(ColorCardSurface)

@@ -95,10 +95,10 @@ class GroupDetailViewModel(
                 photoRepository.getPhotosByFolder(folderId)
             ) { groups, photos ->
                 val currentGroup = groups.firstOrNull { it.id == groupId }
-                // Sort by order added to group (earliest added_at first, matching cover photo logic)
+                // Sort by order added to group (earliest added_at first, matching cover photo logic), prioritizing pinned
                 val memberPhotos = photos
                     .filter { it.groupId == groupId }
-                    .sortedBy { it.addedAt }
+                    .sortedWith(compareByDescending<Photo> { it.isPinned }.thenBy { it.addedAt })
                 val standalonePhotos = photos.filter { it.groupId == null }
 
                 Triple(currentGroup, memberPhotos, standalonePhotos)
@@ -120,6 +120,18 @@ class GroupDetailViewModel(
                 }
             }
             refreshRecentDestinations()
+        }
+    }
+
+    fun togglePhotoPin(photo: Photo) {
+        val currentlyPinnedCount = _uiState.value.photos.count { it.isPinned }
+        if (!photo.isPinned && currentlyPinnedCount >= 4) {
+            _uiState.update { it.copy(userMessage = "Maximum 4 pinned notes reached") }
+            return
+        }
+        val newPinned = !photo.isPinned
+        viewModelScope.launch {
+            photoRepository.setPhotoPinned(photo.id, newPinned)
         }
     }
 

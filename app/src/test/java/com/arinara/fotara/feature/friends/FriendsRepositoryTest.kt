@@ -8,6 +8,7 @@ package com.arinara.fotara.feature.friends
 
 import android.content.SharedPreferences
 import com.arinara.fotara.feature.friends.data.LocalFriendsRepository
+import com.arinara.fotara.feature.friends.data.UsernameManager
 import com.arinara.fotara.feature.friends.model.StudyPresenceStatus
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -61,10 +62,17 @@ class FriendsRepositoryTest {
     private lateinit var prefs: TestSharedPreferences
     private lateinit var repository: LocalFriendsRepository
 
+    private fun createTestUsernameManager(): UsernameManager {
+        return object : UsernameManager(prefs) {
+            override suspend fun checkSupabaseAvailability(cleanUsername: String): Result<Boolean> = Result.success(true)
+            override suspend fun upsertToSupabase(uuid: String, cleanUsername: String, displayName: String, timestamp: Long): Result<Unit> = Result.success(Unit)
+        }
+    }
+
     @Before
     fun setUp() {
         prefs = TestSharedPreferences()
-        repository = LocalFriendsRepository(prefs)
+        repository = LocalFriendsRepository(prefs, createTestUsernameManager())
     }
 
     @Test
@@ -190,7 +198,7 @@ class FriendsRepositoryTest {
         repository.updatePresence(StudyPresenceStatus.OPEN_TO_COLLAB, "Calculus III")
 
         // Instantiate second repository with same preferences backing
-        val newRepoInstance = LocalFriendsRepository(prefs)
+        val newRepoInstance = LocalFriendsRepository(prefs, createTestUsernameManager())
         val loadedFriends = newRepoInstance.getFriendsFlow().first()
 
         assertEquals(2, loadedFriends.size)
@@ -198,5 +206,81 @@ class FriendsRepositoryTest {
         assertEquals("@jordan", loadedFriends[1].handle)
         assertEquals(StudyPresenceStatus.OPEN_TO_COLLAB, newRepoInstance.getMyPresenceStatusFlow().first())
         assertEquals("Calculus III", newRepoInstance.getMySubjectFlow().first())
+    }
+
+    @Test
+    fun testFollowersInitialSeeding() = runTest {
+        val followers = repository.getFollowersFlow().first()
+        assertEquals(3, followers.size)
+        assertTrue(followers.any { it.handle == "@jordan_b" })
+        assertTrue(followers.any { it.handle == "@sarah_k" })
+        assertTrue(followers.any { it.handle == "@alex_w" })
+    }
+
+    @Test
+    fun testFollowingInitialSeeding() = runTest {
+        val following = repository.getFollowingFlow().first()
+        assertEquals(2, following.size)
+        assertTrue(following.any { it.handle == "@jordan_b" })
+        assertTrue(following.any { it.handle == "@taylor_m" })
+    }
+
+    @Test
+    fun testFollowUserAddsToFollowing() = runTest {
+        val newPeer = com.arinara.fotara.feature.friends.model.FriendProfile(
+            id = "peer-99",
+            handle = "@casey_r",
+            displayName = "Casey Rivera"
+        )
+        repository.followUser(newPeer)
+
+        val following = repository.getFollowingFlow().first()
+        assertEquals(3, following.size)
+        assertTrue(following.any { it.handle == "@casey_r" })
+
+        // Adding duplicate should not duplicate
+        repository.followUser(newPeer)
+        assertEquals(3, repository.getFollowingFlow().first().size)
+    }
+
+    @Test
+    fun testUnfollowUserRemovesFromFollowing() = runTest {
+        val initialFollowing = repository.getFollowingFlow().first()
+        assertEquals(2, initialFollowing.size)
+        val toRemove = initialFollowing.first()
+
+        repository.unfollowUser(toRemove.id)
+        val afterUnfollow = repository.getFollowingFlow().first()
+        assertEquals(1, afterUnfollow.size)
+        assertFalse(afterUnfollow.any { it.id == toRemove.id })
+    }
+
+    @Test
+    fun testRemoveFollowerRemovesFromFollowers() = runTest {
+        val initialFollowers = repository.getFollowersFlow().first()
+        assertEquals(3, initialFollowers.size)
+        val toRemove = initialFollowers.first()
+
+        repository.removeFollower(toRemove.id)
+        val afterRemove = repository.getFollowersFlow().first()
+        assertEquals(2, afterRemove.size)
+        assertFalse(afterRemove.any { it.id == toRemove.id })
+    }
+
+    @Test
+    fun testClaimUsernameUpdatesHandleAndCooldown() = runTest {
+        assertEquals("@scholar", repository.getClaimedUsername())
+        assertEquals("@scholar", repository.getMyHandle())
+        assertEquals(0, repository.getUsernameCooldownDays())
+        assertTrue(repository.canChangeUsername().first)
+
+        val claimResult = repository.claimUsername("alex_scholar", "Alex Scholar")
+        assertTrue(claimResult.isSuccess)
+        assertEquals("@alex_scholar", claimResult.getOrNull())
+
+        assertEquals("@alex_scholar", repository.getClaimedUsername())
+        assertEquals("@alex_scholar", repository.getMyHandle())
+        assertEquals(7, repository.getUsernameCooldownDays())
+        assertFalse(repository.canChangeUsername().first)
     }
 }

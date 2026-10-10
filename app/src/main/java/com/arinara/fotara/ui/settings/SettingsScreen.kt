@@ -18,11 +18,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -578,13 +581,20 @@ fun SettingsScreen(
         containerColor = HomeNearBlack,
         modifier = modifier
     ) { innerPadding ->
-        if (activeSection == SettingsSection.PROFILE) {
-            ProfileScreen(
-                viewModel = viewModel,
-                onBackClick = { activeSection = null },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else if (activeSection == null) {
+        AnimatedContent(
+            targetState = activeSection,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(180)) togetherWith fadeOut(animationSpec = tween(180))
+            },
+            label = "SettingsSectionTransition"
+        ) { targetSection ->
+            if (targetSection == SettingsSection.PROFILE) {
+                ProfileScreen(
+                    viewModel = viewModel,
+                    onBackClick = { activeSection = null },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (targetSection == null) {
             val rootScrollState = scrollState ?: rememberScrollState()
             var headerHeightPx by remember { mutableIntStateOf(0) }
             val density = LocalDensity.current
@@ -651,8 +661,8 @@ fun SettingsScreen(
                             onClick = { activeSection = SettingsSection.PROFILE }
                         )
                         FriendsSettingsCard(
-                            activeBuddiesCount = friendsUiState.activeBuddiesCount,
-                            totalBuddiesCount = friendsUiState.totalBuddiesCount,
+                            activeFriendsCount = friendsUiState.activeFriendsCount,
+                            totalFriendsCount = friendsUiState.totalFriendsCount,
                             onClick = { showFriendsScreen = true }
                         )
                         SettingsSection.entries.filter { it != SettingsSection.PROFILE }.forEach { section ->
@@ -720,13 +730,13 @@ fun SettingsScreen(
                 // Header of Active Section with Back Arrow to Root
                 item {
                     SettingsSubScreenHeader(
-                        title = activeSection!!.title,
+                        title = targetSection.title,
                         onBackClick = { activeSection = null }
                     )
                 }
 
                 // Clean Un-carded List Rows inside Selected Section
-                when (activeSection) {
+                when (targetSection) {
                     SettingsSection.PROFILE -> {}
                     SettingsSection.GENERAL -> {
                         item {
@@ -882,9 +892,11 @@ fun SettingsScreen(
                         item {
                             SettingsRowItem(
                                 title = "Study Alarms & Anti-Procrastination",
-                                subtitle = "Photo-proof challenge alarms to beat study procrastination",
+                                subtitle = "Photo-proof challenge alarms (Temporarily Disabled)",
                                 icon = Icons.Default.Alarm,
-                                onClick = { showAntiProcrastinationScreen = true }
+                                iconTint = Color(0xFF6B7280),
+                                enabled = false,
+                                onClick = {}
                             )
                         }
                     }
@@ -1061,6 +1073,7 @@ fun SettingsScreen(
                 }
             }
         }
+    }
     }
 
     // Dialogs
@@ -2047,20 +2060,21 @@ private fun SettingsRowItem(
     subtitle: String? = null,
     icon: ImageVector? = null,
     iconTint: Color = Color(0xFF94A3B8),
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 4.dp, vertical = 10.dp)
     ) {
         if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = iconTint,
+                tint = if (enabled) iconTint else Color(0xFF6B7280),
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(14.dp))
@@ -2069,7 +2083,7 @@ private fun SettingsRowItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                color = Color.White,
+                color = if (enabled) Color.White else Color(0xFF94A3B8),
                 fontSize = 15.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Medium
@@ -2078,7 +2092,7 @@ private fun SettingsRowItem(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    color = HomeSubtitleGray,
+                    color = if (enabled) HomeSubtitleGray else Color(0xFF6B7280),
                     fontSize = 13.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Light,
@@ -2089,12 +2103,22 @@ private fun SettingsRowItem(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        Icon(
-            imageVector = Icons.Default.ChevronRight,
-            contentDescription = null,
-            tint = Color(0xFF64748B),
-            modifier = Modifier.size(20.dp)
-        )
+        if (enabled) {
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color(0xFF64748B),
+                modifier = Modifier.size(20.dp)
+            )
+        } else {
+            Text(
+                text = "Disabled",
+                color = Color(0xFF6B7280),
+                fontSize = 12.sp,
+                fontFamily = ElmsSans,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
 

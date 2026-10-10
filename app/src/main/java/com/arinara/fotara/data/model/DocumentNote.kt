@@ -30,7 +30,8 @@ data class DocumentNote(
     val pageCount: Int = 0,
     override val scheduledAt: Long? = null,
     override val alertType: String? = null,
-    override val scheduleTitle: String? = null
+    override val scheduleTitle: String? = null,
+    override val isPinned: Boolean = false
 ) : SchedulableNote {
     override val title: String get() = name
     override val noteType: ScheduleNoteType get() = ScheduleNoteType.DOCUMENT

@@ -11,8 +11,8 @@ android {
         applicationId = "com.arinara.fotara"
         minSdk = 24
         targetSdk = 36
-        versionCode = 40
-        versionName = "2.2.0 Alpha"
+        versionCode = 42
+        versionName = "2.2.2 Alpha"
         resourceConfigurations += listOf("en")
     }
 
@@ -122,6 +122,7 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation("org.json:json:20240303")
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)

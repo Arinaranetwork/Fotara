@@ -92,8 +92,8 @@ fun WorkspaceTabBar(
     workspaces: List<Workspace>,
     selectedWorkspaceId: Long,
     onWorkspaceSelected: (Workspace) -> Unit,
-    onAddClick: () -> Unit,
-    onLimitReached: () -> Unit,
+    onAddClick: () -> Unit = {},
+    onLimitReached: () -> Unit = {},
     onRenameClick: (Workspace) -> Unit,
     onDeleteClick: (Workspace) -> Unit = {},
     onReorderWorkspaces: (List<Long>) -> Unit,
@@ -457,42 +457,7 @@ fun WorkspaceTabBar(
                 }
             }
         }
-
-            // Divider before pinned (+) button
-            Spacer(modifier = Modifier.width(4.dp))
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(20.dp)
-                    .background(Color(0xFF232D42))
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-
-            // Right-pinned (+) Add Workspace Button
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .alpha(if (isAtLimit) 0.38f else 1.0f)
-                    .clickable {
-                        if (isAtLimit) {
-                            onLimitReached()
-                        } else {
-                            onAddClick()
-                        }
-                    }
-                    .semantics {
-                        contentDescription = "Add workspace"
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
         }
     }
 }
+

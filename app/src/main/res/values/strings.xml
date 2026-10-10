@@ -2,8 +2,10 @@
     <string name="app_name">Fotara</string>
     <string name="widget_due_tomorrow_name">Due Tomorrow</string>
     <string name="widget_due_tomorrow_description">Displays notes and coursework due tomorrow.</string>
-    <string name="widget_timetable_name">Fotara Timetable</string>
-    <string name="widget_timetable_description">Displays today\'s classes and next-day rollover schedule.</string>
+    <string name="widget_schedule_name">Schedule</string>
+    <string name="widget_schedule_description">Displays your daily class schedule or None.</string>
+    <string name="widget_timetable_name">Schedule</string>
+    <string name="widget_timetable_description">Displays your daily class schedule or None.</string>
     <string name="widget_photo_pin_name">Fotara Pinned Coursework</string>
     <string name="widget_photo_pin_description">Pin a formula sheet or study photo to your home screen.</string>
     <string name="widget_photo_carousel_name">Fotara Photo Carousel</string>
@@ -325,4 +327,12 @@
     <string name="cd_back">Back</string>
     <string name="cd_more_options">More options</string>
     <string name="cd_close">Close</string>
+
+    <!-- Friends System -->
+    <string name="friends_title">Friends</string>
+    <string name="friends_subtitle">Academic peer network &amp; presence</string>
+    <string name="friends_empty_title">No Friends Yet</string>
+    <string name="friends_empty_subtitle">Connect with classmates by academic @handle or scan their QR code to study together, share lecture notes, and collaborate.</string>
+    <string name="friends_add_friend">Add Friend</string>
+    <string name="friends_remove_friend">Remove Friend</string>
 </resources>

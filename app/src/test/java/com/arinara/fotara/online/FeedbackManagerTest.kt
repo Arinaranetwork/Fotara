@@ -88,4 +88,25 @@ class FeedbackManagerTest {
         assertTrue(serverErr.userFriendlyMessage.contains("server is temporarily unavailable"))
         assertTrue(serverErr.technicalDetails.contains("HTTP 500"))
     }
+
+    @Test
+    fun payload_doesNotContainSyncedProperty() {
+        val payload = FeedbackPayloadBuilder.buildPayload(
+            id = "test-id",
+            installUuid = "install-uuid",
+            category = FeedbackCategory.BUG_REPORT,
+            content = "Test content",
+            email = "user@test.com",
+            diagnosticInfo = "Diag info"
+        )
+        assertFalse("Raw payload must never contain synced property", payload.has("synced"))
+
+        // Simulate local queue cloning
+        val queueItem = org.json.JSONObject(payload.toString()).apply { put("synced", false) }
+        assertTrue(queueItem.has("synced"))
+        assertFalse("Original payload must not be mutated by queueItem", payload.has("synced"))
+
+        val sanitized = org.json.JSONObject(queueItem.toString()).apply { remove("synced") }
+        assertFalse("Sanitized sendPayload must not have synced property", sanitized.has("synced"))
+    }
 }

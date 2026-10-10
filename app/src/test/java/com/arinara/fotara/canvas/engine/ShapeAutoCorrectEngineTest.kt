@@ -196,4 +196,24 @@ class ShapeAutoCorrectEngineTest {
             assertFalse(p.y.isNaN())
         }
     }
+
+    @Test
+    fun testBezierSmoothing_OpenCurveDoesNotHookToEndpoints() {
+        val rawPoints = listOf(
+            StrokePoint(0f, 0f, 0.5f),
+            StrokePoint(10f, 10f, 0.5f),
+            StrokePoint(20f, 20f, 0.5f),
+            StrokePoint(30f, 30f, 0.5f),
+            StrokePoint(40f, 40f, 0.5f),
+            StrokePoint(50f, 50f, 0.5f),
+            StrokePoint(60f, 60f, 0.5f),
+            StrokePoint(70f, 70f, 0.5f)
+        )
+
+        val smoothed = ShapeAutoCorrectEngine.smoothPointsBezier(rawPoints, pressure = 0.5f, isClosed = false)
+        assertEquals(0f, smoothed.first().x, 1.0f)
+        assertEquals(0f, smoothed.first().y, 1.0f)
+        assertEquals(70f, smoothed.last().x, 1.0f)
+        assertEquals(70f, smoothed.last().y, 1.0f)
+    }
 }

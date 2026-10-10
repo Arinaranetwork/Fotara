@@ -35,7 +35,8 @@ data class Photo(
     val deletedAt: Long? = null,
     override val scheduledAt: Long? = null,
     override val alertType: String? = null,
-    override val scheduleTitle: String? = null
+    override val scheduleTitle: String? = null,
+    override val isPinned: Boolean = false
 ) : SchedulableNote {
     override val title: String get() = caption?.ifBlank { null } ?: "Photo Note"
     override val noteType: ScheduleNoteType get() = ScheduleNoteType.PHOTO

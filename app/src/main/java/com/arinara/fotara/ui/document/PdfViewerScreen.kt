@@ -371,7 +371,6 @@ fun PdfViewerScreen(
             .fillMaxSize()
             .background(ScreenNavy)
             .statusBarsPadding()
-            .navigationBarsPadding()
     ) {
         TopAppBar(
             title = {
@@ -649,7 +648,8 @@ fun PdfViewerScreen(
             err != null -> {
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .weight(1f)
+                        .fillMaxWidth()
                         .padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -684,7 +684,7 @@ fun PdfViewerScreen(
                 }
             }
             renderer == null -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = AccentGold)
                 }
             }
@@ -752,7 +752,8 @@ fun PdfViewerScreen(
 
                 BoxWithConstraints(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .weight(1f)
+                        .fillMaxWidth()
                         .clipToBounds()
                         .then(zoomModifier)
                 ) {
@@ -822,7 +823,8 @@ fun PdfViewerScreen(
         AnimatedVisibility(
             visible = showAudioDock || audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording,
             enter = fadeIn(),
-            exit = fadeOut()
+            exit = fadeOut(),
+            modifier = Modifier.navigationBarsPadding()
         ) {
             Surface(
                 modifier = Modifier
@@ -874,7 +876,7 @@ fun PdfViewerScreen(
                         },
                         onStopRecording = {
                             val totalPagesCount = pdfRenderer?.pageCount ?: pages.size
-                            val targetPage = listState.firstVisibleItemIndex.coerceIn(0, (totalPagesCount - 1).coerceAtLeast(0))
+                            val targetPage = audioUiState.selectedPdfPageIndex ?: listState.firstVisibleItemIndex.coerceIn(0, (totalPagesCount - 1).coerceAtLeast(0))
                             audioViewModel.stopAndSaveRecording(targetPdfPageIndex = targetPage)
                         },
                         onCancelRecording = { audioViewModel.cancelRecording() }
@@ -1228,6 +1230,16 @@ private fun VirtualizedPdfPageView(
                                 onClick = {
                                     showCardMenu = false
                                     onPinToggle()
+                                }
+                            )
+
+                            // 2b. Voice Note
+                            DropdownMenuItem(
+                                text = { Text("Record Voice Note", color = TabCream) },
+                                leadingIcon = { Icon(Icons.Default.Mic, null, tint = AccentGold) },
+                                onClick = {
+                                    showCardMenu = false
+                                    onAudioBadgeClick()
                                 }
                             )
 

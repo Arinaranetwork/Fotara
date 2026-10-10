@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -51,7 +52,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val SheetBg = Color(0xFF141936)
+private val SheetBg = Color(0xFF0F1422)
 private val TabCream = Color(0xFFEAE3D2)
 private val DangerRed = Color(0xFFD62828)
 
@@ -66,6 +67,7 @@ fun CanvasNoteQuickActionSheet(
     onColorSelect: (String?) -> Unit,
     onSetDeadline: () -> Unit,
     onSchedule: () -> Unit = {},
+    onTogglePin: (() -> Unit)? = null,
     onSelect: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit
@@ -148,6 +150,15 @@ fun CanvasNoteQuickActionSheet(
             )
 
             // Actions
+            onTogglePin?.let { toggle ->
+                ActionItem(
+                    icon = Icons.Default.PushPin,
+                    label = if (note.isPinned) "Unpin Note" else "Pin Note"
+                ) {
+                    onDismiss()
+                    toggle()
+                }
+            }
             ActionItem(icon = Icons.Default.Edit, label = "Rename") { onDismiss(); onRename() }
             ActionItem(icon = Icons.AutoMirrored.Filled.DriveFileMove, label = "Move to Folder") { onDismiss(); onMove() }
             ActionItem(icon = Icons.Default.Event, label = "Set Deadline") { onDismiss(); onSetDeadline() }

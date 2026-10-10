@@ -83,7 +83,8 @@ class FotaraPackageManager(
         }
 
         val installedMap = installedList.associateBy { it.packageId }
-        val availableList = OFFICIAL_PACKAGES.filter { official ->
+        val catalog = testCatalog ?: OFFICIAL_PACKAGES
+        val availableList = catalog.filter { official ->
             !installedMap.containsKey(official.packageId)
         }
 
@@ -131,7 +132,7 @@ class FotaraPackageManager(
         payload: ByteArray? = null
     ): Result<FpkgManifest> {
         val packageDir = File(packagesDir, packageId)
-        val manifest = OFFICIAL_PACKAGES.find { it.packageId == packageId }
+        val manifest = (testCatalog ?: OFFICIAL_PACKAGES).find { it.packageId == packageId }
             ?: return Result.failure(IllegalArgumentException("Unknown package: $packageId"))
 
         val rawPayload = payload ?: getOfficialMockPayload(packageId)
@@ -266,10 +267,19 @@ class FotaraPackageManager(
             }
         }
 
+        @Volatile
+        var testCatalog: List<FpkgManifest>? = null
+
         /**
          * Standard official Fotara modular add-on definitions.
+         * Default is empty in production: modules are delivered on demand.
          */
-        val OFFICIAL_PACKAGES: List<FpkgManifest> = listOf(
+        val OFFICIAL_PACKAGES: List<FpkgManifest> = emptyList()
+
+        /**
+         * Sample catalog definitions available for testing or dynamic loading.
+         */
+        val SAMPLE_PACKAGES: List<FpkgManifest> = listOf(
             FpkgManifest(
                 packageId = PACKAGE_COLLAB,
                 name = "Real-Time Collab Canvas",
