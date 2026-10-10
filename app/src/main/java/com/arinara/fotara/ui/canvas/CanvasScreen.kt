@@ -93,7 +93,11 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
+import com.arinara.fotara.feature.collab.engine.CollabSessionEngine
+import com.arinara.fotara.feature.collab.ui.CollabRoomJoinDialog
+import com.arinara.fotara.feature.collab.ui.CollabSessionBar
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Layers
@@ -224,6 +228,11 @@ fun CanvasScreen(
         }
     }
 
+    val collabEngine = remember { CollabSessionEngine() }
+    val collabRoomCode by collabEngine.roomCode.collectAsStateWithLifecycle()
+    val collabPeersMap by collabEngine.activePeers.collectAsStateWithLifecycle()
+    val collabPeers = remember(collabPeersMap) { collabPeersMap.values.toList() }
+    var showCollabJoinDialog by remember { mutableStateOf(false) }
     var drawingViewRef by remember { mutableStateOf<CanvasDrawingView?>(null) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var renameInput by remember { mutableStateOf("") }
@@ -303,17 +312,31 @@ fun CanvasScreen(
         // ==========================================
         // Z1 & Z2: Top Unified Responsive Header Row
         // ==========================================
-        Row(
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-                .onSizeChanged { topCapsulesHeightPx = it.height }
-                .zIndex(10f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .zIndex(10f)
         ) {
+            if (collabRoomCode != null) {
+                CollabSessionBar(
+                    roomCode = collabRoomCode!!,
+                    peers = collabPeers,
+                    onLeaveClick = { collabEngine.leaveRoom() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .onSizeChanged { topCapsulesHeightPx = it.height },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
             // Left: Back button + Title/Alpha/Save capsule
             Row(
                 modifier = Modifier.weight(1f, fill = false),
@@ -586,6 +609,14 @@ fun CanvasScreen(
                                 },
                                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, null, tint = FolderTabCream) }
                             )
+                            DropdownMenuItem(
+                                text = { Text("Collaborative Study Room", color = TextPrimary) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showCollabJoinDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Default.Group, null, tint = FolderTabCream) }
+                            )
                             HorizontalDivider(color = MidnightCardOutline)
                             DropdownMenuItem(
                                 text = { Text("Delete Note", color = TagCrimson) },
@@ -600,6 +631,7 @@ fun CanvasScreen(
                 }
             }
         }
+    }
 
         // ==========================================
         // Z7: Bottom-Left Zoom & Fit-to-Content
@@ -2130,6 +2162,20 @@ fun CanvasScreen(
                     }
                 }
             }
+        }
+        // Collab Room Join Dialog
+        if (showCollabJoinDialog) {
+            CollabRoomJoinDialog(
+                onDismissRequest = { showCollabJoinDialog = false },
+                onJoinRoom = { code ->
+                    collabEngine.joinRoom(code, "StudyBuddy", "#2563EB")
+                    showCollabJoinDialog = false
+                },
+                onCreateRoom = {
+                    collabEngine.createRoom()
+                    showCollabJoinDialog = false
+                }
+            )
         }
     }
 }

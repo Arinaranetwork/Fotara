@@ -25,6 +25,30 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
 ) {
 
     override fun onCreate(db: SQLiteDatabase) {
+        val now = System.currentTimeMillis()
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS spaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                icon_key TEXT NOT NULL DEFAULT 'school',
+                color_hex TEXT NOT NULL DEFAULT '#2563EB',
+                is_private INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_spaces_sort ON spaces(sort_order)")
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO spaces (id, uuid, name, icon_key, color_hex, is_private, sort_order, created_at, updated_at)
+            VALUES (1, '$DEFAULT_SPACE_UUID', 'Default Space', 'school', '#2563EB', 0, 0, $now, $now)
+            """.trimIndent()
+        )
+
         db.execSQL(
             """
             CREATE TABLE IF NOT EXISTS workspaces (
@@ -34,18 +58,19 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 name TEXT NOT NULL,
                 position INTEGER NOT NULL,
                 created_at INTEGER NOT NULL,
-                icon_key TEXT
+                icon_key TEXT,
+                space_id INTEGER NOT NULL DEFAULT 1 REFERENCES spaces(id) ON DELETE CASCADE
             )
             """.trimIndent()
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_workspaces_position ON workspaces(position)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_workspaces_space_id ON workspaces(space_id)")
 
-        val now = System.currentTimeMillis()
         db.execSQL(
-            "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at) VALUES (1, '$HOME_WORKSPACE_UUID', 'HOME', '', 0, $now)"
+            "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at, space_id) VALUES (1, '$HOME_WORKSPACE_UUID', 'HOME', '', 0, $now, 1)"
         )
         db.execSQL(
-            "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at) VALUES (2, '$ARCHIVE_WORKSPACE_UUID', 'ARCHIVE', '', 1, $now)"
+            "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at, space_id) VALUES (2, '$ARCHIVE_WORKSPACE_UUID', 'ARCHIVE', '', 1, $now, 1)"
         )
 
         db.execSQL(
@@ -831,6 +856,38 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v19 (class_schedules) failed: ${e.message}")
             }
         }
+        if (oldVersion < 20) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS spaces (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        uuid TEXT NOT NULL UNIQUE,
+                        name TEXT NOT NULL,
+                        icon_key TEXT NOT NULL DEFAULT 'school',
+                        color_hex TEXT NOT NULL DEFAULT '#2563EB',
+                        is_private INTEGER NOT NULL DEFAULT 0,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_spaces_sort ON spaces(sort_order)")
+                val now = System.currentTimeMillis()
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO spaces (id, uuid, name, icon_key, color_hex, is_private, sort_order, created_at, updated_at)
+                    VALUES (1, '$DEFAULT_SPACE_UUID', 'Default Space', 'school', '#2563EB', 0, 0, $now, $now)
+                    """.trimIndent()
+                )
+                db.execSQL("ALTER TABLE workspaces ADD COLUMN space_id INTEGER DEFAULT 1 REFERENCES spaces(id) ON DELETE CASCADE")
+                db.execSQL("UPDATE workspaces SET space_id = 1 WHERE space_id IS NULL")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_workspaces_space_id ON workspaces(space_id)")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v20 (spaces) failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -874,11 +931,13 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 19
+        const val DATABASE_VERSION = 20
         const val HOME_WORKSPACE_ID = 1L
         const val ARCHIVE_WORKSPACE_ID = 2L
         const val HOME_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000001"
         const val ARCHIVE_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000002"
+        const val DEFAULT_SPACE_ID = 1L
+        const val DEFAULT_SPACE_UUID = "00000000-0000-4000-8000-000000000101"
     }
 
     /**

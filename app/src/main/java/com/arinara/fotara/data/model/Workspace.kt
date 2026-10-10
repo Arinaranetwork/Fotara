@@ -26,7 +26,8 @@ data class Workspace(
     val name: String = "",
     val position: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
-    val iconKey: String? = null
+    val iconKey: String? = null,
+    val spaceId: Long = 1L
 ) {
     val isHome: Boolean get() = kind == WorkspaceKind.HOME
     val isArchive: Boolean get() = kind == WorkspaceKind.ARCHIVE

@@ -176,6 +176,15 @@ import com.arinara.fotara.ui.components.computeFolderGlowAnchors
 import com.arinara.fotara.ui.components.computeFolderGlowOrientations
 import com.arinara.fotara.ui.settings.SettingsScreen
 import com.arinara.fotara.ui.settings.SettingsViewModel
+import com.arinara.fotara.data.model.Space
+import com.arinara.fotara.data.repository.SpaceRepository
+import com.arinara.fotara.feature.space.ActiveSpaceManager
+import com.arinara.fotara.feature.packages.loader.FotaraPackageManager
+import com.arinara.fotara.feature.friends.data.FriendsRepository
+import com.arinara.fotara.ui.space.SpaceSwitcherBottomSheet
+import com.arinara.fotara.feature.academic.syllabus.SyllabusComponent
+import com.arinara.fotara.feature.academic.syllabus.SyllabusEvaluatorSheet
+import androidx.compose.material.icons.outlined.School
 
 /**
  * Fotara v1.5.2 Home Screen matching IMAGE A specification:
@@ -209,6 +218,10 @@ fun HomeScreen(
     onOpenWhatsNew: () -> Unit = {},
     feedbackManager: FeedbackManager? = null,
     dialogCoordinator: com.arinara.fotara.coordinator.AppDialogCoordinator? = null,
+    spaceRepository: SpaceRepository? = null,
+    activeSpaceManager: ActiveSpaceManager? = null,
+    packageManager: FotaraPackageManager? = null,
+    friendsRepository: FriendsRepository? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -226,10 +239,15 @@ fun HomeScreen(
     var isSettingsSubScreenOpen by rememberSaveable { mutableStateOf(false) }
     val saveableStateHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
 
+    var showSpaceSwitcher by remember { mutableStateOf(false) }
+    val spaces by (spaceRepository?.observeSpaces() ?: kotlinx.coroutines.flow.flowOf(emptyList())).collectAsStateWithLifecycle(emptyList())
+    val activeSpace by (spaceRepository?.activeSpace ?: kotlinx.coroutines.flow.flowOf(Space.DEFAULT_SPACE)).collectAsStateWithLifecycle(Space.DEFAULT_SPACE)
+
     var activeContextFolder by remember { mutableStateOf<Folder?>(null) }
     var folderToRename by remember { mutableStateOf<Folder?>(null) }
     var renameInputText by remember { mutableStateOf("") }
     var showHomeOverflowMenu by remember { mutableStateOf(false) }
+    var showSyllabusEvaluator by remember { mutableStateOf(false) }
     var showBatchRenameDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
 
@@ -387,6 +405,8 @@ fun HomeScreen(
                         if (settingsViewModel != null) {
                             SettingsScreen(
                                 viewModel = settingsViewModel,
+                                friendsRepository = friendsRepository,
+                                packageManager = packageManager,
                                 onBackClick = { selectedNavTab = HomeNavTab.HOME },
                                 onNavigateToTrash = onOpenTrash,
                                 modifier = Modifier.fillMaxSize(),
@@ -468,6 +488,22 @@ fun HomeScreen(
                             ) {
                                 ScreenHeader(
                                     title = "Fotara",
+                                    spaceName = activeSpace.name,
+                                    onTitleClick = {
+                                        if (spaceRepository != null) {
+                                            showSpaceSwitcher = true
+                                        }
+                                    },
+                                    onTitleLongClick = {
+                                        if (activeSpaceManager != null) {
+                                            coroutineScope.launch {
+                                                val isUnlocked = activeSpaceManager.toggleStealthVault()
+                                                snackbarHostState.showSnackbar(
+                                                    if (isUnlocked) "Stealth Space Vault Unlocked" else "Stealth Space Vault Locked"
+                                                )
+                                            }
+                                        }
+                                    },
                                     tagline = stringResource(R.string.home_tagline),
                                     actions = {
                                         // 1: Magnifier search trigger
@@ -537,6 +573,20 @@ fun HomeScreen(
                                                     onClick = {
                                                         showHomeOverflowMenu = false
                                                         onOpenWhatsNew()
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Syllabus Evaluator", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.School,
+                                                            contentDescription = null,
+                                                            tint = Color(0xFF60A5FA)
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        showSyllabusEvaluator = true
                                                     }
                                                 )
                                                 DropdownMenuItem(
@@ -1005,6 +1055,16 @@ fun HomeScreen(
                         HomeBottomNavBar(
                             selectedTab = selectedNavTab,
                             onTabSelected = { if (!uiState.isMultiSelectMode) selectedNavTab = it },
+                            onHomeTabLongClick = {
+                                if (activeSpaceManager != null) {
+                                    coroutineScope.launch {
+                                        val isGhostVisible = activeSpaceManager.toggleGhostWorkspaceVisibility()
+                                        snackbarHostState.showSnackbar(
+                                            if (isGhostVisible) "Ghost Workspaces Revealed" else "Ghost Workspaces Shielded"
+                                        )
+                                    }
+                                }
+                            },
                             onTabReSelected = { tab ->
                                 when (tab) {
                                     HomeNavTab.SETTINGS -> {
@@ -1690,6 +1750,41 @@ fun HomeScreen(
         FeedbackDialog(
             feedbackManager = feedbackManager,
             onDismiss = { showFeedbackDialog = false }
+        )
+    }
+
+    if (showSpaceSwitcher && spaceRepository != null) {
+        SpaceSwitcherBottomSheet(
+            spaces = spaces,
+            activeSpaceId = activeSpace.id,
+            onSelectSpace = { newId ->
+                coroutineScope.launch {
+                    spaceRepository.setActiveSpaceId(newId)
+                    showSpaceSwitcher = false
+                }
+            },
+            onCreateSpace = { name, iconKey, colorHex, isPrivate ->
+                coroutineScope.launch {
+                    spaceRepository.createSpace(
+                        name = name,
+                        iconKey = iconKey,
+                        colorHex = colorHex,
+                        isPrivate = isPrivate
+                    )
+                }
+            },
+            onDismiss = { showSpaceSwitcher = false }
+        )
+    }
+
+    if (showSyllabusEvaluator) {
+        SyllabusEvaluatorSheet(
+            initialComponents = listOf(
+                SyllabusComponent("1", "Midterm Exam", 30f, 85f),
+                SyllabusComponent("2", "Assignments & Quizzes", 20f, 92f),
+                SyllabusComponent("3", "Final Examination", 50f, null)
+            ),
+            onDismissRequest = { showSyllabusEvaluator = false }
         )
     }
 

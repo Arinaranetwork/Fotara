@@ -67,6 +67,10 @@ interface AppContainer {
     val context: Context
     val dialogCoordinator: com.arinara.fotara.coordinator.AppDialogCoordinator
     val deviceRegistry: com.arinara.fotara.online.DeviceRegistry
+    val friendsRepository: com.arinara.fotara.feature.friends.data.FriendsRepository
+    val spaceRepository: com.arinara.fotara.data.repository.SpaceRepository
+    val activeSpaceManager: com.arinara.fotara.feature.space.ActiveSpaceManager
+    val packageManager: com.arinara.fotara.feature.packages.loader.FotaraPackageManager
 }
 
 class DefaultAppContainer(override val context: Context) : AppContainer {
@@ -199,6 +203,22 @@ class DefaultAppContainer(override val context: Context) : AppContainer {
 
     override val scheduleNotificationScheduler: ScheduleNotificationScheduler by lazy {
         ScheduleNotificationScheduler(context)
+    }
+
+    override val friendsRepository: com.arinara.fotara.feature.friends.data.FriendsRepository by lazy {
+        com.arinara.fotara.feature.friends.data.LocalFriendsRepository(context)
+    }
+
+    override val spaceRepository: com.arinara.fotara.data.repository.SpaceRepository by lazy {
+        com.arinara.fotara.data.repository.SqliteSpaceRepository(dbHelper, context)
+    }
+
+    override val activeSpaceManager: com.arinara.fotara.feature.space.ActiveSpaceManager by lazy {
+        com.arinara.fotara.feature.space.ActiveSpaceManager(spaceRepository)
+    }
+
+    override val packageManager: com.arinara.fotara.feature.packages.loader.FotaraPackageManager by lazy {
+        com.arinara.fotara.feature.packages.loader.FotaraPackageManager(context)
     }
 
     init {

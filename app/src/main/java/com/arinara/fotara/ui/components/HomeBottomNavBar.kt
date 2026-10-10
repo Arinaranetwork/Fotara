@@ -6,6 +6,8 @@
 
 package com.arinara.fotara.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,6 +64,7 @@ fun HomeBottomNavBar(
     selectedTab: HomeNavTab,
     onTabSelected: (HomeNavTab) -> Unit,
     onTabReSelected: ((HomeNavTab) -> Unit)? = null,
+    onHomeTabLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -90,6 +93,7 @@ fun HomeBottomNavBar(
                         onTabSelected(HomeNavTab.HOME)
                     }
                 },
+                onLongClick = onHomeTabLongClick,
                 modifier = Modifier.weight(1f)
             )
 
@@ -126,12 +130,14 @@ fun HomeBottomNavBar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HomeNavItem(
     icon: ImageVector,
     label: String,
     isSelected: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val activeBlue = Color(0xFF3B82F6)
@@ -146,7 +152,16 @@ private fun HomeNavItem(
                     Modifier.background(HomeBottomNavActiveHighlight)
                 } else Modifier
             )
-            .clickable(onClick = onClick),
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                }
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(

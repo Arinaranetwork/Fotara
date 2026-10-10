@@ -6,8 +6,10 @@
 
 package com.arinara.fotara.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,11 +72,15 @@ object ScreenHeaderDefaults {
  * Enforces unified title typography, padding, circular action buttons, and reserved tagline slot
  * height so downstream elements (such as WorkspaceTabBar) sit at an identical vertical baseline.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ScreenHeader(
     title: String,
     modifier: Modifier = Modifier,
     tagline: String? = null,
+    spaceName: String? = null,
+    onTitleClick: (() -> Unit)? = null,
+    onTitleLongClick: (() -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null
 ) {
     val density = LocalDensity.current
@@ -94,24 +100,36 @@ fun ScreenHeader(
         Column(
             modifier = Modifier.weight(1f, fill = false)
         ) {
-            Text(
-                text = title,
-                style = TextStyle(
-                    fontSize = ScreenHeaderDefaults.TitleFontSize,
-                    lineHeight = ScreenHeaderDefaults.TitleLineHeight,
-                    fontFamily = ElmsSans,
-                    fontWeight = ScreenHeaderDefaults.TitleFontWeight,
-                    letterSpacing = ScreenHeaderDefaults.TitleLetterSpacing,
-                    color = Color.White,
-                    platformStyle = PlatformTextStyle(includeFontPadding = false),
-                    lineHeightStyle = LineHeightStyle(
-                        alignment = LineHeightStyle.Alignment.Center,
-                        trim = LineHeightStyle.Trim.None
-                    )
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = if (onTitleClick != null || onTitleLongClick != null) {
+                    Modifier
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                        .combinedClickable(
+                            onClick = { onTitleClick?.invoke() },
+                            onLongClick = { onTitleLongClick?.invoke() }
+                        )
+                } else Modifier
+            ) {
+                Text(
+                    text = if (spaceName != null) "$title ▾ $spaceName" else title,
+                    style = TextStyle(
+                        fontSize = if (spaceName != null) 24.sp else ScreenHeaderDefaults.TitleFontSize,
+                        lineHeight = ScreenHeaderDefaults.TitleLineHeight,
+                        fontFamily = ElmsSans,
+                        fontWeight = ScreenHeaderDefaults.TitleFontWeight,
+                        letterSpacing = ScreenHeaderDefaults.TitleLetterSpacing,
+                        color = Color.White,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.None
+                        )
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Spacer(modifier = Modifier.height(ScreenHeaderDefaults.TitleToTaglineGap))
             if (!tagline.isNullOrBlank()) {
                 Text(

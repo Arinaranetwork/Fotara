@@ -7,6 +7,11 @@
 package com.arinara.fotara.ui.settings
 
 import android.content.Intent
+import com.arinara.fotara.feature.friends.data.FriendsRepository
+import com.arinara.fotara.feature.friends.data.LocalFriendsRepository
+import com.arinara.fotara.feature.friends.ui.FriendsScreen
+import com.arinara.fotara.feature.friends.ui.FriendsSettingsCard
+import com.arinara.fotara.feature.friends.ui.FriendsViewModel
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -158,6 +163,10 @@ import kotlinx.coroutines.launch
 /**
  * Logical main sections for Settings.
  */
+import androidx.compose.material.icons.filled.Extension
+import com.arinara.fotara.feature.packages.loader.FotaraPackageManager
+import com.arinara.fotara.feature.packages.ui.PackageManagementHubScreen
+
 enum class SettingsSection(
     val title: String,
     val subtitle: String,
@@ -181,6 +190,8 @@ enum class SettingsSection(
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    friendsRepository: FriendsRepository? = null,
+    packageManager: FotaraPackageManager? = null,
     onBackClick: (() -> Unit)? = null,
     onNavigateToTrash: () -> Unit,
     modifier: Modifier = Modifier,
@@ -195,21 +206,40 @@ fun SettingsScreen(
     val context = LocalContext.current
     var activeSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
     var activeLegalDocument by remember { mutableStateOf<com.arinara.fotara.legal.ParsedLegalDocument?>(null) }
+    var showFriendsScreen by rememberSaveable { mutableStateOf(false) }
+    var showPackageHubScreen by rememberSaveable { mutableStateOf(false) }
+
+    val actualFriendsRepo = remember(context, friendsRepository) {
+        friendsRepository ?: LocalFriendsRepository(context)
+    }
+    val actualPackageManager = remember(context, packageManager) {
+        packageManager ?: FotaraPackageManager(context)
+    }
+    val friendsViewModel: FriendsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = FriendsViewModel.provideFactory(actualFriendsRepo)
+    )
+    val friendsUiState by friendsViewModel.uiState.collectAsStateWithLifecycle()
 
     androidx.compose.runtime.LaunchedEffect(resetToRootTrigger) {
         if (resetToRootTrigger > 0) {
             activeLegalDocument = null
             activeSection = null
+            showFriendsScreen = false
+            showPackageHubScreen = false
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(activeSection, activeLegalDocument) {
-        onSubScreenStateChanged?.invoke(activeSection != null || activeLegalDocument != null)
+    androidx.compose.runtime.LaunchedEffect(activeSection, activeLegalDocument, showFriendsScreen, showPackageHubScreen) {
+        onSubScreenStateChanged?.invoke(activeSection != null || activeLegalDocument != null || showFriendsScreen || showPackageHubScreen)
     }
 
-    BackHandler(enabled = activeLegalDocument != null || activeSection != null) {
+    BackHandler(enabled = activeLegalDocument != null || showFriendsScreen || showPackageHubScreen || activeSection != null) {
         if (activeLegalDocument != null) {
             activeLegalDocument = null
+        } else if (showFriendsScreen) {
+            showFriendsScreen = false
+        } else if (showPackageHubScreen) {
+            showPackageHubScreen = false
         } else {
             activeSection = null
         }
@@ -219,6 +249,24 @@ fun SettingsScreen(
         com.arinara.fotara.ui.legal.LegalDocumentScreen(
             document = activeLegalDocument!!,
             onBackClick = { activeLegalDocument = null }
+        )
+        return
+    }
+
+    if (showFriendsScreen) {
+        FriendsScreen(
+            viewModel = friendsViewModel,
+            onBackClick = { showFriendsScreen = false },
+            modifier = Modifier.fillMaxSize()
+        )
+        return
+    }
+
+    if (showPackageHubScreen) {
+        PackageManagementHubScreen(
+            packageManager = actualPackageManager,
+            onBackClick = { showPackageHubScreen = false },
+            modifier = Modifier.fillMaxSize()
         )
         return
     }
@@ -587,14 +635,25 @@ fun SettingsScreen(
                         }
                     }
 
-                    // 7 Category Cards
+                    // Category Cards with Friends strictly below Profile and above General
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 18.dp)
                     ) {
-                        SettingsSection.entries.forEach { section ->
+                        SettingsCardItem(
+                            title = SettingsSection.PROFILE.title,
+                            subtitle = SettingsSection.PROFILE.subtitle,
+                            icon = SettingsSection.PROFILE.icon,
+                            onClick = { activeSection = SettingsSection.PROFILE }
+                        )
+                        FriendsSettingsCard(
+                            activeBuddiesCount = friendsUiState.activeBuddiesCount,
+                            totalBuddiesCount = friendsUiState.totalBuddiesCount,
+                            onClick = { showFriendsScreen = true }
+                        )
+                        SettingsSection.entries.filter { it != SettingsSection.PROFILE }.forEach { section ->
                             SettingsCardItem(
                                 title = section.title,
                                 subtitle = section.subtitle,
@@ -854,6 +913,15 @@ fun SettingsScreen(
                                 icon = Icons.Default.Delete,
                                 iconTint = TagCrimson,
                                 onClick = onNavigateToTrash
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "Modular Feature Packages",
+                                subtitle = "Manage dynamic .fpkg add-ons and disk memory",
+                                icon = Icons.Default.Extension,
+                                onClick = { showPackageHubScreen = true }
                             )
                         }
                         item { SettingsListDivider() }

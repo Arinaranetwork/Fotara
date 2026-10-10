@@ -137,6 +137,10 @@ fun MainNavigation(
                     notesViewModel = notesViewModel,
                     updateManager = appContainer.updateManager,
                     dialogCoordinator = appContainer.dialogCoordinator,
+                    spaceRepository = appContainer.spaceRepository,
+                    activeSpaceManager = appContainer.activeSpaceManager,
+                    packageManager = appContainer.packageManager,
+                    friendsRepository = appContainer.friendsRepository,
                     onFolderClick = { folder ->
                         backStack.add(FolderDetailNavKey(folder.id))
                     },
