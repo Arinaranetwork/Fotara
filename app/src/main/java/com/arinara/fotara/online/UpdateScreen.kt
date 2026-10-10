@@ -6,6 +6,7 @@
 
 package com.arinara.fotara.online
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +31,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
@@ -37,6 +40,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -85,11 +89,15 @@ private val ErrorRed = Color(0xFFE63946)
 @Composable
 fun UpdateScreen(
     updateManager: UpdateManager,
+    downgradeManager: DowngradeManager? = null,
     settingsRepository: SettingsRepository? = null,
     onClose: () -> Unit,
     onSkipVersion: () -> Unit
 ) {
     val context = LocalContext.current
+    val actualDowngradeManager = remember(downgradeManager, context) {
+        downgradeManager ?: DowngradeManager(context)
+    }
     val scope = rememberCoroutineScope()
     val release by updateManager.latestRelease.collectAsState()
     val rollbackReleases by updateManager.rollbackReleases.collectAsState()
@@ -100,6 +108,7 @@ fun UpdateScreen(
     val statusNotice by updateManager.statusNotice.collectAsState()
 
     var confirmRollbackRelease by remember { mutableStateOf<ReleaseInfo?>(null) }
+    var showDowngradeWizardRelease by remember { mutableStateOf<ReleaseInfo?>(null) }
     var isRollbackExpanded by remember { mutableStateOf(false) }
     var expandedReleaseNotesVersion by remember { mutableStateOf<String?>(null) }
 
@@ -479,14 +488,18 @@ fun UpdateScreen(
                         onClick = {
                             val apk = updateManager.downloadedApkFile
                             if (updateState == UpdateState.DOWNLOADED && apk != null) {
-                                if (!updateManager.canRequestPackageInstalls()) {
+                                if (activeRollbackTarget != null) {
+                                    showDowngradeWizardRelease = activeRollbackTarget
+                                } else if (!updateManager.canRequestPackageInstalls()) {
                                     showInstallPermissionDialog = true
                                 } else {
                                     showInstallExplainerDialog = true
                                 }
                             } else if (rel != null) {
                                 updateManager.startDownload(rel) { _ ->
-                                    if (!updateManager.canRequestPackageInstalls()) {
+                                    if (activeRollbackTarget != null) {
+                                        showDowngradeWizardRelease = activeRollbackTarget
+                                    } else if (!updateManager.canRequestPackageInstalls()) {
                                         showInstallPermissionDialog = true
                                     } else {
                                         showInstallExplainerDialog = true
@@ -508,7 +521,12 @@ fun UpdateScreen(
                         } else if (updateState == UpdateState.DOWNLOADED) {
                             Icon(imageVector = Icons.Default.SystemUpdate, contentDescription = null, tint = Color.Black)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Install Update Now", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(
+                                if (activeRollbackTarget != null) "Downgrade Options" else "Install Update Now",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
                         } else {
                             Icon(imageVector = Icons.Default.Download, contentDescription = null, tint = Color.Black)
                             Spacer(modifier = Modifier.width(8.dp))
@@ -689,11 +707,7 @@ fun UpdateScreen(
                                             onInstallClick = {
                                                 val apk = updateManager.downloadedApkFile
                                                 if (apk != null) {
-                                                    if (!updateManager.canRequestPackageInstalls()) {
-                                                        showInstallPermissionDialog = true
-                                                    } else {
-                                                        updateManager.triggerApkInstall(apk)
-                                                    }
+                                                    showDowngradeWizardRelease = pastRel
                                                 }
                                             }
                                         )
@@ -826,7 +840,7 @@ fun UpdateScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "Android package downgrades may carry compatibility differences. We strongly recommend exporting a backup of your study notes and photos first to ensure complete peace of mind.",
+                        text = "Android blocks direct downgrades without authorization. Once downloaded, Fotara provides 1-Tap Shizuku (-d) in-place downgrade, Guided Safe Reinstall (with auto-backup and fragile data preservation), and ADB options.",
                         color = AccentGold.copy(alpha = 0.9f),
                         fontSize = 12.5.sp,
                         lineHeight = 17.sp
@@ -874,6 +888,21 @@ fun UpdateScreen(
             containerColor = CardBg,
             shape = RoundedCornerShape(16.dp)
         )
+    }
+
+    // Downgrade Wizard Dialog
+    if (showDowngradeWizardRelease != null) {
+        val target = showDowngradeWizardRelease!!
+        val apk = updateManager.downloadedApkFile
+        if (apk != null && apk.exists()) {
+            DowngradeWizardDialog(
+                targetRelease = target,
+                apkFile = apk,
+                downgradeManager = actualDowngradeManager,
+                settingsRepository = settingsRepository,
+                onDismiss = { showDowngradeWizardRelease = null }
+            )
+        }
     }
 }
 
@@ -954,7 +983,7 @@ private fun RollbackReleaseCard(
                     ) {
                         Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Install", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                        Text("Downgrade", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                     }
                 } else {
                     OutlinedButton(
@@ -1012,3 +1041,445 @@ private fun RollbackReleaseCard(
         }
     }
 }
+
+@Composable
+private fun DowngradeWizardDialog(
+    targetRelease: ReleaseInfo,
+    apkFile: File,
+    downgradeManager: DowngradeManager,
+    settingsRepository: SettingsRepository?,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val targetInfo = remember(targetRelease) {
+        VersionInfo.parse(targetRelease.version, targetRelease.isPrerelease)
+    }
+
+    var isShizukuAvailable by remember { mutableStateOf(downgradeManager.isShizukuAvailable()) }
+    var hasShizukuPermission by remember { mutableStateOf(downgradeManager.hasShizukuPermission()) }
+    var isShizukuInstalling by remember { mutableStateOf(false) }
+    var shizukuResultMessage by remember { mutableStateOf<String?>(null) }
+    var isShizukuSuccess by remember { mutableStateOf<Boolean?>(null) }
+
+    var isPreparingReinstall by remember { mutableStateOf(false) }
+    var reinstallPrepared by remember { mutableStateOf(false) }
+
+    val adbCommand = remember(targetRelease.version) {
+        val safeVersion = targetRelease.version.replace(" ", "_").replace("/", "_")
+        downgradeManager.getAdbCommand("Fotara_${safeVersion}.apk")
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.History,
+                    contentDescription = null,
+                    tint = AccentGold,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Downgrade to ${targetInfo.displayVersion}",
+                    fontWeight = FontWeight.Bold,
+                    color = TabCream,
+                    fontSize = 17.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // OS Notice Box
+                Surface(
+                    color = Color(0xFF0F142A),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardOutline)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = AccentGold,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Android OS Downgrade Protection",
+                                color = AccentGold,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Android prevents installing older packages directly over newer ones. Select one of the verified pathways below to complete your downgrade without losing data.",
+                            color = TabCream.copy(alpha = 0.85f),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+
+                // Pathway 1: 1-Tap Shizuku Downgrade
+                Surface(
+                    color = Color(0xFF0F142A),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (hasShizukuPermission) SuccessGreen.copy(alpha = 0.8f) else CardOutline
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdate,
+                                contentDescription = null,
+                                tint = if (hasShizukuPermission) SuccessGreen else AccentGold,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "1-Tap Downgrade (Shizuku)",
+                                color = TabCream,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            val (statusText, statusBg, statusColor) = when {
+                                hasShizukuPermission -> Triple("Ready", SuccessGreen.copy(alpha = 0.2f), SuccessGreen)
+                                isShizukuAvailable -> Triple("Permission", AccentGold.copy(alpha = 0.2f), AccentGold)
+                                else -> Triple("Unavailable", Color.White.copy(alpha = 0.1f), TabCream.copy(alpha = 0.6f))
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = statusBg
+                            ) {
+                                Text(
+                                    text = statusText,
+                                    color = statusColor,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Uses privileged shell execution (pm install -d -r) to downgrade in-place without uninstalling and with zero data loss.",
+                            color = TabCream.copy(alpha = 0.7f),
+                            fontSize = 11.5.sp,
+                            lineHeight = 15.sp
+                        )
+
+                        if (!shizukuResultMessage.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isShizukuSuccess == true) SuccessGreen.copy(alpha = 0.15f) else ErrorRed.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = shizukuResultMessage ?: "",
+                                    color = if (isShizukuSuccess == true) SuccessGreen else ErrorRed,
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 15.sp,
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        if (isShizukuInstalling) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    color = AccentGold,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Executing in-place downgrade via shell...",
+                                    color = TabCream,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        } else if (hasShizukuPermission) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        isShizukuInstalling = true
+                                        shizukuResultMessage = null
+                                        val result = downgradeManager.executeShizukuDowngrade(apkFile)
+                                        isShizukuInstalling = false
+                                        result.onSuccess {
+                                            isShizukuSuccess = true
+                                            shizukuResultMessage = "Downgrade installed successfully via Shizuku! Please reopen the app if not reloaded automatically."
+                                        }.onFailure { err ->
+                                            isShizukuSuccess = false
+                                            shizukuResultMessage = "Shell downgrade failed: ${err.message}"
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().height(38.dp)
+                            ) {
+                                Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.White)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Install via Shizuku (-d)", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else if (isShizukuAvailable) {
+                            Button(
+                                onClick = {
+                                    downgradeManager.requestShizukuPermission()
+                                    scope.launch {
+                                        kotlinx.coroutines.delay(1000)
+                                        hasShizukuPermission = downgradeManager.hasShizukuPermission()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().height(38.dp)
+                            ) {
+                                Text("Grant Shizuku Permission", color = Color.Black, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = {
+                                    isShizukuAvailable = downgradeManager.isShizukuAvailable()
+                                    hasShizukuPermission = downgradeManager.hasShizukuPermission()
+                                    if (!isShizukuAvailable) {
+                                        android.widget.Toast.makeText(context, "Shizuku service not detected. Start Shizuku app first.", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CardOutline),
+                                modifier = Modifier.fillMaxWidth().height(36.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, tint = TabCream, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Re-check Shizuku Status", color = TabCream, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
+                // Pathway 2: Guided Safe Reinstall (Zero Data Loss)
+                Surface(
+                    color = Color(0xFF0F142A),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (reinstallPrepared) Color(0xFF60A5FA).copy(alpha = 0.8f) else CardOutline
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = Color(0xFF60A5FA),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Guided Safe Reinstall",
+                                color = TabCream,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            if (reinstallPrepared) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF60A5FA).copy(alpha = 0.2f)
+                                ) {
+                                    Text(
+                                        text = "Prepared",
+                                        color = Color(0xFF60A5FA),
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Preserves all notes and settings with full protection:\n1. Exports vault backup to public Downloads folder.\n2. Stages target APK into public Downloads.\n3. Keeps app data enabled via Android fragile data manifest.\n4. Posts persistent notification to install immediately after uninstall.",
+                            color = TabCream.copy(alpha = 0.7f),
+                            fontSize = 11.5.sp,
+                            lineHeight = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (isPreparingReinstall) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    color = Color(0xFF60A5FA),
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Backing up notes & staging APK...",
+                                    color = TabCream,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        } else if (!reinstallPrepared) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        isPreparingReinstall = true
+                                        val backupFile = downgradeManager.createPreRollbackVaultBackup(
+                                            settingsRepository,
+                                            targetRelease.version
+                                        )
+                                        val stagedApk = downgradeManager.stageApkToPublicDownloads(
+                                            apkFile,
+                                            targetRelease.version
+                                        )
+                                        downgradeManager.postPostUninstallNotification(
+                                            stagedApk,
+                                            targetRelease.version
+                                        )
+                                        isPreparingReinstall = false
+                                        reinstallPrepared = true
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Backup & APK staged to Downloads! Sticky notification posted.",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().height(38.dp)
+                            ) {
+                                Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.White)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Step 1: Backup & Stage APK", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = SuccessGreen.copy(alpha = 0.15f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Backup & APK staged. When uninstalling, ensure 'Keep app data' is checked. After uninstall, tap the persistent notification in your status bar to install!",
+                                        color = SuccessGreen,
+                                        fontSize = 11.5.sp,
+                                        lineHeight = 15.sp,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+                                Button(
+                                    onClick = {
+                                        downgradeManager.launchUninstallIntent()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth().height(38.dp)
+                                ) {
+                                    Text("Step 2: Uninstall App (Keep Data)", color = Color.Black, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Pathway 3: ADB Terminal Command
+                Surface(
+                    color = Color(0xFF0F142A),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardOutline)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Code,
+                                contentDescription = null,
+                                tint = AccentGold,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "ADB Terminal Command",
+                                color = TabCream,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "For PC USB or Wireless ADB debugging:",
+                            color = TabCream.copy(alpha = 0.7f),
+                            fontSize = 11.5.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Surface(
+                            color = Color(0xFF070B1A),
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CardOutline.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = adbCommand,
+                                color = AccentGold,
+                                fontSize = 11.5.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("Fotara ADB Downgrade", adbCommand)
+                                clipboard?.setPrimaryClip(clip)
+                                android.widget.Toast.makeText(context, "ADB command copied to clipboard!", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentGold.copy(alpha = 0.6f)),
+                            modifier = Modifier.fillMaxWidth().height(36.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = AccentGold)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Copy ADB Command", color = AccentGold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", color = TabCream)
+            }
+        },
+        containerColor = CardBg,
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+

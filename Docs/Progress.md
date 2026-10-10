@@ -2,7 +2,7 @@
 Last Updated: 2026-10-10
 
 ## Current Phase
-Phase 54 - FriendsUiThemeAndWindowInsetsPolish (2.1.1 Alpha) [Completed]
+Phase 55 - AndroidVersionDowngradeEngine (2.2.0 Alpha) [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -61,6 +61,7 @@ Phase 54 - FriendsUiThemeAndWindowInsetsPolish (2.1.1 Alpha) [Completed]
 | 52    | DrawingAudioWidgetPolishHotfixes  | Completed   |
 | 53    | VersionRollbackManager            | Completed   |
 | 54    | FriendsUiThemeAndWindowInsetsPolish | Completed   |
+| 55    | AndroidVersionDowngradeEngine     | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -156,6 +157,13 @@ Phase 54 - FriendsUiThemeAndWindowInsetsPolish (2.1.1 Alpha) [Completed]
 - [x] Task 2: Fix status bar hardware overlap in `FriendsScreen.kt` using `WindowInsets.statusBars` / `Modifier.statusBarsPadding()` - Phase 54
 - [x] Task 3: Unify `FriendsScreen.kt` header with `SettingsSubScreenHeader` and desaturate presence chips & dialogs - Phase 54
 - [x] Task 4: Unit test validation, version bump to 2.1.1 Alpha, release APK assembly - Phase 54
+
+- [x] Task 1: Enable `android:hasFragileUserData="true"` in `AndroidManifest.xml` for native data retention on uninstall - Phase 55
+- [x] Task 2: Create `DowngradeManager.kt` with Shizuku `pm install -d -r` shell downgrade pipeline - Phase 55
+- [x] Task 3: Implement Automated Vault Backup to public Downloads and public APK staging - Phase 55
+- [x] Task 4: Sticky post-uninstall notification & uninstall intent trigger in `DowngradeManager` - Phase 55
+- [x] Task 5: Interactive Downgrade Wizard in `UpdateScreen.kt` with Shizuku, Guided Safe Reinstall, and ADB command - Phase 55
+- [x] Task 6: Unit tests, regression verification, version bump to 2.2.0 Alpha, and release packaging - Phase 55
 
 ## In Progress
 None.

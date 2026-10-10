@@ -11,8 +11,8 @@ android {
         applicationId = "com.arinara.fotara"
         minSdk = 24
         targetSdk = 36
-        versionCode = 39
-        versionName = "2.1.1 Alpha"
+        versionCode = 40
+        versionName = "2.2.0 Alpha"
         resourceConfigurations += listOf("en")
     }
 
@@ -137,4 +137,8 @@ dependencies {
   // Jetpack Glance Widget
   implementation("androidx.glance:glance-appwidget:1.1.1")
   implementation("androidx.glance:glance-material3:1.1.1")
+
+  // Shizuku Privileged Shell Downgrade API
+  implementation("dev.rikka.shizuku:api:13.1.5")
+  implementation("dev.rikka.shizuku:provider:13.1.5")
 }

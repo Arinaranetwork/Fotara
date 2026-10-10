@@ -391,6 +391,7 @@ fun MainNavigation(
             entry<UpdateNavKey> {
                 com.arinara.fotara.online.UpdateScreen(
                     updateManager = appContainer.updateManager,
+                    downgradeManager = appContainer.downgradeManager,
                     settingsRepository = appContainer.settingsRepository,
                     onClose = { safePopBack() },
                     onSkipVersion = { safePopBack() }

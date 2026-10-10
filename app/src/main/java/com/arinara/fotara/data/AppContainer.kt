@@ -71,6 +71,7 @@ interface AppContainer {
     val spaceRepository: com.arinara.fotara.data.repository.SpaceRepository
     val activeSpaceManager: com.arinara.fotara.feature.space.ActiveSpaceManager
     val packageManager: com.arinara.fotara.feature.packages.loader.FotaraPackageManager
+    val downgradeManager: com.arinara.fotara.online.DowngradeManager
 }
 
 class DefaultAppContainer(override val context: Context) : AppContainer {
@@ -219,6 +220,10 @@ class DefaultAppContainer(override val context: Context) : AppContainer {
 
     override val packageManager: com.arinara.fotara.feature.packages.loader.FotaraPackageManager by lazy {
         com.arinara.fotara.feature.packages.loader.FotaraPackageManager(context)
+    }
+
+    override val downgradeManager: com.arinara.fotara.online.DowngradeManager by lazy {
+        com.arinara.fotara.online.DowngradeManager(context)
     }
 
     init {
