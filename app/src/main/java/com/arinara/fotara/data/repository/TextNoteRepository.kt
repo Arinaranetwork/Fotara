@@ -110,6 +110,9 @@ class SqliteTextNoteRepository(
 
             textNotesFlow.value = notes
             trashedTextNotesFlow.value = trashed
+            try {
+                com.arinara.fotara.widget.DueTomorrowWidgetProvider.notifyDataChanged(dbHelper.context)
+            } catch (_: Exception) {}
         } catch (e: Exception) {
             Log.e("SqliteTextNoteRepo", "Error refreshing text notes: ${e.message}", e)
         }

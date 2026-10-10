@@ -97,8 +97,8 @@ object MarkdownParser {
     private val STRIKETHROUGH_REGEX = Regex("""~~([^~\n]+?)~~""")
     private val INLINE_CODE_REGEX = Regex("""`([^`\n]+?)`""")
     private val LINK_REGEX = Regex("""\[([^\]\n]+?)\]\(([^)\n]+?)\)""")
-    private val MATH_BLOCK_REGEX = Regex("""(?ms)^\$\$\n?([\s\S]*?)\n?\$\$$""")
-    private val MATH_INLINE_REGEX = Regex("""(?<!\$)\$(?!\$)([^$\n]+?)(?<!\$)\$(?!\$)""")
+    private val MATH_BLOCK_REGEX = Regex("""(?ms)\$\$(.*?)\$\$""")
+    private val MATH_INLINE_REGEX = Regex("""(?ms)(?<!\$)\$(?!\$)(.*?)(?<!\$)\$""")
 
     fun parse(text: String): MarkdownDocument {
         if (text.isEmpty()) {
@@ -408,7 +408,7 @@ object MarkdownParser {
         for (match in MATH_INLINE_REGEX.findAll(text)) {
             val start = match.range.first
             val end = match.range.last + 1
-            if (!isInsideCodeBlock(start, end) && spans.none { it.type == MarkdownSpanType.MATH_BLOCK && start >= it.start && end <= it.end }) {
+            if (!isInsideCodeBlock(start, end) && spans.none { it.type == MarkdownSpanType.MATH_BLOCK && maxOf(start, it.start) < minOf(end, it.end) }) {
                 val contentGroup = match.groups[1]
                 val cStart = contentGroup?.range?.first ?: (start + 1)
                 val cEnd = contentGroup?.range?.last?.plus(1) ?: (end - 1)

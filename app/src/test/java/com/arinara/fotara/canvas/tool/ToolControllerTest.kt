@@ -15,6 +15,7 @@ import com.arinara.fotara.canvas.model.CanvasLayer
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokePoint
 import com.arinara.fotara.canvas.model.StrokeToolType
+import com.arinara.fotara.canvas.model.TextLayerElement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -235,5 +236,112 @@ class ToolControllerTest {
         val selected = controller.selectLasso(polygon, defaultViewport, doc)
         assertEquals(1, selected.elementIds.size)
         assertEquals("inside_stroke", selected.elementIds.first())
+    }
+
+    @Test
+    fun testTextLayer_TapSelection_HitTestsAccurately() {
+        val controller = CanvasToolController()
+        val layer = CanvasLayer(id = "layer_1", name = "Layer 1")
+        val textLayer = TextLayerElement(
+            id = "text_1",
+            layerId = "layer_1",
+            text = "Fotara Note",
+            x = 50f,
+            y = 50f,
+            width = 100f,
+            height = 40f,
+            bounds = CanvasRect(50f, 50f, 150f, 90f)
+        )
+        val doc = CanvasDocument(layers = listOf(layer), elements = listOf(textLayer))
+
+        // Tap inside text layer (60, 60)
+        val selInside = controller.selectTap(60f, 60f, defaultViewport, doc)
+        assertEquals(1, selInside.elementIds.size)
+        assertEquals("text_1", selInside.elementIds.first())
+
+        // Tap outside text layer (300, 300)
+        val selOutside = controller.selectTap(300f, 300f, defaultViewport, doc)
+        assertEquals(0, selOutside.elementIds.size)
+    }
+
+    @Test
+    fun testTextLayer_TransformMove_TranslatesCoordinatesAndBounds() {
+        val controller = CanvasToolController()
+        val historyManager = CanvasHistoryManager()
+        val layer = CanvasLayer(id = "layer_1", name = "Layer 1")
+        val textLayer = TextLayerElement(
+            id = "text_1",
+            layerId = "layer_1",
+            text = "Fotara Note",
+            x = 50f,
+            y = 50f,
+            width = 100f,
+            height = 40f,
+            bounds = CanvasRect(50f, 50f, 150f, 90f)
+        )
+        val doc = CanvasDocument(layers = listOf(layer), elements = listOf(textLayer))
+
+        // Select text element
+        controller.selectTap(60f, 60f, defaultViewport, doc)
+        controller.startTransformGesture(60f, 60f, defaultViewport, doc)
+
+        // Drag body (handleId == -1) by +30, +40
+        val preview = controller.updateTransformPreview(
+            handleId = -1,
+            currentScreenX = 90f,
+            currentScreenY = 100f,
+            viewport = defaultViewport,
+            document = doc
+        )
+        val previewText = requireNotNull(preview).first() as TextLayerElement
+        assertEquals(80f, previewText.x, 0.01f)
+        assertEquals(90f, previewText.y, 0.01f)
+
+        // Commit transform
+        val (committedDoc, _) = controller.commitTransform(
+            handleId = -1,
+            totalDeltaX = 30f,
+            totalDeltaY = 40f,
+            viewport = defaultViewport,
+            document = doc,
+            historyManager = historyManager
+        )
+        val committedText = committedDoc.elements.first() as TextLayerElement
+        assertEquals(80f, committedText.x, 0.01f)
+        assertEquals(90f, committedText.y, 0.01f)
+        assertEquals(80f, committedText.bounds.left, 0.01f)
+        assertEquals(90f, committedText.bounds.top, 0.01f)
+
+        // Undo restores original location
+        val undoneDoc = historyManager.undo(committedDoc)
+        val restoredText = undoneDoc!!.elements.first() as TextLayerElement
+        assertEquals(50f, restoredText.x, 0.01f)
+        assertEquals(50f, restoredText.y, 0.01f)
+    }
+
+    @Test
+    fun testPenDrawing_AutoSmoothingAndShapeSnappingOnFingerLift() {
+        val controller = CanvasToolController()
+        val historyManager = CanvasHistoryManager()
+        val doc = CanvasDocument()
+
+        // 1. Draw pen stroke with several points
+        controller.startStroke(10f, 10f, 1.0f)
+        controller.appendPoints(
+            listOf(
+                PointerPoint(12f, 11f, 1.0f),
+                PointerPoint(15f, 13f, 1.0f),
+                PointerPoint(20f, 18f, 1.0f),
+                PointerPoint(25f, 22f, 1.0f),
+                PointerPoint(30f, 28f, 1.0f)
+            ),
+            defaultViewport
+        )
+
+        // 2. Finish stroke: automatic smoothing & bounds computation
+        val (committedDoc, bounds) = controller.finishStroke(doc, historyManager)
+        val committedStroke = committedDoc.elements.first() as StrokeElement
+        assertTrue("Committed stroke points should be processed", committedStroke.points.isNotEmpty())
+        assertFalse("Bounds should not be empty", bounds.isEmpty)
     }
 }

@@ -97,14 +97,34 @@ class DueTomorrowWidgetProvider : AppWidgetProvider() {
 
             val cursor = db.rawQuery(
                 """
-                SELECT COUNT(*)
-                FROM photos p
-                INNER JOIN folders f ON p.folder_id = f.id
-                WHERE p.is_trashed = 0 AND f.is_trashed = 0
-                  AND ((p.scheduled_at IS NOT NULL AND p.scheduled_at >= ? AND p.scheduled_at <= ?)
-                    OR (p.linked_deadline IS NOT NULL AND p.linked_deadline >= ? AND p.linked_deadline <= ?))
+                SELECT COUNT(*) FROM (
+                    SELECT p.id
+                    FROM photos p
+                    INNER JOIN folders f ON p.folder_id = f.id
+                    WHERE p.is_trashed = 0 AND f.is_trashed = 0
+                      AND ((p.scheduled_at IS NOT NULL AND p.scheduled_at >= ? AND p.scheduled_at <= ?)
+                        OR (p.linked_deadline IS NOT NULL AND p.linked_deadline >= ? AND p.linked_deadline <= ?))
+                    UNION ALL
+                    SELECT d.id
+                    FROM document_notes d
+                    INNER JOIN folders f ON d.folder_id = f.id
+                    WHERE d.is_trashed = 0 AND f.is_trashed = 0
+                      AND ((d.scheduled_at IS NOT NULL AND d.scheduled_at >= ? AND d.scheduled_at <= ?)
+                        OR (d.linked_deadline IS NOT NULL AND d.linked_deadline >= ? AND d.linked_deadline <= ?))
+                    UNION ALL
+                    SELECT t.id
+                    FROM text_notes t
+                    INNER JOIN folders f ON t.folder_id = f.id
+                    WHERE t.is_trashed = 0 AND f.is_trashed = 0
+                      AND ((t.scheduled_at IS NOT NULL AND t.scheduled_at >= ? AND t.scheduled_at <= ?)
+                        OR (t.linked_deadline IS NOT NULL AND t.linked_deadline >= ? AND t.linked_deadline <= ?))
+                )
                 """.trimIndent(),
-                arrayOf(now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString())
+                arrayOf(
+                    now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString(),
+                    now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString(),
+                    now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString()
+                )
             )
             cursor.use { c ->
                 if (c.moveToNext()) c.getInt(0) else 0

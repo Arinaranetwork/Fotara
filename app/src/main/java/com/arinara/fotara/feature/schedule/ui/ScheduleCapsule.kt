@@ -101,7 +101,7 @@ fun ScheduleCapsule(
                         // Moon / Bedtime vector icon for tomorrow rollover
                         Icon(
                             imageVector = Icons.Default.Bedtime,
-                            contentDescription = "Persiapan Besok",
+                            contentDescription = "Next-Day Prep",
                             tint = Color(0xFF818CF8),
                             modifier = Modifier.size(16.dp)
                         )
@@ -110,7 +110,7 @@ fun ScheduleCapsule(
                         // Blue completed icon
                         Icon(
                             imageVector = Icons.Default.Bedtime,
-                            contentDescription = "Hari Ini Selesai",
+                            contentDescription = "Classes Finished",
                             tint = Color(0xFF60A5FA),
                             modifier = Modifier.size(16.dp)
                         )
@@ -119,7 +119,7 @@ fun ScheduleCapsule(
                         // Calendar icon
                         Icon(
                             imageVector = Icons.Default.CalendarToday,
-                            contentDescription = "Jadwal",
+                            contentDescription = "Class Schedule",
                             tint = Color(0xFF94A3B8),
                             modifier = Modifier.size(16.dp)
                         )
@@ -154,7 +154,7 @@ fun ScheduleCapsule(
             // Trailing down chevron
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "Buka Jadwal Kuliah",
+                contentDescription = "Open Class Schedule",
                 tint = Color(0xFF94A3B8),
                 modifier = Modifier.size(16.dp)
             )

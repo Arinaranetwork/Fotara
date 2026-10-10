@@ -682,6 +682,14 @@ class SqlitePhotoRepository(
 
         refreshSync()
         folderRepository.refresh()
+        try {
+            com.arinara.fotara.widget.PhotoCarouselGlanceWidgetReceiver.triggerUpdate(dbHelper.context)
+        } catch (_: Exception) {}
+        if (photo.linkedDeadline != null) {
+            try {
+                com.arinara.fotara.widget.DueTomorrowWidgetProvider.notifyDataChanged(dbHelper.context)
+            } catch (_: Exception) {}
+        }
         insertedId
     }
 
@@ -715,6 +723,10 @@ class SqlitePhotoRepository(
 
         refreshSync()
         folderRepository.refresh()
+        try {
+            com.arinara.fotara.widget.PhotoCarouselGlanceWidgetReceiver.triggerUpdate(dbHelper.context)
+            com.arinara.fotara.widget.DueTomorrowWidgetProvider.notifyDataChanged(dbHelper.context)
+        } catch (_: Exception) {}
     }
 
     override suspend fun renamePhoto(id: Long, newCaption: String) = withContext(Dispatchers.IO) {

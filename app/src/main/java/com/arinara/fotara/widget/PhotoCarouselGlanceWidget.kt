@@ -131,7 +131,7 @@ class PhotoCarouselGlanceWidget : GlanceAppWidget() {
                     val detail = activeItem?.let {
                         val cap = it.caption?.ifBlank { null }
                         if (cap != null) "${it.folderName} • $cap" else it.folderName
-                    } ?: "Catatan kuliah & rumus"
+                    } ?: "Coursework notes & formulas"
 
                     Text(
                         text = detail,
@@ -182,7 +182,7 @@ class PhotoCarouselGlanceWidget : GlanceAppWidget() {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Belum ada foto catatan kuliah",
+                        text = "No coursework photos yet",
                         style = TextStyle(color = ColorTextSecondary, fontSize = 11.sp)
                     )
                 }
@@ -360,6 +360,10 @@ class PhotoCarouselGlanceWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = PhotoCarouselGlanceWidget()
 
     companion object {
+        fun triggerUpdate(context: Context) {
+            notifyDataChanged(context)
+        }
+
         fun notifyDataChanged(context: Context) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val componentName = ComponentName(context, PhotoCarouselGlanceWidgetReceiver::class.java)

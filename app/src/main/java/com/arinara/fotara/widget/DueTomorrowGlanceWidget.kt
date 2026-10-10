@@ -364,7 +364,7 @@ class DueTomorrowGlanceWidget : GlanceAppWidget() {
             // 3. Document notes added or scheduled today
             val docCursor = db.rawQuery(
                 """
-                SELECT d.id, d.title, f.name, d.added_at, d.scheduled_at, d.linked_deadline
+                SELECT d.id, d.name, f.name, d.added_at, d.scheduled_at, d.linked_deadline
                 FROM document_notes d
                 INNER JOIN folders f ON d.folder_id = f.id
                 WHERE d.is_trashed = 0 AND f.is_trashed = 0

@@ -128,7 +128,7 @@ fun WorkspaceTabBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp)
+            .padding(horizontal = 16.dp)
             .height(48.dp)
             .systemGestureExclusion()
             .clip(RoundedCornerShape(24.dp))

@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,11 +63,13 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -130,9 +134,11 @@ fun TextNoteEditorScreen(
     textNoteRepository: TextNoteRepository,
     onBack: () -> Unit,
     onShare: (TextNote) -> Unit,
-    highlightQuery: String? = null
+    highlightQuery: String? = null,
+    audioAnnotationRepository: com.arinara.fotara.audio.repository.AudioAnnotationRepository? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
     val state = rememberEditorState(
         initialNoteId = noteId,
         folderId = folderId,
@@ -140,6 +146,44 @@ fun TextNoteEditorScreen(
         textNoteRepository = textNoteRepository,
         coroutineScope = coroutineScope
     )
+
+    val audioRepo = remember(audioAnnotationRepository, context) {
+        audioAnnotationRepository ?: com.arinara.fotara.audio.repository.SqliteAudioAnnotationRepository(com.arinara.fotara.data.db.FotaraDbHelper(context))
+    }
+    val audioRecorderManager = remember(context) { com.arinara.fotara.audio.recorder.AudioRecorderManager(context) }
+    val audioPlayerManager = remember { com.arinara.fotara.audio.player.AudioPlayerManager() }
+    val audioViewModel: com.arinara.fotara.audio.ui.AudioAnnotationViewModel = viewModel(
+        key = "audio_note_${state.noteId ?: 0L}",
+        factory = com.arinara.fotara.audio.ui.AudioAnnotationViewModelFactory(
+            repository = audioRepo,
+            recorderManager = audioRecorderManager,
+            playerManager = audioPlayerManager,
+            noteId = state.noteId
+        )
+    )
+    val audioUiState by audioViewModel.uiState.collectAsState()
+    var showAudioDock by remember { mutableStateOf(false) }
+
+    val activeMathSpan = remember(state.bodyValue.text, state.bodyValue.selection) {
+        val cursor = state.bodyValue.selection.start
+        val doc = com.arinara.fotara.ui.note.editor.MarkdownParser.parse(state.bodyValue.text)
+        doc.spans.firstOrNull { span ->
+            (span.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_INLINE ||
+             span.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_BLOCK) &&
+            cursor in (span.start - 1)..(span.end + 1)
+        }
+    }
+
+    val rawMathContent = remember(activeMathSpan, state.bodyValue.text) {
+        activeMathSpan?.let { span ->
+            if (span.contentStart in 0..state.bodyValue.text.length &&
+                span.contentEnd in 0..state.bodyValue.text.length &&
+                span.contentStart <= span.contentEnd
+            ) {
+                state.bodyValue.text.substring(span.contentStart, span.contentEnd).trim()
+            } else ""
+        } ?: ""
+    }
 
     var isPreviewMode by remember { mutableStateOf(false) }
     var activeHighlightQuery by remember { mutableStateOf(highlightQuery) }
@@ -224,6 +268,16 @@ fun TextNoteEditorScreen(
                         imageVector = if (isPreviewMode) Icons.Default.EditNote else Icons.Default.Visibility,
                         contentDescription = if (isPreviewMode) "Edit Mode" else "Preview Mode",
                         tint = if (isPreviewMode) AccentGold else TabCream
+                    )
+                }
+
+                IconButton(
+                    onClick = { showAudioDock = !showAudioDock }
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.Mic,
+                        contentDescription = "Voice Annotations",
+                        tint = if (audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording) AccentGold else TabCream
                     )
                 }
 
@@ -782,6 +836,136 @@ fun TextNoteEditorScreen(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Live Floating Math Preview Card (updates in real-time when cursor is inside or adjacent to LaTeX)
+            AnimatedVisibility(
+                visible = activeMathSpan != null && rawMathContent.isNotEmpty(),
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = CardBg,
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ToolbarBorder),
+                    shadowElevation = 6.dp
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFF2563EB).copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "fx",
+                                    color = Color(0xFF64B5F6),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (activeMathSpan?.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_BLOCK) {
+                                    "Display Math Preview"
+                                } else {
+                                    "Inline Math Preview"
+                                },
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        val mathAnnotated = remember(rawMathContent, activeMathSpan?.type) {
+                            com.arinara.fotara.ui.note.editor.KatexMathRenderer.buildMathAnnotatedString(
+                                rawLatex = rawMathContent,
+                                mathColor = TabCream,
+                                isBlock = (activeMathSpan?.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_BLOCK)
+                            )
+                        }
+                        Text(
+                            text = mathAnnotated,
+                            modifier = Modifier.fillMaxWidth(),
+                            fontSize = if (activeMathSpan?.type == com.arinara.fotara.ui.note.editor.MarkdownSpanType.MATH_BLOCK) 16.sp else 14.5.sp,
+                            lineHeight = 22.sp
+                        )
+                    }
+                }
+            }
+
+            // Voice / Audio Annotations Dock
+            AnimatedVisibility(
+                visible = showAudioDock || audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = CardBg,
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ToolbarBorder),
+                    shadowElevation = 4.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Voice Annotations (${audioUiState.annotations.size})",
+                                color = TextMuted,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            IconButton(
+                                onClick = { showAudioDock = false },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Close Audio Dock", tint = TextMuted, modifier = Modifier.size(16.dp))
+                            }
+                        }
+
+                        com.arinara.fotara.audio.ui.AudioRecordPill(
+                            recorderState = audioUiState.recorderState,
+                            onStartRecording = {
+                                coroutineScope.launch {
+                                    if (state.noteId == null) {
+                                        state.flushAutosaveNow()
+                                    }
+                                    audioViewModel.startRecording()
+                                }
+                            },
+                            onStopRecording = { audioViewModel.stopAndSaveRecording() },
+                            onCancelRecording = { audioViewModel.cancelRecording() }
+                        )
+
+                        audioUiState.annotations.forEach { annotation ->
+                            com.arinara.fotara.audio.ui.AudioPlaybackBar(
+                                annotation = annotation,
+                                playerState = audioUiState.playerState,
+                                onPlay = { audioViewModel.playAnnotation(annotation) },
+                                onPause = { audioViewModel.pausePlayback() },
+                                onResume = { audioViewModel.resumePlayback() },
+                                onSeek = { audioViewModel.seekPlayback(it) },
+                                onDelete = { audioViewModel.deleteAnnotation(annotation.id) }
+                            )
+                        }
+                    }
+                }
             }
 
             // Keyboard-Docked Formatting Toolbar

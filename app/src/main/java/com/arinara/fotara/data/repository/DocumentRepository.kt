@@ -368,6 +368,9 @@ class SqliteDocumentRepository(
             documentNotesFlow.value = notesWithCounts
             documentPagesFlow.value = pagesMap
             trashedDocumentNotesFlow.value = trashedWithCounts
+            try {
+                com.arinara.fotara.widget.DueTomorrowWidgetProvider.notifyDataChanged(dbHelper.context)
+            } catch (_: Exception) {}
         } catch (e: Exception) {
             android.util.Log.e("SqliteDocRepo", "Error refreshing document notes: ${e.message}")
         }

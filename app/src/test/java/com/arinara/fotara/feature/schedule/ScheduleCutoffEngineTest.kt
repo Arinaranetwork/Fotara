@@ -68,8 +68,8 @@ class ScheduleCutoffEngineTest {
         assertEquals("Kalkulus II", activeState.ongoing.subjectName)
         assertEquals(70, activeState.minutesRemaining) // 09:40 = 580, 580 - 510 = 70
         assertEquals("Fisika Dasar", activeState.upcomingNext?.subjectName)
-        assertTrue(activeState.displayHeadline.contains("Sekarang: Kalkulus II (R. 302)"))
-        assertTrue(activeState.displayHeadline.contains("s.d 09:40"))
+        assertTrue(activeState.displayHeadline.contains("Now: Kalkulus II (R. 302)"))
+        assertTrue(activeState.displayHeadline.contains("until 09:40"))
         assertTrue(activeState.displayHeadline.contains("10:00 Fisika Dasar"))
     }
 
@@ -92,8 +92,8 @@ class ScheduleCutoffEngineTest {
         val upcoming = state as ScheduleCapsuleState.UpcomingToday
         assertEquals("Struktur Data", upcoming.nextClass.subjectName)
         assertEquals(2, upcoming.remainingClassesCount)
-        assertTrue(upcoming.displayHeadline.contains("Berikutnya: 10:00 Struktur Data (R. 101)"))
-        assertTrue(upcoming.displayHeadline.contains("2 Kelas"))
+        assertTrue(upcoming.displayHeadline.contains("Next: 10:00 Struktur Data (R. 101)"))
+        assertTrue(upcoming.displayHeadline.contains("2 Classes"))
     }
 
     @Test
@@ -113,9 +113,9 @@ class ScheduleCutoffEngineTest {
 
         assertTrue(state is ScheduleCapsuleState.TodayFinished)
         val finished = state as ScheduleCapsuleState.TodayFinished
-        assertEquals("Besok", finished.nextScheduleDayName)
+        assertEquals("Tomorrow", finished.nextScheduleDayName)
         assertEquals("Pemrograman Web", finished.nextFirstClass?.subjectName)
-        assertTrue(finished.displayHeadline.contains("Kelas Hari Ini Selesai"))
+        assertTrue(finished.displayHeadline.contains("Classes Finished for Today"))
     }
 
     @Test
@@ -139,8 +139,8 @@ class ScheduleCutoffEngineTest {
         assertEquals(2, rollover.targetDayOfWeek)
         assertEquals("Basis Data", rollover.firstClass.subjectName)
         assertEquals(2, rollover.totalClassesCount)
-        assertTrue(rollover.displayHeadline.contains("Persiapan Besok: 08:00 Basis Data (R. 401)"))
-        assertTrue(rollover.displayHeadline.contains("2 Kelas"))
+        assertTrue(rollover.displayHeadline.contains("Next-Day Prep: 08:00 Basis Data (R. 401)"))
+        assertTrue(rollover.displayHeadline.contains("2 Classes"))
     }
 
     @Test
@@ -161,9 +161,9 @@ class ScheduleCutoffEngineTest {
         assertTrue(state is ScheduleCapsuleState.RolloverTomorrow)
         val rollover = state as ScheduleCapsuleState.RolloverTomorrow
         assertEquals(1, rollover.targetDayOfWeek) // Monday
-        assertEquals("Senin", rollover.targetDayName)
+        assertEquals("Monday", rollover.targetDayName)
         assertEquals("Kalkulus II", rollover.firstClass.subjectName)
-        assertTrue(rollover.displayHeadline.contains("Persiapan Senin: 08:00 Kalkulus II"))
+        assertTrue(rollover.displayHeadline.contains("Prep for Monday: 08:00 Kalkulus II"))
     }
 
     @Test

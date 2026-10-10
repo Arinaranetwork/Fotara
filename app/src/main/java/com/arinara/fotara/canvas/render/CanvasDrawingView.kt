@@ -114,7 +114,7 @@ class CanvasDrawingView(
 
     private fun checkShapeHoldMovement(x: Float, y: Float) {
         if (!isShapeSnapped) {
-            val slopPx = 18f * resources.displayMetrics.density
+            val slopPx = 36f * resources.displayMetrics.density
             if (kotlin.math.hypot(x - shapeHoldAnchorX, y - shapeHoldAnchorY) > slopPx) {
                 scheduleShapeHold(x, y)
             }

@@ -9,6 +9,7 @@ package com.arinara.fotara.canvas.engine
 import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokePoint
+import com.arinara.fotara.canvas.model.TextLayerElement
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -39,6 +40,7 @@ object TransformHandlesMath {
         val originalImageBounds: Map<String, CanvasRect>,
         val originalImageRotations: Map<String, Float>,
         val originalImages: Map<String, ImageElement> = emptyMap(),
+        val originalTexts: Map<String, TextLayerElement> = emptyMap(),
         val worldCenter: Pair<Float, Float>,
         val worldWidth: Float,
         val worldHeight: Float,
@@ -488,6 +490,191 @@ object TransformHandlesMath {
         val clampedX = img.x.coerceIn(-extent, extent - clampedW)
         val clampedY = img.y.coerceIn(-extent, extent - clampedH)
         return img.copy(
+            x = clampedX,
+            y = clampedY,
+            width = clampedW,
+            height = clampedH,
+            bounds = CanvasRect(clampedX, clampedY, clampedX + clampedW, clampedY + clampedH)
+        )
+    }
+
+    /**
+     * Transforms a TextLayerElement during handle resize, move, or rotation.
+     */
+    fun transformTextElement(
+        originalText: TextLayerElement,
+        handleId: Int,
+        startState: TransformStartState,
+        currentScreenX: Float,
+        currentScreenY: Float,
+        viewport: ViewportState,
+        density: Float = 1.0f
+    ): TextLayerElement {
+        if (handleId == -1) {
+            // Whole body move
+            val worldDx = (currentScreenX - startState.startScreenX) / viewport.scale
+            val worldDy = (currentScreenY - startState.startScreenY) / viewport.scale
+            return clampTextToCanvas(originalText.translated(worldDx, worldDy))
+        }
+
+        val (scx, scy) = ViewportTransform.worldToScreen(startState.worldCenter.first, startState.worldCenter.second, viewport)
+
+        if (handleId == 8) {
+            // Rotation around selection centroid
+            val startAngle = atan2(startState.startScreenY - scy, startState.startScreenX - scx)
+            val currentAngle = atan2(currentScreenY - scy, currentScreenX - scx)
+            val deltaAngle = currentAngle - startAngle
+            val deltaDeg = Math.toDegrees(deltaAngle.toDouble()).toFloat()
+
+            val cosD = cos(deltaAngle)
+            val sinD = sin(deltaAngle)
+            val (cx, cy) = startState.worldCenter
+            val origCenterX = originalText.x + originalText.width / 2f
+            val origCenterY = originalText.y + originalText.height / 2f
+            val rx = origCenterX - cx
+            val ry = origCenterY - cy
+            val newCenterX = cx + rx * cosD - ry * sinD
+            val newCenterY = cy + rx * sinD + ry * cosD
+
+            val newX = newCenterX - originalText.width / 2f
+            val newY = newCenterY - originalText.height / 2f
+            val initRot = originalText.rotationDegrees
+            val newRot = (initRot + deltaDeg) % 360f
+            val finalRot = if (newRot < 0f) newRot + 360f else newRot
+
+            return clampTextToCanvas(
+                originalText.copy(
+                    x = newX,
+                    y = newY,
+                    rotationDegrees = finalRot,
+                    bounds = CanvasRect(newX, newY, newX + originalText.width, newY + originalText.height)
+                )
+            )
+        }
+
+        // Resize handles (0..7)
+        val sW = startState.worldWidth * viewport.scale
+        val sH = startState.worldHeight * viewport.scale
+        val rad = Math.toRadians(startState.rotationDegrees.toDouble()).toFloat()
+        val cosNeg = cos(-rad)
+        val sinNeg = sin(-rad)
+
+        val curDx = currentScreenX - scx
+        val curDy = currentScreenY - scy
+        val curLx = curDx * cosNeg - curDy * sinNeg
+        val curLy = curDx * sinNeg + curDy * cosNeg
+
+        val halfW = sW / 2.0f
+        val halfH = sH / 2.0f
+
+        val (anchorX, anchorY) = when (handleId) {
+            0 -> Pair(halfW, halfH)   // NW dragged -> SE anchor fixed
+            1 -> Pair(0.0f, halfH)    // N dragged -> S anchor fixed
+            2 -> Pair(-halfW, halfH)  // NE dragged -> SW anchor fixed
+            3 -> Pair(-halfW, 0.0f)   // E dragged -> W anchor fixed
+            4 -> Pair(-halfW, -halfH) // SE dragged -> NW anchor fixed
+            5 -> Pair(0.0f, -halfH)   // S dragged -> N anchor fixed
+            6 -> Pair(halfW, -halfH)  // SW dragged -> NE anchor fixed
+            7 -> Pair(halfW, 0.0f)    // W dragged -> E anchor fixed
+            else -> Pair(0.0f, 0.0f)
+        }
+
+        val origDx = when (handleId) {
+            0, 6, 7 -> -halfW - anchorX
+            2, 3, 4 -> halfW - anchorX
+            else -> 0.0f
+        }
+        val origDy = when (handleId) {
+            0, 1, 2 -> -halfH - anchorY
+            4, 5, 6 -> halfH - anchorY
+            else -> 0.0f
+        }
+
+        val minSize = MIN_SIZE_CLAMP_DP * density
+        val isCorner = handleId == 0 || handleId == 2 || handleId == 4 || handleId == 6
+        val isSide = handleId == 1 || handleId == 3 || handleId == 5 || handleId == 7
+
+        val scaleX: Float
+        val scaleY: Float
+
+        if (isCorner) {
+            val vX = curLx - anchorX
+            val vY = curLy - anchorY
+            val dot = vX * origDx + vY * origDy
+            val origLenSq = origDx * origDx + origDy * origDy
+            val rawScale = if (origLenSq > 1e-4f) dot / origLenSq else 1.0f
+
+            val minScaleX = if (kotlin.math.abs(origDx) > 1e-4f) minSize / kotlin.math.abs(origDx) else 0.05f
+            val minScaleY = if (kotlin.math.abs(origDy) > 1e-4f) minSize / kotlin.math.abs(origDy) else 0.05f
+            val minScale = max(minScaleX, minScaleY)
+
+            val finalScale = max(rawScale, minScale)
+            scaleX = finalScale
+            scaleY = finalScale
+        } else if (isSide) {
+            if (handleId == 3 || handleId == 7) {
+                var newDx = curLx - anchorX
+                if (origDx > 0.0f) {
+                    newDx = max(minSize, newDx)
+                } else if (origDx < 0.0f) {
+                    newDx = kotlin.math.min(-minSize, newDx)
+                }
+                scaleX = if (kotlin.math.abs(origDx) < 1e-3f) 1.0f else newDx / origDx
+                scaleY = 1.0f
+            } else {
+                var newDy = curLy - anchorY
+                if (origDy > 0.0f) {
+                    newDy = max(minSize, newDy)
+                } else if (origDy < 0.0f) {
+                    newDy = kotlin.math.min(-minSize, newDy)
+                }
+                scaleX = 1.0f
+                scaleY = if (kotlin.math.abs(origDy) < 1e-3f) 1.0f else newDy / origDy
+            }
+        } else {
+            scaleX = 1.0f
+            scaleY = 1.0f
+        }
+
+        val anchorWorldX = anchorX / viewport.scale
+        val anchorWorldY = anchorY / viewport.scale
+
+        val origTextCenterX = originalText.x + originalText.width / 2f
+        val origTextCenterY = originalText.y + originalText.height / 2f
+        val (textLx, textLy) = worldToLocal(origTextCenterX, origTextCenterY, startState.worldCenter, rad)
+
+        val plxRel = textLx - anchorWorldX
+        val plyRel = textLy - anchorWorldY
+
+        val nlx = anchorWorldX + plxRel * scaleX
+        val nly = anchorWorldY + plyRel * scaleY
+
+        val (newCenterX, newCenterY) = localToWorld(nlx, nly, startState.worldCenter, rad)
+        val minDimension = minSize / viewport.scale
+        val newWidth = max(minDimension, originalText.width * scaleX)
+        val newHeight = max(minDimension, originalText.height * scaleY)
+
+        val newX = newCenterX - newWidth / 2f
+        val newY = newCenterY - newHeight / 2f
+
+        return clampTextToCanvas(
+            originalText.copy(
+                x = newX,
+                y = newY,
+                width = newWidth,
+                height = newHeight,
+                bounds = CanvasRect(newX, newY, newX + newWidth, newY + newHeight)
+            )
+        )
+    }
+
+    private fun clampTextToCanvas(txt: TextLayerElement): TextLayerElement {
+        val extent = 20000.0f
+        val clampedW = txt.width.coerceIn(10f, extent)
+        val clampedH = txt.height.coerceIn(10f, extent)
+        val clampedX = txt.x.coerceIn(-extent, extent - clampedW)
+        val clampedY = txt.y.coerceIn(-extent, extent - clampedH)
+        return txt.copy(
             x = clampedX,
             y = clampedY,
             width = clampedW,

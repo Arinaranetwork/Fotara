@@ -340,7 +340,8 @@ fun MainNavigation(
                     textNoteRepository = appContainer.textNoteRepository,
                     onBack = { safePopBack() },
                     onShare = { note -> textNoteToShare = note },
-                    highlightQuery = key.highlightQuery
+                    highlightQuery = key.highlightQuery,
+                    audioAnnotationRepository = appContainer.audioAnnotationRepository
                 )
                 textNoteToShare?.let { note ->
                     val context = androidx.compose.ui.platform.LocalContext.current

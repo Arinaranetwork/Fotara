@@ -11,8 +11,10 @@ import com.arinara.fotara.canvas.engine.AreaEraseCommand
 import com.arinara.fotara.canvas.engine.CanvasHistoryManager
 import com.arinara.fotara.canvas.engine.CanvasRect
 import com.arinara.fotara.canvas.engine.CanvasSelectionEngine
+import com.arinara.fotara.canvas.engine.RecognizedShape
 import com.arinara.fotara.canvas.engine.RemoveElementsCommand
 import com.arinara.fotara.canvas.engine.ReplaceElementsCommand
+import com.arinara.fotara.canvas.engine.ShapeAutoCorrectEngine
 import com.arinara.fotara.canvas.engine.StrokeProcessor
 import com.arinara.fotara.canvas.engine.TransformElementsCommand
 import com.arinara.fotara.canvas.engine.TransformHandlesMath
@@ -29,6 +31,7 @@ import com.arinara.fotara.canvas.model.StrokeBlendMode
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokePoint
 import com.arinara.fotara.canvas.model.StrokeToolType
+import com.arinara.fotara.canvas.model.TextLayerElement
 import java.util.UUID
 import kotlin.math.hypot
 
@@ -171,11 +174,23 @@ class CanvasToolController(
         // Zoom-aware decimation: screen tolerance converted to world units
         val screenTolerance = 0.8f
         val worldTolerance = screenTolerance / viewportScale.coerceAtLeast(0.05f)
-        val finalPoints = StrokeProcessor.decimatePoints(activeStrokePoints, tolerance = worldTolerance)
+        val decimated = StrokeProcessor.decimatePoints(activeStrokePoints, tolerance = worldTolerance)
 
         val toolType = when (toolState.activeTool) {
             CanvasToolType.HIGHLIGHTER -> StrokeToolType.HIGHLIGHTER
             else -> StrokeToolType.PEN
+        }
+
+        // Automatic drawing smoothing & shape recognition on finger lift for Pen strokes
+        val finalPoints = if (toolType == StrokeToolType.PEN) {
+            val snapResult = ShapeAutoCorrectEngine.recognizeAndSnap(decimated)
+            if (snapResult.shape !is RecognizedShape.None) {
+                snapResult.snappedPoints
+            } else {
+                ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
+            }
+        } else {
+            decimated
         }
         val strokeWidth = if (toolType == StrokeToolType.HIGHLIGHTER) toolState.highlighterSize else toolState.penSize
         val strokeColor = if (toolType == StrokeToolType.HIGHLIGHTER) toolState.highlighterColor else toolState.penColor
@@ -380,13 +395,17 @@ class CanvasToolController(
                 when (el) {
                     is StrokeElement -> StrokeProcessor.hitTestStroke(worldX, worldY, el, hitRadius = 8f / viewport.scale)
                     is ImageElement -> hitTestImage(worldX, worldY, el)
-                    else -> false
+                    is TextLayerElement -> hitTestText(worldX, worldY, el)
                 }
             }
 
         val newSel = if (hitElement != null) {
             val ref = SelectedElementReference.Whole(hitElement.id)
-            val rot = if (hitElement is ImageElement) hitElement.rotationDegrees else 0f
+            val rot = when (hitElement) {
+                is ImageElement -> hitElement.rotationDegrees
+                is TextLayerElement -> hitElement.rotationDegrees
+                else -> 0f
+            }
             CanvasSelection(
                 references = mapOf(hitElement.id to ref),
                 bounds = hitElement.bounds,
@@ -403,6 +422,24 @@ class CanvasToolController(
     private fun hitTestImage(worldX: Float, worldY: Float, el: ImageElement): Boolean {
         if (el.rotationDegrees == 0f) {
             return el.bounds.contains(worldX, worldY)
+        }
+        val rad = Math.toRadians(el.rotationDegrees.toDouble()).toFloat()
+        val centerX = el.x + el.width / 2f
+        val centerY = el.y + el.height / 2f
+        val dx = worldX - centerX
+        val dy = worldY - centerY
+        val localX = dx * kotlin.math.cos(-rad) - dy * kotlin.math.sin(-rad)
+        val localY = dx * kotlin.math.sin(-rad) + dy * kotlin.math.cos(-rad)
+        return kotlin.math.abs(localX) <= el.width / 2f && kotlin.math.abs(localY) <= el.height / 2f
+    }
+
+    fun hitTestText(worldX: Float, worldY: Float, el: TextLayerElement): Boolean {
+        if (el.rotationDegrees == 0f) {
+            val minX = minOf(el.x, el.bounds.left)
+            val maxX = maxOf(el.x + el.width, el.bounds.right)
+            val minY = minOf(el.y, el.bounds.top)
+            val maxY = maxOf(el.y + el.height, el.bounds.bottom)
+            return worldX in minX..maxX && worldY in minY..maxY
         }
         val rad = Math.toRadians(el.rotationDegrees.toDouble()).toFloat()
         val centerX = el.x + el.width / 2f
@@ -447,7 +484,7 @@ class CanvasToolController(
                         selectedRefs[el.id] = ref
                     }
                 }
-                else -> {
+                is TextLayerElement -> {
                     if (CanvasSelectionEngine.isPointInPolygonWinding(el.bounds.centerX, el.bounds.centerY, worldPolygon)) {
                         selectedRefs[el.id] = SelectedElementReference.Whole(el.id)
                     }
@@ -529,6 +566,7 @@ class CanvasToolController(
         val originalImageBounds = mutableMapOf<String, CanvasRect>()
         val originalImageRotations = mutableMapOf<String, Float>()
         val originalImages = mutableMapOf<String, ImageElement>()
+        val originalTexts = mutableMapOf<String, TextLayerElement>()
         val elMap = document.elements.associateBy { it.id }
 
         for ((id, ref) in selection.references) {
@@ -550,7 +588,9 @@ class CanvasToolController(
                     originalImageRotations[id] = el.rotationDegrees
                     originalImages[id] = el
                 }
-                else -> {}
+                is TextLayerElement -> {
+                    originalTexts[id] = el
+                }
             }
         }
 
@@ -559,6 +599,7 @@ class CanvasToolController(
             originalImageBounds = originalImageBounds,
             originalImageRotations = originalImageRotations,
             originalImages = originalImages,
+            originalTexts = originalTexts,
             worldCenter = Pair(selection.bounds.centerX, selection.bounds.centerY),
             worldWidth = selection.bounds.width,
             worldHeight = selection.bounds.height,
@@ -635,19 +676,35 @@ class CanvasToolController(
                     )
                     preview.add(transformed)
                 }
-                else -> {
-                    preview.add(el)
+                is TextLayerElement -> {
+                    val origTxt = startState.originalTexts[id] ?: el
+                    val transformed = TransformHandlesMath.transformTextElement(
+                        originalText = origTxt,
+                        handleId = handleId,
+                        startState = startState,
+                        currentScreenX = currentScreenX,
+                        currentScreenY = currentScreenY,
+                        viewport = viewport,
+                        density = density
+                    )
+                    preview.add(transformed)
                 }
             }
         }
 
         // Live preview of selection box
-        val onlyImages = selection.references.isNotEmpty() && selection.references.keys.all { elMap[it] is ImageElement }
-        previewSelection = if (onlyImages && preview.size == 1 && preview[0] is ImageElement) {
+        val onlySingleBox = preview.size == 1 && (preview[0] is ImageElement || preview[0] is TextLayerElement)
+        previewSelection = if (onlySingleBox && preview[0] is ImageElement) {
             val img = preview[0] as ImageElement
             selection.copy(
                 bounds = img.bounds,
                 rotationDegrees = img.rotationDegrees
+            )
+        } else if (onlySingleBox && preview[0] is TextLayerElement) {
+            val txt = preview[0] as TextLayerElement
+            selection.copy(
+                bounds = txt.bounds,
+                rotationDegrees = txt.rotationDegrees
             )
         } else if (handleId == -1) {
             val worldDx = (currentScreenX - startState.startScreenX) / viewport.scale
@@ -757,9 +814,19 @@ class CanvasToolController(
                     afterElements.add(transformedImage)
                     newReferences[transformedImage.id] = SelectedElementReference.Whole(transformedImage.id)
                 }
-                else -> {
-                    afterElements.add(el)
-                    newReferences[el.id] = SelectedElementReference.Whole(el.id)
+                is TextLayerElement -> {
+                    val origTxt = startState.originalTexts[id] ?: el
+                    val transformedText = TransformHandlesMath.transformTextElement(
+                        originalText = origTxt,
+                        handleId = handleId,
+                        startState = startState,
+                        currentScreenX = startState.startScreenX + totalDeltaX,
+                        currentScreenY = startState.startScreenY + totalDeltaY,
+                        viewport = viewport,
+                        density = density
+                    )
+                    afterElements.add(transformedText)
+                    newReferences[transformedText.id] = SelectedElementReference.Whole(transformedText.id)
                 }
             }
         }
@@ -778,8 +845,7 @@ class CanvasToolController(
             document
         )
 
-        val onlyImages = selection.references.isNotEmpty() && selection.references.keys.all { elMap[it] is ImageElement }
-        val newBounds = if (onlyImages && afterElements.size == 1 && afterElements[0] is ImageElement) {
+        val newBounds = if (afterElements.size == 1 && afterElements[0] is ImageElement) {
             val img = afterElements[0] as ImageElement
             selection = CanvasSelection(
                 references = newReferences,
@@ -787,6 +853,14 @@ class CanvasToolController(
                 rotationDegrees = img.rotationDegrees
             )
             img.bounds
+        } else if (afterElements.size == 1 && afterElements[0] is TextLayerElement) {
+            val txt = afterElements[0] as TextLayerElement
+            selection = CanvasSelection(
+                references = newReferences,
+                bounds = txt.bounds,
+                rotationDegrees = txt.rotationDegrees
+            )
+            txt.bounds
         } else {
             val nb = CanvasSelectionEngine.computeSelectionBounds(newReferences, updatedDoc.elements)
             val finalRot = if (handleId == 8) {
@@ -809,6 +883,16 @@ class CanvasToolController(
         val dirtyBounds = oldUnionBounds.union(newBounds)
         return Pair(updatedDoc, dirtyBounds)
     }
+
+    fun commitTransformGesture(
+        handleId: Int,
+        totalDeltaX: Float,
+        totalDeltaY: Float,
+        viewport: ViewportState,
+        document: CanvasDocument,
+        historyManager: CanvasHistoryManager,
+        density: Float = 1.0f
+    ): Pair<CanvasDocument, CanvasRect?> = commitTransform(handleId, totalDeltaX, totalDeltaY, viewport, document, historyManager, density)
 
     fun cancelTransformGesture() {
         transformStartState = null

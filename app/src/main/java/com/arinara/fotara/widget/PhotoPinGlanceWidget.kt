@@ -152,7 +152,7 @@ class PhotoPinGlanceWidget : GlanceAppWidget() {
                     )
                     Spacer(modifier = GlanceModifier.height(8.dp))
                     Text(
-                        text = "Ketuk untuk memilih foto rumus atau catatan kuliah",
+                        text = "Tap to choose a coursework or formula photo",
                         style = TextStyle(
                             color = ColorTextSecondary,
                             fontSize = 11.sp

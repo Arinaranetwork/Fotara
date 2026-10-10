@@ -34,10 +34,10 @@ class ScheduleNotificationScheduler(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Jadwal Kuliah & Timetable",
+                "Class Schedule & Timetable",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifikasi jadwal kuliah pagi, pengingat sebelum kelas (H-10), dan persiapan malam"
+                description = "Morning schedule notification, pre-class reminders (10 min prior), and next-day evening prep"
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -160,11 +160,11 @@ class ScheduleNotificationScheduler(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val roomDetail = if (room.isNotBlank()) " di $room" else ""
+        val roomDetail = if (room.isNotBlank()) " in $room" else ""
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Kuliah Segera Dimulai (10 Menit): $subject")
-            .setContentText("Mulai pukul $startTime$roomDetail. Ketuk untuk siap mencatat.")
+            .setContentTitle("Class Starting Soon (10 min): $subject")
+            .setContentText("Starts at $startTime$roomDetail. Tap to prepare notes.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingTap)
@@ -228,7 +228,7 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
 
         when (alarmType) {
             ScheduleNotificationScheduler.TYPE_PRE_CLASS -> {
-                val subject = intent.getStringExtra(ScheduleNotificationScheduler.EXTRA_SUBJECT_NAME) ?: "Kuliah"
+                val subject = intent.getStringExtra(ScheduleNotificationScheduler.EXTRA_SUBJECT_NAME) ?: "Class"
                 val room = intent.getStringExtra(ScheduleNotificationScheduler.EXTRA_ROOM_NAME) ?: ""
                 val startTime = intent.getStringExtra(ScheduleNotificationScheduler.EXTRA_START_TIME) ?: ""
                 val folderId = intent.getLongExtra(ScheduleNotificationScheduler.EXTRA_LINKED_FOLDER_ID, -1L)
@@ -236,14 +236,14 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
             }
             ScheduleNotificationScheduler.TYPE_MORNING_DIGEST -> {
                 scheduler.showDigestNotification(
-                    title = "Jadwal Kuliah Hari Ini",
-                    message = "Selamat pagi! Buka Fotara untuk melihat jadwal kuliah dan materi hari ini."
+                    title = "Today's Class Schedule",
+                    message = "Good morning! Open Fotara to review today's class schedule and coursework notes."
                 )
             }
             ScheduleNotificationScheduler.TYPE_EVENING_ROLLOVER -> {
                 scheduler.showDigestNotification(
-                    title = "Persiapan Kuliah Besok",
-                    message = "Jadwal kuliah besok sudah siap. Pastikan buku dan catatan Anda lengkap malam ini."
+                    title = "Tomorrow's Class Preparation",
+                    message = "Tomorrow's class schedule is ready. Ensure your books and notes are prepared tonight."
                 )
             }
         }

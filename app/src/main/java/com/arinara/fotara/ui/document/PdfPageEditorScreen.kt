@@ -49,6 +49,8 @@ import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.AutoFixNormal
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LayersClear
 import androidx.compose.material.icons.outlined.MoreVert
@@ -145,6 +147,24 @@ import java.io.File
 
 private val DangerRed = TagCrimson
 
+private fun hitTestTextLayer(ptX: Float, ptY: Float, el: TextLayerElement): Boolean {
+    if (el.rotationDegrees == 0f) {
+        val minX = minOf(el.x, el.bounds.left)
+        val maxX = maxOf(el.x + el.width, el.bounds.right)
+        val minY = minOf(el.y, el.bounds.top)
+        val maxY = maxOf(el.y + el.height, el.bounds.bottom)
+        return ptX in minX..maxX && ptY in minY..maxY
+    }
+    val rad = Math.toRadians(el.rotationDegrees.toDouble()).toFloat()
+    val centerX = el.x + el.width / 2f
+    val centerY = el.y + el.height / 2f
+    val dx = ptX - centerX
+    val dy = ptY - centerY
+    val localX = dx * kotlin.math.cos(-rad) - dy * kotlin.math.sin(-rad)
+    val localY = dx * kotlin.math.sin(-rad) + dy * kotlin.math.cos(-rad)
+    return kotlin.math.abs(localX) <= el.width / 2f && kotlin.math.abs(localY) <= el.height / 2f
+}
+
 @Composable
 fun PdfPageEditorScreen(
     documentId: Long,
@@ -211,6 +231,9 @@ fun PdfPageEditorScreen(
     var showClearConfirmDialog by remember { mutableStateOf(false) }
 
     val textLayers = uiState.textLayers
+    var selectedTextLayerId by remember { mutableStateOf<String?>(null) }
+    var liveDraggingTextLayer by remember { mutableStateOf<TextLayerElement?>(null) }
+    var editingTextLayerId by remember { mutableStateOf<String?>(null) }
     var showTextOptions by remember { mutableStateOf(false) }
     var textInput by remember { mutableStateOf("Text Annotation") }
     var textFontSizeSp by remember { mutableFloatStateOf(18f) }
@@ -331,6 +354,45 @@ fun PdfPageEditorScreen(
                             var shapeHoldAnchorPt = firstDown.position
                             var shapeHoldStartTime = System.currentTimeMillis()
 
+                            // Text layer interaction at touch down
+                            val initialTransformParams = com.arinara.fotara.canvas.engine.DrawingViewTransform.createParams(
+                                viewportWidth = containerW,
+                                viewportHeight = containerH,
+                                contentWidth = pagePointsWidth,
+                                contentHeight = pagePointsHeight,
+                                scale = userScale,
+                                panOffset = panOffset
+                            )
+                            val firstDownPt = initialTransformParams.localToContent(firstDown.position, clamp = false)
+
+                            var draggedTextLayer: TextLayerElement? = null
+                            var textDragStartPt = Offset.Zero
+                            var textLayerOrigX = 0f
+                            var textLayerOrigY = 0f
+                            var isTextTouch = false
+
+                            if (currentActiveTool == DrawingTool.TEXT && currentIsDrawingVisible) {
+                                isTextTouch = true
+                                val hitLayer = textLayers.asReversed().firstOrNull { hitTestTextLayer(firstDownPt.x, firstDownPt.y, it) }
+                                if (hitLayer != null) {
+                                    selectedTextLayerId = hitLayer.id
+                                    draggedTextLayer = hitLayer
+                                    textDragStartPt = firstDownPt
+                                    textLayerOrigX = hitLayer.x
+                                    textLayerOrigY = hitLayer.y
+                                    liveDraggingTextLayer = hitLayer
+                                    firstDown.consume()
+                                } else {
+                                    // Touched empty canvas: deselect and open placement dialog
+                                    selectedTextLayerId = null
+                                    liveDraggingTextLayer = null
+                                    editingTextLayerId = null
+                                    pendingTextPlacementPt = firstDownPt
+                                    showTextOptions = true
+                                    firstDown.consume()
+                                }
+                            }
+
                             do {
                                 val event = awaitPointerEvent()
                                 val pressedChanges = event.changes.filter { it.pressed }
@@ -341,6 +403,8 @@ fun PdfPageEditorScreen(
                                     currentPathPoints.clear()
                                     prevPtPts = null
                                     isShapeSnapped = false
+                                    draggedTextLayer = null
+                                    liveDraggingTextLayer = null
 
                                     val zoom = event.calculateZoom()
                                     val pan = event.calculatePan()
@@ -367,7 +431,7 @@ fun PdfPageEditorScreen(
                                     }
                                     event.changes.forEach { it.consume() }
                                 } else if (pressedChanges.size == 1 && currentIsDrawingVisible) {
-                                    // 1-finger Drawing / Erasing in PDF page points coordinate space
+                                    // 1-finger Drawing / Erasing / Text Dragging
                                     val change = pressedChanges.first()
                                     val transformParams = com.arinara.fotara.canvas.engine.DrawingViewTransform.createParams(
                                         viewportWidth = containerW,
@@ -377,79 +441,101 @@ fun PdfPageEditorScreen(
                                         scale = userScale,
                                         panOffset = panOffset
                                     )
-                                    val pagePt = transformParams.localToContent(change.position)
+                                    val pagePt = transformParams.localToContent(change.position, clamp = false)
                                     val ptX = pagePt.x
                                     val ptY = pagePt.y
                                     val pressure = StrokeProcessor.normalizePressure(change.pressure)
 
-                                    if (currentActiveTool == DrawingTool.TEXT) {
-                                        pendingTextPlacementPt = pagePt
-                                        showTextOptions = true
+                                    if (isTextTouch) {
+                                        if (draggedTextLayer != null) {
+                                            val deltaX = pagePt.x - textDragStartPt.x
+                                            val deltaY = pagePt.y - textDragStartPt.y
+                                            val newX = (textLayerOrigX + deltaX).coerceIn(0f, maxOf(0f, pagePointsWidth - draggedTextLayer.width))
+                                            val newY = (textLayerOrigY + deltaY).coerceIn(0f, maxOf(0f, pagePointsHeight - draggedTextLayer.height))
+                                            val updatedLayer = draggedTextLayer.copy(
+                                                x = newX,
+                                                y = newY,
+                                                bounds = com.arinara.fotara.canvas.engine.CanvasRect(
+                                                    left = newX,
+                                                    top = newY,
+                                                    right = newX + draggedTextLayer.width,
+                                                    bottom = newY + draggedTextLayer.height
+                                                )
+                                            )
+                                            liveDraggingTextLayer = updatedLayer
+                                        }
                                         change.consume()
-                                        break
-                                    }
+                                    } else {
+                                        if (dragStrokesSnapshot == null) {
+                                            dragStrokesSnapshot = strokes.toList()
+                                        }
 
-                                    if (dragStrokesSnapshot == null) {
-                                        dragStrokesSnapshot = strokes.toList()
-                                    }
+                                        when (currentActiveTool) {
+                                            DrawingTool.PEN, DrawingTool.HIGHLIGHTER -> {
+                                                val pt = StrokePoint(ptX, ptY, pressure)
+                                                currentPathPoints.add(pt)
+                                                livePoints = currentPathPoints.toList()
 
-                                    when (currentActiveTool) {
-                                        DrawingTool.PEN, DrawingTool.HIGHLIGHTER -> {
-                                            val pt = StrokePoint(ptX, ptY, pressure)
-                                            currentPathPoints.add(pt)
-                                            livePoints = currentPathPoints.toList()
-
-                                            if (currentActiveTool == DrawingTool.PEN && !isShapeSnapped) {
-                                                val slopPx = 18f * densityPx
-                                                val moveDist = (change.position - shapeHoldAnchorPt).getDistance()
-                                                val now = System.currentTimeMillis()
-                                                if (moveDist > slopPx) {
-                                                    shapeHoldAnchorPt = change.position
-                                                    shapeHoldStartTime = now
-                                                } else if (now - shapeHoldStartTime >= ShapeAutoCorrectEngine.HOLD_THRESHOLD_MS && currentPathPoints.size >= 5) {
-                                                    val snapRes = ShapeAutoCorrectEngine.recognizeAndSnap(currentPathPoints)
-                                                    if (snapRes.shape !is RecognizedShape.None) {
-                                                        isShapeSnapped = true
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        currentPathPoints.clear()
-                                                        currentPathPoints.addAll(snapRes.snappedPoints)
-                                                        livePoints = currentPathPoints.toList()
+                                                if (currentActiveTool == DrawingTool.PEN && !isShapeSnapped) {
+                                                    val slopPx = 36f * densityPx
+                                                    val moveDist = (change.position - shapeHoldAnchorPt).getDistance()
+                                                    val now = System.currentTimeMillis()
+                                                    if (moveDist > slopPx) {
+                                                        shapeHoldAnchorPt = change.position
+                                                        shapeHoldStartTime = now
+                                                    } else if (now - shapeHoldStartTime >= ShapeAutoCorrectEngine.HOLD_THRESHOLD_MS && currentPathPoints.size >= 5) {
+                                                        val snapRes = ShapeAutoCorrectEngine.recognizeAndSnap(currentPathPoints)
+                                                        if (snapRes.shape !is RecognizedShape.None) {
+                                                            isShapeSnapped = true
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            currentPathPoints.clear()
+                                                            currentPathPoints.addAll(snapRes.snappedPoints)
+                                                            livePoints = currentPathPoints.toList()
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
-                                        DrawingTool.ERASER -> {
-                                            val currentPt = Offset(ptX, ptY)
-                                            val prev = prevPtPts ?: currentPt
-                                            val eraserStrokeWidthPts = DrawingConstants.computeStoredWidth(
-                                                sliderDp = currentEraserSizeDp,
-                                                density = densityPx,
-                                                fitScale = fitScale
-                                            )
-                                            val eraserRadiusPts = eraserStrokeWidthPts / 2f
+                                            DrawingTool.ERASER -> {
+                                                val currentPt = Offset(ptX, ptY)
+                                                val prev = prevPtPts ?: currentPt
+                                                val eraserStrokeWidthPts = DrawingConstants.computeStoredWidth(
+                                                    sliderDp = currentEraserSizeDp,
+                                                    density = densityPx,
+                                                    fitScale = fitScale
+                                                )
+                                                val eraserRadiusPts = eraserStrokeWidthPts / 2f
 
-                                            val updated = DrawingConstants.eraseStrokes(
-                                                strokes = strokes,
-                                                prevPt = prev,
-                                                currentPt = currentPt,
-                                                eraserRadius = eraserRadiusPts
-                                            )
-                                            strokes.clear()
-                                            strokes.addAll(updated)
-                                            prevPtPts = currentPt
+                                                val updated = DrawingConstants.eraseStrokes(
+                                                    strokes = strokes,
+                                                    prevPt = prev,
+                                                    currentPt = currentPt,
+                                                    eraserRadius = eraserRadiusPts
+                                                )
+                                                strokes.clear()
+                                                strokes.addAll(updated)
+                                                prevPtPts = currentPt
+                                            }
+                                            DrawingTool.TEXT -> {}
                                         }
-                                        DrawingTool.TEXT -> {}
+                                        change.consume()
                                     }
-                                    change.consume()
                                 }
                             } while (event.changes.any { it.pressed })
 
                             // Gesture Finished (Finger Lift)
-                            if (currentActiveTool == DrawingTool.ERASER) {
+                            if (isTextTouch) {
+                                val finishedLayer = liveDraggingTextLayer
+                                if (finishedLayer != null && draggedTextLayer != null) {
+                                    if (finishedLayer.x != textLayerOrigX || finishedLayer.y != textLayerOrigY) {
+                                        viewModel.updateTextLayer(finishedLayer)
+                                    }
+                                    liveDraggingTextLayer = null
+                                }
+                            } else if (currentActiveTool == DrawingTool.ERASER) {
                                 if (dragStrokesSnapshot != null && dragStrokesSnapshot != strokes.toList()) {
                                     viewModel.updateStrokesAfterEraser(strokes.toList(), dragStrokesSnapshot)
                                 }
-                            } else if (currentPathPoints.isNotEmpty() && currentActiveTool != DrawingTool.TEXT) {
+                            } else if (currentPathPoints.isNotEmpty()) {
                                 val toolType = if (currentActiveTool == DrawingTool.PEN) StrokeToolType.PEN else StrokeToolType.HIGHLIGHTER
                                 val sizeDp = if (currentActiveTool == DrawingTool.PEN) currentPenSizeDp else currentHighlighterSizeDp
                                 val strokeWidthPts = DrawingConstants.computeStoredWidth(
@@ -460,8 +546,17 @@ fun PdfPageEditorScreen(
                                 val blendMode = if (currentActiveTool == DrawingTool.PEN) StrokeBlendMode.NORMAL else currentHighlighterBlendMode
 
                                 val decimated = StrokeProcessor.decimatePoints(currentPathPoints, strokeWidthPts)
-                                val pointsToUse = if (currentActiveTool == DrawingTool.PEN && !isShapeSnapped) {
-                                    ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
+                                val pointsToUse = if (currentActiveTool == DrawingTool.PEN) {
+                                    if (isShapeSnapped) {
+                                        decimated
+                                    } else {
+                                        val snapRes = ShapeAutoCorrectEngine.recognizeAndSnap(decimated)
+                                        if (snapRes.shape !is RecognizedShape.None) {
+                                            snapRes.snappedPoints
+                                        } else {
+                                            ShapeAutoCorrectEngine.smoothPointsBezier(decimated, pressure = 1.0f, isClosed = false)
+                                        }
+                                    }
                                 } else {
                                     decimated
                                 }
@@ -512,15 +607,76 @@ fun PdfPageEditorScreen(
                             )
                         }
 
-                        // 2b. Draw text layers
-                        if (isDrawingVisible && textLayers.isNotEmpty()) {
+                        // 2b. Draw text layers (including live dragging position)
+                        if (isDrawingVisible && (textLayers.isNotEmpty() || liveDraggingTextLayer != null)) {
+                            val renderedTextLayers = if (liveDraggingTextLayer != null) {
+                                textLayers.map { layer ->
+                                    if (layer.id == liveDraggingTextLayer?.id) liveDraggingTextLayer!! else layer
+                                }
+                            } else {
+                                textLayers
+                            }
                             PhotoDrawingRenderer.renderTextLayers(
                                 canvas = native,
-                                textLayers = textLayers,
+                                textLayers = renderedTextLayers,
                                 scale = fitScale,
                                 offsetX = fitLeft,
                                 offsetY = fitTop
                             )
+
+                            // 2c. Draw bounding box and handles for selected text layer
+                            if (selectedTextLayerId != null && activeTool == DrawingTool.TEXT) {
+                                val activeSelected = liveDraggingTextLayer ?: textLayers.find { it.id == selectedTextLayerId }
+                                if (activeSelected != null) {
+                                    native.save()
+                                    native.translate(fitLeft, fitTop)
+                                    native.scale(fitScale, fitScale)
+                                    native.translate(activeSelected.x, activeSelected.y)
+                                    if (activeSelected.rotationDegrees != 0f) {
+                                        native.rotate(activeSelected.rotationDegrees, activeSelected.width / 2f, activeSelected.height / 2f)
+                                    }
+
+                                    val boxPaint = android.graphics.Paint().apply {
+                                        color = android.graphics.Color.parseColor("#4FA3E2")
+                                        style = android.graphics.Paint.Style.STROKE
+                                        strokeWidth = (1.5f * densityPx) / fitScale
+                                        pathEffect = android.graphics.DashPathEffect(
+                                            floatArrayOf((5f * densityPx) / fitScale, (5f * densityPx) / fitScale),
+                                            0f
+                                        )
+                                        isAntiAlias = true
+                                    }
+
+                                    val rectF = android.graphics.RectF(0f, 0f, activeSelected.width, activeSelected.height)
+                                    native.drawRect(rectF, boxPaint)
+
+                                    val handleFillPaint = android.graphics.Paint().apply {
+                                        color = android.graphics.Color.WHITE
+                                        style = android.graphics.Paint.Style.FILL
+                                        isAntiAlias = true
+                                    }
+                                    val handleStrokePaint = android.graphics.Paint().apply {
+                                        color = android.graphics.Color.parseColor("#4FA3E2")
+                                        style = android.graphics.Paint.Style.STROKE
+                                        strokeWidth = (1.5f * densityPx) / fitScale
+                                        isAntiAlias = true
+                                    }
+                                    val hRadius = (5f * densityPx) / fitScale
+
+                                    val corners = listOf(
+                                        rectF.left to rectF.top,
+                                        rectF.right to rectF.top,
+                                        rectF.right to rectF.bottom,
+                                        rectF.left to rectF.bottom
+                                    )
+                                    for ((hx, hy) in corners) {
+                                        native.drawCircle(hx, hy, hRadius, handleFillPaint)
+                                        native.drawCircle(hx, hy, hRadius, handleStrokePaint)
+                                    }
+
+                                    native.restore()
+                                }
+                            }
                         }
 
                         // 3. Draw live in-progress stroke
@@ -840,6 +996,85 @@ fun PdfPageEditorScreen(
                 }
             }
 
+            // Text Layer Selection & Action Pill
+            AnimatedVisibility(
+                visible = selectedTextLayerId != null && activeTool == DrawingTool.TEXT,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 }
+            ) {
+                Surface(
+                    color = MidnightSurface.copy(alpha = 0.96f),
+                    shape = RoundedCornerShape(20.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline),
+                    shadowElevation = 6.dp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Edit button
+                        TextButton(
+                            onClick = {
+                                val sel = textLayers.find { it.id == selectedTextLayerId }
+                                if (sel != null) {
+                                    editingTextLayerId = sel.id
+                                    textInput = sel.text
+                                    textFontSizeSp = sel.fontSizeSp
+                                    textFontWeight = sel.fontWeight
+                                    textColor = sel.color
+                                    textBackgroundStyle = sel.backgroundStyle
+                                    showTextOptions = true
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Edit,
+                                contentDescription = null,
+                                tint = FolderTabCream,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Edit", color = FolderTabCream, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        // Delete button
+                        TextButton(
+                            onClick = {
+                                val selId = selectedTextLayerId
+                                if (selId != null) {
+                                    viewModel.removeTextLayer(selId)
+                                    selectedTextLayerId = null
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.DeleteOutline,
+                                contentDescription = null,
+                                tint = DangerRed,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Delete", color = DangerRed, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        // Deselect button
+                        IconButton(
+                            onClick = { selectedTextLayerId = null },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = "Deselect",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Floating Tool Dock
             Surface(
                 color = MidnightSurface.copy(alpha = 0.94f),
@@ -855,6 +1090,7 @@ fun PdfPageEditorScreen(
                     // Pen Tool
                     IconButton(
                         onClick = {
+                            selectedTextLayerId = null
                             if (activeTool == DrawingTool.PEN) {
                                 showSizeSlider = !showSizeSlider
                                 showColorPalette = false
@@ -874,6 +1110,7 @@ fun PdfPageEditorScreen(
                     // Highlighter Tool
                     IconButton(
                         onClick = {
+                            selectedTextLayerId = null
                             if (activeTool == DrawingTool.HIGHLIGHTER) {
                                 showSizeSlider = !showSizeSlider
                                 showColorPalette = false
@@ -893,6 +1130,7 @@ fun PdfPageEditorScreen(
                     // Eraser Tool
                     IconButton(
                         onClick = {
+                            selectedTextLayerId = null
                             if (activeTool == DrawingTool.ERASER) {
                                 showSizeSlider = !showSizeSlider
                                 showColorPalette = false
@@ -970,10 +1208,14 @@ fun PdfPageEditorScreen(
         // Text Options / Placement Dialog
         if (showTextOptions) {
             AlertDialog(
-                onDismissRequest = { showTextOptions = false },
+                onDismissRequest = {
+                    showTextOptions = false
+                    editingTextLayerId = null
+                    pendingTextPlacementPt = null
+                },
                 title = {
                     Text(
-                        text = "Text Annotation",
+                        text = if (editingTextLayerId != null) "Edit Text Annotation" else "Text Annotation",
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
@@ -1106,37 +1348,72 @@ fun PdfPageEditorScreen(
                     TextButton(
                         onClick = {
                             showTextOptions = false
-                            val placement = pendingTextPlacementPt ?: Offset(pagePointsWidth / 2f, pagePointsHeight / 2f)
+                            val currentEditingId = editingTextLayerId
                             val estW = maxOf(120f, textInput.length * textFontSizeSp * 0.9f + 24f)
                             val estH = maxOf(40f, textFontSizeSp * 2.2f)
-                            val newLayer = TextLayerElement(
-                                id = "text_${System.currentTimeMillis()}",
-                                layerId = "pdf_page_${documentId}_$pageIndex",
-                                text = textInput.ifBlank { "Text" },
-                                x = (placement.x - estW / 2f).coerceAtLeast(0f),
-                                y = (placement.y - estH / 2f).coerceAtLeast(0f),
-                                width = estW,
-                                height = estH,
-                                fontSizeSp = textFontSizeSp,
-                                color = textColor,
-                                fontWeight = textFontWeight,
-                                backgroundStyle = textBackgroundStyle,
-                                bounds = com.arinara.fotara.canvas.engine.CanvasRect(
-                                    left = placement.x - estW / 2f,
-                                    top = placement.y - estH / 2f,
-                                    right = placement.x + estW / 2f,
-                                    bottom = placement.y + estH / 2f
+
+                            if (currentEditingId != null) {
+                                val existing = textLayers.find { it.id == currentEditingId }
+                                if (existing != null) {
+                                    val updated = existing.copy(
+                                        text = textInput.ifBlank { "Text" },
+                                        fontSizeSp = textFontSizeSp,
+                                        color = textColor,
+                                        fontWeight = textFontWeight,
+                                        backgroundStyle = textBackgroundStyle,
+                                        width = estW,
+                                        height = estH,
+                                        bounds = com.arinara.fotara.canvas.engine.CanvasRect(
+                                            left = existing.x,
+                                            top = existing.y,
+                                            right = existing.x + estW,
+                                            bottom = existing.y + estH
+                                        )
+                                    )
+                                    viewModel.updateTextLayer(updated)
+                                }
+                                editingTextLayerId = null
+                            } else {
+                                val placement = pendingTextPlacementPt ?: Offset(pagePointsWidth / 2f, pagePointsHeight / 2f)
+                                val newLayer = TextLayerElement(
+                                    id = "text_${System.currentTimeMillis()}",
+                                    layerId = "pdf_page_${documentId}_$pageIndex",
+                                    text = textInput.ifBlank { "Text" },
+                                    x = (placement.x - estW / 2f).coerceAtLeast(0f),
+                                    y = (placement.y - estH / 2f).coerceAtLeast(0f),
+                                    width = estW,
+                                    height = estH,
+                                    fontSizeSp = textFontSizeSp,
+                                    color = textColor,
+                                    fontWeight = textFontWeight,
+                                    backgroundStyle = textBackgroundStyle,
+                                    bounds = com.arinara.fotara.canvas.engine.CanvasRect(
+                                        left = placement.x - estW / 2f,
+                                        top = placement.y - estH / 2f,
+                                        right = placement.x + estW / 2f,
+                                        bottom = placement.y + estH / 2f
+                                    )
                                 )
-                            )
-                            viewModel.addTextLayer(newLayer)
-                            pendingTextPlacementPt = null
+                                viewModel.addTextLayer(newLayer)
+                                pendingTextPlacementPt = null
+                            }
                         }
                     ) {
-                        Text("Place", color = FolderTabCream, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (editingTextLayerId != null) "Save" else "Place",
+                            color = FolderTabCream,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showTextOptions = false }) {
+                    TextButton(
+                        onClick = {
+                            showTextOptions = false
+                            editingTextLayerId = null
+                            pendingTextPlacementPt = null
+                        }
+                    ) {
                         Text(stringResource(R.string.action_cancel), color = TextSecondary)
                     }
                 },

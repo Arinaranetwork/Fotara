@@ -18,7 +18,7 @@ class ScreenHeaderTest {
 
     @Test
     fun screenHeaderDefaults_layoutMetricsMatchSpecification() {
-        assertEquals(18.dp, ScreenHeaderDefaults.HorizontalPadding)
+        assertEquals(16.dp, ScreenHeaderDefaults.HorizontalPadding)
         assertEquals(16.dp, ScreenHeaderDefaults.TopPadding)
         assertEquals(12.dp, ScreenHeaderDefaults.BottomPadding)
         assertEquals(4.dp, ScreenHeaderDefaults.TitleToTaglineGap)

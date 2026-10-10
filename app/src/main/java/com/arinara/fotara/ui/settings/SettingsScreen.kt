@@ -55,6 +55,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -252,6 +253,7 @@ fun SettingsScreen(
     var showStorageLocationDialog by remember { mutableStateOf(false) }
     var showCombineFileNameDialog by remember { mutableStateOf(false) }
     var showSavedImageLocationDialog by remember { mutableStateOf(false) }
+    var showAntiProcrastinationScreen by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         val initialMsg = viewModel.consumeFeedbackMessage()
@@ -372,6 +374,15 @@ fun SettingsScreen(
                 cleanupStaged()
                 pendingCropUriString = null
             }
+        )
+        return
+    }
+
+    if (showAntiProcrastinationScreen) {
+        BackHandler { showAntiProcrastinationScreen = false }
+        com.arinara.fotara.alarm.procrastination.ui.AntiProcrastinationAlarmScreen(
+            onBackClick = { showAntiProcrastinationScreen = false },
+            modifier = Modifier.fillMaxSize()
         )
         return
     }
@@ -804,6 +815,15 @@ fun SettingsScreen(
                                         snackbarHostState.showSnackbar("Test alert dispatched. Check notification tray.")
                                     }
                                 }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "Study Alarms & Anti-Procrastination",
+                                subtitle = "Photo-proof challenge alarms to beat study procrastination",
+                                icon = Icons.Default.Alarm,
+                                onClick = { showAntiProcrastinationScreen = true }
                             )
                         }
                     }

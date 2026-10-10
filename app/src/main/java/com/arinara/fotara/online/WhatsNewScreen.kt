@@ -88,6 +88,25 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
+        version = "1.9.1",
+        channel = "Alpha",
+        releaseDate = "2026-10-10",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.9.1_Alpha",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Interactive Text Layer Movement: Drag, reposition, and transform text layers with full bounding box handles across Canvas and PDF Page Editor.",
+            "Drawing Auto-Smoothing: Automatic cubic Bézier curve smoothing on pen stroke release for clean handwriting and shapes.",
+            "Multi-Line LaTeX Math Typesetting: Full support for multi-line formulas, piecewise cases, matrices, and \\boxed{} with live preview card in Text Notes.",
+            "Universal English Academic Terminology: Clean, inclusive timetable terminology ('Class Schedule', 'Next-Day Rollover Cutoff', 'Course / Subject') across app and widgets.",
+            "Glance Widgets Synchronization: Live schedule queries with upcoming class day fallbacks and automatic refresh broadcasts on note mutations."
+        ),
+        patchesAndFixes = listOf(
+            "Standardized screen horizontal padding to exact 16.dp across Header, Workspaces, Schedule Capsule, and Notes list.",
+            "Expanded Due Tomorrow widget query to cover text notes and documents alongside photos.",
+            "Wired Audio Annotations and Anti-Procrastination Study Alarm directly into visible app screens."
+        )
+    ),
+    ReleaseChangelogEntry(
         version = "1.9.0",
         channel = "Beta",
         releaseDate = "2026-10-09",

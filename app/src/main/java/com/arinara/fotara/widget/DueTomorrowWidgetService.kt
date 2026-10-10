@@ -45,35 +45,64 @@ class DueTomorrowRemoteViewsFactory(private val context: Context) : RemoteViewsS
 
             val cursor = db.rawQuery(
                 """
-                SELECT p.id, f.name, f.color_label, p.caption, p.ocr_text,
-                       COALESCE(p.scheduled_at, p.linked_deadline) AS due_time
-                FROM photos p
-                INNER JOIN folders f ON p.folder_id = f.id
-                WHERE p.is_trashed = 0 AND f.is_trashed = 0
-                  AND ((p.scheduled_at IS NOT NULL AND p.scheduled_at >= ? AND p.scheduled_at <= ?)
-                    OR (p.linked_deadline IS NOT NULL AND p.linked_deadline >= ? AND p.linked_deadline <= ?))
+                SELECT id, note_type, folder_name, color_label, caption, due_time FROM (
+                    SELECT p.id, 'photo' AS note_type, f.name AS folder_name, f.color_label,
+                           COALESCE(p.caption, (CASE WHEN p.ocr_text IS NOT NULL THEN substr(p.ocr_text, 1, 40) ELSE 'Photo Note' END)) AS caption,
+                           COALESCE(p.scheduled_at, p.linked_deadline) AS due_time
+                    FROM photos p
+                    INNER JOIN folders f ON p.folder_id = f.id
+                    WHERE p.is_trashed = 0 AND f.is_trashed = 0
+                      AND ((p.scheduled_at IS NOT NULL AND p.scheduled_at >= ? AND p.scheduled_at <= ?)
+                        OR (p.linked_deadline IS NOT NULL AND p.linked_deadline >= ? AND p.linked_deadline <= ?))
+                    UNION ALL
+                    SELECT d.id, 'document' AS note_type, f.name AS folder_name, f.color_label,
+                           d.name AS caption,
+                           COALESCE(d.scheduled_at, d.linked_deadline) AS due_time
+                    FROM document_notes d
+                    INNER JOIN folders f ON d.folder_id = f.id
+                    WHERE d.is_trashed = 0 AND f.is_trashed = 0
+                      AND ((d.scheduled_at IS NOT NULL AND d.scheduled_at >= ? AND d.scheduled_at <= ?)
+                        OR (d.linked_deadline IS NOT NULL AND d.linked_deadline >= ? AND d.linked_deadline <= ?))
+                    UNION ALL
+                    SELECT t.id, 'text' AS note_type, f.name AS folder_name, f.color_label,
+                           t.title AS caption,
+                           COALESCE(t.scheduled_at, t.linked_deadline) AS due_time
+                    FROM text_notes t
+                    INNER JOIN folders f ON t.folder_id = f.id
+                    WHERE t.is_trashed = 0 AND f.is_trashed = 0
+                      AND ((t.scheduled_at IS NOT NULL AND t.scheduled_at >= ? AND t.scheduled_at <= ?)
+                        OR (t.linked_deadline IS NOT NULL AND t.linked_deadline >= ? AND t.linked_deadline <= ?))
+                )
                 ORDER BY due_time ASC
                 LIMIT 25
                 """.trimIndent(),
-                arrayOf(now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString())
+                arrayOf(
+                    now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString(),
+                    now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString(),
+                    now.toString(), windowEnd.toString(), now.toString(), windowEnd.toString()
+                )
             )
 
             cursor.use { c ->
                 while (c.moveToNext()) {
-                    val photoId = c.getLong(0)
-                    val folderName = c.getString(1) ?: "Coursework"
-                    val colorHex = if (c.isNull(2)) null else c.getString(2)
-                    val caption = if (c.isNull(3)) {
-                        val ocr = if (c.isNull(4)) null else c.getString(4)
-                        ocr?.lineSequence()?.firstOrNull() ?: "Note"
+                    val id = c.getLong(0)
+                    val noteType = c.getString(1)
+                    val folderName = c.getString(2) ?: "Coursework"
+                    val colorHex = if (c.isNull(3)) null else c.getString(3)
+                    val caption = if (c.isNull(4) || c.getString(4).isBlank()) {
+                        when (noteType) {
+                            "document" -> "Document"
+                            "text" -> "Text Note"
+                            else -> "Photo Note"
+                        }
                     } else {
-                        c.getString(3)
+                        c.getString(4)
                     }
                     val deadlineMs = c.getLong(5)
 
                     items.add(
                         WidgetNoteItem(
-                            photoId = photoId,
+                            photoId = id,
                             folderName = folderName,
                             colorHex = colorHex,
                             caption = caption,

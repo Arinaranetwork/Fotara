@@ -36,17 +36,23 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Mic
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -162,7 +168,8 @@ fun PdfViewerScreen(
     pdfPageDrawingRepository: PdfPageDrawingRepository? = null,
     settingsRepository: SettingsRepository? = null,
     searchQuery: String? = null,
-    onNavigateToEditor: ((Long, Int) -> Unit)? = null
+    onNavigateToEditor: ((Long, Int) -> Unit)? = null,
+    audioAnnotationRepository: com.arinara.fotara.audio.repository.AudioAnnotationRepository? = null
 ) {
     var showSplitConfirmDialog by remember { mutableStateOf(false) }
     var pageToClearDrawing by remember { mutableStateOf<Int?>(null) }
@@ -176,6 +183,23 @@ fun PdfViewerScreen(
     var flashingPageIndex by remember { mutableStateOf<Int?>(null) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+
+    val audioRepo = remember(audioAnnotationRepository, context) {
+        audioAnnotationRepository ?: com.arinara.fotara.audio.repository.SqliteAudioAnnotationRepository(com.arinara.fotara.data.db.FotaraDbHelper(context))
+    }
+    val audioRecorderManager = remember(context) { com.arinara.fotara.audio.recorder.AudioRecorderManager(context) }
+    val audioPlayerManager = remember { com.arinara.fotara.audio.player.AudioPlayerManager() }
+    val audioViewModel: com.arinara.fotara.audio.ui.AudioAnnotationViewModel = viewModel(
+        key = "audio_pdf_${documentNote.id}",
+        factory = com.arinara.fotara.audio.ui.AudioAnnotationViewModelFactory(
+            repository = audioRepo,
+            recorderManager = audioRecorderManager,
+            playerManager = audioPlayerManager,
+            pdfDocId = documentNote.id
+        )
+    )
+    val audioUiState by audioViewModel.uiState.collectAsState()
+    var showAudioDock by remember { mutableStateOf(false) }
 
     val file = remember(documentNote.originFileUri) { File(documentNote.originFileUri) }
 
@@ -392,6 +416,15 @@ fun PdfViewerScreen(
                             if (isReadingMode) R.string.viewer_action_reading_mode_exit else R.string.viewer_action_reading_mode_enter
                         ),
                         tint = if (isReadingMode) AccentGold else TabCream
+                    )
+                }
+
+                // Audio Annotations toggle
+                IconButton(onClick = { showAudioDock = !showAudioDock }) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.Mic,
+                        contentDescription = "Voice Annotations",
+                        tint = if (audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording) AccentGold else TabCream
                     )
                 }
 
@@ -759,6 +792,66 @@ fun PdfViewerScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                         }
+                    }
+                }
+            }
+        }
+
+        // Voice / Audio Annotations Dock
+        AnimatedVisibility(
+            visible = showAudioDock || audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                color = CardBg,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, BorderColor),
+                shadowElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Audio Notes (${audioUiState.annotations.size})",
+                            color = TabCream,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(
+                            onClick = { showAudioDock = false },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TabCream.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    com.arinara.fotara.audio.ui.AudioRecordPill(
+                        recorderState = audioUiState.recorderState,
+                        onStartRecording = { audioViewModel.startRecording() },
+                        onStopRecording = { audioViewModel.stopAndSaveRecording() },
+                        onCancelRecording = { audioViewModel.cancelRecording() }
+                    )
+
+                    audioUiState.annotations.forEach { annotation ->
+                        com.arinara.fotara.audio.ui.AudioPlaybackBar(
+                            annotation = annotation,
+                            playerState = audioUiState.playerState,
+                            onPlay = { audioViewModel.playAnnotation(annotation) },
+                            onPause = { audioViewModel.pausePlayback() },
+                            onResume = { audioViewModel.resumePlayback() },
+                            onSeek = { audioViewModel.seekPlayback(it) },
+                            onDelete = { audioViewModel.deleteAnnotation(annotation.id) }
+                        )
                     }
                 }
             }

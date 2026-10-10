@@ -51,6 +51,12 @@ data class ClassSchedule(
     val timeRangeFormatted: String
         get() = "$startTimeFormatted - $endTimeFormatted"
 
+    val dayNameEnglish: String
+        get() = getEnglishDayName(dayOfWeek)
+
+    val dayNameShortEnglish: String
+        get() = getEnglishDayShortName(dayOfWeek)
+
     val dayNameIndonesian: String
         get() = getIndonesianDayName(dayOfWeek)
 
@@ -103,6 +109,28 @@ data class ClassSchedule(
             }
             val single = parseTimeToMinutes(cleaned) ?: return null
             return Pair(single, (single + 90) % (24 * 60))
+        }
+
+        fun getEnglishDayName(dayOfWeek: Int): String = when (dayOfWeek) {
+            1 -> "Monday"
+            2 -> "Tuesday"
+            3 -> "Wednesday"
+            4 -> "Thursday"
+            5 -> "Friday"
+            6 -> "Saturday"
+            7 -> "Sunday"
+            else -> "Monday"
+        }
+
+        fun getEnglishDayShortName(dayOfWeek: Int): String = when (dayOfWeek) {
+            1 -> "Mon"
+            2 -> "Tue"
+            3 -> "Wed"
+            4 -> "Thu"
+            5 -> "Fri"
+            6 -> "Sat"
+            7 -> "Sun"
+            else -> "Mon"
         }
 
         fun getIndonesianDayName(dayOfWeek: Int): String = when (dayOfWeek) {

@@ -110,4 +110,36 @@ class MarkdownParserTest {
         val activeOutside = doc.activeTypesAt(2, 2)
         assertTrue(MarkdownSpanType.BOLD !in activeOutside)
     }
+
+    @Test
+    fun testInlineMathParsing() {
+        val markdown = "The equation is ${'$'}E = mc^2${'$'} in the text."
+        val doc = MarkdownParser.parse(markdown)
+
+        val math = doc.spans.firstOrNull { it.type == MarkdownSpanType.MATH_INLINE }
+        assertNotNull(math)
+        assertEquals("E = mc^2", markdown.substring(math!!.contentStart, math.contentEnd))
+    }
+
+    @Test
+    fun testMultiLineMathBlockParsing() {
+        val markdown = """
+            Here is a system of equations:
+            ${'$'}${'$'}
+            \begin{cases}
+            2x + y = 5 \\
+            x - 3y = -1
+            \end{cases}
+            ${'$'}${'$'}
+            And following text.
+        """.trimIndent()
+
+        val doc = MarkdownParser.parse(markdown)
+        val mathBlock = doc.spans.firstOrNull { it.type == MarkdownSpanType.MATH_BLOCK }
+
+        assertNotNull(mathBlock)
+        val content = markdown.substring(mathBlock!!.contentStart, mathBlock.contentEnd)
+        assertTrue(content.contains("begin{cases}"))
+        assertTrue(content.contains("2x + y = 5"))
+    }
 }

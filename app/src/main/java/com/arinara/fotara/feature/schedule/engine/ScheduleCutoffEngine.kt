@@ -13,7 +13,7 @@ import java.util.Calendar
  * Capsule display state computed by [ScheduleCutoffEngine].
  */
 sealed interface ScheduleCapsuleState {
-    data class Empty(val message: String = "Jadwal kosong") : ScheduleCapsuleState
+    data class Empty(val message: String = "No classes scheduled today") : ScheduleCapsuleState
 
     data class ActiveNow(
         val ongoing: ClassSchedule,
@@ -24,7 +24,7 @@ sealed interface ScheduleCapsuleState {
             get() {
                 val roomText = if (!ongoing.roomName.isNullOrBlank()) " (${ongoing.roomName})" else ""
                 val nextText = if (upcomingNext != null) " | ${upcomingNext.startTimeFormatted} ${upcomingNext.subjectName}" else ""
-                return "Sekarang: ${ongoing.subjectName}$roomText s.d ${ongoing.endTimeFormatted}$nextText"
+                return "Now: ${ongoing.subjectName}$roomText until ${ongoing.endTimeFormatted}$nextText"
             }
     }
 
@@ -35,8 +35,8 @@ sealed interface ScheduleCapsuleState {
         val displayHeadline: String
             get() {
                 val roomText = if (!nextClass.roomName.isNullOrBlank()) " (${nextClass.roomName})" else ""
-                val countText = if (remainingClassesCount > 1) " • $remainingClassesCount Kelas" else ""
-                return "Berikutnya: ${nextClass.startTimeFormatted} ${nextClass.subjectName}$roomText$countText"
+                val countText = if (remainingClassesCount > 1) " • $remainingClassesCount Classes" else ""
+                return "Next: ${nextClass.startTimeFormatted} ${nextClass.subjectName}$roomText$countText"
             }
     }
 
@@ -49,9 +49,9 @@ sealed interface ScheduleCapsuleState {
             get() {
                 if (nextFirstClass != null && nextScheduleDayName != null) {
                     val roomText = if (!nextFirstClass.roomName.isNullOrBlank()) " (${nextFirstClass.roomName})" else ""
-                    return "Kelas Hari Ini Selesai • $nextScheduleDayName: ${nextFirstClass.startTimeFormatted} ${nextFirstClass.subjectName}$roomText"
+                    return "Classes Finished for Today • $nextScheduleDayName: ${nextFirstClass.startTimeFormatted} ${nextFirstClass.subjectName}$roomText"
                 }
-                return "Kelas Hari Ini Selesai"
+                return "Classes Finished for Today"
             }
     }
 
@@ -64,10 +64,10 @@ sealed interface ScheduleCapsuleState {
         val displayHeadline: String
             get() {
                 val roomText = if (!firstClass.roomName.isNullOrBlank()) " (${firstClass.roomName})" else ""
-                val countText = if (totalClassesCount > 1) " • $totalClassesCount Kelas" else " • 1 Kelas"
+                val countText = if (totalClassesCount > 1) " • $totalClassesCount Classes" else " • 1 Class"
                 val prefix = if (targetDayOfWeek == (firstClass.dayOfWeek)) {
-                    if (targetDayName.equals("Besok", ignoreCase = true)) "Persiapan Besok" else "Persiapan $targetDayName"
-                } else "Persiapan $targetDayName"
+                    if (targetDayName.equals("Tomorrow", ignoreCase = true) || targetDayName.equals("Besok", ignoreCase = true)) "Next-Day Prep" else "Prep for $targetDayName"
+                } else "Prep for $targetDayName"
                 return "$prefix: ${firstClass.startTimeFormatted} ${firstClass.subjectName}$roomText$countText"
             }
     }
@@ -86,7 +86,7 @@ class ScheduleCutoffEngine {
         currentMinuteOfDay: Int = getCurrentMinuteOfDay()
     ): ScheduleCapsuleState {
         if (allSchedules.isEmpty()) {
-            return ScheduleCapsuleState.Empty("Belum ada jadwal kuliah")
+            return ScheduleCapsuleState.Empty("No classes scheduled today")
         }
 
         val cutoffMinute = ClassSchedule.parseTimeToMinutes(cutoffTimeStr) ?: (18 * 60)
@@ -109,7 +109,7 @@ class ScheduleCutoffEngine {
                 return computeRolloverState(
                     allSchedules = allSchedules,
                     currentDayOfWeek = currentDayOfWeek,
-                    defaultPrefixBesok = false
+                    defaultPrefixTomorrow = false
                 )
             }
 
@@ -164,7 +164,7 @@ class ScheduleCutoffEngine {
                 .sortedBy { it.startMinute }
 
             if (classesForDay.isNotEmpty()) {
-                val dayName = if (offset == 1) "Besok" else ClassSchedule.getIndonesianDayName(targetDay)
+                val dayName = if (offset == 1) "Tomorrow" else ClassSchedule.getEnglishDayName(targetDay)
                 return NextDayInfo(
                     dayOfWeek = targetDay,
                     dayName = dayName,
@@ -178,13 +178,13 @@ class ScheduleCutoffEngine {
     private fun computeRolloverState(
         allSchedules: List<ClassSchedule>,
         currentDayOfWeek: Int,
-        defaultPrefixBesok: Boolean = true
+        defaultPrefixTomorrow: Boolean = true
     ): ScheduleCapsuleState {
         val nextDayInfo = findNextAcademicDay(allSchedules, currentDayOfWeek)
-            ?: return ScheduleCapsuleState.Empty("Tidak ada jadwal tersisa minggu ini")
+            ?: return ScheduleCapsuleState.Empty("No upcoming classes scheduled this week")
 
-        val targetDayName = if (nextDayInfo.dayName == "Besok" && !defaultPrefixBesok) {
-            ClassSchedule.getIndonesianDayName(nextDayInfo.dayOfWeek)
+        val targetDayName = if (nextDayInfo.dayName == "Tomorrow" && !defaultPrefixTomorrow) {
+            ClassSchedule.getEnglishDayName(nextDayInfo.dayOfWeek)
         } else {
             nextDayInfo.dayName
         }

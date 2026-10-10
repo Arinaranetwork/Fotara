@@ -61,16 +61,18 @@ Equip students in STEM fields (engineering, mathematics, natural sciences) with 
   - Disabled (`alpha = 0.38f`, non-clickable): H1, H2, H3, Blockquote, Bullet List, Numbered List, Checklist, Indent, Outdent, Horizontal Rule, Code Block.
   - Contextual action bar: `[ + Row ] [ - Row ] [ + Col ] [ - Col ]`.
 
-### Shape & Curve Auto-Correct (Draw & Hold 400ms)
+### Shape & Curve Auto-Correct & Stroke Smoothing
 - **Detection Algorithm**:
   - Closed strokes: evaluated for circularity (Circle/Ellipse) and polygon corners (Triangle, Rectangle).
   - Open strokes: evaluated for collinearity (Straight Line, Arrow).
-- **Hold Trigger**: 400ms timer with stationary position (<5dp movement). On trigger, fires haptic pulse and replaces path with geometric primitive.
+- **Hold Trigger**: 400ms timer with stationary position (<36dp tolerance for finger jitter). On trigger, fires haptic pulse and replaces path with geometric primitive.
 - **Dynamic Resizing**: Moving finger after snap dynamically updates primitive bounds.
-- **Bézier Smoothing**: Non-held strokes smoothed via cubic Bézier interpolation.
+- **Automatic Bézier Smoothing & Finger-Lift Recognition**: All finished Pen strokes automatically receive cubic Bézier curve smoothing and geometric primitive snapping upon finger lift to eliminate jagged handwriting.
 
 ### Text Layers Tool (`[ T ]`)
 - **Dock Item**: `[ T ]` icon in drawing dock.
+- **Interactive Manipulation**: Tap hit-testing selects existing text layers, rendering dashed selection bounding box and corner drag handles; live dragging updates coordinates in real time, persisted to database on finger lift.
+- **Canvas Tool Controller Integration**: Full support for text layers under Select tool including body dragging (`handleId == -1`), corner dimension scaling, and stem rotation.
 - **Editing Overlay**: Floating format bar with font size slider (12-48sp), color picker, and style toggles.
 - **Vector Serialization**: Stored in `CanvasElement.TextLayer` with bounds, text, font size, color, rotation, and style.
 

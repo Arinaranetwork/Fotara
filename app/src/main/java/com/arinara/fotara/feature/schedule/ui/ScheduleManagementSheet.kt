@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -127,6 +128,7 @@ fun ScheduleManagementSheet(
     var isCreatingNew by remember { mutableStateOf(false) }
     var scheduleToDelete by remember { mutableStateOf<ClassSchedule?>(null) }
     var isEditingCutoff by remember { mutableStateOf(false) }
+    var showAntiProcrastinationScreen by remember { mutableStateOf(false) }
 
     // Import states
     var pendingImportTableData by remember { mutableStateOf<RawTableData?>(null) }
@@ -143,14 +145,14 @@ fun ScheduleManagementSheet(
                         parser.parseUri(context, uri)
                     }
                     if (tableData.rows.isEmpty()) {
-                        Toast.makeText(context, "Tidak ada data tabel ditemukan di berkas tersebut", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "No table data found in the selected file", Toast.LENGTH_SHORT).show()
                     } else {
                         val mapping = parser.autoDetectMapping(tableData)
                         detectedMapping = mapping
                         pendingImportTableData = tableData
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(context, "Gagal membaca berkas: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Failed to read file: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -190,7 +192,7 @@ fun ScheduleManagementSheet(
             ) {
                 Column {
                     Text(
-                        text = "Jadwal Kuliah",
+                        text = "Class Schedule",
                         color = TextPrimary,
                         fontSize = 22.sp,
                         lineHeight = 28.sp,
@@ -198,7 +200,7 @@ fun ScheduleManagementSheet(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Atur jadwal mingguan & persiapan besok",
+                        text = "Manage weekly schedule & next-day prep",
                         color = TextSecondary,
                         fontSize = 12.sp,
                         lineHeight = 16.sp,
@@ -216,7 +218,7 @@ fun ScheduleManagementSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Tambah Kelas",
+                            contentDescription = "Add Class",
                             tint = TextPrimary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -231,7 +233,7 @@ fun ScheduleManagementSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Tutup",
+                            contentDescription = "Close",
                             tint = TextPrimary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -268,7 +270,7 @@ fun ScheduleManagementSheet(
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "Batas Rollover Persiapan Besok: Pukul $cutoffTimeStr",
+                            text = "Next-Day Rollover Cutoff: $cutoffTimeStr",
                             color = Color(0xFFE2E8F0),
                             fontSize = 12.sp,
                             lineHeight = 16.sp,
@@ -278,7 +280,64 @@ fun ScheduleManagementSheet(
                     }
 
                     Text(
-                        text = "Ubah",
+                        text = "Edit",
+                        color = HomeMainButtonBlue,
+                        fontSize = 12.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Anti-Procrastination Study Alarm Card
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(HomeCardSurface)
+                    .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                    .clickable { showAntiProcrastinationScreen = true }
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = null,
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Anti-Procrastination Study Alarm",
+                                color = Color(0xFFE2E8F0),
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Photo proof challenge required to dismiss",
+                                color = HomeSubtitleGray,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                fontFamily = ElmsSans
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Manage",
                         color = HomeMainButtonBlue,
                         fontSize = 12.sp,
                         fontFamily = ElmsSans,
@@ -289,7 +348,7 @@ fun ScheduleManagementSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Day Selector Pill Bar (Senin .. Minggu)
+            // Day Selector Pill Bar (Mon .. Sun)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -300,7 +359,7 @@ fun ScheduleManagementSheet(
                 for (day in 1..7) {
                     val count = schedules.count { it.dayOfWeek == day }
                     val isSelected = selectedDayOfWeek == day
-                    val shortName = ClassSchedule.getIndonesianDayShortName(day)
+                    val shortName = ClassSchedule.getEnglishDayShortName(day)
 
                     Box(
                         modifier = Modifier
@@ -377,14 +436,14 @@ fun ScheduleManagementSheet(
                             modifier = Modifier.size(44.dp)
                         )
                         Text(
-                            text = "Tidak ada kelas di hari ${ClassSchedule.getIndonesianDayName(selectedDayOfWeek)}",
+                            text = "No classes scheduled on ${ClassSchedule.getEnglishDayName(selectedDayOfWeek)}",
                             color = Color(0xFF94A3B8),
                             fontSize = 14.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            text = "Ketuk (+) untuk membuat atau Impor dari berkas Excel/Word.",
+                            text = "Tap (+) to add or import from Excel/Word file.",
                             color = HomeSubtitleGray,
                             fontSize = 12.sp,
                             fontFamily = ElmsSans
@@ -441,7 +500,7 @@ fun ScheduleManagementSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Impor Jadwal (.xlsx / .docx)",
+                        text = "Import Schedule (.xlsx / .docx)",
                         color = TextPrimary,
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
@@ -479,7 +538,7 @@ fun ScheduleManagementSheet(
             onDismissRequest = { scheduleToDelete = null },
             title = {
                 Text(
-                    text = "Hapus Jadwal",
+                    text = "Delete Schedule",
                     color = TextPrimary,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.SemiBold
@@ -487,7 +546,7 @@ fun ScheduleManagementSheet(
             },
             text = {
                 Text(
-                    text = "Hapus kelas \"${toDelete.subjectName}\" dari jadwal mingguan?",
+                    text = "Remove \"${toDelete.subjectName}\" from weekly schedule?",
                     color = Color(0xFFCBD5E1),
                     fontFamily = ElmsSans
                 )
@@ -501,12 +560,12 @@ fun ScheduleManagementSheet(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = TagCrimson)
                 ) {
-                    Text("Hapus", fontFamily = ElmsSans)
+                    Text("Delete", fontFamily = ElmsSans)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { scheduleToDelete = null }) {
-                    Text("Batal", color = TextPrimary, fontFamily = ElmsSans)
+                    Text("Cancel", color = TextPrimary, fontFamily = ElmsSans)
                 }
             }
         )
@@ -536,13 +595,25 @@ fun ScheduleManagementSheet(
                 val parsedSchedules = parser.mapToSchedules(tableData, confirmedMapping)
                 if (parsedSchedules.isNotEmpty()) {
                     onBatchImportSchedules(parsedSchedules)
-                    Toast.makeText(context, "Berhasil mengimpor ${parsedSchedules.size} jadwal kelas", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Successfully imported ${parsedSchedules.size} classes", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(context, "Tidak ada data kelas yang dapat diimpor", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "No class schedule data could be imported", Toast.LENGTH_SHORT).show()
                 }
                 pendingImportTableData = null
             }
         )
+    }
+
+    if (showAntiProcrastinationScreen) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showAntiProcrastinationScreen = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            com.arinara.fotara.alarm.procrastination.ui.AntiProcrastinationAlarmScreen(
+                onBackClick = { showAntiProcrastinationScreen = false },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }
 
@@ -663,7 +734,7 @@ private fun ScheduleItemCard(
                 IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Hapus",
+                        contentDescription = "Delete",
                         tint = TagCrimson.copy(alpha = 0.8f),
                         modifier = Modifier.size(16.dp)
                     )
@@ -693,7 +764,7 @@ private fun AddEditScheduleDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (initial == null) "Tambah Kelas" else "Edit Kelas",
+                text = if (initial == null) "Add Class" else "Edit Class",
                 color = TextPrimary,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.SemiBold
@@ -709,7 +780,7 @@ private fun AddEditScheduleDialog(
                 OutlinedTextField(
                     value = subjectName,
                     onValueChange = { subjectName = it },
-                    label = { Text("Mata Kuliah / Pelajaran", fontFamily = ElmsSans) },
+                    label = { Text("Course / Subject", fontFamily = ElmsSans) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
@@ -737,7 +808,7 @@ private fun AddEditScheduleDialog(
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Text(
-                                text = ClassSchedule.getIndonesianDayShortName(d),
+                                text = ClassSchedule.getEnglishDayShortName(d),
                                 color = TextPrimary,
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
@@ -756,7 +827,7 @@ private fun AddEditScheduleDialog(
                     OutlinedTextField(
                         value = startTimeStr,
                         onValueChange = { startTimeStr = it },
-                        label = { Text("Mulai (08:00)", fontFamily = ElmsSans) },
+                        label = { Text("Start (08:00)", fontFamily = ElmsSans) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
@@ -769,7 +840,7 @@ private fun AddEditScheduleDialog(
                     OutlinedTextField(
                         value = endTimeStr,
                         onValueChange = { endTimeStr = it },
-                        label = { Text("Selesai (09:40)", fontFamily = ElmsSans) },
+                        label = { Text("End (09:40)", fontFamily = ElmsSans) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
@@ -784,7 +855,7 @@ private fun AddEditScheduleDialog(
                 OutlinedTextField(
                     value = roomName,
                     onValueChange = { roomName = it },
-                    label = { Text("Ruangan (opsional)", fontFamily = ElmsSans) },
+                    label = { Text("Classroom (optional)", fontFamily = ElmsSans) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
@@ -798,7 +869,7 @@ private fun AddEditScheduleDialog(
                 OutlinedTextField(
                     value = instructorName,
                     onValueChange = { instructorName = it },
-                    label = { Text("Dosen / Pengajar (opsional)", fontFamily = ElmsSans) },
+                    label = { Text("Instructor (optional)", fontFamily = ElmsSans) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
@@ -840,12 +911,12 @@ private fun AddEditScheduleDialog(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue)
             ) {
-                Text("Simpan", fontFamily = ElmsSans)
+                Text("Save", fontFamily = ElmsSans)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Batal", color = TextPrimary, fontFamily = ElmsSans)
+                Text("Cancel", color = TextPrimary, fontFamily = ElmsSans)
             }
         }
     )
@@ -864,7 +935,7 @@ private fun CutoffTimeDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Batas Rollover Persiapan",
+                text = "Next-Day Rollover Cutoff",
                 color = TextPrimary,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.SemiBold
@@ -873,7 +944,7 @@ private fun CutoffTimeDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Setelah jam ini, kapsul jadwal akan otomatis beralih menampilkan kelas besok untuk persiapan tas dan buku malam hari.",
+                    text = "After this time, the schedule capsule will automatically switch to show tomorrow's classes for evening preparation.",
                     color = TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
@@ -893,7 +964,7 @@ private fun CutoffTimeDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Pukul $p",
+                            text = p,
                             color = TextPrimary,
                             fontFamily = ElmsSans,
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
@@ -908,12 +979,12 @@ private fun CutoffTimeDialog(
                 onClick = { onConfirm(selectedTime) },
                 colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue)
             ) {
-                Text("Terapkan", fontFamily = ElmsSans)
+                Text("Apply", fontFamily = ElmsSans)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Batal", color = TextPrimary, fontFamily = ElmsSans)
+                Text("Cancel", color = TextPrimary, fontFamily = ElmsSans)
             }
         }
     )
@@ -938,7 +1009,7 @@ private fun SmartColumnMappingDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Pemetaan Kolom Jadwal",
+                text = "Schedule Column Mapping",
                 color = TextPrimary,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.SemiBold
@@ -952,7 +1023,7 @@ private fun SmartColumnMappingDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Konfirmasi kolom tabel yang sesuai dengan jadwal kuliah Anda:",
+                    text = "Confirm table columns matching your class schedule:",
                     color = TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
@@ -961,38 +1032,38 @@ private fun SmartColumnMappingDialog(
 
                 // Day Selector
                 Column {
-                    Text("Kolom Hari:", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
+                    Text("Day Column:", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
                     ColumnSelectorRow(allCols, tableData.headers, dayCol) { dayCol = it }
                 }
 
                 // Time Selector
                 Column {
-                    Text("Kolom Jam / Waktu:", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
+                    Text("Time Column:", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
                     ColumnSelectorRow(allCols, tableData.headers, timeCol) { timeCol = it }
                 }
 
                 // Subject Selector
                 Column {
-                    Text("Kolom Mata Kuliah:", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
+                    Text("Course / Subject Column:", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
                     ColumnSelectorRow(allCols, tableData.headers, subjectCol) { subjectCol = it }
                 }
 
                 // Room Selector
                 Column {
-                    Text("Kolom Ruang (Opsional):", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
+                    Text("Classroom Column (Optional):", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
                     ColumnSelectorRow(allCols, tableData.headers, roomCol) { roomCol = it }
                 }
 
                 // Instructor Selector
                 Column {
-                    Text("Kolom Dosen (Opsional):", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
+                    Text("Instructor Column (Optional):", color = TextPrimary, fontSize = 12.sp, lineHeight = 16.sp, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
                     ColumnSelectorRow(allCols, tableData.headers, instructorCol) { instructorCol = it }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Preview Grid
-                Text("Pratinjau Data (3 baris teratas):", color = TextMuted, fontSize = 11.sp, lineHeight = 14.sp, fontFamily = ElmsSans)
+                Text("Data Preview (top 3 rows):", color = TextMuted, fontSize = 11.sp, lineHeight = 14.sp, fontFamily = ElmsSans)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1032,12 +1103,12 @@ private fun SmartColumnMappingDialog(
                 enabled = dayCol >= 0 && timeCol >= 0 && subjectCol >= 0,
                 colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue)
             ) {
-                Text("Impor Sekarang", fontFamily = ElmsSans)
+                Text("Import Now", fontFamily = ElmsSans)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Batal", color = TextPrimary, fontFamily = ElmsSans)
+                Text("Cancel", color = TextPrimary, fontFamily = ElmsSans)
             }
         }
     )
@@ -1058,7 +1129,7 @@ private fun ColumnSelectorRow(
     ) {
         for (col in allCols) {
             val isSel = selectedCol == col
-            val headerName = headers.getOrNull(col)?.ifBlank { "Kolom $col" } ?: "Kolom $col"
+            val headerName = headers.getOrNull(col)?.ifBlank { "Column $col" } ?: "Column $col"
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))

@@ -43,7 +43,7 @@ import com.arinara.fotara.theme.HomeMainButtonBlue
 import com.arinara.fotara.theme.HomeSubtitleGray
 
 object ScreenHeaderDefaults {
-    val HorizontalPadding: Dp = 18.dp
+    val HorizontalPadding: Dp = 16.dp
     val TopPadding: Dp = 16.dp
     val BottomPadding: Dp = 12.dp
     val TitleToTaglineGap: Dp = 4.dp

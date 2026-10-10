@@ -87,6 +87,56 @@ object KatexMathRenderer {
             result = result.substring(1, result.length - 1).trim()
         }
 
+        // 0a. Strip \displaystyle
+        result = result.replace(Regex("""\\displaystyle\s*"""), "")
+
+        // 0b. Unwrap \boxed{...} cleanly
+        val boxedRegex = Regex("""\\boxed\{([^{}]+)\}""")
+        var prevBoxed = ""
+        while (prevBoxed != result) {
+            prevBoxed = result
+            result = boxedRegex.replace(result) { it.groupValues[1] }
+        }
+
+        // 0c. Piecewise cases: \begin{cases} ... \end{cases}
+        val casesRegex = Regex("""(?s)\\begin\{cases\}([\s\S]*?)\\end\{cases\}""")
+        result = casesRegex.replace(result) { match ->
+            val body = match.groupValues[1]
+            val rows = body.split(Regex("""\\\\""")).map { it.trim() }.filter { it.isNotEmpty() }
+            val formattedRows = rows.mapIndexed { idx, row ->
+                val parts = row.split('&').map { it.trim() }
+                val line = parts.joinToString("  ")
+                if (idx == 0) "{ $line" else "  $line"
+            }
+            formattedRows.joinToString("\n")
+        }
+
+        // 0d. Matrices: \begin{pmatrix}, \begin{bmatrix}, \begin{matrix}, etc.
+        val matrixRegex = Regex("""(?s)\\begin\{(p|b|v|B|V)?matrix\}([\s\S]*?)\\end\{\1matrix\}""")
+        result = matrixRegex.replace(result) { match ->
+            val type = match.groupValues[1]
+            val body = match.groupValues[2]
+            val (openBracket, closeBracket) = when (type) {
+                "p" -> "(" to ")"
+                "b" -> "[" to "]"
+                "v" -> "|" to "|"
+                "B" -> "{" to "}"
+                "V" -> "‖" to "‖"
+                else -> "[" to "]"
+            }
+            val rows = body.split(Regex("""\\\\""")).map { it.trim() }.filter { it.isNotEmpty() }
+            if (rows.size == 1) {
+                val rowStr = rows[0].split('&').map { it.trim() }.joinToString("  ")
+                "$openBracket $rowStr $closeBracket"
+            } else {
+                val formattedRows = rows.map { row ->
+                    val rowStr = row.split('&').map { it.trim() }.joinToString("  ")
+                    "$openBracket $rowStr $closeBracket"
+                }
+                formattedRows.joinToString("\n")
+            }
+        }
+
         // 1. Fractions: \frac{a}{b} -> (a)/(b)
         val fracRegex = Regex("""\\frac\{([^{}]+)\}\{([^{}]+)\}""")
         var prevFrac = ""
@@ -144,15 +194,28 @@ object KatexMathRenderer {
             result = result.replace(macro, symbol)
         }
 
-        // 8. Functions: \sin -> sin, \cos -> cos, etc.
-        val funcRegex = Regex("""\\(sin|cos|tan|cot|sec|csc|log|ln|exp|lim|det|max|min|deg)\b""")
+        // 8. Functions: \sin -> sin, \cos -> cos, \det -> det, etc.
+        val funcRegex = Regex("""\\(sin|cos|tan|cot|sec|csc|log|ln|exp|lim|det|max|min|deg|ker|dim|gcd|hom|inf|sup|arg)\b""")
         result = funcRegex.replace(result) { it.groupValues[1] }
 
         // 9. Text macros: \text{abc} -> abc, \mathrm{abc} -> abc
         result = Regex("""\\(text|mathrm|mathbf|mathit)\{([^{}]+)\}""").replace(result) { it.groupValues[2] }
 
-        // Clean double spaces or backslashes
-        result = result.replace(Regex("""\s+"""), " ").trim()
+        // 10. LaTeX spacing macros
+        result = result.replace(Regex("""\\qquad"""), "    ")
+        result = result.replace(Regex("""\\quad"""), "  ")
+        result = result.replace(Regex("""\\[,;:]"""), " ")
+        result = result.replace(Regex("""\\!"""), "")
+
+        // 11. LaTeX line breaks \\ and alignment &
+        result = result.replace(Regex("""\\\\"""), "\n")
+        result = result.replace("&", " ")
+
+        // 12. Clean horizontal whitespace while preserving clean linebreaks
+        result = result.lines()
+            .map { it.replace(Regex("""[^\S\r\n]+"""), " ").trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
         return result
     }
 

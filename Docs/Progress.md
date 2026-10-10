@@ -1,5 +1,5 @@
 # Progress - Fotara
-Last Updated: 2026-10-09
+Last Updated: 2026-10-10
 
 ## Current Phase
 Phase 46 - SpaceHierarchyAndAlphaFoundation (2.0.0 Alpha) [Pending]
@@ -105,7 +105,6 @@ Phase 46 - SpaceHierarchyAndAlphaFoundation (2.0.0 Alpha) [Pending]
 - [x] Task 1: Initialize FotaraDesktop workspace (React 19, TS, Vite) & verify build - Fotara Desktop
 - [x] Task 2: Implement 3-Pane Studio UI (Side Activity Toolbar, Tabs, Split PDF & KaTeX, Scrubber) - Fotara Desktop
 - [x] Task 3: Launch live dev server (http://localhost:5173) & register Desktop Agent 1 - Fotara Desktop
-
 - [x] Task 4: Integrate KaTeX live math engine, PDF.js canvas renderer, and .fotara drag-and-drop bundle parser - Fotara Desktop
 - [x] Task 5: Canonical Desktop UI Realization (IMAGE A replica: Home dashboard, folders grid with accent tiles, recent notes list with folded doc badges, and split study studio) - Fotara Desktop
 - [x] Task 1: Android Home Screen Timetable Widget (4x2 / 4x4) with Rollover Sync (Agent-1) - Phase 45
@@ -113,6 +112,13 @@ Phase 46 - SpaceHierarchyAndAlphaFoundation (2.0.0 Alpha) [Pending]
 - [x] Task 3: Synchronized Audio Annotations with Optional PDF Drag/Number Anchoring (Agent-2) - Phase 45
 - [x] Task 4: Urgent Anti-Procrastination Alarm with Photo Proof Dismiss Challenge (Agent-2) - Phase 45
 - [x] Task 5: Fotara 1.9.0 Beta Build Assembly, Verification & Packaging (Joint / Supervisor) - Phase 45
+- [x] Task 1: Text Layer Movement & Drawing Auto-Smoothing / Shape Snapping - Phase 44
+- [x] Task 2: Universal English Academic Terminology Overhaul across Timetable & Models - Phase 42
+- [x] Task 3: NotesScreen Left-Edge 16dp Visual Alignment (U-31, U-35, U-36) - Phase 44
+- [x] Task 4: Multi-line LaTeX Math Typesetting and Live Preview - Phase 44
+- [x] Task 5: Timetable & Due Tomorrow Widget Data Availability and Broadcasters - Phase 45
+- [x] Task 6: Wire In-App Audio Annotations & Anti-Procrastination Alarm Entry - Phase 45
+- [x] Task 7: Fotara 1.9.1 Alpha Release Assembly & GitHub Publication - Phase 45
 
 ## In Progress
 None.

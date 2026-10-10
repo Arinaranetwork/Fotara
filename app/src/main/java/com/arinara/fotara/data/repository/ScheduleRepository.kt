@@ -206,6 +206,9 @@ class SqliteScheduleRepository(
     private fun refreshSync() {
         val items = loadAllFromDb()
         schedulesFlow.value = items
+        try {
+            com.arinara.fotara.widget.TimetableGlanceWidgetReceiver.triggerUpdate(dbHelper.context)
+        } catch (_: Exception) {}
     }
 
     private fun loadAllFromDb(): List<ClassSchedule> {

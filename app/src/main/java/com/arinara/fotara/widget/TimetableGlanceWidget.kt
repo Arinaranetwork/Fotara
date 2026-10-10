@@ -166,7 +166,7 @@ class TimetableGlanceWidget : GlanceAppWidget() {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (data.isRollover) "Tidak ada kelas besok" else "Tidak ada kelas hari ini",
+                        text = if (data.isRollover) "No classes scheduled tomorrow" else "No classes scheduled today",
                         style = TextStyle(color = ColorTextSecondary, fontSize = 12.sp)
                     )
                 }
@@ -199,7 +199,7 @@ class TimetableGlanceWidget : GlanceAppWidget() {
                                     style = TextStyle(color = ColorTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium),
                                     maxLines = 1
                                 )
-                                val roomInfo = item.roomName?.ifBlank { null } ?: "Ruang Kuliah"
+                                val roomInfo = item.roomName?.ifBlank { null } ?: "Classroom"
                                 Text(
                                     text = roomInfo,
                                     style = TextStyle(color = ColorTextSecondary, fontSize = 10.sp),
@@ -266,12 +266,12 @@ class TimetableGlanceWidget : GlanceAppWidget() {
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = if (data.isRollover) "Tidak ada jadwal kelas besok" else "Tidak ada kelas tersisa hari ini",
+                            text = if (data.isRollover) "No classes scheduled tomorrow" else "No classes remaining today",
                             style = TextStyle(color = ColorTextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         )
                         Spacer(modifier = GlanceModifier.height(4.dp))
                         Text(
-                            text = "Ketuk untuk membuka jadwal lengkap",
+                            text = "Tap to open full schedule",
                             style = TextStyle(color = ColorTextSecondary, fontSize = 10.sp)
                         )
                     }
@@ -314,7 +314,7 @@ class TimetableGlanceWidget : GlanceAppWidget() {
                                     room != null && lecturer != null -> "$room • $lecturer"
                                     room != null -> room
                                     lecturer != null -> lecturer
-                                    else -> "Kuliah Reguler"
+                                    else -> "Regular Class"
                                 }
                                 Text(
                                     text = detailStr,
@@ -404,25 +404,63 @@ class TimetableGlanceWidget : GlanceAppWidget() {
             }
 
             targetDayOfWeek = nextDay
-            targetDayName = if (nextDay == (if (currentDay == 7) 1 else currentDay + 1)) "Besok" else ClassSchedule.getIndonesianDayName(nextDay)
-            headerTitle = "Fotara • Persiapan $targetDayName"
+            val isNextDayTomorrow = nextDay == (if (currentDay == 7) 1 else currentDay + 1)
+            targetDayName = if (isNextDayTomorrow) "Tomorrow" else ClassSchedule.getEnglishDayName(nextDay)
+            headerTitle = if (isNextDayTomorrow) "Fotara • Next-Day Prep" else "Fotara • Prep for $targetDayName"
             targetClasses = found
         } else {
             targetDayOfWeek = currentDay
-            targetDayName = "Hari Ini"
-            headerTitle = "Fotara • Hari Ini (${ClassSchedule.getIndonesianDayShortName(currentDay)})"
+            targetDayName = "Today"
+            headerTitle = "Fotara • Today (${ClassSchedule.getEnglishDayShortName(currentDay)})"
             targetClasses = allSchedules.filter { it.dayOfWeek == currentDay }.sortedBy { it.startMinute }
         }
 
-        val ongoing = targetClasses.firstOrNull { it.isActiveAt(currentMinute) }
-        val subheader = when {
-            isRollover -> "${targetClasses.size} Kelas Terjadwal"
-            ongoing != null -> "Sekarang: ${ongoing.subjectName} s.d ${ongoing.endTimeFormatted}"
-            targetClasses.isNotEmpty() -> "${targetClasses.size} Kelas Terjadwal"
-            else -> "Tidak ada jadwal kelas"
+        var finalTargetClasses = targetClasses
+        var finalDayName = targetDayName
+        var finalHeaderTitle = headerTitle
+        var finalSubheader: String
+        var finalIsRollover = isRollover
+
+        if (!isRollover && targetClasses.isEmpty() && allSchedules.isNotEmpty()) {
+            // Find next upcoming class day
+            var nextDay = if (currentDay == 7) 1 else currentDay + 1
+            var found = allSchedules.filter { it.dayOfWeek == nextDay }.sortedBy { it.startMinute }
+            if (found.isEmpty()) {
+                for (offset in 2..7) {
+                    var candidate = (currentDay + offset)
+                    if (candidate > 7) candidate -= 7
+                    val candidateClasses = allSchedules.filter { it.dayOfWeek == candidate }.sortedBy { it.startMinute }
+                    if (candidateClasses.isNotEmpty()) {
+                        nextDay = candidate
+                        found = candidateClasses
+                        break
+                    }
+                }
+            }
+
+            if (found.isNotEmpty()) {
+                finalTargetClasses = found
+                val isNextTomorrow = nextDay == (if (currentDay == 7) 1 else currentDay + 1)
+                val dayLabel = if (isNextTomorrow) "Tomorrow" else ClassSchedule.getEnglishDayName(nextDay)
+                val firstSubject = found.first().subjectName
+                finalDayName = dayLabel
+                finalHeaderTitle = "Fotara • Next: $dayLabel"
+                finalSubheader = "Next: $dayLabel ($firstSubject)"
+                finalIsRollover = true
+            } else {
+                finalSubheader = "No classes scheduled"
+            }
+        } else {
+            val ongoing = finalTargetClasses.firstOrNull { it.isActiveAt(currentMinute) }
+            finalSubheader = when {
+                isRollover -> "${finalTargetClasses.size} Scheduled ${if (finalTargetClasses.size == 1) "Class" else "Classes"}"
+                ongoing != null -> "Now: ${ongoing.subjectName} until ${ongoing.endTimeFormatted}"
+                finalTargetClasses.isNotEmpty() -> "${finalTargetClasses.size} Scheduled ${if (finalTargetClasses.size == 1) "Class" else "Classes"}"
+                else -> "No classes scheduled"
+            }
         }
 
-        val mappedItems = targetClasses.map {
+        val mappedItems = finalTargetClasses.map {
             TimetableWidgetItem(
                 id = it.id,
                 dayOfWeek = it.dayOfWeek,
@@ -437,10 +475,10 @@ class TimetableGlanceWidget : GlanceAppWidget() {
         }
 
         return TimetableWidgetData(
-            headerTitle = headerTitle,
-            subheader = subheader,
-            dayName = targetDayName,
-            isRollover = isRollover,
+            headerTitle = finalHeaderTitle,
+            subheader = finalSubheader,
+            dayName = finalDayName,
+            isRollover = finalIsRollover,
             classes = mappedItems
         )
     }
@@ -460,6 +498,10 @@ class TimetableGlanceWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TimetableGlanceWidget()
 
     companion object {
+        fun triggerUpdate(context: Context) {
+            notifyDataChanged(context)
+        }
+
         fun notifyDataChanged(context: Context) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val componentName = ComponentName(context, TimetableGlanceWidgetReceiver::class.java)

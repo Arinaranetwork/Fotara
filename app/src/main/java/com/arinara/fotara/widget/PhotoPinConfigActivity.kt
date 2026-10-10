@@ -181,7 +181,7 @@ fun PhotoPinConfigScreen(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Pilih foto rumus atau catatan untuk disematkan di Home Screen",
+            text = "Select a formula or study photo to pin to your Home Screen",
             color = TextSecondary,
             fontSize = 14.sp,
             lineHeight = 20.sp,
@@ -198,7 +198,7 @@ fun PhotoPinConfigScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Belum ada foto catatan. Ambil foto terlebih dahulu di Fotara.",
+                    text = "No study photos available. Capture or import photos in Fotara first.",
                     color = TextMuted,
                     fontSize = 14.sp,
                     fontFamily = ElmsSans

@@ -220,7 +220,7 @@ class MarkdownVisualTransformation(
 
                         // 2. Visible content
                         val rawContent = raw.substring(span.contentStart, span.contentEnd)
-                        val spanContent = if (span.type == MarkdownSpanType.MATH_INLINE) {
+                        val spanContent = if (span.type == MarkdownSpanType.MATH_INLINE || span.type == MarkdownSpanType.MATH_BLOCK) {
                             KatexMathRenderer.formatToReadableMath(rawContent)
                         } else {
                             rawContent
@@ -349,5 +349,6 @@ class MarkdownVisualTransformation(
                 this == MarkdownSpanType.STRIKETHROUGH ||
                 this == MarkdownSpanType.INLINE_CODE ||
                 this == MarkdownSpanType.LINK ||
-                this == MarkdownSpanType.MATH_INLINE
+                this == MarkdownSpanType.MATH_INLINE ||
+                this == MarkdownSpanType.MATH_BLOCK
 }

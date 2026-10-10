@@ -194,6 +194,22 @@ class PdfPageEditorViewModel(
         scheduleAutosave()
     }
 
+    fun updateTextLayer(updated: TextLayerElement) {
+        _uiState.update { current ->
+            val updatedList = current.textLayers.map { if (it.id == updated.id) updated else it }
+            current.copy(textLayers = updatedList)
+        }
+        scheduleAutosave()
+    }
+
+    fun removeTextLayer(layerId: String) {
+        _uiState.update { current ->
+            val updatedList = current.textLayers.filterNot { it.id == layerId }
+            current.copy(textLayers = updatedList)
+        }
+        scheduleAutosave()
+    }
+
     fun undo() {
         if (undoStack.isNotEmpty()) {
             redoStack.addLast(_uiState.value.strokes)
