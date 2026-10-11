@@ -103,12 +103,15 @@ fun AddWorkspaceDialog(
     val duplicateError = stringResource(R.string.workspace_error_name_duplicate)
     val reservedError = stringResource(R.string.workspace_error_reserved)
 
-    val currentValidationErr = WorkspaceValidator.validateName(textValue.text, workspaces)
+    val trimmedName = textValue.text.trim()
+    val currentValidationErr = WorkspaceValidator.validateName(trimmedName, workspaces)
     val isSaveEnabled = currentValidationErr == null
 
     fun submit() {
-        if (currentValidationErr != null) {
-            errorMessage = when (currentValidationErr) {
+        val trimmed = textValue.text.trim()
+        val err = WorkspaceValidator.validateName(trimmed, workspaces)
+        if (err != null) {
+            errorMessage = when (err) {
                 WorkspaceError.NameEmpty -> emptyError
                 WorkspaceError.NameTooLong -> lengthError
                 WorkspaceError.NameDuplicate -> duplicateError
@@ -117,7 +120,8 @@ fun AddWorkspaceDialog(
             }
             return
         }
-        onCreate(textValue.text, selectedIconKey)
+        val iconKey = selectedIconKey.ifBlank { WorkspaceIcons.DEFAULT_KEY }
+        onCreate(trimmed, iconKey)
     }
 
     LaunchedEffect(Unit) {

@@ -55,7 +55,7 @@ object ScreenHeaderDefaults {
     val ActionButtonSize: Dp = 48.dp
     val ActionButtonContentSize: Dp = 40.dp
     val ActionIconSize: Dp = 20.dp
-    val ActionButtonSpacing: Dp = 12.dp
+    val ActionButtonSpacing: Dp = 4.dp
 
     val TitleFontSize: TextUnit = 32.sp
     val TitleLineHeight: TextUnit = 38.sp

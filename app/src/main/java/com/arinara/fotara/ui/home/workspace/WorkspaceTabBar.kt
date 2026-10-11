@@ -472,8 +472,11 @@ fun WorkspaceTabBar(
                     }
                 }
             }
+        }
 
-            // Pinned '+' Add Workspace Button
+            Spacer(modifier = Modifier.width(4.dp))
+
+            // Pinned '+' Add Workspace Button locked to the right side
             IconButton(
                 onClick = {
                     if (isAtLimit) onLimitReached() else onAddClick()
@@ -492,6 +495,5 @@ fun WorkspaceTabBar(
             }
         }
     }
-}
 }
 

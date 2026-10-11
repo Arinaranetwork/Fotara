@@ -252,3 +252,15 @@ Advancing to Phase 45 Task 5: 1.9.0 Beta Packaging & Release by Supervisor."
 - Documentation: Docs/Version/1.0/1.9/1.9.1/Anchor.md and Release.md prepared.
 - Advancing to git commit, tag Fotara_1.9.1_Alpha, and GitHub release upload."
 
+[2026-10-11 14:45:00] [Agent-1 ➔ Swarm]
+"8 ANDROID UI & WORKSPACE REPAIRS COMPLETE:
+1. FolderCard.kt: Removed folder accent tag dot / pill box from badges row.
+2. FolderCard.kt: Removed pushpin icon badge from badges row.
+3. WorkspaceTabBar.kt: Pinned '+' Add Workspace button locked to far right outside scrollable row.
+4. WorkspaceDialogs.kt & WorkspaceRepository.kt: Fixed workspace creation with trimmed name, default icon key fallback, safe space_id fallback to 1L without foreign key failure, insertedId validation, and flow emission.
+5. ProfileBanner.kt: Restored clean dark neutral gradient fallback without forced version banner override.
+6. HomeScreen.kt: Shifted empty workspace state container 40dp upwards to clear bottom bar visually.
+7. ScreenHeader.kt: Reduced ActionButtonSpacing from 12dp to 4dp bringing Search and 3-dots closer together.
+8. HomeScreen.kt: Deleted Syllabus Evaluator item from 3-dots overflow menu.
+Verification: ./gradlew testDebugUnitTest completed with 942 tests passed (100% pass rate). All write locks released."
+

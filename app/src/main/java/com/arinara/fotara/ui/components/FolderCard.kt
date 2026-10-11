@@ -226,21 +226,13 @@ fun FolderCard(
                     }
                 }
 
-                // Middle Badges (Pinned, Locked, and Tag Color Dot)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(top = 4.dp, end = 44.dp)
-                ) {
-                    if (folder.isPinned) {
-                        Icon(
-                            imageVector = Icons.Default.PushPin,
-                            contentDescription = "Pinned folder",
-                            tint = accent.glowColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    if (folder.isLocked) {
+                // Middle Badges (Locked)
+                if (folder.isLocked) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(top = 4.dp, end = 44.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = "Locked folder",
@@ -248,13 +240,6 @@ fun FolderCard(
                             modifier = Modifier.size(14.dp)
                         )
                     }
-                    // Folder accent tag dot
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(accent.glowColor)
-                    )
                 }
 
                 // Space reserved for the top-right corner 3-dots button

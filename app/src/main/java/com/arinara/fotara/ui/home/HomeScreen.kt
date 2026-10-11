@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -562,20 +563,6 @@ fun HomeScreen(
                                                         viewModel.openAddWorkspaceDialog()
                                                     }
                                                 )
-                                                DropdownMenuItem(
-                                                    text = { Text("Syllabus Evaluator", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Outlined.School,
-                                                            contentDescription = null,
-                                                            tint = TagAmber
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showHomeOverflowMenu = false
-                                                        showSyllabusEvaluator = true
-                                                    }
-                                                )
                                                 HorizontalDivider(color = HomeCardBorder)
                                                 DropdownMenuItem(
                                                     text = { Text("What's New", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
@@ -813,6 +800,7 @@ fun HomeScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(
+                                        modifier = Modifier.offset(y = (-40).dp),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {

@@ -385,29 +385,7 @@ private fun ProfileBannerFallbackGradient(modifier: Modifier = Modifier) {
                     )
                 )
             )
-    ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(com.arinara.fotara.R.drawable.fotara_banner_default)
-                .crossfade(true)
-                .build(),
-            contentDescription = "Default Fotara Banner",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.35f),
-                            Color.Black.copy(alpha = 0.65f)
-                        )
-                    )
-                )
-        )
-    }
+    )
 }
 
 object ProfileBannerDefaults {

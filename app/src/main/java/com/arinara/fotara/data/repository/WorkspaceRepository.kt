@@ -294,15 +294,36 @@ class SqliteWorkspaceRepository(
         val uuid = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
 
-        val currentSpaceId = spaceRepository?.activeSpaceId?.value ?: 1L
+        val requestedSpaceId = spaceRepository?.activeSpaceId?.value ?: 1L
         val db = dbHelper.getSafeWritableDatabase()
+
+        // Ensure space_id falls back safely to 1L (or existing default space) without foreign key failure
+        var effectiveSpaceId = if (requestedSpaceId > 0L) requestedSpaceId else 1L
+        try {
+            val spaceCheck = db.rawQuery("SELECT id FROM spaces WHERE id = ?", arrayOf(effectiveSpaceId.toString()))
+            val exists = spaceCheck.use { it.moveToFirst() }
+            if (!exists) {
+                val fallbackCheck = db.rawQuery("SELECT id FROM spaces WHERE id = 1", null)
+                val fallbackExists = fallbackCheck.use { it.moveToFirst() }
+                if (!fallbackExists) {
+                    val nowTs = System.currentTimeMillis()
+                    db.execSQL(
+                        "INSERT OR IGNORE INTO spaces (id, uuid, name, icon_key, color_hex, is_private, sort_order, created_at, updated_at) VALUES (1, '${FotaraDbHelper.DEFAULT_SPACE_UUID}', 'Default Space', 'school', '#2563EB', 0, 0, $nowTs, $nowTs)"
+                    )
+                }
+                effectiveSpaceId = 1L
+            }
+        } catch (_: Exception) {
+            effectiveSpaceId = 1L
+        }
+
         val values = ContentValues().apply {
             put("uuid", uuid)
             put("kind", WorkspaceKind.CUSTOM.name)
             put("name", normalizedName)
             put("position", nextPos)
             put("created_at", now)
-            put("space_id", currentSpaceId)
+            put("space_id", effectiveSpaceId)
             if (sanitizedIconKey != null) {
                 put("icon_key", sanitizedIconKey)
             } else {
@@ -310,6 +331,10 @@ class SqliteWorkspaceRepository(
             }
         }
         val insertedId = db.insert("workspaces", null, values)
+        if (insertedId <= 0) {
+            android.util.Log.e("SqliteWorkspaceRepo", "Failed to insert workspace into SQLite: insertedId=$insertedId")
+            return@withContext WorkspaceResult.Error(WorkspaceError.NotFound)
+        }
         refreshSync()
 
         val created = Workspace(
@@ -321,6 +346,12 @@ class SqliteWorkspaceRepository(
             createdAt = now,
             iconKey = sanitizedIconKey
         )
+
+        // Ensure workspacesFlow emits the newly created workspace
+        if (workspacesFlow.value.none { it.id == insertedId }) {
+            workspacesFlow.value = workspacesFlow.value + created
+        }
+
         WorkspaceResult.Success(created)
     }
 

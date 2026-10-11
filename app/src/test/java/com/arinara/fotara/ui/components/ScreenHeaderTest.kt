@@ -31,7 +31,7 @@ class ScreenHeaderTest {
         assertEquals(48.dp, ScreenHeaderDefaults.ActionButtonSize)
         assertEquals(40.dp, ScreenHeaderDefaults.ActionButtonContentSize)
         assertEquals(20.dp, ScreenHeaderDefaults.ActionIconSize)
-        assertEquals(12.dp, ScreenHeaderDefaults.ActionButtonSpacing)
+        assertEquals(4.dp, ScreenHeaderDefaults.ActionButtonSpacing)
         assertTrue(
             "Touch target must be at least 44dp",
             ScreenHeaderDefaults.ActionButtonSize.value >= 44f
