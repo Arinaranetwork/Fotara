@@ -1,0 +1,85 @@
+// --- Arinara Network (c) 2026 ---
+// Exclusive property of Arinara Network.
+// Unauthorized use, reproduction, distribution, or modification of this code,
+// in whole or in part, for any purpose, is strictly prohibited without prior
+// written consent from Arinara Network as sole legal owner of this codebase.
+
+package com.arinara.fotara.ui.home
+
+import com.arinara.fotara.data.model.DocumentNote
+import com.arinara.fotara.data.model.CanvasNote
+import com.arinara.fotara.data.model.Folder
+import com.arinara.fotara.data.model.Photo
+import com.arinara.fotara.data.model.PhotoGroup
+import com.arinara.fotara.data.model.DateRange
+import com.arinara.fotara.data.model.SearchDateFilter
+import com.arinara.fotara.data.model.SearchSortOrder
+import com.arinara.fotara.data.model.TextNote
+import com.arinara.fotara.data.repository.FolderBulkDeleteResult
+
+data class HomeUiState(
+    val folders: List<Folder> = emptyList(),
+    val totalFolderCount: Int = 0,
+    val photosAddedToday: List<Photo> = emptyList(),
+    val photosDueTomorrow: List<Photo> = emptyList(),
+    val isSearchActive: Boolean = false,
+    val searchQuery: String = "",
+    val isSearchLoading: Boolean = false,
+    val folderSearchResults: List<Folder> = emptyList(),
+    val groupSearchResults: List<PhotoGroup> = emptyList(),
+    val searchResults: List<Photo> = emptyList(),
+    val textNoteSearchResults: List<TextNote> = emptyList(),
+    val documentSearchResults: List<DocumentNote> = emptyList(),
+    val canvasNoteSearchResults: List<CanvasNote> = emptyList(),
+    val recentSearches: List<String> = emptyList(),
+    val searchDateFilter: SearchDateFilter = SearchDateFilter.ALL,
+    val searchSortOrder: SearchSortOrder = SearchSortOrder.NEWEST_ADDED,
+    val customDateRange: DateRange? = null,
+    val searchColorFilter: String? = null,
+    val availableSmartTags: List<String> = emptyList(),
+    val selectedSmartTag: String? = null,
+    val showNewFolderDialog: Boolean = false,
+    val isLoading: Boolean = false,
+    val userMessage: String? = null,
+    val isMultiSelectMode: Boolean = false,
+    val selectedFolderIds: Set<Long> = emptySet(),
+    val showBulkDeleteDialog: Boolean = false,
+    val bulkDeleteStats: FolderBulkDeleteResult? = null,
+    val isRefreshing: Boolean = false,
+    val workspaces: List<com.arinara.fotara.data.model.Workspace> = listOf(
+        com.arinara.fotara.data.model.Workspace(
+            id = 1L,
+            uuid = com.arinara.fotara.data.db.FotaraDbHelper.HOME_WORKSPACE_UUID,
+            kind = com.arinara.fotara.data.model.WorkspaceKind.HOME,
+            name = "Home",
+            position = 0
+        ),
+        com.arinara.fotara.data.model.Workspace(
+            id = 2L,
+            uuid = com.arinara.fotara.data.db.FotaraDbHelper.ARCHIVE_WORKSPACE_UUID,
+            kind = com.arinara.fotara.data.model.WorkspaceKind.ARCHIVE,
+            name = "Archive",
+            position = 1
+        )
+    ),
+    val selectedWorkspaceId: Long = 1L,
+    val showAddWorkspaceDialog: Boolean = false,
+    val workspaceToRename: com.arinara.fotara.data.model.Workspace? = null,
+    val foldersToMoveWorkspace: List<Folder>? = null,
+    val workspaceToDelete: com.arinara.fotara.data.model.Workspace? = null,
+    val workspaceDeleteStats: com.arinara.fotara.data.repository.WorkspaceContentStats? = null,
+    val workspaceDeleteStep: WorkspaceDeleteStep = WorkspaceDeleteStep.NONE,
+    val workspaceDeleteProgress: Pair<Int, Int>? = null,
+    val searchWorkspaceScopeId: Long? = null
+) {
+    val selectedWorkspace: com.arinara.fotara.data.model.Workspace?
+        get() = workspaces.find { it.id == selectedWorkspaceId }
+}
+
+enum class WorkspaceDeleteStep {
+    NONE,
+    CONFIRM,
+    CHOICE,
+    PERMANENT_CONFIRM,
+    PROGRESS
+}

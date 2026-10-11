@@ -1,0 +1,30 @@
+// --- Arinara Network (c) 2026 ---
+// Exclusive property of Arinara Network.
+// Unauthorized use, reproduction, distribution, or modification of this code,
+// in whole or in part, for any purpose, is strictly prohibited without prior
+// written consent from Arinara Network as sole legal owner of this codebase.
+
+package com.arinara.fotara.ui.settings
+
+import com.arinara.fotara.data.model.StorageBreakdown
+import com.arinara.fotara.data.model.UserProfile
+import com.arinara.fotara.data.model.UserSettings
+
+data class SettingsUiState(
+    val userSettings: UserSettings = UserSettings(),
+    val userProfile: UserProfile = UserProfile(),
+    val storageBreakdown: StorageBreakdown = StorageBreakdown(),
+    val isLoadingStorage: Boolean = false,
+    val isRebuildingThumbnails: Boolean = false,
+    val isRebuildingSearchIndex: Boolean = false,
+    val showLicensesDialog: Boolean = false,
+    val feedbackMessage: String? = null,
+    val registeredDeviceId: String? = null,
+    val appResidueInfo: com.arinara.fotara.data.model.AppResidueInfo = com.arinara.fotara.data.model.AppResidueInfo(),
+    val isCleaningResidue: Boolean = false,
+    val residueCleanProgress: Float = 0f,
+    val claimedUsername: String = "",
+    val canChangeUsername: Boolean = true,
+    val cooldownDaysRemaining: Int = 0,
+    val cooldownMessage: String? = null
+)
