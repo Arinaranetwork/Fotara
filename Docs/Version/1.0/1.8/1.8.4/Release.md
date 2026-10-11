@@ -1,5 +1,5 @@
 # Release - Fotara 1.8.4
-Tag: Fotara_1.8.4_Beta    Stable: 
+Tag: Fotara_1.8.4_Beta    Stable: Fotara_1.8.4
 Date: 2026-10-07    Branch: release/1.7.0    Commit: 848533cb68ac0c147962746ef89e46311bccd378
 Banner: Assets/Banners/FotaraBanner_1.8_2026-10-07.jpg    Changelog: Changelog/Changelog_1.8.md
 Artifacts: Output/Release/Fotara_1.8.4_Beta.apk, Output/Release/Fotara_1.8.4_Beta.apk.sha256

@@ -1,5 +1,5 @@
 # Fotara 1.8 - Workspace Icons, PDF Tools & Page Drawing
-Released: 2026-10-07   Status: Released (Beta)
+Released: 2026-10-07   Status: Released (Stable)
 
 ## 1.8.4 Beta - 2026-10-07
 - **Update Download Lifecycle & Collision Resolution**: Fixed background download persistence when skipping updates or initiating installation. Active APK download jobs and `.apk.part` files are now reliably cancelled and deleted when the user chooses "Skip this version" or triggers APK installation. If a newer release is discovered while an older release is downloading, the obsolete download is cleanly aborted, partial files are removed, and the update prompt transitions to the newer version.
