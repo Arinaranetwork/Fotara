@@ -1,6 +1,14 @@
 # Fotara 2.2 - Universal Android Version Downgrade Engine & Academic Social Ecosystem
 Released: 2026-10-10   Status: Released (Alpha)
 
+## 2.2.3 Patch - 2026-10-11
+- **Workspace Tab Resilience**: Repaired workspace tab bar on Home and Notes screens to ensure default Home and Archive tabs always render without layout jumps, filtering out corrupt custom workspaces with blank names and preventing blank 48dp container pills.
+- **Zero Mock Profile Purge (Rule R-005)**: Permanently removed fake seed personas (`@jordan_b`, `@sarah_k`, etc.) and seeder functions from `FriendsRepository`, auto-sanitizing legacy device preferences on launch to guarantee 100% authentic empty states.
+- **Peer Profile Discovery & Academic Banner**: Enabled viewing peer profiles with banner, avatar, status dot, followers, and following counts by clicking any peer in Friends, Followers, or Following lists, or by searching their `@username`. Linked real user profile banners with crop transforms and cache invalidation in `UserProfileDialog`.
+- **Live Supabase Feedback Sync Fix**: Aligned `FeedbackCategory` database values (`BUG_REPORT`, `SUGGESTION`, `FEATURE_IDEA`, `GENERAL`) with PostgreSQL check constraints, restoring live submission and sync of suggestions and bug reports to Supabase.
+- **Transparent Server Error Propagation**: Hardened `UsernameManager` to honestly propagate server authorization and registration errors rather than silently suppressing HTTP 401 responses.
+- **Space Creation Auto-Switch**: Creating a new space now immediately activates and switches to it in `HomeScreen`.
+
 ## 2.2.2 Alpha - 2026-10-10
 - **Unique Academic Username System (`@username`)**: Integrated Supabase `user_profiles` schema with global uniqueness verification, regex validation (`^[a-z0-9_]{3,20}$`), local offline fallback, and custom QR code generator for academic handle sharing.
 - **7-Day Rate-Limit Cooldown**: Enforced strict 7-day cooldown on username changes across local SharedPreferences and remote PostgreSQL triggers, with live countdown indicator in the profile UI.

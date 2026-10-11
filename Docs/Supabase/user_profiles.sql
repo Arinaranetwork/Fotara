@@ -35,8 +35,9 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_profiles_username ON public.user_profiles(username);
 CREATE INDEX IF NOT EXISTS idx_user_profiles_install_uuid ON public.user_profiles(install_uuid);
 
--- 3. Enable Row Level Security (RLS)
+-- 3. Enable Row Level Security (RLS) & Grant Table Access
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE ON public.user_profiles TO anon, authenticated;
 
 -- 4. Drop existing policies if re-running
 DROP POLICY IF EXISTS "Allow anon public profile read" ON public.user_profiles;

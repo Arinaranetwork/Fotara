@@ -35,7 +35,9 @@ interface FriendsRepository {
     suspend fun followUser(friend: FriendProfile)
     suspend fun unfollowUser(id: String)
     suspend fun removeFollower(id: String)
+    suspend fun findUserByHandle(handle: String): FriendProfile?
 }
+
 
 class LocalFriendsRepository(
     private val prefs: SharedPreferences,
@@ -86,61 +88,26 @@ class LocalFriendsRepository(
         return list
     }
 
-    private fun loadFriends(): List<FriendProfile> {
-        val raw = prefs.getString(KEY_FRIENDS_LIST, null) ?: return emptyList()
-        return parseList(raw)
+    private fun isSeedProfile(profile: FriendProfile): Boolean {
+        return profile.id.startsWith("seed-") ||
+                profile.id.startsWith("seed_") ||
+                profile.handle in setOf("@jordan_b", "@sarah_k", "@alex_w", "@taylor_m")
     }
 
-    private fun seedFollowers(): List<FriendProfile> = listOf(
-        FriendProfile(
-            id = "seed-follower-1",
-            handle = "@jordan_b",
-            displayName = "Jordan Baker",
-            studyStatus = StudyPresenceStatus.STUDYING,
-            currentSubject = "Linear Algebra & Vector Spaces",
-            followersCount = 14,
-            followingCount = 12
-        ),
-        FriendProfile(
-            id = "seed-follower-2",
-            handle = "@sarah_k",
-            displayName = "Sarah Kim",
-            studyStatus = StudyPresenceStatus.OPEN_TO_COLLAB,
-            currentSubject = "Microeconomics",
-            followersCount = 28,
-            followingCount = 19
-        ),
-        FriendProfile(
-            id = "seed-follower-3",
-            handle = "@alex_w",
-            displayName = "Alex Wong",
-            studyStatus = StudyPresenceStatus.OFFLINE,
-            currentSubject = null,
-            followersCount = 9,
-            followingCount = 15
-        )
-    )
+    private fun saveFriendsToPrefs(list: List<FriendProfile>) {
+        val serialized = list.joinToString(DELIMITER) { it.toJson() }
+        prefs.edit().putString(KEY_FRIENDS_LIST, serialized).apply()
+    }
 
-    private fun seedFollowing(): List<FriendProfile> = listOf(
-        FriendProfile(
-            id = "seed-following-1",
-            handle = "@jordan_b",
-            displayName = "Jordan Baker",
-            studyStatus = StudyPresenceStatus.STUDYING,
-            currentSubject = "Linear Algebra & Vector Spaces",
-            followersCount = 14,
-            followingCount = 12
-        ),
-        FriendProfile(
-            id = "seed-following-2",
-            handle = "@taylor_m",
-            displayName = "Taylor Miller",
-            studyStatus = StudyPresenceStatus.IN_LECTURE,
-            currentSubject = "Computer Architecture",
-            followersCount = 31,
-            followingCount = 24
-        )
-    )
+    private fun loadFriends(): List<FriendProfile> {
+        val raw = prefs.getString(KEY_FRIENDS_LIST, null) ?: return emptyList()
+        val list = parseList(raw)
+        val sanitized = list.filterNot { isSeedProfile(it) }
+        if (sanitized.size != list.size) {
+            saveFriendsToPrefs(sanitized)
+        }
+        return sanitized
+    }
 
     private fun saveFollowersToPrefs(list: List<FriendProfile>) {
         val serialized = list.joinToString(DELIMITER) { it.toJson() }
@@ -153,37 +120,23 @@ class LocalFriendsRepository(
     }
 
     private fun loadFollowers(): List<FriendProfile> {
-        val raw = prefs.getString(KEY_FOLLOWERS_LIST, null)
-        if (raw.isNullOrBlank()) {
-            val seeded = seedFollowers()
-            saveFollowersToPrefs(seeded)
-            return seeded
-        }
+        val raw = prefs.getString(KEY_FOLLOWERS_LIST, null) ?: return emptyList()
         val list = parseList(raw)
-        return if (list.isEmpty()) {
-            val seeded = seedFollowers()
-            saveFollowersToPrefs(seeded)
-            seeded
-        } else {
-            list
+        val sanitized = list.filterNot { isSeedProfile(it) }
+        if (sanitized.size != list.size) {
+            saveFollowersToPrefs(sanitized)
         }
+        return sanitized
     }
 
     private fun loadFollowing(): List<FriendProfile> {
-        val raw = prefs.getString(KEY_FOLLOWING_LIST, null)
-        if (raw.isNullOrBlank()) {
-            val seeded = seedFollowing()
-            saveFollowingToPrefs(seeded)
-            return seeded
-        }
+        val raw = prefs.getString(KEY_FOLLOWING_LIST, null) ?: return emptyList()
         val list = parseList(raw)
-        return if (list.isEmpty()) {
-            val seeded = seedFollowing()
-            saveFollowingToPrefs(seeded)
-            seeded
-        } else {
-            list
+        val sanitized = list.filterNot { isSeedProfile(it) }
+        if (sanitized.size != list.size) {
+            saveFollowingToPrefs(sanitized)
         }
+        return sanitized
     }
 
     private fun persistFriends(list: List<FriendProfile>) {
@@ -227,11 +180,6 @@ class LocalFriendsRepository(
     override fun getMySubjectFlow(): Flow<String?> = _mySubjectFlow.asStateFlow()
 
     override suspend fun addFriend(handle: String, displayName: String): Result<FriendProfile> {
-        val trimmedDisplay = displayName.trim()
-        if (trimmedDisplay.isEmpty()) {
-            return Result.failure(IllegalArgumentException("Display name cannot be empty"))
-        }
-
         val rawHandle = handle.trim()
         val normalizedHandle = if (rawHandle.startsWith("@")) rawHandle else "@$rawHandle"
         if (normalizedHandle.length <= 1) {
@@ -250,6 +198,17 @@ class LocalFriendsRepository(
             return Result.failure(IllegalStateException("Friend with handle $cleanHandle already exists"))
         }
 
+        var trimmedDisplay = displayName.trim()
+        if (trimmedDisplay.isEmpty()) {
+            val remoteRes = usernameManager.fetchProfileByUsername(handleBody)
+            val remoteName = remoteRes.getOrNull()?.displayName?.trim()
+            trimmedDisplay = if (!remoteName.isNullOrBlank()) {
+                remoteName
+            } else {
+                handleBody.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            }
+        }
+
         val newFriend = FriendProfile(
             id = UUID.randomUUID().toString(),
             handle = cleanHandle,
@@ -265,6 +224,41 @@ class LocalFriendsRepository(
         persistFriends(updated)
         return Result.success(newFriend)
     }
+
+    override suspend fun findUserByHandle(handle: String): FriendProfile? {
+        val clean = usernameManager.cleanUsername(handle)
+        if (clean.isBlank()) return null
+        val normalized = "@$clean"
+
+        // 1. Check local friends, following, followers
+        _friendsFlow.value.find { it.handle.equals(normalized, ignoreCase = true) }?.let { return it }
+        _followingFlow.value.find { it.handle.equals(normalized, ignoreCase = true) }?.let { return it }
+        _followersFlow.value.find { it.handle.equals(normalized, ignoreCase = true) }?.let { return it }
+
+        // 2. Query remote Supabase registry
+        val remoteRes = usernameManager.fetchProfileByUsername(clean)
+        if (remoteRes.isSuccess && remoteRes.getOrNull() != null) {
+            val remote = remoteRes.getOrNull()!!
+            return FriendProfile(
+                id = remote.id,
+                handle = "@${remote.username}",
+                displayName = remote.displayName,
+                studyStatus = StudyPresenceStatus.OFFLINE
+            )
+        }
+
+        // 3. Fallback discovered representation if valid username format
+        if (usernameManager.validateUsernameFormat(clean).first) {
+            return FriendProfile(
+                id = "discovered_${clean}",
+                handle = normalized,
+                displayName = clean.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
+                studyStatus = StudyPresenceStatus.OFFLINE
+            )
+        }
+        return null
+    }
+
 
     override suspend fun removeFriend(id: String) {
         val currentList = _friendsFlow.value

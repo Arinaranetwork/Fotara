@@ -774,7 +774,7 @@ fun HomeScreen(
                                 val wsDisplayName = when (currentWs?.kind) {
                                     WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
                                     WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
-                                    WorkspaceKind.CUSTOM -> currentWs.name
+                                    WorkspaceKind.CUSTOM -> currentWs.name.ifBlank { stringResource(R.string.workspace_home) }
                                     null -> stringResource(R.string.workspace_home)
                                 }
                                 Box(
@@ -1738,12 +1738,16 @@ fun HomeScreen(
             },
             onCreateSpace = { name, iconKey, colorHex, isPrivate ->
                 coroutineScope.launch {
-                    spaceRepository.createSpace(
+                    val createResult = spaceRepository.createSpace(
                         name = name,
                         iconKey = iconKey,
                         colorHex = colorHex,
                         isPrivate = isPrivate
                     )
+                    createResult.getOrNull()?.let { newSpace ->
+                        spaceRepository.setActiveSpaceId(newSpace.id)
+                        showSpaceSwitcher = false
+                    }
                 }
             },
             onOpenSpaceSettings = { sId ->

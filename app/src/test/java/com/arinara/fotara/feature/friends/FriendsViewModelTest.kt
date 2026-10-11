@@ -81,8 +81,16 @@ class FriendsViewModelTest {
         val testUsernameManager = object : UsernameManager(prefs, ioDispatcher = testDispatcher) {
             override suspend fun checkSupabaseAvailability(cleanUsername: String): Result<Boolean> = Result.success(true)
             override suspend fun upsertToSupabase(uuid: String, cleanUsername: String, displayName: String, timestamp: Long): Result<Unit> = Result.success(Unit)
+            override suspend fun fetchProfileByUsername(username: String): Result<com.arinara.fotara.feature.friends.data.SupabaseUserProfile?> {
+                return if (username == "peer_scholar") {
+                    Result.success(com.arinara.fotara.feature.friends.data.SupabaseUserProfile("id-123", "uuid-123", "peer_scholar", "Peer Scholar", 5000L))
+                } else {
+                    Result.success(null)
+                }
+            }
         }
         repository = LocalFriendsRepository(prefs, testUsernameManager)
+
         viewModel = FriendsViewModel(repository)
     }
 
@@ -100,10 +108,10 @@ class FriendsViewModelTest {
         assertEquals("@scholar", state.myHandle)
         assertTrue(state.canChangeUsername)
         assertEquals(0, state.cooldownDaysRemaining)
-        assertEquals(3, state.followers.size)
-        assertEquals(3, state.followersCount)
-        assertEquals(2, state.following.size)
-        assertEquals(2, state.followingCount)
+        assertEquals(0, state.followers.size)
+        assertEquals(0, state.followersCount)
+        assertEquals(0, state.following.size)
+        assertEquals(0, state.followingCount)
     }
 
     @Test
@@ -115,31 +123,39 @@ class FriendsViewModelTest {
         advanceUntilIdle()
 
         val stateAfterFollow = viewModel.uiState.value
-        assertEquals(3, stateAfterFollow.following.size)
-        assertEquals(3, stateAfterFollow.followingCount)
+        assertEquals(1, stateAfterFollow.following.size)
+        assertEquals(1, stateAfterFollow.followingCount)
         assertTrue(stateAfterFollow.following.any { it.id == "user-100" })
 
         viewModel.unfollowUser("user-100")
         advanceUntilIdle()
 
         val stateAfterUnfollow = viewModel.uiState.value
-        assertEquals(2, stateAfterUnfollow.following.size)
-        assertEquals(2, stateAfterUnfollow.followingCount)
+        assertEquals(0, stateAfterUnfollow.following.size)
+        assertEquals(0, stateAfterUnfollow.followingCount)
         assertFalse(stateAfterUnfollow.following.any { it.id == "user-100" })
     }
 
     @Test
     fun testRemoveFollower() = runTest(testDispatcher) {
-        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
+        val testFollower = FriendProfile(id = "follower-test-1", handle = "@follower_1", displayName = "Follower 1")
+        prefs.edit().putString(LocalFriendsRepository.KEY_FOLLOWERS_LIST, testFollower.toJson()).apply()
+        val customRepo = LocalFriendsRepository(prefs, object : UsernameManager(prefs, ioDispatcher = testDispatcher) {
+            override suspend fun checkSupabaseAvailability(cleanUsername: String): Result<Boolean> = Result.success(true)
+            override suspend fun upsertToSupabase(uuid: String, cleanUsername: String, displayName: String, timestamp: Long): Result<Unit> = Result.success(Unit)
+        })
+        val customVm = FriendsViewModel(customRepo)
+
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { customVm.uiState.collect() }
         advanceUntilIdle()
-        val followerToRemove = viewModel.uiState.value.followers.first()
-        viewModel.removeFollower(followerToRemove.id)
+        assertEquals(1, customVm.uiState.value.followers.size)
+
+        customVm.removeFollower("follower-test-1")
         advanceUntilIdle()
 
-        val stateAfterRemove = viewModel.uiState.value
-        assertEquals(2, stateAfterRemove.followers.size)
-        assertEquals(2, stateAfterRemove.followersCount)
-        assertFalse(stateAfterRemove.followers.any { it.id == followerToRemove.id })
+        val stateAfterRemove = customVm.uiState.value
+        assertEquals(0, stateAfterRemove.followers.size)
+        assertEquals(0, stateAfterRemove.followersCount)
     }
 
     @Test
@@ -179,4 +195,27 @@ class FriendsViewModelTest {
         assertFalse(claimSuccess)
         assertEquals("Username must be 3-20 characters using letters, numbers, or underscores.", errorMessage)
     }
+
+    @Test
+    fun testSearchQueryDiscoversPeer() = runTest(testDispatcher) {
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        viewModel.onSearchQueryChanged("@peer_scholar")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("@peer_scholar", state.searchQuery)
+        assertTrue(state.discoveredPeer != null)
+        assertEquals("@peer_scholar", state.discoveredPeer?.handle)
+        assertEquals("Peer Scholar", state.discoveredPeer?.displayName)
+
+        // Clear search
+        viewModel.onSearchQueryChanged("")
+        advanceUntilIdle()
+        val clearedState = viewModel.uiState.value
+        assertEquals("", clearedState.searchQuery)
+        assertTrue(clearedState.discoveredPeer == null)
+    }
 }
+

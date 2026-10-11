@@ -186,11 +186,11 @@ class UsernameManagerTest {
     }
 
     @Test
-    fun testClaimUsernameSuccessOfflineResilient() = runTest(testDispatcher) {
-        val result = usernameManager.claimUsername("jordan_b", "Jordan Baker")
+    fun testClaimUsernameSuccess() = runTest(testDispatcher) {
+        val result = usernameManager.claimUsername("master_scholar", "Master Scholar")
         assertTrue(result.isSuccess)
-        assertEquals("@jordan_b", result.getOrNull())
-        assertEquals("@jordan_b", usernameManager.getClaimedUsername())
+        assertEquals("@master_scholar", result.getOrNull())
+        assertEquals("@master_scholar", usernameManager.getClaimedUsername())
 
         // Cooldown is now active
         assertEquals(7, usernameManager.getRemainingCooldownDays())
@@ -200,11 +200,11 @@ class UsernameManagerTest {
     @Test
     fun testClaimUsernameCooldownActiveFails() = runTest(testDispatcher) {
         // Claim first time
-        val firstClaim = usernameManager.claimUsername("alex_w", "Alex Wong")
+        val firstClaim = usernameManager.claimUsername("scholar_alpha", "Scholar Alpha")
         assertTrue(firstClaim.isSuccess)
 
         // Attempting to claim again while cooldown is active
-        val secondClaim = usernameManager.claimUsername("alex_2", "Alex Wong")
+        val secondClaim = usernameManager.claimUsername("scholar_beta", "Scholar Beta")
         assertFalse(secondClaim.isSuccess)
         assertTrue(secondClaim.exceptionOrNull() is IllegalStateException)
         assertTrue(secondClaim.exceptionOrNull()?.message?.contains("Cooldown active for") == true)
@@ -218,9 +218,21 @@ class UsernameManagerTest {
             }
         }
 
-        val result = customManager.claimUsername("sarah_k", "Sarah Kim")
+        val result = customManager.claimUsername("scholar_taken", "Scholar Taken")
         assertFalse(result.isSuccess)
         assertTrue(result.exceptionOrNull() is IllegalStateException)
-        assertEquals("Username @sarah_k is already taken by another student.", result.exceptionOrNull()?.message)
+        assertEquals("Username @scholar_taken is already taken by another student.", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun testClaimUsernameServerCheckFailure() = runTest(testDispatcher) {
+        val failingManager = object : UsernameManager(prefs, ioDispatcher = testDispatcher) {
+            override suspend fun checkSupabaseAvailability(cleanUsername: String): Result<Boolean> {
+                return Result.failure(IllegalStateException("HTTP 401 Permission Denied"))
+            }
+        }
+        val result = failingManager.claimUsername("scholar_test", "Scholar Test")
+        assertFalse(result.isSuccess)
+        assertTrue(result.exceptionOrNull()?.message?.contains("Cannot verify username") == true)
     }
 }

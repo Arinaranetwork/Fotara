@@ -319,7 +319,7 @@ fun FriendQrDialog(
                             peerCodeInput = it
                             inputError = null
                         },
-                        label = { Text("Peer Handle or Code (@alex or FOTARA-...)") },
+                        label = { Text("Peer Handle or Code (@username or FOTARA-...)") },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF3B82F6),
@@ -341,7 +341,7 @@ fun FriendQrDialog(
                             peerNameInput = it
                             inputError = null
                         },
-                        label = { Text("Full Display Name (e.g. Alex Miller)") },
+                        label = { Text("Full Display Name") },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF3B82F6),

@@ -17,6 +17,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 
+data class SupabaseUserProfile(
+    val id: String,
+    val installUuid: String,
+    val username: String,
+    val displayName: String,
+    val updatedAt: Long
+)
+
 open class UsernameManager(
     private val prefs: SharedPreferences,
     private val supabaseUrl: String = SUPABASE_URL,
@@ -126,12 +134,56 @@ open class UsernameManager(
                 }
                 Result.success(true)
             } else {
-                // Network error or unexpected HTTP status: gracefully allow (offline resilience)
-                Result.success(true)
+                val errorBody = try {
+                    connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                } catch (_: Exception) { "" }
+                Result.failure(IllegalStateException("Server check failed (HTTP $code): ${errorBody.ifBlank { "Permission denied or invalid request" }}"))
             }
-        } catch (_: Exception) {
-            // Gracefully handle offline / connection failure
-            Result.success(true)
+        } catch (e: Exception) {
+            Result.failure(e)
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    open suspend fun fetchProfileByUsername(username: String): Result<SupabaseUserProfile?> = withContext(ioDispatcher) {
+        val clean = cleanUsername(username)
+        if (clean.isBlank()) return@withContext Result.success(null)
+        var connection: HttpURLConnection? = null
+        try {
+            val endpoint = "$supabaseUrl/rest/v1/user_profiles?username=eq.$clean&select=id,install_uuid,username,display_name,updated_at"
+            val url = URL(endpoint)
+            connection = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10000
+                readTimeout = 10000
+                setRequestProperty("User-Agent", "Fotara-Android-App")
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("apikey", supabaseKey)
+                setRequestProperty("Authorization", "Bearer $supabaseKey")
+            }
+
+            val code = connection.responseCode
+            if (code in 200..299) {
+                val responseText = connection.inputStream?.bufferedReader()?.use { it.readText() } ?: "[]"
+                val jsonArray = JSONArray(responseText)
+                if (jsonArray.length() > 0) {
+                    val obj = jsonArray.getJSONObject(0)
+                    val profile = SupabaseUserProfile(
+                        id = obj.optString("id", UUID.randomUUID().toString()),
+                        installUuid = obj.optString("install_uuid", ""),
+                        username = obj.optString("username", clean),
+                        displayName = obj.optString("display_name", clean),
+                        updatedAt = obj.optLong("updated_at", System.currentTimeMillis())
+                    )
+                    return@withContext Result.success(profile)
+                }
+                Result.success(null)
+            } else {
+                Result.success(null)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         } finally {
             connection?.disconnect()
         }
@@ -176,10 +228,16 @@ open class UsernameManager(
             }
 
             val code = connection.responseCode
-            Result.success(Unit)
-        } catch (_: Exception) {
-            // Offline resilience: gracefully ignore remote upsert error and rely on local storage
-            Result.success(Unit)
+            if (code in 200..299) {
+                Result.success(Unit)
+            } else {
+                val errorBody = try {
+                    connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                } catch (_: Exception) { "" }
+                Result.failure(IllegalStateException("Server registration failed (HTTP $code): ${errorBody.ifBlank { "Permission denied or invalid request" }}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         } finally {
             connection?.disconnect()
         }
@@ -202,7 +260,11 @@ open class UsernameManager(
 
         // 3) Check Supabase availability
         val availabilityResult = checkSupabaseAvailability(clean)
-        val isAvailable = availabilityResult.getOrDefault(true)
+        if (availabilityResult.isFailure) {
+            val err = availabilityResult.exceptionOrNull()
+            return Result.failure(IllegalStateException("Cannot verify username: ${err?.message ?: "Server connection failed"}"))
+        }
+        val isAvailable = availabilityResult.getOrNull() ?: true
         if (!isAvailable) {
             return Result.failure(IllegalStateException("Username @$clean is already taken by another student."))
         }
@@ -211,12 +273,16 @@ open class UsernameManager(
         val uuid = getInstallUuid()
         val now = System.currentTimeMillis()
         val trimmedDisplayName = displayName.trim().ifEmpty { clean }
-        upsertToSupabase(
+        val upsertResult = upsertToSupabase(
             uuid = uuid,
             cleanUsername = clean,
             displayName = trimmedDisplayName,
             timestamp = now
         )
+        if (upsertResult.isFailure) {
+            val err = upsertResult.exceptionOrNull()
+            return Result.failure(IllegalStateException("Failed to register username: ${err?.message ?: "Server error"}"))
+        }
 
         // 5) Persist locally
         val claimedHandle = "@$clean"

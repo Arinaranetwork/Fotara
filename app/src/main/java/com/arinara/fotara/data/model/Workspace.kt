@@ -47,20 +47,20 @@ data class WorkspaceDisplay(
 fun Workspace.getDisplayName(context: Context): String = when (kind) {
     WorkspaceKind.HOME -> context.getString(R.string.workspace_home)
     WorkspaceKind.ARCHIVE -> context.getString(R.string.workspace_archive)
-    WorkspaceKind.CUSTOM -> name
+    WorkspaceKind.CUSTOM -> if (name.isBlank()) context.getString(R.string.workspace_home) else name
 }
 
 fun Workspace.getDisplayName(homeLabel: String, archiveLabel: String): String = when (kind) {
     WorkspaceKind.HOME -> homeLabel
     WorkspaceKind.ARCHIVE -> archiveLabel
-    WorkspaceKind.CUSTOM -> name
+    WorkspaceKind.CUSTOM -> if (name.isBlank()) homeLabel else name
 }
 
 @Composable
 fun Workspace.getDisplayName(): String = when (kind) {
     WorkspaceKind.HOME -> stringResource(R.string.workspace_home)
     WorkspaceKind.ARCHIVE -> stringResource(R.string.workspace_archive)
-    WorkspaceKind.CUSTOM -> name
+    WorkspaceKind.CUSTOM -> if (name.isBlank()) stringResource(R.string.workspace_home) else name
 }
 
 @Composable

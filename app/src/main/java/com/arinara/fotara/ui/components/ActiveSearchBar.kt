@@ -1146,7 +1146,8 @@ fun ActiveSearchBar(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     val emptyTitle = if (selectedWorkspaceScopeId != null) {
-                        val wsName = workspaces.firstOrNull { it.id == selectedWorkspaceScopeId }?.name ?: ""
+                        val ws = workspaces.firstOrNull { it.id == selectedWorkspaceScopeId }
+                        val wsName = ws?.getDisplayName() ?: stringResource(R.string.workspace_home)
                         stringResource(R.string.search_no_results_in_workspace, wsName)
                     } else if (query.isNotBlank()) {
                         stringResource(R.string.search_empty_matching_query, query)

@@ -66,8 +66,16 @@ class FriendsRepositoryTest {
         return object : UsernameManager(prefs) {
             override suspend fun checkSupabaseAvailability(cleanUsername: String): Result<Boolean> = Result.success(true)
             override suspend fun upsertToSupabase(uuid: String, cleanUsername: String, displayName: String, timestamp: Long): Result<Unit> = Result.success(Unit)
+            override suspend fun fetchProfileByUsername(username: String): Result<com.arinara.fotara.feature.friends.data.SupabaseUserProfile?> {
+                return if (username == "alex_remote") {
+                    Result.success(com.arinara.fotara.feature.friends.data.SupabaseUserProfile("remote-id", "uuid", "alex_remote", "Remote Alex", 1000L))
+                } else {
+                    Result.success(null)
+                }
+            }
         }
     }
+
 
     @Before
     fun setUp() {
@@ -129,10 +137,12 @@ class FriendsRepositoryTest {
     }
 
     @Test
-    fun testAddFriendEmptyDisplayNameFails() = runTest {
-        val emptyName = repository.addFriend("@alex", "")
-        assertFalse(emptyName.isSuccess)
-        assertTrue(emptyName.exceptionOrNull() is IllegalArgumentException)
+    fun testAddFriendEmptyDisplayNameAutoResolves() = runTest {
+        val autoResolved = repository.addFriend("@alex", "")
+        assertTrue(autoResolved.isSuccess)
+        val friend = autoResolved.getOrNull()
+        assertNotNull(friend)
+        assertEquals("Alex", friend!!.displayName)
     }
 
     @Test
@@ -209,20 +219,17 @@ class FriendsRepositoryTest {
     }
 
     @Test
-    fun testFollowersInitialSeeding() = runTest {
+    fun testFollowersInitialEmpty() = runTest {
         val followers = repository.getFollowersFlow().first()
-        assertEquals(3, followers.size)
-        assertTrue(followers.any { it.handle == "@jordan_b" })
-        assertTrue(followers.any { it.handle == "@sarah_k" })
-        assertTrue(followers.any { it.handle == "@alex_w" })
+        assertEquals(0, followers.size)
+        assertTrue(followers.isEmpty())
     }
 
     @Test
-    fun testFollowingInitialSeeding() = runTest {
+    fun testFollowingInitialEmpty() = runTest {
         val following = repository.getFollowingFlow().first()
-        assertEquals(2, following.size)
-        assertTrue(following.any { it.handle == "@jordan_b" })
-        assertTrue(following.any { it.handle == "@taylor_m" })
+        assertEquals(0, following.size)
+        assertTrue(following.isEmpty())
     }
 
     @Test
@@ -235,36 +242,49 @@ class FriendsRepositoryTest {
         repository.followUser(newPeer)
 
         val following = repository.getFollowingFlow().first()
-        assertEquals(3, following.size)
+        assertEquals(1, following.size)
         assertTrue(following.any { it.handle == "@casey_r" })
 
         // Adding duplicate should not duplicate
         repository.followUser(newPeer)
-        assertEquals(3, repository.getFollowingFlow().first().size)
+        assertEquals(1, repository.getFollowingFlow().first().size)
     }
 
     @Test
     fun testUnfollowUserRemovesFromFollowing() = runTest {
-        val initialFollowing = repository.getFollowingFlow().first()
-        assertEquals(2, initialFollowing.size)
-        val toRemove = initialFollowing.first()
+        val newPeer = com.arinara.fotara.feature.friends.model.FriendProfile(
+            id = "peer-99",
+            handle = "@casey_r",
+            displayName = "Casey Rivera"
+        )
+        repository.followUser(newPeer)
+        assertEquals(1, repository.getFollowingFlow().first().size)
 
-        repository.unfollowUser(toRemove.id)
+        repository.unfollowUser("peer-99")
         val afterUnfollow = repository.getFollowingFlow().first()
-        assertEquals(1, afterUnfollow.size)
-        assertFalse(afterUnfollow.any { it.id == toRemove.id })
+        assertEquals(0, afterUnfollow.size)
+        assertFalse(afterUnfollow.any { it.id == "peer-99" })
     }
 
     @Test
     fun testRemoveFollowerRemovesFromFollowers() = runTest {
-        val initialFollowers = repository.getFollowersFlow().first()
-        assertEquals(3, initialFollowers.size)
-        val toRemove = initialFollowers.first()
+        val testFollower = com.arinara.fotara.feature.friends.model.FriendProfile(
+            id = "follower-real-1",
+            handle = "@real_peer",
+            displayName = "Real Peer"
+        )
+        prefs.edit().putString(
+            LocalFriendsRepository.KEY_FOLLOWERS_LIST,
+            testFollower.toJson()
+        ).apply()
 
-        repository.removeFollower(toRemove.id)
-        val afterRemove = repository.getFollowersFlow().first()
-        assertEquals(2, afterRemove.size)
-        assertFalse(afterRemove.any { it.id == toRemove.id })
+        val repoWithFollower = LocalFriendsRepository(prefs, createTestUsernameManager())
+        val initialFollowers = repoWithFollower.getFollowersFlow().first()
+        assertEquals(1, initialFollowers.size)
+
+        repoWithFollower.removeFollower("follower-real-1")
+        val afterRemove = repoWithFollower.getFollowersFlow().first()
+        assertEquals(0, afterRemove.size)
     }
 
     @Test
@@ -283,4 +303,39 @@ class FriendsRepositoryTest {
         assertEquals(7, repository.getUsernameCooldownDays())
         assertFalse(repository.canChangeUsername().first)
     }
+
+    @Test
+    fun testFindUserByHandleLocal() = runTest {
+        repository.addFriend("@charlie", "Charlie Brown")
+        val found = repository.findUserByHandle("@charlie")
+        assertNotNull(found)
+        assertEquals("@charlie", found!!.handle)
+        assertEquals("Charlie Brown", found.displayName)
+    }
+
+    @Test
+    fun testFindUserByHandleRemoteSupabase() = runTest {
+        val found = repository.findUserByHandle("@alex_remote")
+        assertNotNull(found)
+        assertEquals("@alex_remote", found!!.handle)
+        assertEquals("Remote Alex", found.displayName)
+    }
+
+    @Test
+    fun testFindUserByHandleFormatFallback() = runTest {
+        val found = repository.findUserByHandle("@some_peer")
+        assertNotNull(found)
+        assertEquals("@some_peer", found!!.handle)
+        assertEquals("Some_peer", found.displayName)
+    }
+
+    @Test
+    fun testAddFriendAutoResolvesDisplayNameFromRemote() = runTest {
+        val result = repository.addFriend("@alex_remote", "")
+        assertTrue(result.isSuccess)
+        val friend = result.getOrNull()
+        assertNotNull(friend)
+        assertEquals("Remote Alex", friend!!.displayName)
+    }
 }
+

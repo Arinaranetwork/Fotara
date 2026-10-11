@@ -21,10 +21,10 @@ import java.net.URL
 import java.util.UUID
 
 enum class FeedbackCategory(val dbValue: String, val displayName: String) {
-    BUG_REPORT("Bug Report", "Bug Report"),
-    SUGGESTION("Suggestion", "Suggestion"),
-    FEATURE_IDEA("Feature Idea", "Feature Idea"),
-    GENERAL("General", "General");
+    BUG_REPORT("BUG_REPORT", "Bug Report"),
+    SUGGESTION("SUGGESTION", "Suggestion"),
+    FEATURE_IDEA("FEATURE_IDEA", "Feature Idea"),
+    GENERAL("GENERAL", "General");
 
     companion object {
         fun fromString(value: String): FeedbackCategory {

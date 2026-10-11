@@ -30,6 +30,8 @@ data class FriendsUiState(
     val cooldownMessage: String? = null,
     val claimedUsername: String = "@scholar",
     val searchQuery: String = "",
+    val discoveredPeer: FriendProfile? = null,
+    val isSearchingPeer: Boolean = false,
     val myHandle: String = "@scholar",
     val myPresenceStatus: StudyPresenceStatus = StudyPresenceStatus.OFFLINE,
     val mySubject: String? = null,
@@ -66,6 +68,8 @@ class FriendsViewModel(
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
+    private val _discoveredPeer = MutableStateFlow<FriendProfile?>(null)
+    private val _isSearchingPeer = MutableStateFlow(false)
     private val _message = MutableStateFlow<String?>(null)
     private val _claimVersion = MutableStateFlow(0)
 
@@ -79,9 +83,11 @@ class FriendsViewModel(
         },
         repository.getMyPresenceStatusFlow(),
         repository.getMySubjectFlow(),
-        _searchQuery,
+        combine(_searchQuery, _discoveredPeer, _isSearchingPeer) { q, peer, searching ->
+            Triple(q, peer, searching)
+        },
         combine(_message, _claimVersion) { msg, ver -> msg to ver }
-    ) { (friends, followers, following), presence, subject, query, (message, _) ->
+    ) { (friends, followers, following), presence, subject, (query, peer, searching), (message, _) ->
         val (canChange, cooldownMsg) = repository.canChangeUsername()
         val cooldownDays = repository.getUsernameCooldownDays()
         val claimed = repository.getClaimedUsername()
@@ -96,6 +102,8 @@ class FriendsViewModel(
             cooldownMessage = cooldownMsg,
             claimedUsername = claimed,
             searchQuery = query,
+            discoveredPeer = peer,
+            isSearchingPeer = searching,
             myHandle = claimed,
             myPresenceStatus = presence,
             mySubject = subject,
@@ -116,7 +124,31 @@ class FriendsViewModel(
 
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
+        val trimmed = query.trim()
+        val clean = trimmed.removePrefix("@").lowercase()
+        if (clean.length >= 3) {
+            viewModelScope.launch {
+                _isSearchingPeer.value = true
+                val peer = repository.findUserByHandle(clean)
+                _discoveredPeer.value = peer
+                _isSearchingPeer.value = false
+            }
+        } else {
+            _discoveredPeer.value = null
+            _isSearchingPeer.value = false
+        }
     }
+
+    fun searchPeerDirect(handle: String, onResult: (FriendProfile?) -> Unit = {}) {
+        viewModelScope.launch {
+            _isSearchingPeer.value = true
+            val peer = repository.findUserByHandle(handle)
+            _discoveredPeer.value = peer
+            _isSearchingPeer.value = false
+            onResult(peer)
+        }
+    }
+
 
     fun updatePresence(status: StudyPresenceStatus, subject: String?) {
         viewModelScope.launch {

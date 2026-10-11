@@ -123,7 +123,12 @@ class SqliteWorkspaceRepository(
 ) : WorkspaceRepository {
 
     private val scope = coroutineScope
-    private val workspacesFlow = MutableStateFlow<List<Workspace>>(emptyList())
+    private val workspacesFlow = MutableStateFlow<List<Workspace>>(
+        listOf(
+            Workspace(id = 1L, uuid = FotaraDbHelper.HOME_WORKSPACE_UUID, kind = WorkspaceKind.HOME, name = "Home", position = 0),
+            Workspace(id = 2L, uuid = FotaraDbHelper.ARCHIVE_WORKSPACE_UUID, kind = WorkspaceKind.ARCHIVE, name = "Archive", position = 1)
+        )
+    )
     private val _selectedWorkspaceId = MutableStateFlow(FotaraDbHelper.HOME_WORKSPACE_ID)
     override val selectedWorkspaceId: StateFlow<Long> = _selectedWorkspaceId.asStateFlow()
 
@@ -179,7 +184,13 @@ class SqliteWorkspaceRepository(
                         "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at, space_id) VALUES (1, '${FotaraDbHelper.HOME_WORKSPACE_UUID}', 'HOME', '', 0, $now, 1)"
                     )
                     writeDb.execSQL(
+                        "UPDATE workspaces SET space_id = 1 WHERE id = 1 AND (space_id IS NULL OR space_id != 1)"
+                    )
+                    writeDb.execSQL(
                         "INSERT OR IGNORE INTO workspaces (id, uuid, kind, name, position, created_at, space_id) VALUES (2, '${FotaraDbHelper.ARCHIVE_WORKSPACE_UUID}', 'ARCHIVE', '', 1, $now, 1)"
+                    )
+                    writeDb.execSQL(
+                        "UPDATE workspaces SET space_id = 1 WHERE id = 2 AND (space_id IS NULL OR space_id != 1)"
                     )
                 } else {
                     writeDb.execSQL(
@@ -189,14 +200,46 @@ class SqliteWorkspaceRepository(
                         "INSERT OR IGNORE INTO workspaces (uuid, kind, name, position, created_at, space_id) VALUES ('${UUID.randomUUID()}', 'ARCHIVE', '', 1, $now, $currentSpaceId)"
                     )
                 }
-                refreshSync()
-                return
+
+                // Re-query directly without unbounded recursive calls
+                list.clear()
+                val recheckCursor = db.rawQuery(
+                    "SELECT id, uuid, kind, name, position, created_at, icon_key FROM workspaces WHERE space_id = ? ORDER BY position ASC",
+                    arrayOf(currentSpaceId.toString())
+                )
+                recheckCursor.use { c ->
+                    while (c.moveToNext()) {
+                        val iconKey = if (!c.isNull(6)) c.getString(6) else null
+                        list.add(
+                            Workspace(
+                                id = c.getLong(0),
+                                uuid = c.getString(1),
+                                kind = try { WorkspaceKind.valueOf(c.getString(2)) } catch (_: Exception) { WorkspaceKind.CUSTOM },
+                                name = c.getString(3) ?: "",
+                                position = c.getInt(4),
+                                createdAt = c.getLong(5),
+                                iconKey = iconKey
+                            )
+                        )
+                    }
+                }
             }
 
-            workspacesFlow.value = list
-            if (list.none { it.id == _selectedWorkspaceId.value }) {
-                val homeWs = list.firstOrNull { it.kind == WorkspaceKind.HOME }
-                _selectedWorkspaceId.value = homeWs?.id ?: list.firstOrNull()?.id ?: FotaraDbHelper.HOME_WORKSPACE_ID
+            // Filter out corrupted custom workspaces with blank names
+            val sanitizedList = list.filterNot { it.kind == WorkspaceKind.CUSTOM && it.name.isBlank() }
+            val effectiveList = if (sanitizedList.isEmpty()) {
+                listOf(
+                    Workspace(id = 1L, uuid = FotaraDbHelper.HOME_WORKSPACE_UUID, kind = WorkspaceKind.HOME, name = "Home", position = 0),
+                    Workspace(id = 2L, uuid = FotaraDbHelper.ARCHIVE_WORKSPACE_UUID, kind = WorkspaceKind.ARCHIVE, name = "Archive", position = 1)
+                )
+            } else {
+                sanitizedList
+            }
+
+            workspacesFlow.value = effectiveList
+            if (effectiveList.none { it.id == _selectedWorkspaceId.value }) {
+                val homeWs = effectiveList.firstOrNull { it.kind == WorkspaceKind.HOME }
+                _selectedWorkspaceId.value = homeWs?.id ?: effectiveList.firstOrNull()?.id ?: FotaraDbHelper.HOME_WORKSPACE_ID
             }
         } catch (e: Exception) {
             android.util.Log.e("SqliteWorkspaceRepo", "Error refreshing workspaces: ${e.message}", e)
@@ -645,6 +688,15 @@ class SqliteWorkspaceRepository(
 
     override suspend fun repairDanglingWorkspaces(): Int = withContext(Dispatchers.IO) {
         val db = dbHelper.getSafeWritableDatabase()
+        try {
+            // Heal any workspaces with missing/null space_id
+            db.execSQL("UPDATE workspaces SET space_id = 1 WHERE space_id IS NULL OR space_id <= 0")
+            // Ensure space 1 primary workspaces have space_id = 1
+            db.execSQL("UPDATE workspaces SET space_id = 1 WHERE id IN (1, 2)")
+            // Purge corrupted custom workspaces with blank names
+            db.execSQL("DELETE FROM workspaces WHERE kind = 'CUSTOM' AND (name IS NULL OR TRIM(name) = '')")
+        } catch (_: Exception) {}
+
         val cursor = db.rawQuery(
             "SELECT COUNT(*) FROM folders WHERE workspace_id NOT IN (SELECT id FROM workspaces)",
             null

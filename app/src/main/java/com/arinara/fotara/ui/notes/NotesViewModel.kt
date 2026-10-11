@@ -54,7 +54,10 @@ data class NotesUiState(
     val searchQuery: String = "",
     val isSearchActive: Boolean = false,
     val folders: List<Folder> = emptyList(),
-    val workspaces: List<Workspace> = emptyList(),
+    val workspaces: List<Workspace> = listOf(
+        Workspace(id = 1L, kind = WorkspaceKind.HOME, name = "Home", position = 0),
+        Workspace(id = 2L, kind = WorkspaceKind.ARCHIVE, name = "Archive", position = 1)
+    ),
     val selectedWorkspaceId: Long = 1L,
     val selectedWorkspaceName: String = "Home",
     val isLoading: Boolean = false,
@@ -289,7 +292,7 @@ class NotesViewModel(
                     currentWs == null -> "Home"
                     currentWs.kind == WorkspaceKind.HOME -> "Home"
                     currentWs.kind == WorkspaceKind.ARCHIVE -> "Archive"
-                    else -> currentWs.name
+                    else -> currentWs.name.ifBlank { "Home" }
                 }
 
                 _uiState.update { prev ->

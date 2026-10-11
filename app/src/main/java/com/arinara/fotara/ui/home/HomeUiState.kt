@@ -45,7 +45,22 @@ data class HomeUiState(
     val showBulkDeleteDialog: Boolean = false,
     val bulkDeleteStats: FolderBulkDeleteResult? = null,
     val isRefreshing: Boolean = false,
-    val workspaces: List<com.arinara.fotara.data.model.Workspace> = emptyList(),
+    val workspaces: List<com.arinara.fotara.data.model.Workspace> = listOf(
+        com.arinara.fotara.data.model.Workspace(
+            id = 1L,
+            uuid = com.arinara.fotara.data.db.FotaraDbHelper.HOME_WORKSPACE_UUID,
+            kind = com.arinara.fotara.data.model.WorkspaceKind.HOME,
+            name = "Home",
+            position = 0
+        ),
+        com.arinara.fotara.data.model.Workspace(
+            id = 2L,
+            uuid = com.arinara.fotara.data.db.FotaraDbHelper.ARCHIVE_WORKSPACE_UUID,
+            kind = com.arinara.fotara.data.model.WorkspaceKind.ARCHIVE,
+            name = "Archive",
+            position = 1
+        )
+    ),
     val selectedWorkspaceId: Long = 1L,
     val showAddWorkspaceDialog: Boolean = false,
     val workspaceToRename: com.arinara.fotara.data.model.Workspace? = null,

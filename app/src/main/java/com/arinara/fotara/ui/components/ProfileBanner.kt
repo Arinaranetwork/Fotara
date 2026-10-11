@@ -186,8 +186,8 @@ private class AnimatedBannerView(context: Context) : View(context) {
 @Composable
 fun ProfileBanner(
     bannerPath: String?,
-    bannerUpdatedAt: Long,
-    bannerCrop: String?,
+    bannerUpdatedAt: Long = 0L,
+    bannerCrop: String? = null,
     modifier: Modifier = Modifier,
     isOnScreen: Boolean = true
 ) {

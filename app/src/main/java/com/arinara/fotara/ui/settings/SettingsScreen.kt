@@ -262,10 +262,12 @@ fun SettingsScreen(
         FriendsScreen(
             viewModel = friendsViewModel,
             onBackClick = { showFriendsScreen = false },
+            userProfile = uiState.userProfile,
             modifier = Modifier.fillMaxSize()
         )
         return
     }
+
 
     if (showPackageHubScreen) {
         PackageManagementHubScreen(

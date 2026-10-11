@@ -74,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.R
+import com.arinara.fotara.data.db.FotaraDbHelper
 import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.model.WorkspaceKind
 import com.arinara.fotara.data.model.getDisplay
@@ -105,7 +106,21 @@ fun WorkspaceTabBar(
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
 
-    var localWorkspaces by remember(workspaces) { mutableStateOf(workspaces) }
+    val homeName = stringResource(R.string.workspace_home)
+    val archiveName = stringResource(R.string.workspace_archive)
+    val validWorkspaces = remember(workspaces, homeName, archiveName) {
+        val sanitized = workspaces.filterNot { it.kind == WorkspaceKind.CUSTOM && it.name.isBlank() }
+        if (sanitized.isEmpty()) {
+            listOf(
+                Workspace(id = 1L, uuid = FotaraDbHelper.HOME_WORKSPACE_UUID, kind = WorkspaceKind.HOME, name = homeName, position = 0),
+                Workspace(id = 2L, uuid = FotaraDbHelper.ARCHIVE_WORKSPACE_UUID, kind = WorkspaceKind.ARCHIVE, name = archiveName, position = 1)
+            )
+        } else {
+            sanitized
+        }
+    }
+
+    var localWorkspaces by remember(validWorkspaces) { mutableStateOf(validWorkspaces) }
 
     val customCount = localWorkspaces.count { it.kind == WorkspaceKind.CUSTOM }
     val isAtLimit = customCount >= WorkspaceValidator.MAX_CUSTOM_WORKSPACES
@@ -116,8 +131,8 @@ fun WorkspaceTabBar(
     val tabWidths = remember { mutableStateMapOf<Long, Float>() }
 
     // Auto-scroll selected tab into view
-    LaunchedEffect(selectedWorkspaceId, workspaces) {
-        val selectedIndex = workspaces.indexOfFirst { it.id == selectedWorkspaceId }
+    LaunchedEffect(selectedWorkspaceId, localWorkspaces) {
+        val selectedIndex = localWorkspaces.indexOfFirst { it.id == selectedWorkspaceId }
         if (selectedIndex != -1) {
             val approxTabWidthPx = with(density) { 90.dp.toPx() }
             val targetScroll = (selectedIndex * approxTabWidthPx).toInt()
@@ -392,7 +407,7 @@ fun WorkspaceTabBar(
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = wsDisplay.name,
+                                text = wsDisplay.name.ifBlank { homeName },
                                 color = if (isSelected) Color.White else Color(0xFF6B7280),
                                 fontSize = 14.5.sp,
                                 fontWeight = FontWeight.Medium,

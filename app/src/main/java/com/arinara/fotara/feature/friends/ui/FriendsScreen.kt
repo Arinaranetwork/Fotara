@@ -98,6 +98,8 @@ import com.arinara.fotara.theme.HomeSearchBarSurface
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.data.model.UserProfile
+import com.arinara.fotara.ui.components.ProfileBanner
 import com.arinara.fotara.ui.components.SettingsSubScreenHeader
 import com.arinara.fotara.ui.components.SettingsSubScreenHeaderDefaults
 
@@ -120,6 +122,7 @@ fun FriendsScreen(
     viewModel: FriendsViewModel,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
+    userProfile: UserProfile = UserProfile(),
     onInviteToStudy: ((FriendProfile) -> Unit)? = null,
     onShareNotes: ((FriendProfile) -> Unit)? = null
 ) {
@@ -147,12 +150,16 @@ fun FriendsScreen(
         uiState.mySubject,
         uiState.followersCount,
         uiState.followingCount,
-        uiState.totalFriendsCount
+        uiState.totalFriendsCount,
+        userProfile.name,
+        userProfile.avatarPath,
+        userProfile.bannerPath
     ) {
         FriendProfile(
             id = "self_user",
             handle = uiState.claimedUsername,
-            displayName = "My Profile",
+            displayName = userProfile.resolvedName("My Profile"),
+            avatarUrl = userProfile.avatarPath,
             studyStatus = uiState.myPresenceStatus,
             currentSubject = uiState.mySubject,
             followersCount = uiState.followersCount,
@@ -411,10 +418,31 @@ fun FriendsScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             if (uiState.searchQuery.isNotEmpty()) {
-                                FriendsSearchEmptyState(
-                                    query = uiState.searchQuery,
-                                    onClearSearch = { viewModel.onSearchQueryChanged("") }
-                                )
+                                if (uiState.discoveredPeer != null) {
+                                    DiscoveredPeerCard(
+                                        peer = uiState.discoveredPeer!!,
+                                        onViewProfile = {
+                                            profileForDialog = uiState.discoveredPeer
+                                            isOwnProfileDialog = false
+                                        },
+                                        onAddFriend = {
+                                            viewModel.addFriend(uiState.discoveredPeer!!.handle, uiState.discoveredPeer!!.displayName)
+                                        }
+                                    )
+                                } else {
+                                    FriendsSearchEmptyState(
+                                        query = uiState.searchQuery,
+                                        onClearSearch = { viewModel.onSearchQueryChanged("") },
+                                        onSearchDirect = {
+                                            viewModel.searchPeerDirect(uiState.searchQuery) { peer ->
+                                                if (peer != null) {
+                                                    profileForDialog = peer
+                                                    isOwnProfileDialog = false
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
                             } else {
                                 FriendsEmptyState(
                                     onAddFriendClick = { showAddFriendDialog = true },
@@ -428,6 +456,21 @@ fun FriendsScreen(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
+                            if (uiState.discoveredPeer != null && uiState.friends.none { it.handle.equals(uiState.discoveredPeer!!.handle, ignoreCase = true) }) {
+                                item {
+                                    DiscoveredPeerCard(
+                                        peer = uiState.discoveredPeer!!,
+                                        onViewProfile = {
+                                            profileForDialog = uiState.discoveredPeer
+                                            isOwnProfileDialog = false
+                                        },
+                                        onAddFriend = {
+                                            viewModel.addFriend(uiState.discoveredPeer!!.handle, uiState.discoveredPeer!!.displayName)
+                                        }
+                                    )
+                                }
+                            }
+
                             // Active Friends Group
                             if (uiState.activeFriends.isNotEmpty()) {
                                 item {
@@ -666,7 +709,11 @@ fun FriendsScreen(
             canChangeUsername = uiState.canChangeUsername,
             cooldownDaysRemaining = uiState.cooldownDaysRemaining,
             isFollowing = isCurrentlyFollowing,
+            bannerPath = if (isSelf) userProfile.bannerPath else null,
+            bannerUpdatedAt = if (isSelf) userProfile.bannerUpdatedAt else 0L,
+            bannerCrop = if (isSelf) userProfile.bannerCrop else null,
             onDismiss = { profileForDialog = null },
+            onSelectTab = { tab -> selectedTab = tab },
             onChangeUsernameClick = {
                 profileForDialog = null
                 showClaimUsernameDialog = true
@@ -1695,12 +1742,109 @@ private fun FollowingEmptyState(
 }
 
 /**
+ * Discovered peer search result card displayed when user searches an academic @username.
+ */
+@Composable
+private fun DiscoveredPeerCard(
+    peer: FriendProfile,
+    onViewProfile: () -> Unit,
+    onAddFriend: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
+        border = BorderStroke(1.dp, Color(0xFF283548)),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onViewProfile)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1E2638)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val initials = peer.displayName
+                        .split(" ")
+                        .mapNotNull { it.firstOrNull()?.toString() }
+                        .take(2)
+                        .joinToString("")
+                        .uppercase()
+                    Text(
+                        text = if (initials.isNotEmpty()) initials else "PR",
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = peer.displayName,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = Color.White
+                    )
+                    Text(
+                        text = peer.formattedHandle,
+                        fontFamily = ElmsSans,
+                        fontSize = 13.sp,
+                        color = FolderTabCream
+                    )
+                }
+
+                Button(
+                    onClick = onViewProfile,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
+                    border = BorderStroke(1.dp, Color(0xFF334155)),
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Text(
+                        text = "View Profile",
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp,
+                        color = Color.White
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Academic peer discovered on the network. Tap to inspect profile banner, followers, and study focus.",
+                fontFamily = ElmsSans,
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
+        }
+    }
+}
+
+/**
  * Empty state when search query matches no friends.
  */
 @Composable
 private fun FriendsSearchEmptyState(
     query: String,
     onClearSearch: () -> Unit,
+    onSearchDirect: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -1717,7 +1861,7 @@ private fun FriendsSearchEmptyState(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "No friends match \"$query\". Check spelling or invite them by @username.",
+            text = "No friends match \"$query\". Check spelling or search peer by academic @username.",
             fontFamily = ElmsSans,
             fontWeight = FontWeight.Normal,
             fontSize = 14.sp,
@@ -1725,19 +1869,37 @@ private fun FriendsSearchEmptyState(
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(16.dp))
-        TextButton(
-            onClick = onClearSearch,
-            modifier = Modifier.height(48.dp)
-        ) {
-            Text(
-                text = "Clear Search",
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.Medium,
-                color = Color(0xFF60A5FA)
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = onSearchDirect,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
+                border = BorderStroke(1.dp, Color(0xFF28354D)),
+                modifier = Modifier.height(48.dp)
+            ) {
+                Text(
+                    text = "Find Peer",
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = Color.White
+                )
+            }
+            TextButton(
+                onClick = onClearSearch,
+                modifier = Modifier.height(48.dp)
+            ) {
+                Text(
+                    text = "Clear Search",
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF60A5FA)
+                )
+            }
         }
     }
 }
+
 
 /**
  * User Profile Detail modal dialog.
@@ -1758,7 +1920,11 @@ private fun UserProfileDialog(
     onInviteToStudy: () -> Unit,
     onShareNotes: () -> Unit,
     onToggleFollow: () -> Unit,
-    onRemoveFriend: () -> Unit
+    onRemoveFriend: () -> Unit,
+    bannerPath: String? = null,
+    bannerUpdatedAt: Long = 0L,
+    bannerCrop: String? = null,
+    onSelectTab: (FriendsTab) -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -1779,34 +1945,52 @@ private fun UserProfileDialog(
                         .height(108.dp)
                 ) {
                     // Profile Banner Background
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(72.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color(0xFF162032),
-                                        Color(0xFF0F172A),
-                                        Color(0xFF1E3A5F)
+                    if (!bannerPath.isNullOrBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(72.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .border(BorderStroke(1.dp, Color(0xFF283548)), RoundedCornerShape(12.dp))
+                        ) {
+                            ProfileBanner(
+                                bannerPath = bannerPath,
+                                bannerUpdatedAt = bannerUpdatedAt,
+                                bannerCrop = bannerCrop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(72.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFF162032),
+                                            Color(0xFF0F172A),
+                                            Color(0xFF1E3A5F)
+                                        )
                                     )
                                 )
+                                .border(BorderStroke(1.dp, Color(0xFF283548)), RoundedCornerShape(12.dp))
+                        ) {
+                            Text(
+                                text = "ACADEMIC PROFILE",
+                                fontFamily = ElmsSans,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF64748B),
+                                letterSpacing = 1.sp,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
                             )
-                            .border(BorderStroke(1.dp, Color(0xFF283548)), RoundedCornerShape(12.dp))
-                    ) {
-                        Text(
-                            text = "ACADEMIC PROFILE",
-                            fontFamily = ElmsSans,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF64748B),
-                            letterSpacing = 1.sp,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp)
-                        )
+                        }
                     }
+
 
                     // Avatar Tile positioned over the banner
                     Box(
@@ -1930,19 +2114,23 @@ private fun UserProfileDialog(
                     StatCounterCard(
                         count = followersCount,
                         label = "Followers",
+                        onClick = if (isSelf) { { onDismiss(); onSelectTab(FriendsTab.FOLLOWERS) } } else null,
                         modifier = Modifier.weight(1f)
                     )
                     StatCounterCard(
                         count = followingCount,
                         label = "Following",
+                        onClick = if (isSelf) { { onDismiss(); onSelectTab(FriendsTab.FOLLOWING) } } else null,
                         modifier = Modifier.weight(1f)
                     )
                     StatCounterCard(
                         count = friendsCount,
                         label = "Friends",
+                        onClick = if (isSelf) { { onDismiss(); onSelectTab(FriendsTab.FRIENDS) } } else null,
                         modifier = Modifier.weight(1f)
                     )
                 }
+
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -2113,13 +2301,15 @@ private fun UserProfileDialog(
 private fun StatCounterCard(
     count: Int,
     label: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFF161D2C))
             .border(BorderStroke(1.dp, HomeCardBorder), RoundedCornerShape(8.dp))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -2380,7 +2570,8 @@ private fun AddFriendDialog(
                         nameInput = it
                         errorMessage = null
                     },
-                    label = { Text("Display Name (e.g. Alex Miller)") },
+                    label = { Text("Display Name (Optional)") },
+                    placeholder = { Text("Auto-resolved if left empty") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF3B82F6),
@@ -2415,12 +2606,9 @@ private fun AddFriendDialog(
                         errorMessage = "Please enter an academic handle"
                         return@Button
                     }
-                    if (name.isEmpty()) {
-                        errorMessage = "Please enter a display name"
-                        return@Button
-                    }
                     onConfirm(handle, name)
                 },
+
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
                 border = BorderStroke(1.dp, Color(0xFF334155)),
                 shape = RoundedCornerShape(8.dp),

@@ -25,10 +25,10 @@ class FeedbackManagerTest {
 
     @Test
     fun feedbackCategory_dbValuesMatchSupabaseCheckConstraint() {
-        assertEquals("Bug Report", FeedbackCategory.BUG_REPORT.dbValue)
-        assertEquals("Suggestion", FeedbackCategory.SUGGESTION.dbValue)
-        assertEquals("Feature Idea", FeedbackCategory.FEATURE_IDEA.dbValue)
-        assertEquals("General", FeedbackCategory.GENERAL.dbValue)
+        assertEquals("BUG_REPORT", FeedbackCategory.BUG_REPORT.dbValue)
+        assertEquals("SUGGESTION", FeedbackCategory.SUGGESTION.dbValue)
+        assertEquals("FEATURE_IDEA", FeedbackCategory.FEATURE_IDEA.dbValue)
+        assertEquals("GENERAL", FeedbackCategory.GENERAL.dbValue)
 
         // Verify case-insensitive fromString resolution
         assertEquals(FeedbackCategory.BUG_REPORT, FeedbackCategory.fromString("BUG_REPORT"))
