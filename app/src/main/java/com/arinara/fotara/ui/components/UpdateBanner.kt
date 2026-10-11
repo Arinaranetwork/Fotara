@@ -152,29 +152,32 @@ fun UpdateBanner(
             .semantics { contentDescription = "Fotara update banner" }
     ) {
         // Banner background image behind dark gradient scrim
-        if (!bannerImageUrl.isNullOrBlank() && com.arinara.fotara.ui.markdown.ReleaseNotesImageValidator.isAllowedImageUrl(bannerImageUrl)) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(bannerImageUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize()
-            )
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.60f),
-                                Color.Black.copy(alpha = 0.88f)
-                            )
+        val imageModel: Any = if (!bannerImageUrl.isNullOrBlank() && com.arinara.fotara.ui.markdown.ReleaseNotesImageValidator.isAllowedImageUrl(bannerImageUrl)) {
+            bannerImageUrl
+        } else {
+            com.arinara.fotara.R.drawable.fotara_banner_default
+        }
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(imageModel)
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize()
+        )
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.60f),
+                            Color.Black.copy(alpha = 0.88f)
                         )
                     )
-            )
-        }
+                )
+        )
 
         Row(
             modifier = Modifier

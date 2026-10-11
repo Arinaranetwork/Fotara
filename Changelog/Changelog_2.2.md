@@ -1,6 +1,13 @@
 # Fotara 2.2 - Universal Android Version Downgrade Engine & Academic Social Ecosystem
 Released: 2026-10-10   Status: Released (Alpha)
 
+## 2.2.4 Alpha - 2026-10-11
+- **Folder Visibility & Workspace Resilience**: Repaired folder scoping across spaces and workspaces in `HomeViewModel` and `HomeScreen`. If an active workspace contains 0 folders while folders exist elsewhere, a prominent direct recovery button `[ Switch to Home Workspace ]` is displayed so folders never appear missing. Restored the pinned `+` Add Workspace button to `WorkspaceTabBar` and restored "Add Workspace" and "Syllabus Evaluator" to the Home 3-dot overflow menu.
+- **FolderCard Visual Completeness**: Fully restored the top status row in `FolderCard` with the accent folder icon tile, selection checkmark badge, pinned icon (`PushPin`), lock icon (`Lock`), and color label glow dot. Restored the "Locked" status indicator row below the folder title when locked.
+- **Official Brand Image Banner Integration**: Bundled official release banner `Assets/Banners/FotaraBanner_2.2_2026-10-10.jpg` as an embedded drawable asset (`res/drawable/fotara_banner_default.jpg`) in app resources. Seamlessly rendered across Settings/Profile fallback headers and in-app `UpdateBanner` popup, and attached to GitHub release distribution.
+- **Glance Today & Photo Widget Receivers Restored**: Re-registered all missing Glance widget broadcast receivers in `AndroidManifest.xml` (`DueTomorrowGlanceWidgetReceiver`, `PhotoPinGlanceWidgetReceiver`, `PhotoPinConfigActivity`, `PhotoCarouselGlanceWidgetReceiver`). Refactored `DueTomorrowGlanceWidget` to use non-collapsing RemoteViews layout weight and OEM launcher-safe clickable elements, eliminating blank widget voids.
+- **Modular Add-Ons Bottom Clearance**: Replaced fixed 120dp padding with dynamic `LocalBottomOverlayPadding` clearance (minimum 160dp) in `PackageManagementHubScreen`, completely preventing floating bottom navigation bar overlap.
+
 ## 2.2.3 Patch - 2026-10-11
 - **Workspace Tab Resilience**: Repaired workspace tab bar on Home and Notes screens to ensure default Home and Archive tabs always render without layout jumps, filtering out corrupt custom workspaces with blank names and preventing blank 48dp container pills.
 - **Zero Mock Profile Purge (Rule R-005)**: Permanently removed fake seed personas (`@jordan_b`, `@sarah_k`, etc.) and seeder functions from `FriendsRepository`, auto-sanitizing legacy device preferences on launch to guarantee 100% authentic empty states.

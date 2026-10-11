@@ -2,7 +2,7 @@
 Last Updated: 2026-10-11
 
 ## Current Phase
-Phase 60 - WorkspacePillAndFriendsDefectRepairs [Completed]
+Phase 61 - FeatureRestorationAndWidgetRepair [Completed]
 
 ## Phases
 | Phase | Name                              | Status      |
@@ -67,6 +67,7 @@ Phase 60 - WorkspacePillAndFriendsDefectRepairs [Completed]
 | 58    | AttendanceRegisterSpreadsheet    | Removed     |
 | 59    | SocialUsernameEcosystemAndScheduleWidgetConsolidation | Completed   |
 | 60    | WorkspacePillAndFriendsDefectRepairs | Completed   |
+| 61    | FeatureRestorationAndWidgetRepair    | Completed   |
 
 ## Completed
 - [x] Task 0: Verification & Android Skills Compliance Audit - Phase 35
@@ -205,6 +206,11 @@ Phase 60 - WorkspacePillAndFriendsDefectRepairs [Completed]
 - [x] Task 3: Unit test validation and verification for workspace resilience and empty states - Phase 60
 - [x] Task 4: Peer profile discovery by username, Supabase profile query, banner integration, and profile dialog polish - Phase 60
 - [x] Task 5: Unit test validation, regression verification, and release preparation - Phase 60
+- [x] Task 1: Restore folder visibility, space isolation fallback, and complete visual indicators (pin, lock, color label, selection checkmark) on FolderCard - Phase 61
+- [x] Task 2: Official brand image banner bundle into drawables and integration across Profile/Settings headers and UpdateBanner - Phase 61
+- [x] Task 3: Restore missing Glance widget receiver in AndroidManifest.xml and repair DueTomorrowGlanceWidget layout hierarchy to eliminate blank void - Phase 61
+- [x] Task 4: Fix navigation bar bottom clearance in PackageManagementHubScreen and restore Home overflow actions ("Add Workspace", "Syllabus Evaluator") - Phase 61
+- [x] Task 5: Unit test verification, regression testing, and build validation - Phase 61
 
 ## In Progress
 None.

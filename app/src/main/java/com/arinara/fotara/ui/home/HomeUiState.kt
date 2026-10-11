@@ -19,6 +19,7 @@ import com.arinara.fotara.data.repository.FolderBulkDeleteResult
 
 data class HomeUiState(
     val folders: List<Folder> = emptyList(),
+    val totalFolderCount: Int = 0,
     val photosAddedToday: List<Photo> = emptyList(),
     val photosDueTomorrow: List<Photo> = emptyList(),
     val isSearchActive: Boolean = false,

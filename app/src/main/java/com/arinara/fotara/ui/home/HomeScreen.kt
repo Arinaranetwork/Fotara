@@ -96,6 +96,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.arinara.fotara.data.db.FotaraDbHelper
 import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -547,6 +548,34 @@ fun HomeScreen(
                                                         viewModel.enterMultiSelectMode(null)
                                                     }
                                                 )
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.menu_add_workspace), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Add,
+                                                            contentDescription = null,
+                                                            tint = Color(0xFF60A5FA)
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        viewModel.openAddWorkspaceDialog()
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Syllabus Evaluator", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.School,
+                                                            contentDescription = null,
+                                                            tint = TagAmber
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        showSyllabusEvaluator = true
+                                                    }
+                                                )
                                                 HorizontalDivider(color = HomeCardBorder)
                                                 DropdownMenuItem(
                                                     text = { Text("What's New", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
@@ -785,7 +814,7 @@ fun HomeScreen(
                                 ) {
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         Text(
                                             text = stringResource(R.string.workspace_empty_state_title, wsDisplayName),
@@ -795,13 +824,37 @@ fun HomeScreen(
                                             fontFamily = ElmsSans,
                                             textAlign = TextAlign.Center
                                         )
-                                        Text(
-                                            text = stringResource(R.string.workspace_empty_state_hint),
-                                            color = Color(0xFF9CA3AF),
-                                            fontSize = 14.sp,
-                                            fontFamily = ElmsSans,
-                                            textAlign = TextAlign.Center
-                                        )
+                                        if (uiState.totalFolderCount > 0) {
+                                            Text(
+                                                text = "You have ${uiState.totalFolderCount} folder${if (uiState.totalFolderCount > 1) "s" else ""} in other workspaces.",
+                                                color = Color(0xFF9CA3AF),
+                                                fontSize = 14.sp,
+                                                fontFamily = ElmsSans,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Button(
+                                                onClick = { viewModel.selectWorkspace(FotaraDbHelper.HOME_WORKSPACE_ID) },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Switch to Home Workspace",
+                                                    color = Color.White,
+                                                    fontFamily = ElmsSans,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontSize = 14.sp
+                                                )
+                                            }
+                                        } else {
+                                            Text(
+                                                text = stringResource(R.string.workspace_empty_state_hint),
+                                                color = Color(0xFF9CA3AF),
+                                                fontSize = 14.sp,
+                                                fontFamily = ElmsSans,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
                                     }
                                 }
                             } else {

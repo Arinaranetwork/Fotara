@@ -51,6 +51,7 @@ private data class WorkspacesAndFolders(
     val workspaces: List<Workspace>,
     val selectedWorkspaceId: Long,
     val folders: List<Folder>,
+    val totalFolderCount: Int,
     val addedToday: List<Photo>,
     val dueTomorrow: List<Photo>
 )
@@ -135,6 +136,7 @@ class HomeViewModel(
                     workspaces = workspaces,
                     selectedWorkspaceId = effectiveWsId,
                     folders = arranged,
+                    totalFolderCount = folders.size,
                     addedToday = addedToday,
                     dueTomorrow = dueTomorrow
                 )
@@ -149,6 +151,7 @@ class HomeViewModel(
                         selectedWorkspaceId = data.selectedWorkspaceId,
                         searchWorkspaceScopeId = validScope,
                         folders = data.folders,
+                        totalFolderCount = data.totalFolderCount,
                         photosAddedToday = data.addedToday,
                         photosDueTomorrow = data.dueTomorrow,
                         isLoading = false

@@ -77,6 +77,7 @@ import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
 import com.arinara.fotara.ui.components.SettingsSubScreenHeader
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -131,11 +132,14 @@ fun PackageManagementHubScreen(
                 onBackClick = onBackClick
             )
 
+            val bottomOverlayPadding = LocalBottomOverlayPadding.current
+            val bottomClearance = if (bottomOverlayPadding > 0.dp) bottomOverlayPadding + 32.dp else 160.dp
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                contentPadding = PaddingValues(bottom = 120.dp),
+                contentPadding = PaddingValues(bottom = bottomClearance),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Storage Statistics Hero Card

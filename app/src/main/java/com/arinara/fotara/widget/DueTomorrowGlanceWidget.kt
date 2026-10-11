@@ -159,7 +159,8 @@ class DueTomorrowGlanceWidget : GlanceAppWidget() {
             if (data.items.isEmpty()) {
                 Column(
                     modifier = GlanceModifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .defaultWeight()
                         .background(cardBg)
                         .cornerRadius(12.dp)
                         .padding(14.dp)
@@ -184,14 +185,26 @@ class DueTomorrowGlanceWidget : GlanceAppWidget() {
                         )
                     )
                     Spacer(modifier = GlanceModifier.height(10.dp))
-                    Button(
-                        text = "Open Fotara",
-                        onClick = actionStartActivity(android.content.ComponentName(context, MainActivity::class.java)),
-                        modifier = GlanceModifier.padding(horizontal = 8.dp)
-                    )
+                    Box(
+                        modifier = GlanceModifier
+                            .background(accentGold)
+                            .cornerRadius(8.dp)
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .clickable(actionStartActivity(android.content.ComponentName(context, MainActivity::class.java))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Open Fotara",
+                            style = TextStyle(
+                                color = ColorProvider(day = androidx.compose.ui.graphics.Color.Black, night = androidx.compose.ui.graphics.Color.Black),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
                 }
             } else {
-                LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
+                LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
                     items(data.items) { item ->
                         Row(
                             modifier = GlanceModifier

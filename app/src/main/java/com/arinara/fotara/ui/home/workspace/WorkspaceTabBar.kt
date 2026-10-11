@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -471,8 +472,26 @@ fun WorkspaceTabBar(
                     }
                 }
             }
-        }
+
+            // Pinned '+' Add Workspace Button
+            IconButton(
+                onClick = {
+                    if (isAtLimit) onLimitReached() else onAddClick()
+                },
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(HomeCardSurface)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.cd_add_workspace),
+                    tint = if (isAtLimit) Color(0xFF64748B) else Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
+}
 }
 

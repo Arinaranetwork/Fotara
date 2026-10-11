@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -183,7 +184,7 @@ fun FolderCard(
                 .fillMaxSize()
                 .padding(18.dp)
         ) {
-            // Top Row: Accent icon tile (left) and 3-dots menu button (right)
+            // Top Row: Accent icon tile (left), Status Badges (middle), and 3-dots menu clearance (right)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -197,11 +198,62 @@ fun FolderCard(
                         .background(accent.tileFill),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Folder,
-                        contentDescription = null,
-                        tint = accent.iconTint,
-                        modifier = Modifier.size(22.dp)
+                    if (isSelectionMode) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(if (isSelected) Color(0xFF2563EB) else Color.Transparent)
+                                .border(1.5.dp, if (isSelected) Color(0xFF2563EB) else Color.White.copy(alpha = 0.6f), androidx.compose.foundation.shape.CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Folder,
+                            contentDescription = null,
+                            tint = accent.iconTint,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
+                // Middle Badges (Pinned, Locked, and Tag Color Dot)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(top = 4.dp, end = 44.dp)
+                ) {
+                    if (folder.isPinned) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = "Pinned folder",
+                            tint = accent.glowColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    if (folder.isLocked) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Locked folder",
+                            tint = FolderTabCream.copy(alpha = 0.85f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    // Folder accent tag dot
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(accent.glowColor)
                     )
                 }
 
@@ -277,14 +329,33 @@ fun FolderCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                val noteText = if (folder.photoCount == 1) "1 note" else "${folder.photoCount} notes"
-                Text(
-                    text = noteText,
-                    color = Color(0xFF6B7280),
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.Light,
-                    fontFamily = ElmsSans
-                )
+                if (folder.isLocked) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = FolderTabCream.copy(alpha = 0.85f),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Locked",
+                            color = FolderTabCream.copy(alpha = 0.85f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = ElmsSans
+                        )
+                    }
+                } else {
+                    val noteText = if (folder.photoCount == 1) "1 note" else "${folder.photoCount} notes"
+                    Text(
+                        text = noteText,
+                        color = Color(0xFF6B7280),
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Light,
+                        fontFamily = ElmsSans
+                    )
+                }
             }
         }
 
