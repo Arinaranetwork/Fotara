@@ -188,8 +188,8 @@ fun ScoresTrackerScreen(
                     Text(
                         text = "Scores",
                         fontFamily = ElmsSans,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = TextWhite
                     )
                     Spacer(modifier = Modifier.width(8.dp))

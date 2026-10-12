@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arinara.fotara.ui.components.SettingsSubScreenHeader
 import com.arinara.fotara.data.model.Space
 import com.arinara.fotara.data.model.Workspace
 import com.arinara.fotara.data.repository.SpaceRepository
@@ -221,36 +222,12 @@ fun BackupRestoreScreen(
             .navigationBarsPadding()
     ) {
         // Top Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = TextPrimary
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
-                Text(
-                    text = "Backup & Restore (.fotara)",
-                    color = TextPrimary,
-                    fontFamily = ElmsSans,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Offline Archive & Complete Data Portability",
-                    color = TextSecondary,
-                    fontFamily = ElmsSans,
-                    fontSize = 12.sp
-                )
-            }
-        }
+        SettingsSubScreenHeader(
+            title = "Backup & Restore (.fotara)",
+            subtitle = "Offline Archive & Complete Data Portability",
+            onBackClick = onBack,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
 
         Column(
             modifier = Modifier

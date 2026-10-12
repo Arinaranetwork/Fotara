@@ -787,6 +787,7 @@ fun RichMarkdownColumn(
             }
 
             // Display Math Block ($$ ... $$ or \[ ... \])
+            // Display Math Block ($$ ... $$ or \[ ... \])
             if (trimmed.startsWith("$$") || trimmed.startsWith("\\[")) {
                 val isBracket = trimmed.startsWith("\\[")
                 val endDelimiter = if (isBracket) "\\]" else "$$"
@@ -799,54 +800,31 @@ fun RichMarkdownColumn(
                     mathBuffer.append(trimmed.removePrefix(startDelimiter).trim())
                     lineIndex++
                     while (lineIndex < lines.size) {
-                        val mathLine = lines[lineIndex].trim()
-                        if (mathLine.endsWith(endDelimiter)) {
-                            mathBuffer.append("\n").append(mathLine.removeSuffix(endDelimiter).trim())
+                        val currentRawLine = lines[lineIndex]
+                        val mathLine = currentRawLine.trim()
+                        val endIdx = mathLine.indexOf(endDelimiter)
+                        if (endIdx != -1) {
+                            val beforeEnd = mathLine.substring(0, endIdx).trim()
+                            if (beforeEnd.isNotEmpty()) {
+                                mathBuffer.append("\n").append(beforeEnd)
+                            }
                             lineIndex++
                             break
                         } else {
-                            mathBuffer.append("\n").append(lines[lineIndex])
+                            mathBuffer.append("\n").append(currentRawLine)
                             lineIndex++
                         }
                     }
                 }
 
                 val mathCode = mathBuffer.toString().trim()
-                val isMathInstalled = LatexAddonManager.isInstalled(LocalContext.current)
-                if (isMathInstalled) {
+                if (mathCode.isNotEmpty()) {
                     ComposeMathView(
                         latex = mathCode,
                         isDisplayMode = true,
                         textColor = FolderTabCream,
                         modifier = Modifier.padding(vertical = 6.dp)
                     )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(cardBg)
-                            .border(BorderStroke(1.dp, cardBorder), RoundedCornerShape(8.dp))
-                            .padding(12.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = "$$ $mathCode $$",
-                                color = TextMuted,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "LaTeX Math Add-On required to render formula",
-                                color = accentColor,
-                                fontSize = 11.sp,
-                                fontFamily = ElmsSans,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
                 }
                 continue
             }

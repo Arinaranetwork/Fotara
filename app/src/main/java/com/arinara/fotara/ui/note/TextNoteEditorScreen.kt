@@ -123,6 +123,7 @@ import com.arinara.fotara.ui.note.editor.rememberEditorState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.TagAmber
 import androidx.compose.runtime.collectAsState
 import com.arinara.fotara.feature.packages.loader.FotaraPackageManager
@@ -209,6 +210,7 @@ fun TextNoteEditorScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
+            showAudioDock = true
             coroutineScope.launch {
                 if (state.noteId == null) {
                     state.flushAutosaveNow()
@@ -300,8 +302,9 @@ fun TextNoteEditorScreen(
                     Text(
                         text = if (state.noteId == null) stringResource(R.string.editor_title_new) else stringResource(R.string.editor_title_edit),
                         color = TabCream,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -310,7 +313,8 @@ fun TextNoteEditorScreen(
                         Text(
                             text = stringResource(R.string.editor_saving),
                             color = AccentGold,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            fontFamily = ElmsSans
                         )
                     }
                 }
@@ -344,7 +348,26 @@ fun TextNoteEditorScreen(
                 }
 
                 IconButton(
-                    onClick = { showAudioDock = !showAudioDock }
+                    onClick = {
+                        showAudioDock = true
+                        val isCurrentlyRecording = audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording
+                        if (!isCurrentlyRecording) {
+                            val hasMic = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.RECORD_AUDIO
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (hasMic) {
+                                coroutineScope.launch {
+                                    if (state.noteId == null) {
+                                        state.flushAutosaveNow()
+                                    }
+                                    audioViewModel.startRecording()
+                                }
+                            } else {
+                                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        }
+                    }
                 ) {
                     Icon(
                         imageVector = androidx.compose.material.icons.Icons.Outlined.Mic,
@@ -585,7 +608,7 @@ fun TextNoteEditorScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(editorScrollState)
             ) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
@@ -1033,7 +1056,9 @@ fun TextNoteEditorScreen(
                                 }
                             },
                             onStopRecording = { audioViewModel.stopAndSaveRecording() },
-                            onCancelRecording = { audioViewModel.cancelRecording() }
+                            onCancelRecording = { audioViewModel.cancelRecording() },
+                            onPauseRecording = { audioViewModel.pauseRecording() },
+                            onResumeRecording = { audioViewModel.resumeRecording() }
                         )
 
                         audioUiState.annotations.forEach { annotation ->

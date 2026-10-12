@@ -548,8 +548,8 @@ fun FolderDetailScreen(
                             text = "${uiState.selectedSubfolderIds.size} Selected",
                             color = Color.White,
                             fontFamily = ElmsSans,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     },
                     navigationIcon = {
@@ -604,8 +604,8 @@ fun FolderDetailScreen(
                             text = "${uiState.totalSelectionCount} Selected",
                             color = Color.White,
                             fontFamily = ElmsSans,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     },
                     navigationIcon = {
@@ -655,7 +655,7 @@ fun FolderDetailScreen(
                                 color = Color.White,
                                 fontFamily = ElmsSans,
                                 fontSize = 22.sp,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)

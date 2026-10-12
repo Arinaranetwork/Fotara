@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arinara.fotara.theme.ElmsSans
 import java.io.File
 import java.io.FileOutputStream
 import android.graphics.BitmapFactory
@@ -97,8 +98,9 @@ fun SupportScreen(
                 Text(
                     text = "Support Fotara",
                     color = TabCream,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 22.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.SemiBold
                 )
             },
             navigationIcon = {

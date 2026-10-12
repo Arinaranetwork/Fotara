@@ -103,6 +103,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.data.model.DocumentNote
 import com.arinara.fotara.data.model.DocumentPage
 import com.arinara.fotara.ui.components.NoteDetailScheduleChip
@@ -411,8 +412,9 @@ fun PdfViewerScreen(
                     Text(
                         text = documentNote.name,
                         color = TabCream,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

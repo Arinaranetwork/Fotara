@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.AlertDialog
+import com.arinara.fotara.ui.components.SettingsSubScreenHeader
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -125,36 +126,12 @@ fun SpaceSettingsScreen(
             .navigationBarsPadding()
     ) {
         // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = TextPrimary
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Space Settings",
-                    fontFamily = ElmsSans,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-                Text(
-                    text = currentSpace?.name ?: "Academic Space",
-                    fontFamily = ElmsSans,
-                    fontSize = 13.sp,
-                    color = TextSecondary
-                )
-            }
-        }
+        SettingsSubScreenHeader(
+            title = "Space Settings",
+            subtitle = currentSpace?.name ?: "Academic Space",
+            onBackClick = onBack,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
 
         Column(
             modifier = Modifier

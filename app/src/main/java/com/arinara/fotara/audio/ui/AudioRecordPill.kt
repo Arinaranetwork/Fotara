@@ -54,12 +54,20 @@ import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import com.arinara.fotara.theme.AccentGold
+import kotlin.math.sin
+
 @Composable
 fun AudioRecordPill(
     recorderState: AudioRecorderState,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
     onCancelRecording: () -> Unit,
+    onPauseRecording: (() -> Unit)? = null,
+    onResumeRecording: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -108,17 +116,26 @@ fun AudioRecordPill(
                 )
 
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Pulsing Red Recording Indicator
+                    // Pulsing Red Recording Indicator or amber when paused
                     Box(
                         modifier = Modifier
-                            .size(12.dp)
-                            .alpha(pulseAlpha)
+                            .size(10.dp)
+                            .alpha(if (recorderState.isPaused) 0.6f else pulseAlpha)
                             .clip(CircleShape)
-                            .background(TagCrimson)
+                            .background(if (recorderState.isPaused) AccentGold else TagCrimson)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Live Waveform Visualizer
+                    RecordingWaveformBars(
+                        amplitude = recorderState.amplitude,
+                        isPaused = recorderState.isPaused,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+
                     Spacer(modifier = Modifier.width(8.dp))
 
                     // Timer Counter
@@ -132,25 +149,52 @@ fun AudioRecordPill(
                         color = TextPrimary
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Pause / Resume Toggle
+                    if (recorderState.isPaused) {
+                        IconButton(
+                            onClick = { onResumeRecording?.invoke() },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Filled.PlayArrow,
+                                contentDescription = "Resume Recording",
+                                tint = AccentGold,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = { onPauseRecording?.invoke() },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Filled.Pause,
+                                contentDescription = "Pause Recording",
+                                tint = FolderTabCream,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
 
                     // Discard Button
                     IconButton(
                         onClick = onCancelRecording,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Close,
                             contentDescription = "Cancel Recording",
                             tint = TextMuted,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
                     // Save / Stop Button
                     IconButton(
                         onClick = onStopRecording,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Done,
@@ -161,6 +205,51 @@ fun AudioRecordPill(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun RecordingWaveformBars(
+    amplitude: Int,
+    isPaused: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "waveform")
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 6.28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+
+    // Normalize amplitude between 0f and 1f (max amplitude typically up to 32767)
+    val normAmp = (amplitude.toFloat() / 24000f).coerceIn(0f, 1f)
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val barCount = 5
+        for (i in 0 until barCount) {
+            val factor = if (isPaused) {
+                0.2f
+            } else {
+                val wave = sin(phase + i * 1.1).toFloat() * 0.5f + 0.5f
+                0.2f + 0.8f * (normAmp * 0.7f + wave * 0.3f)
+            }
+            val barHeight = (4.dp + 16.dp * factor)
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(barHeight)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(if (isPaused) TextMuted else FolderTabCream)
+            )
         }
     }
 }

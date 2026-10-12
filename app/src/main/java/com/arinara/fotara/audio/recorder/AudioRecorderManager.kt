@@ -26,7 +26,12 @@ import java.util.Locale
 
 sealed interface AudioRecorderState {
     object Idle : AudioRecorderState
-    data class Recording(val elapsedMs: Long, val filePath: String) : AudioRecorderState
+    data class Recording(
+        val elapsedMs: Long,
+        val filePath: String,
+        val amplitude: Int = 0,
+        val isPaused: Boolean = false
+    ) : AudioRecorderState
     data class Finalized(val totalDurationMs: Long, val filePath: String) : AudioRecorderState
     data class Error(val message: String) : AudioRecorderState
 }
@@ -39,6 +44,9 @@ class AudioRecorderManager(
     private var mediaRecorder: MediaRecorder? = null
     private var currentOutputFile: File? = null
     private var recordingStartTime: Long = 0L
+    private var lastResumeTimeMs: Long = 0L
+    private var accumulatedDurationMs: Long = 0L
+    private var isPaused = false
     private var timerJob: Job? = null
     private var isCurrentlyRecording = false
 
@@ -105,7 +113,10 @@ class AudioRecorderManager(
 
             mediaRecorder = recorder
             isCurrentlyRecording = true
-            recordingStartTime = System.currentTimeMillis()
+            isPaused = false
+            accumulatedDurationMs = 0L
+            lastResumeTimeMs = System.currentTimeMillis()
+            recordingStartTime = lastResumeTimeMs
 
             startDurationTimer(outputFile.absolutePath)
             Log.i(TAG, "Audio recording started at: ${outputFile.absolutePath}")
@@ -116,6 +127,54 @@ class AudioRecorderManager(
             _recorderState.value = AudioRecorderState.Error("Failed to start recording: ${e.message}")
             cleanupRecorderResources()
             return false
+        }
+    }
+
+    /**
+     * Pauses the active recording session.
+     */
+    fun pauseRecording() {
+        if (!isCurrentlyRecording || isPaused || mediaRecorder == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                mediaRecorder?.pause()
+                accumulatedDurationMs += (System.currentTimeMillis() - lastResumeTimeMs)
+                isPaused = true
+                val currentFile = currentOutputFile?.absolutePath ?: ""
+                _recorderState.value = AudioRecorderState.Recording(
+                    elapsedMs = accumulatedDurationMs,
+                    filePath = currentFile,
+                    amplitude = 0,
+                    isPaused = true
+                )
+                Log.i(TAG, "Audio recording paused at ${accumulatedDurationMs}ms")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error pausing recording", e)
+            }
+        }
+    }
+
+    /**
+     * Resumes the paused recording session.
+     */
+    fun resumeRecording() {
+        if (!isCurrentlyRecording || !isPaused || mediaRecorder == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                mediaRecorder?.resume()
+                lastResumeTimeMs = System.currentTimeMillis()
+                isPaused = false
+                val currentFile = currentOutputFile?.absolutePath ?: ""
+                _recorderState.value = AudioRecorderState.Recording(
+                    elapsedMs = accumulatedDurationMs,
+                    filePath = currentFile,
+                    amplitude = 0,
+                    isPaused = false
+                )
+                Log.i(TAG, "Audio recording resumed")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error resuming recording", e)
+            }
         }
     }
 
@@ -131,7 +190,8 @@ class AudioRecorderManager(
         timerJob?.cancel()
         timerJob = null
 
-        val finalDurationMs = (System.currentTimeMillis() - recordingStartTime).coerceAtMost(MAX_RECORDING_DURATION_MS)
+        val currentResumeDuration = if (isPaused) 0L else (System.currentTimeMillis() - lastResumeTimeMs)
+        val finalDurationMs = (accumulatedDurationMs + currentResumeDuration).coerceAtMost(MAX_RECORDING_DURATION_MS)
         val file = currentOutputFile
 
         return try {
@@ -141,6 +201,7 @@ class AudioRecorderManager(
             }
             mediaRecorder = null
             isCurrentlyRecording = false
+            isPaused = false
 
             if (file != null && file.exists() && file.length() > 0) {
                 val finalizedState = AudioRecorderState.Finalized(
@@ -174,7 +235,8 @@ class AudioRecorderManager(
         timerJob?.cancel()
         timerJob = null
 
-        val finalDurationMs = (System.currentTimeMillis() - recordingStartTime).coerceAtMost(MAX_RECORDING_DURATION_MS)
+        val currentResumeDuration = if (isPaused) 0L else (System.currentTimeMillis() - lastResumeTimeMs)
+        val finalDurationMs = (accumulatedDurationMs + currentResumeDuration).coerceAtMost(MAX_RECORDING_DURATION_MS)
         val file = currentOutputFile
 
         try {
@@ -227,15 +289,25 @@ class AudioRecorderManager(
         timerJob?.cancel()
         timerJob = scope.launch {
             while (isActive && isCurrentlyRecording) {
-                val elapsed = System.currentTimeMillis() - recordingStartTime
-                if (elapsed >= MAX_RECORDING_DURATION_MS) {
-                    stopRecording()
-                    break
+                if (!isPaused) {
+                    val currentResumeDuration = System.currentTimeMillis() - lastResumeTimeMs
+                    val elapsed = accumulatedDurationMs + currentResumeDuration
+                    if (elapsed >= MAX_RECORDING_DURATION_MS) {
+                        stopRecording()
+                        break
+                    }
+                    val amp = try {
+                        mediaRecorder?.maxAmplitude ?: 0
+                    } catch (e: Exception) {
+                        0
+                    }
+                    _recorderState.value = AudioRecorderState.Recording(
+                        elapsedMs = elapsed,
+                        filePath = filePath,
+                        amplitude = amp,
+                        isPaused = false
+                    )
                 }
-                _recorderState.value = AudioRecorderState.Recording(
-                    elapsedMs = elapsed,
-                    filePath = filePath
-                )
                 delay(TICK_INTERVAL_MS)
             }
         }
@@ -249,6 +321,8 @@ class AudioRecorderManager(
         }
         mediaRecorder = null
         isCurrentlyRecording = false
+        isPaused = false
+        accumulatedDurationMs = 0L
     }
 
     companion object {

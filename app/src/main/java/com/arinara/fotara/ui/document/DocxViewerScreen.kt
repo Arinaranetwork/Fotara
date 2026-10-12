@@ -52,6 +52,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.ui.components.NoteDetailScheduleChip
 import com.arinara.fotara.ui.components.ScheduleNoteDialog
 import com.arinara.fotara.util.NoteScheduleManager
@@ -145,15 +146,19 @@ fun DocxViewerScreen(
                     Text(
                         text = documentNote.name,
                         color = TabCream,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Reflowed Word Document",
                         color = TabCream.copy(alpha = 0.7f),
-                        fontSize = 12.sp
+                        fontSize = 14.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Normal
                     )
                     if (currentScheduledAt != null) {
                         Spacer(modifier = Modifier.height(2.dp))

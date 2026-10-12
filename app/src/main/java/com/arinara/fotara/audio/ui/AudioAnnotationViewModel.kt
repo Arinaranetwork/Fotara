@@ -106,6 +106,14 @@ class AudioAnnotationViewModel(
         }
     }
 
+    fun pauseRecording() {
+        recorderManager.pauseRecording()
+    }
+
+    fun resumeRecording() {
+        recorderManager.resumeRecording()
+    }
+
     fun cancelRecording() {
         recorderManager.cancelRecording()
     }

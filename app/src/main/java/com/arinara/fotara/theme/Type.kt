@@ -79,9 +79,9 @@ val Typography = Typography(
     ),
     titleLarge = TextStyle(
         fontFamily = ElmsSans,
-        fontWeight = FontWeight.Bold,
-        fontSize = 20.sp,
-        lineHeight = 26.sp,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
         letterSpacing = (-0.2).sp
     ),
     titleMedium = TextStyle(
@@ -133,3 +133,18 @@ val Typography = Typography(
         lineHeight = 14.sp
     )
 )
+
+val ScreenHeadingTextStyle = TextStyle(
+    fontFamily = ElmsSans,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 22.sp,
+    lineHeight = 28.sp
+)
+
+val ScreenSubheadingTextStyle = TextStyle(
+    fontFamily = ElmsSans,
+    fontWeight = FontWeight.Normal,
+    fontSize = 14.sp,
+    lineHeight = 18.sp
+)
+

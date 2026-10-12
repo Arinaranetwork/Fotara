@@ -296,6 +296,238 @@ fun VfxControlBottomSheet(
 }
 
 @Composable
+fun VfxSidebarPanel(
+    parameters: VfxParameters,
+    onParametersChanged: (VfxParameters) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = SheetBackground.copy(alpha = 0.95f),
+        shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp),
+        border = BorderStroke(1.dp, SectionBorder),
+        shadowElevation = 16.dp,
+        modifier = modifier
+            .width(280.dp)
+            .padding(vertical = 54.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AutoFixHigh,
+                        contentDescription = null,
+                        tint = AccentPurple,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Visual Effects",
+                        fontFamily = ElmsSans,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextWhite
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { onParametersChanged(VfxParameters()) },
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reset",
+                            tint = AccentGold,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(26.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted, modifier = Modifier.size(15.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Section 1: Chroma Key
+            Text(
+                text = "CHROMA KEY (KNOCKOUT)",
+                color = AccentPurple,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = ElmsSans,
+                letterSpacing = 0.8.sp
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Enable Chroma Key",
+                    color = TextWhite,
+                    fontSize = 12.5.sp,
+                    fontFamily = ElmsSans
+                )
+                Switch(
+                    checked = parameters.chromaKeyEnabled,
+                    onCheckedChange = { onParametersChanged(parameters.copy(chromaKeyEnabled = it)) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = AccentPurple
+                    )
+                )
+            }
+
+            if (parameters.chromaKeyEnabled) {
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Key Color Chips
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Key Color:", color = TextMuted, fontSize = 11.sp, fontFamily = ElmsSans)
+                    KEY_COLORS.forEach { (colorLong, label) ->
+                        val isSelected = parameters.keyColor == colorLong
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(Color(colorLong))
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) AccentGold else SectionBorder,
+                                    shape = CircleShape
+                                )
+                                .clickable { onParametersChanged(parameters.copy(keyColor = colorLong)) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                VfxSlider(
+                    label = "Tolerance",
+                    value = parameters.tolerance,
+                    valueRange = 0.05f..0.85f,
+                    displayFormat = "${(parameters.tolerance * 100).toInt()}%",
+                    onValueChange = { onParametersChanged(parameters.copy(tolerance = it)) }
+                )
+
+                VfxSlider(
+                    label = "Edge Softening",
+                    value = parameters.edgeSoftening,
+                    valueRange = 0.01f..0.50f,
+                    displayFormat = "${(parameters.edgeSoftening * 100).toInt()}%",
+                    onValueChange = { onParametersChanged(parameters.copy(edgeSoftening = it)) }
+                )
+            }
+
+            HorizontalDivider(color = SectionBorder, modifier = Modifier.padding(vertical = 8.dp))
+
+            // Section 2: Color & Channel Grading
+            Text(
+                text = "COLOR & CHANNEL GRADING",
+                color = AccentPurple,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = ElmsSans,
+                letterSpacing = 0.8.sp
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            VfxSlider(
+                label = "Brightness",
+                value = parameters.brightness,
+                valueRange = -0.5f..0.5f,
+                displayFormat = "${(parameters.brightness * 100).toInt()}%",
+                onValueChange = { onParametersChanged(parameters.copy(brightness = it)) }
+            )
+
+            VfxSlider(
+                label = "Contrast",
+                value = parameters.contrast,
+                valueRange = 0.5f..1.8f,
+                displayFormat = "${(parameters.contrast * 100).toInt()}%",
+                onValueChange = { onParametersChanged(parameters.copy(contrast = it)) }
+            )
+
+            VfxSlider(
+                label = "Saturation",
+                value = parameters.saturation,
+                valueRange = 0.0f..2.0f,
+                displayFormat = "${(parameters.saturation * 100).toInt()}%",
+                onValueChange = { onParametersChanged(parameters.copy(saturation = it)) }
+            )
+
+            VfxSlider(
+                label = "Temperature",
+                value = parameters.temperature,
+                valueRange = -0.5f..0.5f,
+                displayFormat = "${(parameters.temperature * 100).toInt()}%",
+                onValueChange = { onParametersChanged(parameters.copy(temperature = it)) }
+            )
+
+            HorizontalDivider(color = SectionBorder, modifier = Modifier.padding(vertical = 8.dp))
+
+            // Section 3: Independent RGB Balance
+            Text(
+                text = "RGB CHANNEL BALANCE",
+                color = AccentPurple,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = ElmsSans,
+                letterSpacing = 0.8.sp
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            VfxSlider(
+                label = "Red Balance",
+                value = parameters.redBalance,
+                valueRange = 0.5f..1.5f,
+                displayFormat = "${(parameters.redBalance * 100).toInt()}%",
+                onValueChange = { onParametersChanged(parameters.copy(redBalance = it)) }
+            )
+
+            VfxSlider(
+                label = "Green Balance",
+                value = parameters.greenBalance,
+                valueRange = 0.5f..1.5f,
+                displayFormat = "${(parameters.greenBalance * 100).toInt()}%",
+                onValueChange = { onParametersChanged(parameters.copy(greenBalance = it)) }
+            )
+
+            VfxSlider(
+                label = "Blue Balance",
+                value = parameters.blueBalance,
+                valueRange = 0.5f..1.5f,
+                displayFormat = "${(parameters.blueBalance * 100).toInt()}%",
+                onValueChange = { onParametersChanged(parameters.copy(blueBalance = it)) }
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+    }
+}
+
+@Composable
 private fun VfxSlider(
     label: String,
     value: Float,

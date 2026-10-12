@@ -78,6 +78,7 @@ import com.arinara.fotara.theme.HomeCardSurface
 import com.arinara.fotara.theme.HomeMainButtonBlue
 import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.HomeSubtitleGray
+import com.arinara.fotara.ui.components.SettingsSubScreenHeader
 import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
@@ -229,46 +230,12 @@ fun AntiProcrastinationAlarmScreen(
 
 @Composable
 private fun AntiProcrastinationTopBar(onBackClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(
-            onClick = onBackClick,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(HomeCardSurface)
-                .border(1.dp, HomeCardBorder, CircleShape)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = TextPrimary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(14.dp))
-
-        Column {
-            Text(
-                text = "Anti-Procrastination Alarms",
-                color = TextPrimary,
-                fontSize = 18.sp,
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "Photo proof challenge required to turn off",
-                color = TextSecondary,
-                fontSize = 12.sp,
-                fontFamily = ElmsSans
-            )
-        }
-    }
+    SettingsSubScreenHeader(
+        title = "Anti-Procrastination Alarms",
+        subtitle = "Photo proof challenge required to turn off",
+        onBackClick = onBackClick,
+        modifier = Modifier.padding(horizontal = 16.dp)
+    )
 }
 
 @Composable

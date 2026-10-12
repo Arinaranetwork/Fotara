@@ -177,9 +177,9 @@ fun NoteClockScreen(
                 Text(
                     text = if (flipAngle >= 90f) "Focus Timer" else "World Clock & Timezone",
                     color = FolderTabCream,
-                    fontSize = 18.sp,
+                    fontSize = 22.sp,
                     fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
             },
             navigationIcon = {

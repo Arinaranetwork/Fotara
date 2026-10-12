@@ -102,6 +102,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.R
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.canvas.engine.DrawingConstants
 import com.arinara.fotara.canvas.engine.DrawingTool
 import com.arinara.fotara.canvas.engine.RecognizedShape
@@ -740,7 +741,7 @@ fun PdfPageEditorScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = {
@@ -757,8 +758,9 @@ fun PdfPageEditorScreen(
                 Text(
                     text = stringResource(R.string.pdf_editor_title, pageIndex + 1, totalPages),
                     color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier

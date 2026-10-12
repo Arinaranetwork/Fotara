@@ -741,8 +741,8 @@ fun SettingsScreen(
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(
-                    start = 18.dp,
-                    end = 18.dp,
+                    start = 16.dp,
+                    end = 16.dp,
                     top = innerPadding.calculateTopPadding() + contentPadding.calculateTopPadding() + 8.dp,
                     bottom = innerPadding.calculateBottomPadding() + contentPadding.calculateBottomPadding() + effectiveBottomPadding + 16.dp
                 ),

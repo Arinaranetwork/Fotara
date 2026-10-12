@@ -43,7 +43,7 @@ class ScreenHeaderTest {
     fun screenHeaderDefaults_typographyTokensMatchSpecification() {
         assertEquals(22.sp, ScreenHeaderDefaults.TitleFontSize)
         assertEquals(28.sp, ScreenHeaderDefaults.TitleLineHeight)
-        assertEquals(FontWeight.Bold, ScreenHeaderDefaults.TitleFontWeight)
+        assertEquals(FontWeight.SemiBold, ScreenHeaderDefaults.TitleFontWeight)
         assertEquals(0.sp, ScreenHeaderDefaults.TitleLetterSpacing)
 
         assertEquals(14.sp, ScreenHeaderDefaults.TaglineFontSize)

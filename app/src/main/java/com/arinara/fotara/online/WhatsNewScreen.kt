@@ -386,9 +386,9 @@ fun WhatsNewScreen(
                 Text(
                     text = "What's New",
                     color = TabCream,
-                    fontSize = 18.sp,
+                    fontSize = 22.sp,
                     fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
             },
             navigationIcon = {
@@ -406,7 +406,7 @@ fun WhatsNewScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(8.dp))

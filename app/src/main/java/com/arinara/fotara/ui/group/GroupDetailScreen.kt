@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.ui.components.CaptureReviewSliderModal
 import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
 import com.arinara.fotara.data.model.Workspace
@@ -225,8 +226,9 @@ fun GroupDetailScreen(
                         Text(
                             text = uiState.group?.name ?: "Group",
                             color = TextPrimary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)

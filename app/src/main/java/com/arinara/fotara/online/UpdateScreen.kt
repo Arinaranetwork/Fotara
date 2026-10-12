@@ -10,6 +10,7 @@ import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import com.arinara.fotara.theme.ElmsSans
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -168,7 +169,7 @@ fun UpdateScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 16.dp)
                 .padding(top = 16.dp, bottom = 24.dp)
                 .verticalScroll(rememberScrollState())
         ) {
@@ -182,8 +183,9 @@ fun UpdateScreen(
                 Text(
                     text = "App Update",
                     color = AccentGold,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 22.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Box {

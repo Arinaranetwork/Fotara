@@ -63,7 +63,7 @@ object ScreenHeaderDefaults {
 
     val TitleFontSize: TextUnit = 22.sp
     val TitleLineHeight: TextUnit = 28.sp
-    val TitleFontWeight: FontWeight = FontWeight.Bold
+    val TitleFontWeight: FontWeight = FontWeight.SemiBold
     val TitleLetterSpacing: TextUnit = 0.sp
 
     val TaglineFontSize: TextUnit = 14.sp
@@ -143,10 +143,10 @@ fun ScreenHeader(
                     Text(
                         text = spaceName,
                         style = TextStyle(
-                            fontSize = 20.sp,
+                            fontSize = ScreenHeaderDefaults.TitleFontSize,
                             lineHeight = ScreenHeaderDefaults.TitleLineHeight,
                             fontFamily = ElmsSans,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = ScreenHeaderDefaults.TitleFontWeight,
                             letterSpacing = ScreenHeaderDefaults.TitleLetterSpacing,
                             color = Color(0xFFA0A5C2),
                             platformStyle = PlatformTextStyle(includeFontPadding = false),

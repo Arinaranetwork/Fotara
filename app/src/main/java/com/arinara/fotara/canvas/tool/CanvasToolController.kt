@@ -126,6 +126,11 @@ class CanvasToolController(
     private val eraserActiveSurvivingMap = mutableMapOf<String, StrokeElement>()
     private val eraserTouchedNonStrokes = mutableMapOf<String, CanvasElement>()
     private var lastEraserPoint: Pair<Float, Float>? = null
+    val activeEraserPoints = mutableListOf<StrokePoint>()
+    private var hasErasedOverNonStrokes = false
+
+    val activeEraserStrokePoints: List<StrokePoint>
+        get() = activeEraserPoints
 
     var isShapeSnapped: Boolean = false
 
@@ -303,6 +308,8 @@ class CanvasToolController(
         eraserTouchedOriginals.clear()
         eraserActiveSurvivingMap.clear()
         eraserTouchedNonStrokes.clear()
+        activeEraserPoints.clear()
+        hasErasedOverNonStrokes = false
         lastEraserPoint = Pair(screenX, screenY)
     }
 
@@ -336,9 +343,29 @@ class CanvasToolController(
 
         var prev = lastEraserPoint ?: Pair(points.first().x, points.first().y)
 
+        val nonStrokes = document.elements.filter {
+            (it is ImageElement || it is TextLayerElement) && (targetLayerId == null || it.layerId == targetLayerId)
+        }
+
         for (pt in points) {
             val (wx1, wy1) = ViewportTransform.screenToWorld(prev.first, prev.second, viewport)
             val (wx2, wy2) = ViewportTransform.screenToWorld(pt.x, pt.y, viewport)
+
+            activeEraserPoints.add(StrokePoint(wx2, wy2, pt.pressure))
+
+            // Check if eraser brush traverses across image elements or text blocks
+            for (ns in nonStrokes) {
+                val isHit = when (ns) {
+                    is ImageElement -> hitTestImage(wx2, wy2, ns) || ns.bounds.expand(worldRadius).contains(wx2, wy2)
+                    is TextLayerElement -> ns.computeDynamicBounds().expand(worldRadius).contains(wx2, wy2)
+                    else -> false
+                }
+                if (isHit) {
+                    hasErasedOverNonStrokes = true
+                    val nsBounds = if (ns is ImageElement) ns.bounds else (ns as TextLayerElement).computeDynamicBounds()
+                    dirtyBounds = dirtyBounds?.union(nsBounds) ?: nsBounds
+                }
+            }
 
             val strokesToCheck = eraserActiveSurvivingMap.values.toList()
             for (stroke in strokesToCheck) {
@@ -387,17 +414,48 @@ class CanvasToolController(
         historyManager: CanvasHistoryManager
     ): Pair<CanvasDocument, CanvasRect?> {
         lastEraserPoint = null
+
+        val targetLayer = activeLayerId ?: document.getPrimaryLayerId()
+        val eraserStroke = if (hasErasedOverNonStrokes && activeEraserPoints.size >= 2) {
+            val strokeBounds = CanvasRect.fromPoints(activeEraserPoints.map { Pair(it.x, it.y) }).expand(toolState.eraserRadius)
+            StrokeElement(
+                id = java.util.UUID.randomUUID().toString(),
+                layerId = targetLayer,
+                toolType = StrokeToolType.ERASER,
+                color = 0xFF000000L,
+                width = toolState.eraserRadius * 2f,
+                points = activeEraserPoints.toList(),
+                bounds = strokeBounds,
+                blendMode = StrokeBlendMode.DST_OUT
+            )
+        } else null
+
         if (eraserTouchedOriginals.isEmpty()) {
             eraserActiveSurvivingMap.clear()
             eraserTouchedNonStrokes.clear()
+
+            if (eraserStroke != null) {
+                val committedDoc = historyManager.execute(
+                    com.arinara.fotara.canvas.engine.AddElementsCommand(listOf(eraserStroke), "Mask Eraser"),
+                    document
+                )
+                activeEraserPoints.clear()
+                hasErasedOverNonStrokes = false
+                return Pair(committedDoc, eraserStroke.bounds)
+            }
+
+            activeEraserPoints.clear()
+            hasErasedOverNonStrokes = false
             return Pair(document, null)
         }
 
         val strokeOriginals = eraserTouchedOriginals.values.toList()
         val originalIds = strokeOriginals.map { it.id }.toSet()
         val replacements = eraserActiveSurvivingMap.values.filter { it.id !in originalIds }
+        val finalReplacements = if (eraserStroke != null) replacements + eraserStroke else replacements
 
         val unionBounds = strokeOriginals.map { it.bounds }.fold(CanvasRect.Empty) { acc, cur -> acc.union(cur) }
+            .let { if (eraserStroke != null) it.union(eraserStroke.bounds) else it }
 
         // Ensure we execute against the document containing original elements
         val baseDoc = if (document.elements.any { it.id in originalIds }) {
@@ -409,23 +467,27 @@ class CanvasToolController(
         }
 
         val committedDoc = historyManager.execute(
-            ReplaceElementsCommand(strokeOriginals, replacements, description = "Free Eraser"),
+            ReplaceElementsCommand(strokeOriginals, finalReplacements, description = "Free Eraser"),
             baseDoc
         )
 
         eraserTouchedOriginals.clear()
         eraserActiveSurvivingMap.clear()
         eraserTouchedNonStrokes.clear()
+        activeEraserPoints.clear()
+        hasErasedOverNonStrokes = false
 
         return Pair(committedDoc, unionBounds)
     }
 
     fun cancelEraser(): CanvasDocument? {
         lastEraserPoint = null
-        val hadTouches = eraserTouchedOriginals.isNotEmpty()
+        val hadTouches = eraserTouchedOriginals.isNotEmpty() || hasErasedOverNonStrokes
         eraserTouchedOriginals.clear()
         eraserActiveSurvivingMap.clear()
         eraserTouchedNonStrokes.clear()
+        activeEraserPoints.clear()
+        hasErasedOverNonStrokes = false
         return if (hadTouches) null else null
     }
 
@@ -496,7 +558,7 @@ class CanvasToolController(
         return newSel
     }
 
-    private fun hitTestImage(worldX: Float, worldY: Float, el: ImageElement): Boolean {
+    fun hitTestImage(worldX: Float, worldY: Float, el: ImageElement): Boolean {
         if (el.rotationDegrees == 0f) {
             return el.bounds.contains(worldX, worldY)
         }

@@ -105,6 +105,29 @@ class CanvasDrawingView(
                 false
             }
         }
+
+        // Route direct image element hit-testing to tool controller (prevents drawing over images)
+        pointerStateMachine.onHitTestImageElement = { sx, sy ->
+            val (wx, wy) = ViewportTransform.screenToWorld(sx, sy, viewport)
+            val hitImg = documentSnapshot.elements
+                .filterIsInstance<com.arinara.fotara.canvas.model.ImageElement>()
+                .lastOrNull { toolController.hitTestImage(wx, wy, it) }
+
+            if (hitImg != null) {
+                cancelShapeHold()
+                val selRef = com.arinara.fotara.canvas.model.SelectedElementReference.Whole(hitImg.id)
+                toolController.selection = com.arinara.fotara.canvas.model.CanvasSelection(
+                    references = mapOf(hitImg.id to selRef),
+                    bounds = hitImg.bounds,
+                    rotationDegrees = hitImg.rotationDegrees
+                )
+                onSelectionChanged?.invoke(toolController.selection)
+                invalidate()
+                true
+            } else {
+                false
+            }
+        }
     }
 
     private val shapeHoldHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -427,25 +450,31 @@ class CanvasDrawingView(
         super.onDraw(canvas)
 
         val isEraser = toolController.toolState.activeTool == CanvasToolType.ERASER
-        val inProgressPoints = if (!isEraser && toolController.isDrawing()) toolController.currentPoints else null
-        val inProgressTool = when (toolController.toolState.activeTool) {
-            CanvasToolType.HIGHLIGHTER -> StrokeToolType.HIGHLIGHTER
+        val inProgressPoints = if (isEraser) {
+            if (toolController.activeEraserStrokePoints.isNotEmpty()) toolController.activeEraserStrokePoints else null
+        } else if (toolController.isDrawing()) {
+            toolController.currentPoints
+        } else null
+
+        val inProgressTool = when {
+            isEraser -> StrokeToolType.ERASER
+            toolController.toolState.activeTool == CanvasToolType.HIGHLIGHTER -> StrokeToolType.HIGHLIGHTER
             else -> StrokeToolType.PEN
         }
-        val inProgressColor = if (inProgressTool == StrokeToolType.HIGHLIGHTER) {
-            toolController.toolState.highlighterColor
-        } else {
-            toolController.toolState.penColor
+        val inProgressColor = when {
+            isEraser -> 0xFF000000L
+            inProgressTool == StrokeToolType.HIGHLIGHTER -> toolController.toolState.highlighterColor
+            else -> toolController.toolState.penColor
         }
-        val inProgressWidth = if (inProgressTool == StrokeToolType.HIGHLIGHTER) {
-            toolController.toolState.highlighterSize
-        } else {
-            toolController.toolState.penSize
+        val inProgressWidth = when {
+            isEraser -> (toolController.toolState.eraserRadius * 2f).coerceAtLeast(8f)
+            inProgressTool == StrokeToolType.HIGHLIGHTER -> toolController.toolState.highlighterSize
+            else -> toolController.toolState.penSize
         }
-        val inProgressBlendMode = if (inProgressTool == StrokeToolType.HIGHLIGHTER) {
-            toolController.toolState.highlighterBlendMode
-        } else {
-            com.arinara.fotara.canvas.model.StrokeBlendMode.NORMAL
+        val inProgressBlendMode = when {
+            isEraser -> com.arinara.fotara.canvas.model.StrokeBlendMode.DST_OUT
+            inProgressTool == StrokeToolType.HIGHLIGHTER -> toolController.toolState.highlighterBlendMode
+            else -> com.arinara.fotara.canvas.model.StrokeBlendMode.NORMAL
         }
 
         canvasRenderer.drawCanvas(

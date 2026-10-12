@@ -72,6 +72,7 @@ import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.ui.home.workspace.RestoreWorkspaceDestinationDialog
 import com.arinara.fotara.ui.components.WorkspaceFolderPickerColumn
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.MidnightCardOutline
@@ -111,8 +112,9 @@ fun TrashScreen(
                     Text(
                         text = "Trash",
                         color = TextPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 22.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.SemiBold
                     )
                 },
                 navigationIcon = {

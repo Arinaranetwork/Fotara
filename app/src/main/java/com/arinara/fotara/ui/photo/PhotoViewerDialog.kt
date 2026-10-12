@@ -117,6 +117,7 @@ import com.arinara.fotara.ui.components.ScheduleNoteDialog
 import com.arinara.fotara.util.NoteScheduleManager
 import com.arinara.fotara.util.ScheduleNoteType
 import com.arinara.fotara.util.ScheduleAlertType
+import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.MidnightCardOutline
@@ -285,7 +286,7 @@ fun PhotoViewerDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = onDismiss) {
@@ -309,8 +310,9 @@ fun PhotoViewerDialog(
                                     currentPhoto.caption ?: "Note Inspector"
                                 },
                                 color = TextPrimary,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )

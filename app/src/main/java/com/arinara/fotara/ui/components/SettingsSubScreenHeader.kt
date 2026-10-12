@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,11 +45,14 @@ object SettingsSubScreenHeaderDefaults {
     val ButtonBackgroundColor: Color = Color(0xFF131925)
     val ButtonIconTint: Color = Color.White
     val TitleSpacing: Dp = 12.dp
-    val TitleFontSize: TextUnit = 24.sp
-    val TitleFontWeight: FontWeight = FontWeight.Medium
-    val HorizontalPadding: Dp = 18.dp
+    val TitleFontSize: TextUnit = 22.sp
+    val TitleFontWeight: FontWeight = FontWeight.SemiBold
+    val HorizontalPadding: Dp = 16.dp
     val TopPadding: Dp = 8.dp
     val BottomPadding: Dp = 6.dp
+    val SubtitleFontSize: TextUnit = 14.sp
+    val SubtitleFontWeight: FontWeight = FontWeight.Normal
+    val TitleToSubtitleSpacing: Dp = 4.dp
 }
 
 /**
@@ -103,12 +107,13 @@ fun SettingsSubScreenHeader(
                 fontWeight = SettingsSubScreenHeaderDefaults.TitleFontWeight
             )
             if (subtitle != null) {
+                Spacer(modifier = Modifier.height(SettingsSubScreenHeaderDefaults.TitleToSubtitleSpacing))
                 Text(
                     text = subtitle,
                     color = com.arinara.fotara.theme.HomeSubtitleGray,
-                    fontSize = 12.sp,
+                    fontSize = SettingsSubScreenHeaderDefaults.SubtitleFontSize,
                     fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = SettingsSubScreenHeaderDefaults.SubtitleFontWeight
                 )
             }
         }

@@ -143,10 +143,12 @@ fun SharePlacementScreen(
                         Text(
                             text = "Save to Fotara",
                             color = TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 22.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.SemiBold
                         )
                         if (!uiState.isStaging && uiState.totalRemaining > 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
                             val destSummary = uiState.selectedFolder?.let { f ->
                                 val sub = uiState.subfolders.find { it.id == uiState.selectedSubfolderId }?.name
                                 val grp = uiState.availableGroups.find { it.id == uiState.selectedGroupId }?.name
@@ -159,7 +161,9 @@ fun SharePlacementScreen(
                             Text(
                                 text = destSummary,
                                 color = FolderTabCream,
-                                fontSize = 12.sp,
+                                fontSize = 14.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Normal,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )

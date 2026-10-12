@@ -53,6 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.arinara.fotara.theme.ElmsSans
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -180,7 +181,7 @@ fun PdfPageViewerDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { onDismiss(pagerState.currentPage) }) {
@@ -199,11 +200,13 @@ fun PdfPageViewerDialog(
                         Text(
                             text = documentNote.name,
                             color = TextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (isCurrentPageZoomed) {
                                 "Zoomed: Pan enabled · Double-tap to reset"
@@ -211,7 +214,9 @@ fun PdfPageViewerDialog(
                                 "Page ${pagerState.currentPage + 1} of $totalCount"
                             },
                             color = if (isCurrentPageZoomed) TagAmber else TextSecondary,
-                            fontSize = 11.sp
+                            fontSize = 14.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Normal
                         )
                     }
 

@@ -444,9 +444,33 @@ object LatexAstParser {
         }
 
         private fun parseEnvironment(envName: String): MathNode {
+            val startMarker = "\\begin{$envName}"
             val endMarker = "\\end{$envName}"
-            val bodyStart = pos
-            val endIdx = text.indexOf(endMarker, pos)
+            var depth = 1
+            var scanPos = pos
+            var endIdx = -1
+
+            while (scanPos < length) {
+                val nextStart = text.indexOf(startMarker, scanPos)
+                val nextEnd = text.indexOf(endMarker, scanPos)
+
+                if (nextEnd == -1) {
+                    break
+                }
+
+                if (nextStart != -1 && nextStart < nextEnd) {
+                    depth++
+                    scanPos = nextStart + startMarker.length
+                } else {
+                    depth--
+                    if (depth == 0) {
+                        endIdx = nextEnd
+                        break
+                    }
+                    scanPos = nextEnd + endMarker.length
+                }
+            }
+
             val bodyText = if (endIdx != -1) {
                 val content = text.substring(pos, endIdx)
                 pos = endIdx + endMarker.length
@@ -459,9 +483,9 @@ object LatexAstParser {
 
             return when (envName) {
                 "cases" -> {
-                    val rawRows = bodyText.split(Regex("""\\\\""")).map { it.trim() }.filter { it.isNotEmpty() }
+                    val rawRows = splitEnvironmentRows(bodyText)
                     val casesList = rawRows.map { row ->
-                        val parts = row.split('&')
+                        val parts = splitRowColumns(row)
                         val expression = parse(parts[0].trim())
                         val condition = if (parts.size > 1) parse(parts[1].trim()) else null
                         expression to condition
@@ -469,9 +493,9 @@ object LatexAstParser {
                     MathNode.CasesNode(cases = casesList)
                 }
                 "aligned", "align" -> {
-                    val rawRows = bodyText.split(Regex("""\\\\""")).map { it.trim() }.filter { it.isNotEmpty() }
+                    val rawRows = splitEnvironmentRows(bodyText)
                     val lines = rawRows.map { row ->
-                        row.split('&').map { parse(it.trim()) }
+                        splitRowColumns(row).map { parse(it.trim()) }
                     }
                     MathNode.AlignedNode(lines = lines)
                 }
@@ -484,9 +508,9 @@ object LatexAstParser {
                         "Bmatrix" -> MatrixBracketType.CURLY_BRACES
                         else -> MatrixBracketType.NONE
                     }
-                    val rawRows = bodyText.split(Regex("""\\\\""")).map { it.trim() }.filter { it.isNotEmpty() }
+                    val rawRows = splitEnvironmentRows(bodyText)
                     val matrixRows = rawRows.map { row ->
-                        row.split('&').map { parse(it.trim()) }
+                        splitRowColumns(row).map { parse(it.trim()) }
                     }
                     MathNode.MatrixNode(rows = matrixRows, bracketType = bracket)
                 }
@@ -494,6 +518,115 @@ object LatexAstParser {
                     parse(bodyText)
                 }
             }
+        }
+
+        private fun splitEnvironmentRows(content: String): List<String> {
+            val rows = mutableListOf<String>()
+            var current = StringBuilder()
+            var braceDepth = 0
+            var envDepth = 0
+            var i = 0
+            val len = content.length
+
+            while (i < len) {
+                if (content.startsWith("\\begin{", i)) {
+                    envDepth++
+                    current.append("\\begin{")
+                    i += 7
+                    continue
+                }
+                if (content.startsWith("\\end{", i)) {
+                    if (envDepth > 0) envDepth--
+                    current.append("\\end{")
+                    i += 5
+                    continue
+                }
+                val ch = content[i]
+                if (ch == '{') {
+                    braceDepth++
+                    current.append(ch)
+                    i++
+                    continue
+                }
+                if (ch == '}') {
+                    if (braceDepth > 0) braceDepth--
+                    current.append(ch)
+                    i++
+                    continue
+                }
+                if (braceDepth == 0 && envDepth == 0 && content.startsWith("\\\\", i)) {
+                    rows.add(current.toString().trim())
+                    current = StringBuilder()
+                    i += 2
+                    // Skip optional spacing argument like \\[6pt] or \\[1em]
+                    while (i < len && content[i].isWhitespace()) i++
+                    if (i < len && content[i] == '[') {
+                        val closeBracket = content.indexOf(']', i)
+                        if (closeBracket != -1) {
+                            i = closeBracket + 1
+                        }
+                    }
+                    continue
+                }
+
+                current.append(ch)
+                i++
+            }
+
+            val lastRow = current.toString().trim()
+            if (lastRow.isNotEmpty()) {
+                rows.add(lastRow)
+            }
+            return rows.filter { it.isNotBlank() }
+        }
+
+        private fun splitRowColumns(row: String): List<String> {
+            val cols = mutableListOf<String>()
+            var current = StringBuilder()
+            var braceDepth = 0
+            var envDepth = 0
+            var i = 0
+            val len = row.length
+
+            while (i < len) {
+                if (row.startsWith("\\begin{", i)) {
+                    envDepth++
+                    current.append("\\begin{")
+                    i += 7
+                    continue
+                }
+                if (row.startsWith("\\end{", i)) {
+                    if (envDepth > 0) envDepth--
+                    current.append("\\end{")
+                    i += 5
+                    continue
+                }
+                val ch = row[i]
+                if (ch == '{') {
+                    braceDepth++
+                    current.append(ch)
+                    i++
+                    continue
+                }
+                if (ch == '}') {
+                    if (braceDepth > 0) braceDepth--
+                    current.append(ch)
+                    i++
+                    continue
+                }
+                if (ch == '&' && braceDepth == 0 && envDepth == 0) {
+                    cols.add(current.toString().trim())
+                    current = StringBuilder()
+                    i++
+                    continue
+                }
+
+                current.append(ch)
+                i++
+            }
+
+            cols.add(current.toString().trim())
+            return cols
         }
 
         private fun startsWith(prefix: String): Boolean {
