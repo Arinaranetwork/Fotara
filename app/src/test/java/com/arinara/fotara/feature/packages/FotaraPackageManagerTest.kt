@@ -38,13 +38,19 @@ class FotaraPackageManagerTest {
     }
 
     @Test
-    fun testProductionOfficialPackagesContainsLatexMath() {
-        assertEquals(1, FotaraPackageManager.OFFICIAL_PACKAGES.size)
-        val latexPkg = FotaraPackageManager.OFFICIAL_PACKAGES.first()
-        assertEquals(FotaraPackageManager.PACKAGE_LATEX_MATH, latexPkg.packageId)
-        assertEquals("LaTeX Math Typesetting Engine", latexPkg.name)
+    fun testProductionOfficialPackagesContainsLatexMathAndVfx() {
+        assertEquals(2, FotaraPackageManager.OFFICIAL_PACKAGES.size)
+        val latexPkg = FotaraPackageManager.OFFICIAL_PACKAGES.find { it.packageId == FotaraPackageManager.PACKAGE_LATEX_MATH }
+        assertNotNull(latexPkg)
+        assertEquals("LaTeX Math Typesetting Engine", latexPkg!!.name)
         assertFalse(latexPkg.isInstalled)
         assertTrue(latexPkg.isEnabled)
+
+        val vfxPkg = FotaraPackageManager.OFFICIAL_PACKAGES.find { it.packageId == FotaraPackageManager.PACKAGE_CANVAS_VFX }
+        assertNotNull(vfxPkg)
+        assertEquals("Visual Effects (VFX) Add-On", vfxPkg!!.name)
+        assertFalse(vfxPkg.isInstalled)
+        assertTrue(vfxPkg.isEnabled)
     }
 
     @Test

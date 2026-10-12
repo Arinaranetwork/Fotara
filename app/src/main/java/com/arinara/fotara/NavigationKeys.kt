@@ -84,3 +84,6 @@ data class SpaceSettingsNavKey(val spaceId: Long) : NavKey
 @Serializable
 data object NoteClockNavKey : NavKey
 
+@Serializable
+data object ScoresTrackerNavKey : NavKey
+

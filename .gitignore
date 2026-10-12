@@ -26,7 +26,7 @@ local.properties
 node_modules/
 scratch/
 *.idsig
-Font/
+/Font/
 test.py
 *.log
 .agents/
@@ -37,8 +37,8 @@ Changelog/
 Rules.md
 Android.md
 fotara-app-brief.md
-UI/
-QRIS/
-Icon/
+/UI/
+/QRIS/
+/Icon/
 package.json
 package-lock.json

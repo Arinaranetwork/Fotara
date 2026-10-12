@@ -20,6 +20,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
+        android:name=".FotaraApp"
         android:allowBackup="true"
         android:hasFragileUserData="true"
         android:fullBackupContent="@xml/backup_rules"

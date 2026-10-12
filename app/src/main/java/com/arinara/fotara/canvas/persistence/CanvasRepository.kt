@@ -224,6 +224,24 @@ class DefaultCanvasRepository(
                     bottom = entity.boundsBottom
                 )
 
+                val vfxParams = if (input.available() > 0) {
+                    com.arinara.fotara.canvas.vfx.VfxParameters(
+                        chromaKeyEnabled = input.readBoolean(),
+                        keyColor = input.readLong(),
+                        tolerance = input.readFloat(),
+                        edgeSoftening = input.readFloat(),
+                        brightness = input.readFloat(),
+                        contrast = input.readFloat(),
+                        saturation = input.readFloat(),
+                        temperature = input.readFloat(),
+                        redBalance = input.readFloat(),
+                        greenBalance = input.readFloat(),
+                        blueBalance = input.readFloat()
+                    )
+                } else {
+                    com.arinara.fotara.canvas.vfx.VfxParameters()
+                }
+
                 ImageElement(
                     id = entity.id,
                     layerId = entity.layerId,
@@ -234,6 +252,7 @@ class DefaultCanvasRepository(
                     height = h,
                     scale = scale,
                     rotationDegrees = rot,
+                    vfxParams = vfxParams,
                     bounds = bounds,
                     zIndex = entity.zIndex
                 )
@@ -253,6 +272,18 @@ class DefaultCanvasRepository(
             out.writeFloat(element.height)
             out.writeFloat(element.scale)
             out.writeFloat(element.rotationDegrees)
+            // VFX parameters
+            out.writeBoolean(element.vfxParams.chromaKeyEnabled)
+            out.writeLong(element.vfxParams.keyColor)
+            out.writeFloat(element.vfxParams.tolerance)
+            out.writeFloat(element.vfxParams.edgeSoftening)
+            out.writeFloat(element.vfxParams.brightness)
+            out.writeFloat(element.vfxParams.contrast)
+            out.writeFloat(element.vfxParams.saturation)
+            out.writeFloat(element.vfxParams.temperature)
+            out.writeFloat(element.vfxParams.redBalance)
+            out.writeFloat(element.vfxParams.greenBalance)
+            out.writeFloat(element.vfxParams.blueBalance)
         }
         return baos.toByteArray()
     }

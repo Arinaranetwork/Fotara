@@ -4,8 +4,8 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
 }
 
-val appVersionCode = 50
-val appVersionName = "1.9.5-alpha"
+val appVersionCode = 51
+val appVersionName = "1.9.6-alpha"
 val appChannel = when {
     appVersionName.contains("alpha", ignoreCase = true) -> "alpha"
     appVersionName.contains("beta", ignoreCase = true) -> "beta"
@@ -150,6 +150,12 @@ dependencies {
 
   // Chrome Custom Tabs / Browser Link Support
   implementation("androidx.browser:browser:1.8.0")
+
+  // Coil GIF decoding
+  implementation("io.coil-kt:coil-gif:2.7.0")
+
+  // Biometric Authentication
+  implementation("androidx.biometric:biometric:1.2.0-alpha05")
 
   // Shizuku Privileged Shell Downgrade API
   implementation("dev.rikka.shizuku:api:13.1.5")

@@ -133,6 +133,8 @@ class CanvasRenderer(
                     com.arinara.fotara.canvas.model.StrokeBlendMode.MULTIPLY -> android.graphics.BlendMode.MULTIPLY
                     com.arinara.fotara.canvas.model.StrokeBlendMode.DARKEN -> android.graphics.BlendMode.DARKEN
                     com.arinara.fotara.canvas.model.StrokeBlendMode.SCREEN -> android.graphics.BlendMode.SCREEN
+                    com.arinara.fotara.canvas.model.StrokeBlendMode.CLEAR -> android.graphics.BlendMode.CLEAR
+                    com.arinara.fotara.canvas.model.StrokeBlendMode.DST_OUT -> android.graphics.BlendMode.DST_OUT
                 }
             } else {
                 paint.xfermode = when (mode) {
@@ -140,6 +142,8 @@ class CanvasRenderer(
                     com.arinara.fotara.canvas.model.StrokeBlendMode.MULTIPLY -> PorterDuffXfermode(PorterDuff.Mode.DARKEN)
                     com.arinara.fotara.canvas.model.StrokeBlendMode.DARKEN -> PorterDuffXfermode(PorterDuff.Mode.DARKEN)
                     com.arinara.fotara.canvas.model.StrokeBlendMode.SCREEN -> PorterDuffXfermode(PorterDuff.Mode.SCREEN)
+                    com.arinara.fotara.canvas.model.StrokeBlendMode.CLEAR -> PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+                    com.arinara.fotara.canvas.model.StrokeBlendMode.DST_OUT -> PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
                 }
             }
         }
@@ -442,7 +446,7 @@ class CanvasRenderer(
             is ImageElement -> {
                 val file = assetManager?.getAssetFile(element.assetId)
                 if (file != null && file.exists()) {
-                    val bmp = imageBitmapCache[element.assetId] ?: run {
+                    var bmp = imageBitmapCache[element.assetId] ?: run {
                         try {
                             val decoded = BitmapFactory.decodeFile(file.absolutePath)
                             if (decoded != null) imageBitmapCache[element.assetId] = decoded
@@ -452,6 +456,20 @@ class CanvasRenderer(
                         }
                     }
                     if (bmp != null && !bmp.isRecycled) {
+                        if (element.vfxParams.chromaKeyEnabled) {
+                            val chromaKey = "${element.assetId}_chroma_${element.vfxParams.keyColor}_${element.vfxParams.tolerance}_${element.vfxParams.edgeSoftening}"
+                            val chromaBmp = imageBitmapCache[chromaKey] ?: run {
+                                val processed = com.arinara.fotara.canvas.vfx.VfxEngine.applyChromaKey(bmp, element.vfxParams)
+                                imageBitmapCache[chromaKey] = processed
+                                processed
+                            }
+                            bmp = chromaBmp
+                        }
+                        if (!element.vfxParams.isDefault) {
+                            imagePaint.colorFilter = com.arinara.fotara.canvas.vfx.VfxEngine.buildColorFilter(element.vfxParams)
+                        } else {
+                            imagePaint.colorFilter = null
+                        }
                         canvas.save()
                         canvas.translate(element.x, element.y)
                         if (element.rotationDegrees != 0f) {

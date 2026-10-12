@@ -128,21 +128,7 @@ object PhotoDrawingRenderer {
     }
 
     private fun applyBlendMode(paint: Paint, mode: StrokeBlendMode) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            paint.blendMode = when (mode) {
-                StrokeBlendMode.NORMAL -> android.graphics.BlendMode.SRC_OVER
-                StrokeBlendMode.MULTIPLY -> android.graphics.BlendMode.MULTIPLY
-                StrokeBlendMode.DARKEN -> android.graphics.BlendMode.DARKEN
-                StrokeBlendMode.SCREEN -> android.graphics.BlendMode.SCREEN
-            }
-        } else {
-            paint.xfermode = when (mode) {
-                StrokeBlendMode.NORMAL -> null
-                StrokeBlendMode.MULTIPLY -> PorterDuffXfermode(PorterDuff.Mode.DARKEN)
-                StrokeBlendMode.DARKEN -> PorterDuffXfermode(PorterDuff.Mode.DARKEN)
-                StrokeBlendMode.SCREEN -> PorterDuffXfermode(PorterDuff.Mode.SCREEN)
-            }
-        }
+        CanvasRenderer.applyBlendMode(paint, mode)
     }
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG)

@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.FlipToBack
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Scale
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
@@ -221,6 +222,7 @@ fun HomeScreen(
     onOpenUpdates: () -> Unit = {},
     onOpenSupport: () -> Unit = {},
     onOpenWhatsNew: () -> Unit = {},
+    onOpenScores: () -> Unit = {},
     onOpenSpaceSettings: (spaceId: Long) -> Unit = {},
     feedbackManager: FeedbackManager? = null,
     dialogCoordinator: com.arinara.fotara.coordinator.AppDialogCoordinator? = null,
@@ -605,21 +607,7 @@ fun HomeScreen(
                                                     .background(HomeCardSurface)
                                                     .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
                                             ) {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_add_workspace), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Add,
-                                                            contentDescription = null,
-                                                            tint = Color(0xFF60A5FA)
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        showHomeOverflowMenu = false
-                                                        viewModel.openAddWorkspaceDialog()
-                                                    }
-                                                )
-                                                HorizontalDivider(color = HomeCardBorder)
+
                                                 DropdownMenuItem(
                                                     text = { Text("What's New", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
@@ -632,6 +620,20 @@ fun HomeScreen(
                                                     onClick = {
                                                         showHomeOverflowMenu = false
                                                         onOpenWhatsNew()
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Scores (Beta)", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Scale,
+                                                            contentDescription = null,
+                                                            tint = FolderBodyBlue
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        showHomeOverflowMenu = false
+                                                        onOpenScores()
                                                     }
                                                 )
                                                 DropdownMenuItem(
@@ -1860,6 +1862,9 @@ fun HomeScreen(
                 coroutineScope.launch {
                     spaceRepository.setPrivateSpaceUnlocked(false)
                 }
+            },
+            onVerifyPin = { enteredPin ->
+                spaceRepository.verifyPrivateVaultPin(enteredPin)
             },
             onOpenSpaceSettings = { sId ->
                 showSpaceSwitcher = false

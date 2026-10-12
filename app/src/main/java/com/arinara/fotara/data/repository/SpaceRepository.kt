@@ -39,6 +39,9 @@ interface SpaceRepository {
     suspend fun updateSpace(space: Space): Result<Unit>
     suspend fun deleteSpace(id: Long): Result<Unit>
     suspend fun setPrivateSpaceUnlocked(unlocked: Boolean)
+    fun hasPrivateVaultPin(): Boolean = true
+    fun setPrivateVaultPin(pin: String) {}
+    fun verifyPrivateVaultPin(pin: String): Boolean = true
 }
 
 class SqliteSpaceRepository(
@@ -47,7 +50,35 @@ class SqliteSpaceRepository(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) : SpaceRepository {
 
+    companion object {
+        private const val KEY_PRIVATE_VAULT_PIN_HASH = "key_private_vault_pin_hash"
+    }
+
     private val prefs = context.getSharedPreferences("fotara_spaces", Context.MODE_PRIVATE)
+
+    override fun hasPrivateVaultPin(): Boolean {
+        return prefs.contains(KEY_PRIVATE_VAULT_PIN_HASH)
+    }
+
+    override fun setPrivateVaultPin(pin: String) {
+        val hash = hashPin(pin)
+        prefs.edit().putString(KEY_PRIVATE_VAULT_PIN_HASH, hash).apply()
+    }
+
+    override fun verifyPrivateVaultPin(pin: String): Boolean {
+        val savedHash = prefs.getString(KEY_PRIVATE_VAULT_PIN_HASH, null)
+        if (savedHash == null) {
+            setPrivateVaultPin(pin)
+            return true
+        }
+        return hashPin(pin) == savedHash
+    }
+
+    private fun hashPin(pin: String): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        val bytes = md.digest("fotara_salt_$pin".toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
 
     private val _activeSpaceId = MutableStateFlow(
         prefs.getLong("active_space_id", Space.DEFAULT_SPACE_ID)

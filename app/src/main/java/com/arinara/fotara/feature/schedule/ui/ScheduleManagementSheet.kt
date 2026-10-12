@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
@@ -91,11 +92,14 @@ import com.arinara.fotara.feature.schedule.parser.ScheduleColumnMapping
 import com.arinara.fotara.feature.schedule.parser.ScheduleTemplateExporter
 import com.arinara.fotara.feature.schedule.parser.XlsxDocxScheduleParser
 import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.HomeCardBorder
 import com.arinara.fotara.theme.HomeCardSurface
 import com.arinara.fotara.theme.HomeMainButtonBlue
 import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.HomeSubtitleGray
+import com.arinara.fotara.theme.MidnightNavy
+import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
@@ -140,6 +144,7 @@ fun ScheduleManagementSheet(
     // Import states
     var pendingImportTableData by remember { mutableStateOf<RawTableData?>(null) }
     var detectedMapping by remember { mutableStateOf(ScheduleColumnMapping()) }
+    var importDiagnosticsDetails by remember { mutableStateOf<ScheduleImportDiagnostics?>(null) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -152,14 +157,39 @@ fun ScheduleManagementSheet(
                         parser.parseUri(context, uri)
                     }
                     if (tableData.rows.isEmpty()) {
-                        Toast.makeText(context, "No table data found in the selected file", Toast.LENGTH_SHORT).show()
+                        importDiagnosticsDetails = ScheduleImportDiagnostics(
+                            filename = uri.lastPathSegment ?: "Spreadsheet",
+                            headersFound = tableData.headers,
+                            rowCount = tableData.rows.size,
+                            missingRoles = listOf("Day of Week", "Time Range", "Course / Subject"),
+                            reason = "No data rows were found in the selected file. The spreadsheet may be empty or formatted with unsupported nested layouts."
+                        )
                     } else {
                         val mapping = parser.autoDetectMapping(tableData)
                         detectedMapping = mapping
                         pendingImportTableData = tableData
+                        if (!mapping.isValid) {
+                            importDiagnosticsDetails = ScheduleImportDiagnostics(
+                                filename = uri.lastPathSegment ?: "Spreadsheet",
+                                headersFound = tableData.headers,
+                                rowCount = tableData.rows.size,
+                                missingRoles = listOfNotNull(
+                                    if (mapping.dayColumnIndex < 0) "Day of Week" else null,
+                                    if (mapping.timeColumnIndex < 0) "Time Range" else null,
+                                    if (mapping.subjectColumnIndex < 0) "Course / Subject" else null
+                                ),
+                                reason = "Custom spreadsheet layout detected. Automatic column identification could not match all required schedule fields."
+                            )
+                        }
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(context, "Failed to read file: ${e.message}", Toast.LENGTH_LONG).show()
+                    importDiagnosticsDetails = ScheduleImportDiagnostics(
+                        filename = uri.lastPathSegment ?: "File",
+                        headersFound = emptyList(),
+                        rowCount = 0,
+                        missingRoles = emptyList(),
+                        reason = "Failed to parse document: ${e.message}"
+                    )
                 }
             }
         }
@@ -733,9 +763,39 @@ fun ScheduleManagementSheet(
                     onBatchImportSchedules(parsedSchedules)
                     Toast.makeText(context, "Successfully imported ${parsedSchedules.size} classes", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(context, "No class schedule data could be imported", Toast.LENGTH_SHORT).show()
+                    importDiagnosticsDetails = ScheduleImportDiagnostics(
+                        filename = "Imported File",
+                        headersFound = tableData.headers,
+                        rowCount = tableData.rows.size,
+                        missingRoles = listOfNotNull(
+                            if (confirmedMapping.dayColumnIndex < 0) "Day of Week" else null,
+                            if (confirmedMapping.timeColumnIndex < 0) "Time Range" else null,
+                            if (confirmedMapping.subjectColumnIndex < 0) "Course / Subject" else null
+                        ),
+                        reason = "No class schedules could be extracted using the current column mappings. Verify that day names and time ranges (e.g. 08:00 - 10:00) match the expected format."
+                    )
                 }
                 pendingImportTableData = null
+            }
+        )
+    }
+
+    if (importDiagnosticsDetails != null) {
+        ScheduleImportDiagnosticsDialog(
+            diagnostics = importDiagnosticsDetails!!,
+            onDismiss = { importDiagnosticsDetails = null },
+            onManualAdjust = {
+                val details = importDiagnosticsDetails
+                importDiagnosticsDetails = null
+                if (pendingImportTableData != null) {
+                    // re-open mapping dialog
+                } else if (details != null && details.headersFound.isNotEmpty()) {
+                    pendingImportTableData = RawTableData(details.headersFound, emptyList())
+                }
+            },
+            onViewTemplate = {
+                importDiagnosticsDetails = null
+                showTemplateGuideDialog = true
             }
         )
     }
@@ -1502,3 +1562,126 @@ private fun ColumnSelectorRow(
         }
     }
 }
+
+data class ScheduleImportDiagnostics(
+    val filename: String,
+    val headersFound: List<String>,
+    val rowCount: Int,
+    val missingRoles: List<String>,
+    val reason: String
+)
+
+@Composable
+private fun ScheduleImportDiagnosticsDialog(
+    diagnostics: ScheduleImportDiagnostics,
+    onDismiss: () -> Unit,
+    onManualAdjust: () -> Unit,
+    onViewTemplate: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = TagAmber,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Import Diagnostics",
+                    color = TextPrimary,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = diagnostics.reason,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontFamily = ElmsSans
+                )
+
+                // Metrics Box
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MidnightNavy)
+                        .padding(10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Rows detected: ${diagnostics.rowCount}",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans
+                        )
+                        Text(
+                            text = "Headers: ${if (diagnostics.headersFound.isEmpty()) "None" else diagnostics.headersFound.joinToString(", ")}",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans
+                        )
+                        if (diagnostics.missingRoles.isNotEmpty()) {
+                            Text(
+                                text = "Unrecognized fields: ${diagnostics.missingRoles.joinToString(", ")}",
+                                color = TagCrimson,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                // Expected Format Guide
+                Text(
+                    text = "Expected Academic Schedule Schema:",
+                    color = FolderTabCream,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = ElmsSans
+                )
+                Text(
+                    text = "Spreadsheets should include columns for Day (e.g. Monday/Senin), Time Range (e.g. 08:00 - 10:00), and Course/Subject title.",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    fontFamily = ElmsSans,
+                    lineHeight = 16.sp
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onManualAdjust,
+                colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Map Columns", fontFamily = ElmsSans, fontSize = 13.sp)
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onViewTemplate) {
+                    Text("View Template", color = TagAmber, fontFamily = ElmsSans, fontSize = 13.sp)
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Dismiss", color = HomeSubtitleGray, fontFamily = ElmsSans, fontSize = 13.sp)
+                }
+            }
+        },
+        containerColor = HomeCardSurface
+    )
+}
+

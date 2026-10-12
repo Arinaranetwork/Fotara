@@ -25,7 +25,9 @@ enum class StrokeBlendMode {
     NORMAL,
     MULTIPLY,
     DARKEN,
-    SCREEN
+    SCREEN,
+    CLEAR,
+    DST_OUT
 }
 
 /**
@@ -101,6 +103,7 @@ data class ImageElement(
     val height: Float,
     val scale: Float = 1.0f,
     val rotationDegrees: Float = 0.0f,
+    val vfxParams: com.arinara.fotara.canvas.vfx.VfxParameters = com.arinara.fotara.canvas.vfx.VfxParameters(),
     override val bounds: CanvasRect,
     override val zIndex: Int = 0
 ) : CanvasElement() {

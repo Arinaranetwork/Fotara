@@ -114,7 +114,9 @@ sealed interface FolderGridItem {
     @Immutable
     data class CanvasNoteItem(
         val canvasNote: com.arinara.fotara.data.model.CanvasNote,
-        override val linkGroupId: Long? = null
+        override val linkGroupId: Long? = null,
+        val collaboratorCount: Int = 0,
+        val hasActiveCollaborator: Boolean = false
     ) : FolderGridItem {
         override val key: String get() = "canvas_note_${canvasNote.id}"
         override val itemId: Long get() = canvasNote.id + 3_000_000_000L

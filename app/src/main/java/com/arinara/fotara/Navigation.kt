@@ -199,6 +199,9 @@ fun MainNavigation(
                     onOpenWhatsNew = {
                         backStack.add(WhatsNewNavKey)
                     },
+                    onOpenScores = {
+                        backStack.add(ScoresTrackerNavKey)
+                    },
                     onOpenSpaceSettings = { sId ->
                         backStack.add(SpaceSettingsNavKey(sId))
                     },
@@ -397,6 +400,13 @@ fun MainNavigation(
 
             entry<NoteClockNavKey> {
                 com.arinara.fotara.ui.note.clock.NoteClockScreen(
+                    onBack = { safePopBack() }
+                )
+            }
+
+            entry<ScoresTrackerNavKey> {
+                com.arinara.fotara.ui.academic.scores.ScoresTrackerScreen(
+                    scoreRepository = appContainer.scoreRepository,
                     onBack = { safePopBack() }
                 )
             }

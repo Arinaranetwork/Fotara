@@ -255,7 +255,7 @@ class CanvasViewModel(
                     document = initialDoc,
                     activeLayerId = initialDoc.getPrimaryLayerId(),
                     saveState = SaveState.SAVED,
-                    showExperimentalNotice = true // One-time Alpha notice
+                    showExperimentalNotice = false
                 )
             }
             toolController.activeLayerId = initialDoc.getPrimaryLayerId()
@@ -1055,6 +1055,26 @@ class CanvasViewModel(
             }
             triggerDebouncedAutosave()
         }
+    }
+
+    fun updateImageVfx(elementId: String, newVfxParams: com.arinara.fotara.canvas.vfx.VfxParameters) {
+        val currentDoc = _uiState.value.document
+        val origElement = currentDoc.elements.find { it.id == elementId } as? com.arinara.fotara.canvas.model.ImageElement ?: return
+        val updatedElement = origElement.copy(vfxParams = newVfxParams)
+        val updatedDoc = historyManager.execute(
+            com.arinara.fotara.canvas.engine.ReplaceElementsCommand(listOf(origElement), listOf(updatedElement), description = "Apply VFX"),
+            currentDoc
+        )
+        spatialIndex.rebuild(updatedDoc.elements)
+        tileCacheManager.invalidateRegion(updatedElement.bounds)
+        _uiState.update {
+            it.copy(
+                document = updatedDoc,
+                canUndo = historyManager.canUndo,
+                canRedo = historyManager.canRedo
+            )
+        }
+        triggerDebouncedAutosave()
     }
 
     fun deleteTextLayer(elementId: String) {

@@ -8,7 +8,7 @@ package com.arinara.fotara
 
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -52,7 +52,7 @@ import com.arinara.fotara.theme.TextSecondary
 import java.io.File
 import java.util.Date
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private var appContainer: AppContainer? by mutableStateOf(null)
     private var startupError: String? by mutableStateOf(null)

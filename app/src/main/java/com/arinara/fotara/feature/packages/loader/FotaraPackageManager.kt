@@ -247,12 +247,14 @@ class FotaraPackageManager(
 
         // Official Package Identifiers
         const val PACKAGE_LATEX_MATH = "addon.latex.math"
+        const val PACKAGE_CANVAS_VFX = "com.arinara.fotara.pkg.canvas_vfx"
         const val PACKAGE_COLLAB = "com.arinara.fotara.pkg.collab"
         const val PACKAGE_WHITEBOARD_OCR = "com.arinara.fotara.pkg.whiteboard_ocr"
         const val PACKAGE_EXAM_ANALYTICS = "com.arinara.fotara.pkg.exam_analytics"
 
         // Mock Payload Data Blocks
         private val PAYLOAD_LATEX_MATH_RAW = "ARINARA_FPKG_OFFICIAL_LATEX_MATH_PAYLOAD_V1_2026".toByteArray(Charsets.UTF_8)
+        private val PAYLOAD_CANVAS_VFX_RAW = "ARINARA_FPKG_OFFICIAL_CANVAS_VFX_PAYLOAD_V1_2026".toByteArray(Charsets.UTF_8)
         private val PAYLOAD_COLLAB_RAW = "ARINARA_FPKG_OFFICIAL_COLLAB_PAYLOAD_V1_2026".toByteArray(Charsets.UTF_8)
         private val PAYLOAD_OCR_RAW = "ARINARA_FPKG_OFFICIAL_WHITEBOARD_OCR_PAYLOAD_V1_2026".toByteArray(Charsets.UTF_8)
         private val PAYLOAD_ANALYTICS_RAW = "ARINARA_FPKG_OFFICIAL_EXAM_ANALYTICS_PAYLOAD_V1_2026".toByteArray(Charsets.UTF_8)
@@ -263,6 +265,7 @@ class FotaraPackageManager(
         fun getOfficialMockPayload(packageId: String): ByteArray {
             return when (packageId) {
                 PACKAGE_LATEX_MATH -> PAYLOAD_LATEX_MATH_RAW
+                PACKAGE_CANVAS_VFX -> PAYLOAD_CANVAS_VFX_RAW
                 PACKAGE_COLLAB -> PAYLOAD_COLLAB_RAW
                 PACKAGE_WHITEBOARD_OCR -> PAYLOAD_OCR_RAW
                 PACKAGE_EXAM_ANALYTICS -> PAYLOAD_ANALYTICS_RAW
@@ -287,6 +290,19 @@ class FotaraPackageManager(
                 sizeBytes = 1_468_006L, // 1.4 MB
                 permissions = listOf("LOCAL_MATH_ENGINE", "COMPOSE_CANVAS_RENDER"),
                 signatureSha256 = FpkgSignatureVerifier.computeSha256(PAYLOAD_LATEX_MATH_RAW),
+                isEnabled = true,
+                isInstalled = false
+            ),
+            FpkgManifest(
+                packageId = PACKAGE_CANVAS_VFX,
+                name = "Visual Effects (VFX) Add-On",
+                version = "1.0.0",
+                minFotaraVersion = "1.9.6",
+                description = "Chroma key background knockout and color grading engine (brightness, contrast, saturation, temperature, RGB balance) for drawing notes.",
+                iconKey = "vfx_grading",
+                sizeBytes = 1_887_436L, // 1.8 MB
+                permissions = listOf("LOCAL_SHADER_EFFECTS", "COMPOSE_CANVAS_RENDER"),
+                signatureSha256 = FpkgSignatureVerifier.computeSha256(PAYLOAD_CANVAS_VFX_RAW),
                 isEnabled = true,
                 isInstalled = false
             )

@@ -6,6 +6,13 @@
 
 package com.arinara.fotara.ui.space
 
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -103,6 +110,7 @@ fun SpaceSwitcherBottomSheet(
     onOpenSpaceSettings: ((Long) -> Unit)? = null,
     onUnlockPrivateVault: (() -> Unit)? = null,
     onLockPrivateVault: (() -> Unit)? = null,
+    onVerifyPin: ((String) -> Boolean)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -180,13 +188,13 @@ fun SpaceSwitcherBottomSheet(
                     )
                 }
 
-                // 2. Prominent Private & Locked Spaces Entry
+                // 2. Prominent Private & Locked Spaces Entry (Minimalist Single-Row Card)
                 item {
                     Spacer(modifier = Modifier.height(6.dp))
                     Surface(
                         color = if (isPrivateUnlocked) Color(0xFF1E1438) else Color(0xFF13172C),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.2.dp, if (isPrivateUnlocked) Color(0xFF8B5CF6) else Color(0xFF374151)),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, if (isPrivateUnlocked) Color(0xFF8B5CF6) else Color(0xFF374151)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
@@ -198,60 +206,32 @@ fun SpaceSwitcherBottomSheet(
                             }
                     ) {
                         Row(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isPrivateUnlocked) Color(0xFF8B5CF6).copy(alpha = 0.25f) else Color(0xFF4B5563).copy(alpha = 0.25f))
-                                    .border(1.dp, if (isPrivateUnlocked) Color(0xFF8B5CF6) else Color(0xFF6B7280), RoundedCornerShape(10.dp)),
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isPrivateUnlocked) Color(0xFF8B5CF6).copy(alpha = 0.25f) else Color(0xFF4B5563).copy(alpha = 0.25f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = if (isPrivateUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
-                                    contentDescription = "Private Vault",
+                                    contentDescription = "Private Space",
                                     tint = if (isPrivateUnlocked) Color(0xFFA78BFA) else Color(0xFF9CA3AF),
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = "Locked & Private Spaces",
-                                        fontFamily = ElmsSans,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Surface(
-                                        color = Color(0xFF7C3AED).copy(alpha = 0.25f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(
-                                            text = if (isPrivateUnlocked) "UNLOCKED" else "PIN / BIOMETRIC",
-                                            color = Color(0xFFA78BFA),
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = if (isPrivateUnlocked) {
-                                        if (privateSpaces.isEmpty()) "Vault unlocked. Create or move spaces here." else "${privateSpaces.size} private space(s) accessible"
-                                    } else {
-                                        "Tap to unlock private study vaults"
-                                    },
-                                    fontFamily = ElmsSans,
-                                    fontSize = 12.sp,
-                                    color = SpaceTextSecondary
-                                )
-                            }
+                            Text(
+                                text = "Private Space",
+                                fontFamily = ElmsSans,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                modifier = Modifier.weight(1f)
+                            )
                             TextButton(
                                 onClick = {
                                     if (isPrivateUnlocked) {
@@ -330,7 +310,8 @@ fun SpaceSwitcherBottomSheet(
             onSuccess = {
                 showSecurityGateDialog = false
                 onUnlockPrivateVault?.invoke()
-            }
+            },
+            onVerifyPin = onVerifyPin
         )
     }
 
@@ -643,11 +624,26 @@ fun CreateSpaceDialog(
 @Composable
 fun PrivateSpaceSecurityGateDialog(
     onDismiss: () -> Unit,
-    onSuccess: () -> Unit
+    onSuccess: () -> Unit,
+    onVerifyPin: ((String) -> Boolean)? = null
 ) {
+    val context = LocalContext.current
     var pin by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var isPinVisible by remember { mutableStateOf(false) }
+
+    fun submitPin() {
+        if (pin.length >= 4) {
+            val verified = onVerifyPin?.invoke(pin) ?: true
+            if (verified) {
+                onSuccess()
+            } else {
+                errorMsg = "Incorrect PIN. Please try again."
+            }
+        } else {
+            errorMsg = "PIN must be at least 4 digits"
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -715,13 +711,7 @@ fun PrivateSpaceSecurityGateDialog(
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(
-                        onDone = {
-                            if (pin.length >= 4) {
-                                onSuccess()
-                            } else {
-                                errorMsg = "PIN must be at least 4 digits"
-                            }
-                        }
+                        onDone = { submitPin() }
                     ),
                     trailingIcon = {
                         IconButton(onClick = { isPinVisible = !isPinVisible }) {
@@ -755,7 +745,46 @@ fun PrivateSpaceSecurityGateDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 OutlinedButton(
-                    onClick = { onSuccess() },
+                    onClick = {
+                        val activity = context.findFragmentActivity()
+                        if (activity != null) {
+                            val executor = ContextCompat.getMainExecutor(context)
+                            val biometricPrompt = BiometricPrompt(
+                                activity,
+                                executor,
+                                object : BiometricPrompt.AuthenticationCallback() {
+                                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                                        super.onAuthenticationSucceeded(result)
+                                        onSuccess()
+                                    }
+                                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                        super.onAuthenticationError(errorCode, errString)
+                                        if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                                            errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
+                                            errorCode != BiometricPrompt.ERROR_CANCELED
+                                        ) {
+                                            errorMsg = errString.toString()
+                                        }
+                                    }
+                                }
+                            )
+                            val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                                .setTitle("Unlock Private Space")
+                                .setSubtitle("Authenticate using biometric identity or device credentials")
+                                .setAllowedAuthenticators(
+                                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                                )
+                                .build()
+                            try {
+                                biometricPrompt.authenticate(promptInfo)
+                            } catch (e: Exception) {
+                                errorMsg = e.message ?: "Authentication error"
+                            }
+                        } else {
+                            errorMsg = "Device authentication not available"
+                        }
+                    },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFA78BFA)),
                     border = BorderStroke(1.dp, Color(0xFF7C3AED).copy(alpha = 0.6f)),
                     shape = RoundedCornerShape(10.dp),
@@ -778,13 +807,7 @@ fun PrivateSpaceSecurityGateDialog(
         },
         confirmButton = {
             Button(
-                onClick = {
-                    if (pin.length >= 4) {
-                        onSuccess()
-                    } else {
-                        errorMsg = "PIN must be at least 4 digits"
-                    }
-                },
+                onClick = { submitPin() },
                 enabled = pin.length >= 4,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
                 shape = RoundedCornerShape(10.dp)
@@ -799,5 +822,14 @@ fun PrivateSpaceSecurityGateDialog(
         },
         shape = RoundedCornerShape(16.dp)
     )
+}
+
+private fun Context.findFragmentActivity(): FragmentActivity? {
+    var cur = this
+    while (cur is ContextWrapper) {
+        if (cur is FragmentActivity) return cur
+        cur = cur.baseContext
+    }
+    return null
 }
 

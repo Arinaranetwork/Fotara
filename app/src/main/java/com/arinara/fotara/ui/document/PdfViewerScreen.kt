@@ -77,6 +77,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -205,6 +207,11 @@ fun PdfViewerScreen(
     )
     val audioUiState by audioViewModel.uiState.collectAsState()
     var showAudioDock by remember { mutableStateOf(false) }
+    var userDismissedAudioDock by remember { mutableStateOf(false) }
+    var activeAudioPageIndex by remember { mutableStateOf<Int?>(null) }
+    val allPdfAnnotations by remember(audioRepo, documentNote.id) {
+        audioRepo.getAllAnnotationsForPdf(documentNote.id)
+    }.collectAsState(initial = emptyList())
 
     val file = remember(documentNote.originFileUri) { File(documentNote.originFileUri) }
 
@@ -257,6 +264,10 @@ fun PdfViewerScreen(
     DisposableEffect(documentNote.id) {
         onDispose {
             PdfSearchHighlighter.clearCache()
+            audioViewModel.stopPlayback()
+            if (audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording) {
+                audioViewModel.cancelRecording()
+            }
         }
     }
 
@@ -308,6 +319,28 @@ fun PdfViewerScreen(
     LaunchedEffect(zoomState.isZoomed) {
         if (!zoomState.isZoomed) {
             pdfRenderer?.evictHighResCache()
+        }
+    }
+
+    val currentVisiblePageIndex by remember {
+        derivedStateOf { listState.firstVisibleItemIndex }
+    }
+
+    LaunchedEffect(currentVisiblePageIndex, allPdfAnnotations) {
+        val pageHasAudio = allPdfAnnotations.any { it.pdfPageIndex == currentVisiblePageIndex }
+        if (pageHasAudio) {
+            if (!userDismissedAudioDock) {
+                activeAudioPageIndex = currentVisiblePageIndex
+                audioViewModel.setPdfPageFilter(currentVisiblePageIndex)
+                showAudioDock = true
+            }
+        } else {
+            if (audioUiState.recorderState !is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording) {
+                showAudioDock = false
+                userDismissedAudioDock = false
+                activeAudioPageIndex = null
+                audioViewModel.setPdfPageFilter(null)
+            }
         }
     }
 
@@ -430,15 +463,6 @@ fun PdfViewerScreen(
                             if (isReadingMode) R.string.viewer_action_reading_mode_exit else R.string.viewer_action_reading_mode_enter
                         ),
                         tint = if (isReadingMode) AccentGold else TabCream
-                    )
-                }
-
-                // Audio Annotations toggle
-                IconButton(onClick = { showAudioDock = !showAudioDock }) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Outlined.Mic,
-                        contentDescription = "Voice Annotations",
-                        tint = if (audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording) AccentGold else TabCream
                     )
                 }
 
@@ -780,7 +804,7 @@ fun PdfViewerScreen(
                         items(totalCount, key = { index -> "${documentNote.id}_page_$index" }) { pageIndex ->
                             val placeholderPage = pages.getOrNull(pageIndex)
                             val drawing = drawingsMap[pageIndex]
-                            val pageAudioCount = audioUiState.annotations.count { it.pdfPageIndex == pageIndex }
+                            val pageAudioCount = allPdfAnnotations.count { it.pdfPageIndex == pageIndex }
                             VirtualizedPdfPageView(
                                 pageIndex = pageIndex,
                                 totalPages = totalCount,
@@ -799,6 +823,8 @@ fun PdfViewerScreen(
                                 searchQuery = searchQuery,
                                 audioNotesCount = pageAudioCount,
                                 onAudioBadgeClick = {
+                                    userDismissedAudioDock = false
+                                    activeAudioPageIndex = pageIndex
                                     audioViewModel.setPdfPageFilter(pageIndex)
                                     showAudioDock = true
                                 },
@@ -821,7 +847,7 @@ fun PdfViewerScreen(
 
         // Voice / Audio Annotations Dock
         AnimatedVisibility(
-            visible = showAudioDock || audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording,
+            visible = showAudioDock && (audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording),
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.navigationBarsPadding()
@@ -852,7 +878,12 @@ fun PdfViewerScreen(
                         )
                         IconButton(
                             onClick = {
+                                userDismissedAudioDock = true
                                 showAudioDock = false
+                                audioViewModel.stopPlayback()
+                                if (audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording) {
+                                    audioViewModel.cancelRecording()
+                                }
                                 audioViewModel.setPdfPageFilter(null)
                             },
                             modifier = Modifier.size(24.dp)
@@ -882,7 +913,7 @@ fun PdfViewerScreen(
                         onCancelRecording = { audioViewModel.cancelRecording() }
                     )
 
-                    audioUiState.annotations.forEach { annotation ->
+                    for (annotation in audioUiState.annotations) {
                         com.arinara.fotara.audio.ui.AudioPlaybackBar(
                             annotation = annotation,
                             playerState = audioUiState.playerState,

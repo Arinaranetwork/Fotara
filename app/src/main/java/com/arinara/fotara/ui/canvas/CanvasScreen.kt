@@ -238,6 +238,10 @@ fun CanvasScreen(
     var showOverflowMenu by remember { mutableStateOf(false) }
     var showShareSheet by remember { mutableStateOf(false) }
     var renameInput by remember { mutableStateOf("") }
+    val packageManager = remember(context) { com.arinara.fotara.feature.packages.loader.FotaraPackageManager.getInstance(context) }
+    var showVfxBottomSheet by remember { mutableStateOf(false) }
+    var showVfxJitDialog by remember { mutableStateOf(false) }
+    var activeVfxImageElement by remember { mutableStateOf<com.arinara.fotara.canvas.model.ImageElement?>(null) }
     var editingLayerId by remember { mutableStateOf<String?>(null) }
     var editingLayerName by remember { mutableStateOf(TextFieldValue()) }
     val renameFocusRequester = remember { FocusRequester() }
@@ -498,17 +502,6 @@ fun CanvasScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = { showShareSheet = true },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Share Note",
-                            tint = FolderTabCream,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
 
                     Box {
                         IconButton(
@@ -1350,6 +1343,33 @@ fun CanvasScreen(
                             }
                         }
 
+                        val selectedImageElement = if (hasSelection) {
+                            uiState.document.elements.firstOrNull { el ->
+                                uiState.toolState.selection.elementIds.contains(el.id) && el is com.arinara.fotara.canvas.model.ImageElement
+                            } as? com.arinara.fotara.canvas.model.ImageElement
+                        } else null
+
+                        if (selectedImageElement != null) {
+                            IconButton(
+                                onClick = {
+                                    activeVfxImageElement = selectedImageElement
+                                    if (packageManager.isPackageInstalled(com.arinara.fotara.feature.packages.loader.FotaraPackageManager.PACKAGE_CANVAS_VFX)) {
+                                        showVfxBottomSheet = true
+                                    } else {
+                                        showVfxJitDialog = true
+                                    }
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Palette,
+                                    contentDescription = "Visual Effects (VFX)",
+                                    tint = FolderTabCream,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
                         // Duplicate
                         IconButton(
                             onClick = { viewModel.duplicateSelectedElements() },
@@ -1915,6 +1935,39 @@ fun CanvasScreen(
                     Spacer(modifier = Modifier.height(20.dp))
                 }
             }
+        }
+
+        // Visual Effects (VFX) Bottom Sheet & JIT Feature Interception Dialog
+        if (showVfxBottomSheet && activeVfxImageElement != null) {
+            com.arinara.fotara.canvas.vfx.VfxControlBottomSheet(
+                parameters = activeVfxImageElement!!.vfxParams,
+                onParametersChanged = { newParams ->
+                    val el = activeVfxImageElement ?: return@VfxControlBottomSheet
+                    val updated = el.copy(vfxParams = newParams)
+                    activeVfxImageElement = updated
+                    viewModel.updateImageVfx(el.id, newParams)
+                },
+                onDismiss = {
+                    showVfxBottomSheet = false
+                    activeVfxImageElement = null
+                }
+            )
+        }
+
+        if (showVfxJitDialog) {
+            val vfxManifest = packageManager.getAvailablePackages().find { it.packageId == com.arinara.fotara.feature.packages.loader.FotaraPackageManager.PACKAGE_CANVAS_VFX }
+                ?: com.arinara.fotara.feature.packages.loader.FotaraPackageManager.OFFICIAL_PACKAGES.find { it.packageId == com.arinara.fotara.feature.packages.loader.FotaraPackageManager.PACKAGE_CANVAS_VFX }!!
+            com.arinara.fotara.feature.packages.ui.JitFeatureInterceptionDialog(
+                manifest = vfxManifest,
+                onDismissRequest = { showVfxJitDialog = false },
+                onLaunch = {
+                    showVfxJitDialog = false
+                    if (activeVfxImageElement != null) {
+                        showVfxBottomSheet = true
+                    }
+                },
+                packageManager = packageManager
+            )
         }
 
         // Note Info Dialog
