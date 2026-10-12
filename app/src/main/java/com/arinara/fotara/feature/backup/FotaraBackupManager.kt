@@ -83,6 +83,7 @@ class FotaraBackupManager(private val context: Context) {
         const val ATTACHMENTS_DIR_ENTRY = "Attachments/"
         const val ATTACHMENTS_DIR_ENTRY_LEGACY = "attachments/"
         const val DATABASE_ENTRY_LEGACY = "database.json"
+        const val PRIVATE_VAULT_ENTRY = "Private/private_vault.enc"
 
         fun computeSha256(data: ByteArray): String {
             val md = MessageDigest.getInstance("SHA-256")
@@ -167,12 +168,81 @@ class FotaraBackupManager(private val context: Context) {
                 }
             }
 
-            // 3. Build Manifest
+            // 3. Detect and encrypt Private Space data with AES-GCM
+            val privateSpaceIds = mutableSetOf<Long>()
+            val privateSpacesArray = org.json.JSONArray()
+            for (i in 0 until spacesArray.length()) {
+                val obj = spacesArray.getJSONObject(i)
+                if (obj.optBoolean("is_private", false) || obj.optInt("is_private", 0) == 1) {
+                    privateSpaceIds.add(obj.optLong("id"))
+                    privateSpacesArray.put(obj)
+                }
+            }
+
+            val privateWorkspaceIds = mutableSetOf<Long>()
+            val privateWorkspacesArray = org.json.JSONArray()
+            for (i in 0 until workspacesArray.length()) {
+                val obj = workspacesArray.getJSONObject(i)
+                if (privateSpaceIds.contains(obj.optLong("space_id"))) {
+                    privateWorkspaceIds.add(obj.optLong("id"))
+                    privateWorkspacesArray.put(obj)
+                }
+            }
+
+            val privateFolderIds = mutableSetOf<Long>()
+            val privateFoldersArray = org.json.JSONArray()
+            for (i in 0 until foldersArray.length()) {
+                val obj = foldersArray.getJSONObject(i)
+                if (privateWorkspaceIds.contains(obj.optLong("workspace_id"))) {
+                    privateFolderIds.add(obj.optLong("id"))
+                    privateFoldersArray.put(obj)
+                }
+            }
+
+            val privateTextNotesArray = org.json.JSONArray()
+            for (i in 0 until textNotesArray.length()) {
+                val obj = textNotesArray.getJSONObject(i)
+                if (privateFolderIds.contains(obj.optLong("folder_id"))) {
+                    privateTextNotesArray.put(obj)
+                }
+            }
+
+            val privatePhotosArray = org.json.JSONArray()
+            for (i in 0 until photosArray.length()) {
+                val obj = photosArray.getJSONObject(i)
+                if (privateFolderIds.contains(obj.optLong("folder_id"))) {
+                    privatePhotosArray.put(obj)
+                }
+            }
+
+            val privateDocsArray = org.json.JSONArray()
+            for (i in 0 until documentNotesArray.length()) {
+                val obj = documentNotesArray.getJSONObject(i)
+                if (privateFolderIds.contains(obj.optLong("folder_id"))) {
+                    privateDocsArray.put(obj)
+                }
+            }
+
+            val privateVaultEncryptedBytes: ByteArray? = if (privateSpaceIds.isNotEmpty()) {
+                val privateVaultJson = JSONObject().apply {
+                    put("spaces", privateSpacesArray)
+                    put("workspaces", privateWorkspacesArray)
+                    put("folders", privateFoldersArray)
+                    put("text_notes", privateTextNotesArray)
+                    put("photos", privatePhotosArray)
+                    put("document_notes", privateDocsArray)
+                }
+                com.arinara.fotara.util.AesGcmCrypto.encrypt(
+                    privateVaultJson.toString(2).toByteArray(Charsets.UTF_8)
+                )
+            } else null
+
+            // 4. Build Manifest
             val manifest = BackupManifest(
-                format = "fotara_archive_v2",
-                version = 2,
+                format = "fotara_archive_v3",
+                version = 3,
                 createdAt = System.currentTimeMillis(),
-                appVersion = "1.9.4-alpha",
+                appVersion = "1.9.5-alpha",
                 checksumSha256 = checksum,
                 scopeType = if (scope is BackupScope.EntireApp) "ENTIRE_APP" else "SELECTIVE",
                 spaceCount = spacesArray.length(),
@@ -200,12 +270,14 @@ class FotaraBackupManager(private val context: Context) {
                 put("documentCount", manifest.documentCount)
                 put("scheduleCount", manifest.scheduleCount)
                 put("attachmentCount", manifest.attachmentCount)
+                put("hasPrivateVault", privateSpaceIds.isNotEmpty())
+                put("privateEncryption", if (privateSpaceIds.isNotEmpty()) "AES-256-GCM" else "NONE")
             }
             val manifestBytes = manifestJson.toString(2).toByteArray(Charsets.UTF_8)
 
             onProgress(0.5f)
 
-            // 4. Write Hierarchical ZIP stream
+            // 5. Write Hierarchical ZIP stream
             val zipOut = ZipOutputStream(outputStream)
             zipOut.use { zos ->
                 fun writeJsonEntry(name: String, contentBytes: ByteArray) {
@@ -227,6 +299,11 @@ class FotaraBackupManager(private val context: Context) {
                 writeJsonEntry(DOCUMENT_NOTES_ENTRY, documentNotesArray.toString(2).toByteArray(Charsets.UTF_8))
                 writeJsonEntry(DOCUMENT_PAGES_ENTRY, documentPagesArray.toString(2).toByteArray(Charsets.UTF_8))
                 writeJsonEntry(SCHEDULES_ENTRY, schedulesArray.toString(2).toByteArray(Charsets.UTF_8))
+
+                // AES-GCM Encrypted Private Space Vault
+                if (privateVaultEncryptedBytes != null) {
+                    writeJsonEntry(PRIVATE_VAULT_ENTRY, privateVaultEncryptedBytes)
+                }
 
                 // Backward-compatibility bundle
                 writeJsonEntry(DATABASE_ENTRY_LEGACY, dbBytes)
@@ -346,6 +423,7 @@ class FotaraBackupManager(private val context: Context) {
             var restoredAttachmentsCount = 0
 
             val hierarchicalJsonMap = mutableMapOf<String, String>()
+            var privateVaultBytes: ByteArray? = null
 
             val zipIn = ZipInputStream(inputStream)
             var entry = zipIn.nextEntry
@@ -377,6 +455,11 @@ class FotaraBackupManager(private val context: Context) {
                         val out = ByteArrayOutputStream()
                         zipIn.copyTo(out)
                         databaseBytes = out.toByteArray()
+                    }
+                    entryName.equals(PRIVATE_VAULT_ENTRY, ignoreCase = true) -> {
+                        val out = ByteArrayOutputStream()
+                        zipIn.copyTo(out)
+                        privateVaultBytes = out.toByteArray()
                     }
                     entryName.endsWith(".json") && (entryName.startsWith("Spaces/") || entryName.startsWith("Workspaces/") || entryName.startsWith("Folders/") || entryName.startsWith("Notes/")) -> {
                         val out = ByteArrayOutputStream()
@@ -459,6 +542,24 @@ class FotaraBackupManager(private val context: Context) {
                     restoreTableFromJson(db, "document_pages", parseArray(DOCUMENT_PAGES_ENTRY), conflictAlgorithm = SQLiteDatabase.CONFLICT_IGNORE)
                     restoreTableFromJson(db, "class_schedules", parseArray(SCHEDULES_ENTRY), conflictAlgorithm = SQLiteDatabase.CONFLICT_IGNORE)
                     restoredNotes = restoredPhotos + restoredTexts + restoredDocs
+                }
+
+                // Restore encrypted private vault if present
+                if (privateVaultBytes != null) {
+                    try {
+                        val decryptedBytes = com.arinara.fotara.util.AesGcmCrypto.decrypt(privateVaultBytes)
+                        val privateVaultJson = JSONObject(decryptedBytes.toString(Charsets.UTF_8))
+                        restoreTableFromJson(db, "spaces", privateVaultJson.optJSONArray("spaces"), conflictAlgorithm = SQLiteDatabase.CONFLICT_REPLACE)
+                        restoreTableFromJson(db, "workspaces", privateVaultJson.optJSONArray("workspaces"), conflictAlgorithm = SQLiteDatabase.CONFLICT_REPLACE)
+                        val privFolders = restoreTableFromJson(db, "folders", privateVaultJson.optJSONArray("folders"), conflictAlgorithm = SQLiteDatabase.CONFLICT_REPLACE)
+                        val privPhotos = restoreTableFromJson(db, "photos", privateVaultJson.optJSONArray("photos"), conflictAlgorithm = SQLiteDatabase.CONFLICT_REPLACE)
+                        val privTexts = restoreTableFromJson(db, "text_notes", privateVaultJson.optJSONArray("text_notes"), conflictAlgorithm = SQLiteDatabase.CONFLICT_REPLACE)
+                        val privDocs = restoreTableFromJson(db, "document_notes", privateVaultJson.optJSONArray("document_notes"), conflictAlgorithm = SQLiteDatabase.CONFLICT_REPLACE)
+                        restoredFolders += privFolders
+                        restoredNotes += (privPhotos + privTexts + privDocs)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to restore encrypted private vault", e)
+                    }
                 }
 
                 db.setTransactionSuccessful()

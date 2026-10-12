@@ -38,8 +38,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import android.net.Uri
+import java.io.File
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EditNote
@@ -48,6 +51,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.AlertDialog
@@ -146,7 +152,10 @@ fun TextNoteEditorScreen(
     onBack: () -> Unit,
     onShare: (TextNote) -> Unit,
     highlightQuery: String? = null,
-    audioAnnotationRepository: com.arinara.fotara.audio.repository.AudioAnnotationRepository? = null
+    audioAnnotationRepository: com.arinara.fotara.audio.repository.AudioAnnotationRepository? = null,
+    documentRepository: com.arinara.fotara.data.repository.DocumentRepository? = null,
+    onOpenClock: (() -> Unit)? = null,
+    onOpenDocument: ((docId: Long, isDocx: Boolean) -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -208,6 +217,49 @@ fun TextNoteEditorScreen(
             }
         } else {
             Toast.makeText(context, "Microphone permission is required to record audio notes", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            coroutineScope.launch {
+                try {
+                    val fileName = try {
+                        context.contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (cursor.moveToFirst() && nameIndex != -1) cursor.getString(nameIndex) else null
+                        }
+                    } catch (_: Exception) { null } ?: "Document_${System.currentTimeMillis()}"
+                    val isPdf = fileName.lowercase().endsWith(".pdf") || (context.contentResolver.getType(it)?.contains("pdf") == true)
+                    val isDocx = fileName.lowercase().endsWith(".docx") || fileName.lowercase().endsWith(".doc")
+                    val docId = if (isPdf) {
+                        documentRepository?.importPdf(it, folderId, subfolderId, fileName) ?: System.currentTimeMillis()
+                    } else {
+                        documentRepository?.importDocx(it, folderId, subfolderId, fileName) ?: System.currentTimeMillis()
+                    }
+                    state.appendDocumentAttachment(fileName, docId)
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Failed to attach document: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            coroutineScope.launch {
+                try {
+                    val storageManager = com.arinara.fotara.data.storage.PhotoStorageManager(context)
+                    val saved = storageManager.saveUriAsPhoto(it)
+                    state.appendImageAttachment(saved.filePath)
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Failed to attach image: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -370,6 +422,15 @@ fun TextNoteEditorScreen(
                             color = ToolbarBorder,
                             thickness = 1.dp,
                             modifier = Modifier.padding(vertical = 4.dp)
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("Clock", color = TabCream) },
+                            leadingIcon = { Icon(Icons.Default.AccessTime, null, tint = AccentGold) },
+                            onClick = {
+                                showOverflowMenu = false
+                                onOpenClock?.invoke()
+                            }
                         )
 
                         DropdownMenuItem(
@@ -551,7 +612,8 @@ fun TextNoteEditorScreen(
                     cardBorder = ToolbarBorder,
                     onToggleChecklistLine = { lineIndex ->
                         state.toggleChecklistAtLine(lineIndex)
-                    }
+                    },
+                    onOpenDocument = onOpenDocument
                 )
                 Spacer(modifier = Modifier.height(32.dp))
             }
@@ -647,6 +709,32 @@ fun TextNoteEditorScreen(
                     }
                 }
 
+                val density = LocalDensity.current
+                val imeBottom = WindowInsets.ime.getBottom(density)
+
+                LaunchedEffect(state.bodyValue.selection, imeBottom, textLayoutResult) {
+                    val layout = textLayoutResult ?: return@LaunchedEffect
+                    if (state.bodyValue.selection.collapsed) {
+                        val cursorOffset = visualTransformation.lastOffsetMapping.originalToTransformed(state.bodyValue.selection.start)
+                        val clampedOffset = cursorOffset.coerceIn(0, (layout.layoutInput.text.length - 1).coerceAtLeast(0))
+                        if (layout.lineCount > 0) {
+                            val line = layout.getLineForOffset(clampedOffset)
+                            val lineTop = layout.getLineTop(line)
+                            val lineBottom = layout.getLineBottom(line)
+                            val viewportHeight = editorScrollState.viewportSize
+                            if (viewportHeight > 0) {
+                                val scrollPos = editorScrollState.value
+                                val marginPx = with(density) { 72.dp.toPx() }.toInt()
+                                if (lineBottom + marginPx > scrollPos + viewportHeight) {
+                                    editorScrollState.animateScrollTo((lineBottom + marginPx - viewportHeight).coerceAtLeast(0f).toInt())
+                                } else if (lineTop - marginPx < scrollPos) {
+                                    editorScrollState.animateScrollTo((lineTop - marginPx).coerceAtLeast(0f).toInt())
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -659,6 +747,35 @@ fun TextNoteEditorScreen(
                                         coroutineScope.launch { searchHighlightAlpha.snapTo(0f) }
                                     }
                                     val layout = textLayoutResult ?: return@detectTapGestures
+                                    val charOffset = layout.getOffsetForPosition(offset)
+                                    val origCharOffset = visualTransformation.lastOffsetMapping.transformedToOriginal(charOffset)
+                                    val doc = state.bodyValue.text
+
+                                    // Direct link hit-test
+                                    val linkRegex = Regex("""\[([^\]]+)\]\(([^)]+)\)""")
+                                    val hitMatch = linkRegex.findAll(doc).firstOrNull { origCharOffset in it.range }
+                                    if (hitMatch != null) {
+                                        val targetUrl = hitMatch.groupValues[2]
+                                        if (targetUrl.startsWith("fotara://doc/")) {
+                                            val docIdStr = targetUrl.removePrefix("fotara://doc/")
+                                            val docId = docIdStr.toLongOrNull()
+                                            if (docId != null) {
+                                                val isDocx = hitMatch.groupValues[1].endsWith(".docx", ignoreCase = true)
+                                                onOpenDocument?.invoke(docId, isDocx)
+                                                return@detectTapGestures
+                                            }
+                                        } else {
+                                            com.arinara.fotara.util.LinkLauncher.openUrl(context, targetUrl)
+                                            return@detectTapGestures
+                                        }
+                                    }
+                                    val rawUrlRegex = Regex("""https?://[^\s<>"{}|\\^`\[\]]+""")
+                                    val hitRaw = rawUrlRegex.findAll(doc).firstOrNull { origCharOffset in it.range }
+                                    if (hitRaw != null) {
+                                        com.arinara.fotara.util.LinkLauncher.openUrl(context, hitRaw.value)
+                                        return@detectTapGestures
+                                    }
+
                                     val line = layout.getLineForVerticalPosition(offset.y)
                                     if (line in 0 until layout.lineCount) {
                                         val tLineStart = layout.getLineStart(line)
@@ -938,7 +1055,19 @@ fun TextNoteEditorScreen(
             EditorToolbar(
                 state = state,
                 isLatexInstalled = isLatexInstalled,
-                onMathPromoClick = { showLatexPromoSheet = true }
+                onMathPromoClick = { showLatexPromoSheet = true },
+                onAttachDocumentClick = {
+                    documentPickerLauncher.launch(
+                        arrayOf(
+                            "application/pdf",
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            "application/msword"
+                        )
+                    )
+                },
+                onInsertImageClick = {
+                    imagePickerLauncher.launch(arrayOf("image/*"))
+                }
             )
         }
     }

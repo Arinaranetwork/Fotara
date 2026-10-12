@@ -1524,6 +1524,16 @@ class FakeWorkspaceRepository(
         return WorkspaceResult.Success(Unit)
     }
 
+    override suspend fun moveFoldersToSpace(folderIds: List<Long>, targetSpaceId: Long): WorkspaceResult<Unit> {
+        val current = workspacesFlow.value
+        val targetWs = current.firstOrNull { it.spaceId == targetSpaceId } ?: current.firstOrNull()
+        return if (targetWs != null) {
+            moveFolders(folderIds, targetWs.id)
+        } else {
+            WorkspaceResult.Success(Unit)
+        }
+    }
+
     override suspend fun getWorkspaceStats(workspaceId: Long): WorkspaceContentStats {
         val folders = folderRepository.getFoldersByWorkspace(workspaceId).first()
         val noteCount = folders.sumOf { it.photoCount }

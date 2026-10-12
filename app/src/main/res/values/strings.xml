@@ -210,7 +210,7 @@
     <string name="cd_workspace_options">Workspace options</string>
 
     <!-- Workspaces Part 2 (Phase 28 - Batch 2B) -->
-    <string name="folder_menu_move_to_workspace">Move to workspace</string>
+    <string name="folder_menu_move_to_workspace">Move to...</string>
     <string name="dialog_move_to_workspace_title_single">Move %1$s</string>
     <string name="dialog_move_to_workspace_title_plural">Move %1$d folders</string>
     <string name="action_move_confirm">Move</string>

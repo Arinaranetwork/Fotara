@@ -8,6 +8,8 @@ package com.arinara.fotara.ui.home.workspace
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -453,24 +455,29 @@ fun formatWorkspaceCountsAndSize(stats: WorkspaceContentStats): String {
     return "$fStr · $nStr · $sStr"
 }
 
+enum class MoveTargetCategory {
+    WORKSPACES,
+    SPACES
+}
+
 @Composable
-fun MoveToWorkspaceDialog(
+fun MoveActionDialog(
     folders: List<Folder>,
     workspaces: List<Workspace>,
+    spaces: List<com.arinara.fotara.data.model.Space> = emptyList(),
+    currentSpaceId: Long = 1L,
     onDismiss: () -> Unit,
-    onMove: (targetWorkspaceId: Long) -> Unit
+    onMoveToWorkspace: (targetWorkspaceId: Long) -> Unit,
+    onMoveToSpace: (targetSpaceId: Long) -> Unit
 ) {
-    val title = if (folders.size == 1) {
-        stringResource(R.string.dialog_move_to_workspace_title_single, folders[0].name)
-    } else {
-        stringResource(R.string.dialog_move_to_workspace_title_plural, folders.size)
-    }
+    var selectedCategory by remember { mutableStateOf(MoveTargetCategory.WORKSPACES) }
+    var selectedWorkspaceId by remember { mutableStateOf<Long?>(null) }
+    var selectedSpaceId by remember { mutableStateOf<Long?>(null) }
 
     val commonWorkspaceId = if (folders.isNotEmpty() && folders.all { it.workspaceId == folders[0].workspaceId }) {
         folders[0].workspaceId
     } else null
 
-    var selectedId by remember { mutableStateOf<Long?>(null) }
     val orderedWorkspaces = remember(workspaces) { workspaces.sortedBy { it.position } }
 
     AlertDialog(
@@ -478,78 +485,204 @@ fun MoveToWorkspaceDialog(
         containerColor = HomeCardSurface,
         shape = RoundedCornerShape(20.dp),
         title = {
-            Text(
-                text = title,
-                color = Color.White,
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
+            Column {
+                Text(
+                    text = "Move to...",
+                    color = Color.White,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF0F1424))
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val isWsSelected = selectedCategory == MoveTargetCategory.WORKSPACES
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isWsSelected) HomeMainButtonBlue else Color.Transparent)
+                            .clickable { selectedCategory = MoveTargetCategory.WORKSPACES }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Workspaces",
+                            color = if (isWsSelected) Color.White else HomeSubtitleGray,
+                            fontFamily = ElmsSans,
+                            fontWeight = if (isWsSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    val isSpaceSelected = selectedCategory == MoveTargetCategory.SPACES
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSpaceSelected) HomeMainButtonBlue else Color.Transparent)
+                            .clickable { selectedCategory = MoveTargetCategory.SPACES }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Space",
+                            color = if (isSpaceSelected) Color.White else HomeSubtitleGray,
+                            fontFamily = ElmsSans,
+                            fontWeight = if (isSpaceSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                orderedWorkspaces.forEach { ws ->
-                    val isCurrent = commonWorkspaceId != null && ws.id == commonWorkspaceId
-                    val wsDisplay = ws.getDisplay()
-                    val isSelected = selectedId == ws.id
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (selectedCategory == MoveTargetCategory.WORKSPACES) {
+                    orderedWorkspaces.forEach { ws ->
+                        val isCurrent = commonWorkspaceId != null && ws.id == commonWorkspaceId
+                        val wsDisplay = ws.getDisplay()
+                        val isSelected = selectedWorkspaceId == ws.id
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = !isCurrent) {
-                                selectedId = ws.id
-                            }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = isSelected,
-                            onClick = { if (!isCurrent) selectedId = ws.id },
-                            enabled = !isCurrent,
-                            colors = RadioButtonDefaults.colors(
-                                selectedColor = HomeMainButtonBlue,
-                                unselectedColor = HomeSubtitleGray,
-                                disabledSelectedColor = HomeSubtitleGray.copy(alpha = 0.4f),
-                                disabledUnselectedColor = HomeSubtitleGray.copy(alpha = 0.3f)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !isCurrent) {
+                                    selectedWorkspaceId = ws.id
+                                }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { if (!isCurrent) selectedWorkspaceId = ws.id },
+                                enabled = !isCurrent,
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = HomeMainButtonBlue,
+                                    unselectedColor = HomeSubtitleGray,
+                                    disabledSelectedColor = HomeSubtitleGray.copy(alpha = 0.4f),
+                                    disabledUnselectedColor = HomeSubtitleGray.copy(alpha = 0.3f)
+                                )
                             )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            painter = painterResource(wsDisplay.iconResId),
-                            contentDescription = null,
-                            tint = if (isCurrent) HomeSubtitleGray.copy(alpha = 0.5f) else Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = wsDisplay.name,
-                            color = if (isCurrent) HomeSubtitleGray.copy(alpha = 0.5f) else Color.White,
-                            fontFamily = ElmsSans,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 15.sp,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (isCurrent) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                painter = painterResource(wsDisplay.iconResId),
+                                contentDescription = null,
+                                tint = if (isCurrent) HomeSubtitleGray.copy(alpha = 0.5f) else Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = stringResource(R.string.workspace_current_badge),
-                                color = HomeSubtitleGray.copy(alpha = 0.6f),
+                                text = wsDisplay.name,
+                                color = if (isCurrent) HomeSubtitleGray.copy(alpha = 0.5f) else Color.White,
                                 fontFamily = ElmsSans,
-                                fontSize = 12.sp
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 15.sp,
+                                modifier = Modifier.weight(1f)
                             )
+                            if (isCurrent) {
+                                Text(
+                                    text = stringResource(R.string.workspace_current_badge),
+                                    color = HomeSubtitleGray.copy(alpha = 0.6f),
+                                    fontFamily = ElmsSans,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    if (spaces.isEmpty()) {
+                        Text(
+                            text = "No other spaces available",
+                            color = HomeSubtitleGray,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    } else {
+                        spaces.forEach { space ->
+                            val isCurrent = space.id == currentSpaceId
+                            val isSelected = selectedSpaceId == space.id
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !isCurrent) {
+                                        selectedSpaceId = space.id
+                                    }
+                                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { if (!isCurrent) selectedSpaceId = space.id },
+                                    enabled = !isCurrent,
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = HomeMainButtonBlue,
+                                        unselectedColor = HomeSubtitleGray,
+                                        disabledSelectedColor = HomeSubtitleGray.copy(alpha = 0.4f),
+                                        disabledUnselectedColor = HomeSubtitleGray.copy(alpha = 0.3f)
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    painter = painterResource(com.arinara.fotara.data.model.WorkspaceIcons.getIconResId(space.iconKey)),
+                                    contentDescription = null,
+                                    tint = if (isCurrent) HomeSubtitleGray.copy(alpha = 0.5f) else Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = space.name,
+                                    color = if (isCurrent) HomeSubtitleGray.copy(alpha = 0.5f) else Color.White,
+                                    fontFamily = ElmsSans,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 15.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isCurrent) {
+                                    Text(
+                                        text = "Current",
+                                        color = HomeSubtitleGray.copy(alpha = 0.6f),
+                                        fontFamily = ElmsSans,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         },
         confirmButton = {
+            val canConfirm = if (selectedCategory == MoveTargetCategory.WORKSPACES) {
+                selectedWorkspaceId != null && (commonWorkspaceId == null || selectedWorkspaceId != commonWorkspaceId)
+            } else {
+                selectedSpaceId != null && selectedSpaceId != currentSpaceId
+            }
             Button(
-                onClick = { selectedId?.let { onMove(it) } },
-                enabled = selectedId != null && (commonWorkspaceId == null || selectedId != commonWorkspaceId),
+                onClick = {
+                    if (selectedCategory == MoveTargetCategory.WORKSPACES) {
+                        selectedWorkspaceId?.let { onMoveToWorkspace(it) }
+                    } else {
+                        selectedSpaceId?.let { onMoveToSpace(it) }
+                    }
+                },
+                enabled = canConfirm,
                 colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
-                    text = stringResource(R.string.action_move_confirm),
+                    text = if (selectedCategory == MoveTargetCategory.WORKSPACES) "Move to Workspace" else "Move to Space",
                     color = Color.White,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.SemiBold
@@ -565,6 +698,24 @@ fun MoveToWorkspaceDialog(
                 )
             }
         }
+    )
+}
+
+@Composable
+fun MoveToWorkspaceDialog(
+    folders: List<Folder>,
+    workspaces: List<Workspace>,
+    onDismiss: () -> Unit,
+    onMove: (targetWorkspaceId: Long) -> Unit
+) {
+    MoveActionDialog(
+        folders = folders,
+        workspaces = workspaces,
+        spaces = emptyList(),
+        currentSpaceId = 1L,
+        onDismiss = onDismiss,
+        onMoveToWorkspace = onMove,
+        onMoveToSpace = {}
     )
 }
 

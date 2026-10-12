@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DataObject
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.outlined.FormatListNumbered
 import androidx.compose.material.icons.outlined.FormatQuote
 import androidx.compose.material.icons.outlined.FormatStrikethrough
 import androidx.compose.material.icons.outlined.HorizontalRule
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,7 +67,9 @@ fun EditorToolbar(
     state: EditorState,
     modifier: Modifier = Modifier,
     isLatexInstalled: Boolean = true,
-    onMathPromoClick: () -> Unit = {}
+    onMathPromoClick: () -> Unit = {},
+    onAttachDocumentClick: () -> Unit = {},
+    onInsertImageClick: () -> Unit = {}
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -206,11 +210,21 @@ fun EditorToolbar(
 
             GroupDivider()
 
-            // Group 5: Insertions [Link, Table, Code block, Divider]
+            // Group 5: Insertions [Link, Attach Document, Insert Image, Table, Code block, Divider]
             ToolbarActionItem(
                 icon = Icons.Outlined.Link,
                 description = "Insert Link",
                 onClick = { state.openLinkDialog() }
+            )
+            ToolbarActionItem(
+                icon = Icons.Outlined.AttachFile,
+                description = "Attach Document (.pdf, .docx)",
+                onClick = onAttachDocumentClick
+            )
+            ToolbarActionItem(
+                icon = Icons.Outlined.Image,
+                description = "Insert Image",
+                onClick = onInsertImageClick
             )
             ToolbarTextActionItem(
                 label = "▦",

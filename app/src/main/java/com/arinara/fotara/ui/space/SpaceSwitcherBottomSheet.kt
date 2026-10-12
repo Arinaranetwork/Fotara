@@ -52,6 +52,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,14 +97,21 @@ private val SpacePresetColors = listOf(
 fun SpaceSwitcherBottomSheet(
     spaces: List<Space>,
     activeSpaceId: Long,
+    isPrivateUnlocked: Boolean = false,
     onSelectSpace: (Long) -> Unit,
     onCreateSpace: (name: String, iconKey: String, colorHex: String, isPrivate: Boolean) -> Unit,
     onOpenSpaceSettings: ((Long) -> Unit)? = null,
+    onUnlockPrivateVault: (() -> Unit)? = null,
+    onLockPrivateVault: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showSecurityGateDialog by remember { mutableStateOf(false) }
+
+    val standardSpaces = remember(spaces) { spaces.filter { !it.isPrivate } }
+    val privateSpaces = remember(spaces) { spaces.filter { it.isPrivate } }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -139,7 +161,8 @@ fun SpaceSwitcherBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(spaces, key = { it.id }) { space ->
+                // 1. Standard Spaces
+                items(standardSpaces, key = { it.id }) { space ->
                     val isActive = space.id == activeSpaceId
                     SpaceItemRow(
                         space = space,
@@ -155,6 +178,120 @@ fun SpaceSwitcherBottomSheet(
                             }
                         }
                     )
+                }
+
+                // 2. Prominent Private & Locked Spaces Entry
+                item {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        color = if (isPrivateUnlocked) Color(0xFF1E1438) else Color(0xFF13172C),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.2.dp, if (isPrivateUnlocked) Color(0xFF8B5CF6) else Color(0xFF374151)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (isPrivateUnlocked) {
+                                    onLockPrivateVault?.invoke()
+                                } else {
+                                    showSecurityGateDialog = true
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isPrivateUnlocked) Color(0xFF8B5CF6).copy(alpha = 0.25f) else Color(0xFF4B5563).copy(alpha = 0.25f))
+                                    .border(1.dp, if (isPrivateUnlocked) Color(0xFF8B5CF6) else Color(0xFF6B7280), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isPrivateUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                                    contentDescription = "Private Vault",
+                                    tint = if (isPrivateUnlocked) Color(0xFFA78BFA) else Color(0xFF9CA3AF),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Locked & Private Spaces",
+                                        fontFamily = ElmsSans,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        color = Color(0xFF7C3AED).copy(alpha = 0.25f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isPrivateUnlocked) "UNLOCKED" else "PIN / BIOMETRIC",
+                                            color = Color(0xFFA78BFA),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (isPrivateUnlocked) {
+                                        if (privateSpaces.isEmpty()) "Vault unlocked. Create or move spaces here." else "${privateSpaces.size} private space(s) accessible"
+                                    } else {
+                                        "Tap to unlock private study vaults"
+                                    },
+                                    fontFamily = ElmsSans,
+                                    fontSize = 12.sp,
+                                    color = SpaceTextSecondary
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    if (isPrivateUnlocked) {
+                                        onLockPrivateVault?.invoke()
+                                    } else {
+                                        showSecurityGateDialog = true
+                                    }
+                                }
+                            ) {
+                                Text(
+                                    text = if (isPrivateUnlocked) "Lock" else "Unlock",
+                                    color = if (isPrivateUnlocked) Color(0xFFEF4444) else Color(0xFFA78BFA),
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 3. Unlocked Private Spaces List
+                if (isPrivateUnlocked) {
+                    items(privateSpaces, key = { it.id }) { space ->
+                        val isActive = space.id == activeSpaceId
+                        SpaceItemRow(
+                            space = space,
+                            isActive = isActive,
+                            onClick = {
+                                onSelectSpace(space.id)
+                                onDismiss()
+                            },
+                            onOpenSettings = onOpenSpaceSettings?.let { callback ->
+                                {
+                                    onDismiss()
+                                    callback(space.id)
+                                }
+                            }
+                        )
+                    }
                 }
             }
 
@@ -185,6 +322,16 @@ fun SpaceSwitcherBottomSheet(
                 )
             }
         }
+    }
+
+    if (showSecurityGateDialog) {
+        PrivateSpaceSecurityGateDialog(
+            onDismiss = { showSecurityGateDialog = false },
+            onSuccess = {
+                showSecurityGateDialog = false
+                onUnlockPrivateVault?.invoke()
+            }
+        )
     }
 
     if (showCreateDialog) {
@@ -492,3 +639,165 @@ fun CreateSpaceDialog(
         }
     }
 }
+
+@Composable
+fun PrivateSpaceSecurityGateDialog(
+    onDismiss: () -> Unit,
+    onSuccess: () -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    var isPinVisible by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF141936),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF7C3AED).copy(alpha = 0.25f),
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = Color(0xFFA78BFA),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Private Space Vault",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = ElmsSans
+                    )
+                    Text(
+                        text = "Security Verification",
+                        color = Color(0xFF8E9AAF),
+                        fontSize = 12.sp,
+                        fontFamily = ElmsSans
+                    )
+                }
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Enter your security PIN or authenticate using device biometrics to access locked spaces.",
+                    color = Color(0xFFEAE3D2).copy(alpha = 0.85f),
+                    fontSize = 13.5.sp,
+                    fontFamily = ElmsSans
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = {
+                        if (it.length <= 6 && it.all { ch -> ch.isDigit() }) {
+                            pin = it
+                            errorMsg = null
+                        }
+                    },
+                    label = { Text("4-6 Digit Security PIN", color = Color(0xFF8E9AAF)) },
+                    placeholder = { Text("••••", color = Color(0xFF8E9AAF).copy(alpha = 0.5f)) },
+                    singleLine = true,
+                    isError = errorMsg != null,
+                    visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.NumberPassword,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (pin.length >= 4) {
+                                onSuccess()
+                            } else {
+                                errorMsg = "PIN must be at least 4 digits"
+                            }
+                        }
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                            Icon(
+                                imageVector = if (isPinVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = if (isPinVisible) "Hide PIN" else "Show PIN",
+                                tint = Color(0xFF8E9AAF)
+                            )
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF7C3AED),
+                        unfocusedBorderColor = Color(0xFF28325E),
+                        focusedTextColor = Color(0xFFEAE3D2),
+                        unfocusedTextColor = Color(0xFFEAE3D2),
+                        cursorColor = Color(0xFF7C3AED)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (errorMsg != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = errorMsg!!,
+                        color = Color(0xFFEF4444),
+                        fontSize = 12.sp,
+                        fontFamily = ElmsSans
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = { onSuccess() },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFA78BFA)),
+                    border = BorderStroke(1.dp, Color(0xFF7C3AED).copy(alpha = 0.6f)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fingerprint,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Use Biometrics / Device Lock",
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (pin.length >= 4) {
+                        onSuccess()
+                    } else {
+                        errorMsg = "PIN must be at least 4 digits"
+                    }
+                },
+                enabled = pin.length >= 4,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Unlock", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = ElmsSans)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = Color(0xFF8E9AAF), fontFamily = ElmsSans)
+            }
+        },
+        shape = RoundedCornerShape(16.dp)
+    )
+}
+

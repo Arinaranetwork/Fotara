@@ -81,3 +81,6 @@ data class PdfPageEditorNavKey(
 @Serializable
 data class SpaceSettingsNavKey(val spaceId: Long) : NavKey
 
+@Serializable
+data object NoteClockNavKey : NavKey
+

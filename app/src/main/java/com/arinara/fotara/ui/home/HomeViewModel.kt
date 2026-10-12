@@ -1050,6 +1050,27 @@ class HomeViewModel(
         }
     }
 
+    fun moveFoldersToSpace(folderIds: List<Long>, targetSpaceId: Long) {
+        viewModelScope.launch {
+            val repo = workspaceRepository ?: return@launch
+            when (val result = repo.moveFoldersToSpace(folderIds, targetSpaceId)) {
+                is WorkspaceResult.Success -> {
+                    closeMoveFoldersDialog()
+                    exitMultiSelectMode()
+                    val msg = if (folderIds.size == 1) {
+                        "Moved to Space"
+                    } else {
+                        "Moved ${folderIds.size} folders to Space"
+                    }
+                    _uiState.update { it.copy(userMessage = msg) }
+                }
+                is WorkspaceResult.Error -> {
+                    _uiState.update { it.copy(userMessage = "Failed to move folders") }
+                }
+            }
+        }
+    }
+
     fun initiateDeleteWorkspace(workspace: Workspace) {
         _uiState.update {
             it.copy(

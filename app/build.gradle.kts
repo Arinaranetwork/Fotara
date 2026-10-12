@@ -4,8 +4,8 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
 }
 
-val appVersionCode = 49
-val appVersionName = "1.9.4-alpha"
+val appVersionCode = 50
+val appVersionName = "1.9.5-alpha"
 val appChannel = when {
     appVersionName.contains("alpha", ignoreCase = true) -> "alpha"
     appVersionName.contains("beta", ignoreCase = true) -> "beta"
@@ -147,6 +147,9 @@ dependencies {
   // Jetpack Glance Widget
   implementation("androidx.glance:glance-appwidget:1.1.1")
   implementation("androidx.glance:glance-material3:1.1.1")
+
+  // Chrome Custom Tabs / Browser Link Support
+  implementation("androidx.browser:browser:1.8.0")
 
   // Shizuku Privileged Shell Downgrade API
   implementation("dev.rikka.shizuku:api:13.1.5")

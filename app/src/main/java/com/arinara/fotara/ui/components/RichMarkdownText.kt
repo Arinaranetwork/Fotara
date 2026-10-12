@@ -28,26 +28,42 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderTabCream
+import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.ui.note.math.ComposeMathView
 import com.arinara.fotara.ui.note.math.LatexAddonManager
+import com.arinara.fotara.util.LinkLauncher
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.TextUnit
@@ -195,8 +211,11 @@ private fun AnnotatedString.Builder.appendRichMarkdownInternal(
             fullMatch.startsWith("[") && fullMatch.contains("](") && fullMatch.endsWith(")") -> {
                 val closeBracket = fullMatch.indexOf("](")
                 val linkText = fullMatch.substring(1, closeBracket)
+                val url = fullMatch.substring(closeBracket + 2, fullMatch.length - 1)
+                pushStringAnnotation(tag = "URL", annotation = url)
                 pushStyle(SpanStyle(fontFamily = ElmsSans, color = linkColor, textDecoration = TextDecoration.Underline))
                 append(linkText)
+                pop()
                 pop()
             }
 
@@ -312,9 +331,27 @@ fun RichMarkdownText(
         )
     }
 
+    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val hasLinks = remember(annotated) { annotated.getStringAnnotations("URL", 0, annotated.length).isNotEmpty() }
+    val clickModifier = if (hasLinks) {
+        modifier.pointerInput(annotated) {
+            detectTapGestures { pos ->
+                layoutResult?.let { layout ->
+                    val offset = layout.getOffsetForPosition(pos)
+                    val urlAnnotations = annotated.getStringAnnotations(tag = "URL", start = offset, end = offset)
+                    urlAnnotations.firstOrNull()?.let { annotation ->
+                        LinkLauncher.openUrl(context, annotation.item)
+                    }
+                }
+            }
+        }
+    } else {
+        modifier
+    }
+
     Text(
         text = annotated,
-        modifier = modifier,
+        modifier = clickModifier,
         color = color,
         fontSize = fontSize,
         fontStyle = fontStyle,
@@ -322,7 +359,8 @@ fun RichMarkdownText(
         lineHeight = lineHeight,
         maxLines = maxLines,
         overflow = overflow,
-        textDecoration = textDecoration
+        textDecoration = textDecoration,
+        onTextLayout = { layoutResult = it }
     )
 }
 
@@ -534,12 +572,50 @@ fun RichMarkdownTable(
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
                                 contentAlignment = Alignment.CenterStart
                             ) {
-                                RichMarkdownText(
-                                    text = cellText,
-                                    color = textColor.copy(alpha = 0.92f),
-                                    fontSize = 13.sp,
-                                    accentColor = accentColor
-                                )
+                                val imgRegex = Regex("""!\[([^\]]*)\]\(([^)]+)\)""")
+                                val imgMatch = imgRegex.find(cellText)
+                                if (imgMatch != null) {
+                                    val alt = imgMatch.groupValues[1]
+                                    val url = imgMatch.groupValues[2]
+                                    val beforeText = cellText.substring(0, imgMatch.range.first).trim()
+                                    val afterText = cellText.substring(imgMatch.range.last + 1).trim()
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        if (beforeText.isNotEmpty()) {
+                                            RichMarkdownText(
+                                                text = beforeText,
+                                                color = textColor.copy(alpha = 0.92f),
+                                                fontSize = 13.sp,
+                                                accentColor = accentColor
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                        }
+                                        AsyncImage(
+                                            model = url,
+                                            contentDescription = alt.ifBlank { "Table cell image" },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .border(1.dp, borderColor, RoundedCornerShape(6.dp)),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                        if (afterText.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            RichMarkdownText(
+                                                text = afterText,
+                                                color = textColor.copy(alpha = 0.92f),
+                                                fontSize = 13.sp,
+                                                accentColor = accentColor
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    RichMarkdownText(
+                                        text = cellText,
+                                        color = textColor.copy(alpha = 0.92f),
+                                        fontSize = 13.sp,
+                                        accentColor = accentColor
+                                    )
+                                }
                             }
                         }
                     }
@@ -605,7 +681,8 @@ fun RichMarkdownColumn(
     accentColor: Color = Color(0xFFF77F00),
     cardBg: Color = Color(0xFF141936),
     cardBorder: Color = Color(0xFF283256),
-    onToggleChecklistLine: ((Int) -> Unit)? = null
+    onToggleChecklistLine: ((Int) -> Unit)? = null,
+    onOpenDocument: ((docId: Long, isDocx: Boolean) -> Unit)? = null
 ) {
     val lines = remember(markdown) { markdown.lines() }
 
@@ -642,8 +719,42 @@ fun RichMarkdownColumn(
                 continue
             }
 
-            // Skip empty lines or image banners (already handled by hero banner)
-            if (trimmed.isEmpty() || trimmed.startsWith("![")) {
+            // Document attachments: [title.pdf](fotara://doc/123) or [title.docx](fotara://doc/123)
+            val docMatch = Regex("""^\[([^\]]+)\]\(fotara://doc/(\d+)\)$""").find(trimmed)
+            if (docMatch != null) {
+                val title = docMatch.groupValues[1]
+                val docId = docMatch.groupValues[2].toLongOrNull() ?: 0L
+                val isDocx = title.endsWith(".docx", ignoreCase = true)
+                DocumentAttachmentCard(
+                    title = title,
+                    docId = docId,
+                    isDocx = isDocx,
+                    onOpenDocument = onOpenDocument,
+                    cardBg = cardBg,
+                    cardBorder = cardBorder,
+                    accentColor = accentColor,
+                    modifier = Modifier.padding(vertical = 6.dp)
+                )
+                lineIndex++
+                continue
+            }
+
+            // Resizable Markdown Image
+            val imgMatch = Regex("""^!\[([^\]]*)\]\(([^)]+)\)$""").find(trimmed)
+            if (imgMatch != null) {
+                val alt = imgMatch.groupValues[1]
+                val url = imgMatch.groupValues[2]
+                ResizableMarkdownImage(
+                    imageUrl = url,
+                    altText = alt,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+                lineIndex++
+                continue
+            }
+
+            // Skip empty lines
+            if (trimmed.isEmpty()) {
                 lineIndex++
                 continue
             }
@@ -935,3 +1046,140 @@ fun RichMarkdownColumn(
         }
     }
 }
+
+@Composable
+fun DocumentAttachmentCard(
+    title: String,
+    docId: Long,
+    isDocx: Boolean,
+    onOpenDocument: ((Long, Boolean) -> Unit)?,
+    cardBg: Color,
+    cardBorder: Color,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val badgeColor = if (isDocx) Color(0xFF3B82F6) else TagCrimson
+    val badgeLabel = if (isDocx) "DOCX" else "PDF"
+    val icon = if (isDocx) Icons.Default.Description else Icons.Default.PictureAsPdf
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(cardBg)
+            .border(BorderStroke(1.dp, cardBorder), RoundedCornerShape(12.dp))
+            .clickable(enabled = onOpenDocument != null) {
+                onOpenDocument?.invoke(docId, isDocx)
+            }
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(badgeColor.copy(alpha = 0.2f))
+                .border(1.dp, badgeColor.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = badgeLabel,
+                tint = badgeColor,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontFamily = ElmsSans,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = FolderTabCream,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = badgeColor.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = badgeLabel,
+                        color = badgeColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Internal Viewer Engine",
+                    fontSize = 12.sp,
+                    color = TextMuted
+                )
+            }
+        }
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+            contentDescription = "Open Document",
+            tint = accentColor,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+fun ResizableMarkdownImage(
+    imageUrl: String,
+    altText: String,
+    modifier: Modifier = Modifier
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF0F1424))
+                .border(BorderStroke(1.dp, Color(0xFF242E52)), RoundedCornerShape(12.dp))
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, _, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(0.5f, 3.0f)
+                    }
+                }
+                .padding(8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = altText.ifBlank { "Embedded Image" },
+                modifier = Modifier
+                    .fillMaxWidth(fraction = (0.95f * scale).coerceIn(0.2f, 1f))
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.FillWidth
+            )
+        }
+        if (altText.isNotBlank()) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = altText,
+                fontFamily = ElmsSans,
+                fontSize = 12.sp,
+                color = TextMuted,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+

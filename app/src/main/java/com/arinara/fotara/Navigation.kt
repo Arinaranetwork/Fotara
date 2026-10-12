@@ -346,6 +346,61 @@ fun MainNavigation(
                 }
             }
 
+            entry<PdfViewerNavKey> { key ->
+                var docNote by remember { mutableStateOf<com.arinara.fotara.data.model.DocumentNote?>(null) }
+                var pages by remember { mutableStateOf<List<com.arinara.fotara.data.model.DocumentPage>>(emptyList()) }
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val coroutineScope = rememberCoroutineScope()
+                LaunchedEffect(key.documentId) {
+                    docNote = appContainer.documentRepository.getDocumentNoteById(key.documentId)
+                    appContainer.documentRepository.getDocumentPages(key.documentId).collect {
+                        pages = it
+                    }
+                }
+                docNote?.let { doc ->
+                    com.arinara.fotara.ui.document.PdfViewerScreen(
+                        documentNote = doc,
+                        pages = pages,
+                        initialPageIndex = 0,
+                        pdfPagePinRepository = appContainer.pdfPagePinRepository,
+                        pdfPageDrawingRepository = appContainer.pdfPageDrawingRepository,
+                        settingsRepository = appContainer.settingsRepository,
+                        onBack = { safePopBack() },
+                        onSplitToImages = {},
+                        onDelete = {
+                            coroutineScope.launch {
+                                appContainer.documentRepository.deleteDocumentNote(doc.id)
+                                safePopBack()
+                            }
+                        },
+                        onShare = {
+                            try {
+                                val file = java.io.File(doc.originFileUri)
+                                val shareUri = androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file
+                                )
+                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(android.content.Intent.EXTRA_STREAM, shareUri)
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share PDF"))
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, "Share failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+            }
+
+            entry<NoteClockNavKey> {
+                com.arinara.fotara.ui.note.clock.NoteClockScreen(
+                    onBack = { safePopBack() }
+                )
+            }
+
             entry<TextNoteEditorNavKey> { key ->
                 var textNoteToShare by remember { mutableStateOf<com.arinara.fotara.data.model.TextNote?>(null) }
                 com.arinara.fotara.ui.note.TextNoteEditorScreen(
@@ -353,10 +408,19 @@ fun MainNavigation(
                     folderId = key.folderId,
                     subfolderId = key.subfolderId,
                     textNoteRepository = appContainer.textNoteRepository,
+                    documentRepository = appContainer.documentRepository,
                     onBack = { safePopBack() },
                     onShare = { note -> textNoteToShare = note },
                     highlightQuery = key.highlightQuery,
-                    audioAnnotationRepository = appContainer.audioAnnotationRepository
+                    audioAnnotationRepository = appContainer.audioAnnotationRepository,
+                    onOpenClock = { backStack.add(NoteClockNavKey) },
+                    onOpenDocument = { docId, isDocx ->
+                        if (isDocx) {
+                            backStack.add(DocxViewerNavKey(docId))
+                        } else {
+                            backStack.add(PdfViewerNavKey(docId))
+                        }
+                    }
                 )
                 textNoteToShare?.let { note ->
                     val context = androidx.compose.ui.platform.LocalContext.current

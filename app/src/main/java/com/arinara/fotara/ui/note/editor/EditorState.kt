@@ -233,6 +233,32 @@ class EditorState(
         scheduleAutosave()
     }
 
+    fun appendDocumentAttachment(displayName: String, docId: Long) {
+        executeAction { current ->
+            val oldText = current.text
+            val tag = "[$displayName](fotara://doc/$docId)\n"
+            val newText = if (oldText.isEmpty() || oldText.endsWith("\n")) {
+                oldText + tag
+            } else {
+                oldText + "\n\n" + tag
+            }
+            TextFieldValue(newText, selection = TextRange(newText.length))
+        }
+    }
+
+    fun appendImageAttachment(filePath: String) {
+        executeAction { current ->
+            val oldText = current.text
+            val tag = "![Image]($filePath)\n"
+            val newText = if (oldText.isEmpty() || oldText.endsWith("\n")) {
+                oldText + tag
+            } else {
+                oldText + "\n\n" + tag
+            }
+            TextFieldValue(newText, selection = TextRange(newText.length))
+        }
+    }
+
     fun toggleChecklistAtOffset(charOffset: Int): Boolean {
         val before = bodyValue.text
         executeAction { EditorActions.toggleChecklistAtOffset(it, charOffset) }

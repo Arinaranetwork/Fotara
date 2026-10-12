@@ -169,6 +169,7 @@ import com.arinara.fotara.ui.home.workspace.AddWorkspaceDialog
 import com.arinara.fotara.ui.home.workspace.EditWorkspaceDialog
 import com.arinara.fotara.ui.home.workspace.RenameWorkspaceDialog
 import com.arinara.fotara.ui.home.workspace.MoveToWorkspaceDialog
+import com.arinara.fotara.ui.home.workspace.MoveActionDialog
 import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceConfirmDialog
 import com.arinara.fotara.ui.home.workspace.DeleteWorkspaceChoiceDialog
 import com.arinara.fotara.ui.home.workspace.DeleteWorkspacePermanentConfirmDialog
@@ -248,6 +249,7 @@ fun HomeScreen(
     var showSpaceSwitcher by remember { mutableStateOf(false) }
     val spaces by (spaceRepository?.observeSpaces() ?: kotlinx.coroutines.flow.flowOf(emptyList())).collectAsStateWithLifecycle(emptyList())
     val activeSpace by (spaceRepository?.activeSpace ?: kotlinx.coroutines.flow.flowOf(Space.DEFAULT_SPACE)).collectAsStateWithLifecycle(Space.DEFAULT_SPACE)
+    val isPrivateUnlocked by (spaceRepository?.isPrivateSpaceUnlocked ?: kotlinx.coroutines.flow.flowOf(false)).collectAsStateWithLifecycle(false)
 
     var activeContextFolder by remember { mutableStateOf<Folder?>(null) }
     var folderToRename by remember { mutableStateOf<Folder?>(null) }
@@ -968,7 +970,7 @@ fun HomeScreen(
                                                 if (uiState.isMultiSelectMode) {
                                                     viewModel.toggleFolderSelection(folder.id)
                                                 } else {
-                                                    activeContextFolder = folder
+                                                    viewModel.enterMultiSelectMode(folder.id)
                                                 }
                                             }
                                         )
@@ -1825,6 +1827,7 @@ fun HomeScreen(
         SpaceSwitcherBottomSheet(
             spaces = spaces,
             activeSpaceId = activeSpace.id,
+            isPrivateUnlocked = isPrivateUnlocked,
             onSelectSpace = { newId ->
                 coroutineScope.launch {
                     spaceRepository.setActiveSpaceId(newId)
@@ -1840,9 +1843,22 @@ fun HomeScreen(
                         isPrivate = isPrivate
                     )
                     createResult.getOrNull()?.let { newSpace ->
+                        if (isPrivate) {
+                            spaceRepository.setPrivateSpaceUnlocked(true)
+                        }
                         spaceRepository.setActiveSpaceId(newSpace.id)
                         showSpaceSwitcher = false
                     }
+                }
+            },
+            onUnlockPrivateVault = {
+                coroutineScope.launch {
+                    spaceRepository.setPrivateSpaceUnlocked(true)
+                }
+            },
+            onLockPrivateVault = {
+                coroutineScope.launch {
+                    spaceRepository.setPrivateSpaceUnlocked(false)
                 }
             },
             onOpenSpaceSettings = { sId ->
@@ -1957,12 +1973,17 @@ fun HomeScreen(
     }
 
     uiState.foldersToMoveWorkspace?.let { folders ->
-        MoveToWorkspaceDialog(
+        MoveActionDialog(
             folders = folders,
             workspaces = uiState.workspaces,
+            spaces = spaces,
+            currentSpaceId = activeSpace.id,
             onDismiss = { viewModel.closeMoveFoldersDialog() },
-            onMove = { targetWsId ->
+            onMoveToWorkspace = { targetWsId ->
                 viewModel.moveFoldersToWorkspace(folders.map { it.id }, targetWsId)
+            },
+            onMoveToSpace = { targetSpaceId ->
+                viewModel.moveFoldersToSpace(folders.map { it.id }, targetSpaceId)
             }
         )
     }

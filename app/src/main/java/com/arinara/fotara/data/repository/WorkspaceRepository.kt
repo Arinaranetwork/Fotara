@@ -104,6 +104,7 @@ interface WorkspaceRepository {
     suspend fun renameWorkspace(workspaceId: Long, newName: String): WorkspaceResult<Unit>
     suspend fun reorderWorkspaces(workspaceIds: List<Long>): WorkspaceResult<Unit>
     suspend fun moveFolders(folderIds: List<Long>, targetWorkspaceId: Long): WorkspaceResult<Unit>
+    suspend fun moveFoldersToSpace(folderIds: List<Long>, targetSpaceId: Long): WorkspaceResult<Unit>
     suspend fun getWorkspaceStats(workspaceId: Long): WorkspaceContentStats
     suspend fun deleteWorkspaceMoveFoldersToHome(workspaceId: Long): WorkspaceResult<Unit>
     suspend fun deleteWorkspaceWithContents(
@@ -464,6 +465,56 @@ class SqliteWorkspaceRepository(
         try {
             val cv = ContentValues().apply {
                 put("workspace_id", targetWorkspaceId)
+            }
+            db.update("folders", cv, "id IN ($placeholders)", folderIds.map { it.toString() }.toTypedArray())
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+
+        folderRepository.refresh()
+        refreshSync()
+        WorkspaceResult.Success(Unit)
+    }
+
+    override suspend fun moveFoldersToSpace(folderIds: List<Long>, targetSpaceId: Long): WorkspaceResult<Unit> = withContext(Dispatchers.IO) {
+        if (folderIds.isEmpty()) return@withContext WorkspaceResult.Success(Unit)
+        val db = dbHelper.getSafeWritableDatabase()
+        var targetHomeWsId: Long? = null
+        val c = db.rawQuery("SELECT id FROM workspaces WHERE space_id = ? AND kind = 'HOME' LIMIT 1", arrayOf(targetSpaceId.toString()))
+        c.use {
+            if (it.moveToNext()) {
+                targetHomeWsId = it.getLong(0)
+            }
+        }
+        if (targetHomeWsId == null) {
+            val now = System.currentTimeMillis()
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("kind", "HOME")
+                put("name", "")
+                put("position", 0)
+                put("created_at", now)
+                put("space_id", targetSpaceId)
+            }
+            targetHomeWsId = db.insert("workspaces", null, cv)
+        }
+        val targetWsId = targetHomeWsId ?: return@withContext WorkspaceResult.Error(WorkspaceError.NotFound)
+
+        val placeholders = folderIds.joinToString(",") { "?" }
+        val trashedCursor = db.rawQuery(
+            "SELECT COUNT(*) FROM folders WHERE id IN ($placeholders) AND is_trashed = 1",
+            folderIds.map { it.toString() }.toTypedArray()
+        )
+        val hasTrashed = trashedCursor.use { if (it.moveToNext()) it.getInt(0) > 0 else false }
+        if (hasTrashed) {
+            return@withContext WorkspaceResult.Error(WorkspaceError.TrashedFolderCannotMove)
+        }
+
+        db.beginTransaction()
+        try {
+            val cv = ContentValues().apply {
+                put("workspace_id", targetWsId)
             }
             db.update("folders", cv, "id IN ($placeholders)", folderIds.map { it.toString() }.toTypedArray())
             db.setTransactionSuccessful()
