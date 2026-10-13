@@ -53,8 +53,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -87,23 +85,18 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.MaterialTheme
 import com.arinara.fotara.theme.ElmsSans
-import com.arinara.fotara.theme.FolderTabCream
-import com.arinara.fotara.theme.FotaraShapes
-import com.arinara.fotara.theme.HomeCardBorder
-import com.arinara.fotara.theme.HomeCardSurface
-import com.arinara.fotara.theme.TagAmber
-import com.arinara.fotara.theme.TagCrimson
-import com.arinara.fotara.theme.TextMuted
+import com.arinara.fotara.ui.components.presets.AppButton
+import com.arinara.fotara.ui.components.presets.AppButtonVariant
+import com.arinara.fotara.ui.components.presets.AppPillChip
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
-
-private val AccentGold = TagAmber
 
 enum class ClockScreenFace {
     CLOCK,
@@ -185,7 +178,7 @@ fun NoteClockScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(ElectricSlateTokens.BgCanvas)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -198,8 +191,8 @@ fun NoteClockScreen(
                         ClockScreenFace.GLOBE -> "3D Tech Globe"
                         ClockScreenFace.CLOCK -> "World Clock & Timezone"
                     },
-                    color = FolderTabCream,
-                    fontSize = 22.sp,
+                    color = ElectricSlateTokens.TextPrimary,
+                    fontSize = 20.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -215,7 +208,7 @@ fun NoteClockScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = FolderTabCream
+                        tint = ElectricSlateTokens.TextPrimary
                     )
                 }
             },
@@ -234,11 +227,11 @@ fun NoteClockScreen(
                     Icon(
                         imageVector = Icons.Default.FlipCameraAndroid,
                         contentDescription = "Flip 3D Surface",
-                        tint = AccentGold
+                        tint = ElectricSlateTokens.PrimaryAccent
                     )
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
         )
 
         // 3D Flip Container with realistic depth camera distance
@@ -432,10 +425,12 @@ private fun ClockFaceView(
         ) {
             Box {
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = FotaraShapes.Pill,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-                    modifier = Modifier.clickable { onTimezoneDropdownToggle(true) }
+                    color = ElectricSlateTokens.SurfaceElevated,
+                    shape = RoundedCornerShape(999.dp),
+                    border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .jigglePressClickable { onTimezoneDropdownToggle(true) }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
@@ -444,13 +439,13 @@ private fun ClockFaceView(
                         Icon(
                             imageVector = Icons.Default.Public,
                             contentDescription = "Timezone",
-                            tint = AccentGold,
+                            tint = ElectricSlateTokens.PrimaryAccent,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "[${selectedLocation.countryCode}] ${selectedLocation.name}",
-                            color = FolderTabCream,
+                            color = ElectricSlateTokens.TextPrimary,
                             fontSize = 13.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Medium
@@ -462,15 +457,15 @@ private fun ClockFaceView(
                     expanded = showTimezoneDropdown,
                     onDismissRequest = { onTimezoneDropdownToggle(false) },
                     modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), FotaraShapes.CardSmall)
+                        .background(ElectricSlateTokens.SurfacePanel)
+                        .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
                 ) {
                     DEFAULT_GLOBE_LOCATIONS.forEach { loc ->
                         DropdownMenuItem(
                             text = {
                                 Text(
                                     text = "[${loc.countryCode}] ${loc.name}",
-                                    color = if (loc.id == selectedLocation.id) AccentGold else FolderTabCream,
+                                    color = if (loc.id == selectedLocation.id) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextPrimary,
                                     fontFamily = ElmsSans
                                 )
                             },
@@ -484,10 +479,12 @@ private fun ClockFaceView(
 
             // 3D Globe Visualizer Mode Pill
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = FotaraShapes.Pill,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                modifier = Modifier.clickable { onOpenGlobeMode() }
+                color = ElectricSlateTokens.SurfaceElevated,
+                shape = RoundedCornerShape(999.dp),
+                border = BorderStroke(1.dp, ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .jigglePressClickable { onOpenGlobeMode() }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -495,7 +492,7 @@ private fun ClockFaceView(
                 ) {
                     Text(
                         text = "3D Globe",
-                        color = MaterialTheme.colorScheme.primary,
+                        color = ElectricSlateTokens.PrimaryAccent,
                         fontSize = 12.sp,
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Bold
@@ -508,9 +505,9 @@ private fun ClockFaceView(
 
         // Large Digital Clock with Tabular Monospace Digits and Play Button Pill Beside Clock
         Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = FotaraShapes.CardLarge,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+            color = ElectricSlateTokens.SurfacePanel,
+            shape = RoundedCornerShape(24.dp),
+            border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -519,7 +516,7 @@ private fun ClockFaceView(
             ) {
                 Text(
                     text = dateStr,
-                    color = TextMuted,
+                    color = ElectricSlateTokens.TextMuted,
                     fontSize = 13.sp,
                     fontFamily = ElmsSans
                 )
@@ -539,7 +536,7 @@ private fun ClockFaceView(
                         // Big Tabular Monospace HH:MM
                         Text(
                             text = String.format(Locale.US, "%02d:%02d", hours, minutes),
-                            color = FolderTabCream,
+                            color = ElectricSlateTokens.TextPrimary,
                             fontSize = 56.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -552,14 +549,14 @@ private fun ClockFaceView(
                         Column(modifier = Modifier.padding(bottom = 6.dp)) {
                             Text(
                                 text = String.format(Locale.US, ":%02d", seconds),
-                                color = FolderTabCream.copy(alpha = 0.65f),
+                                color = ElectricSlateTokens.TextMuted,
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Medium,
                                 fontFamily = FontFamily.Monospace
                             )
                             Text(
                                 text = String.format(Locale.US, ".%03d", millis),
-                                color = FolderTabCream.copy(alpha = 0.35f),
+                                color = ElectricSlateTokens.TextMuted.copy(alpha = 0.5f),
                                 fontSize = 13.sp,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -570,11 +567,11 @@ private fun ClockFaceView(
 
                     // Play Button Pill Beside Clock Display (Triggers 3D Flip to Timer)
                     Surface(
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = FotaraShapes.Pill,
+                        color = ElectricSlateTokens.PrimaryAccent,
+                        shape = RoundedCornerShape(999.dp),
                         modifier = Modifier
-                            .clip(FotaraShapes.Pill)
-                            .clickable { onOpenTimerMode() }
+                            .clip(RoundedCornerShape(999.dp))
+                            .jigglePressClickable { onOpenTimerMode() }
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -604,9 +601,9 @@ private fun ClockFaceView(
 
         // Multi-Alarm Management Section
         Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = FotaraShapes.CardLarge,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+            color = ElectricSlateTokens.SurfacePanel,
+            shape = RoundedCornerShape(24.dp),
+            border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -619,13 +616,13 @@ private fun ClockFaceView(
                         Icon(
                             imageVector = Icons.Default.Alarm,
                             contentDescription = null,
-                            tint = AccentGold,
+                            tint = ElectricSlateTokens.PrimaryAccent,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Academic Alarms",
-                            color = FolderTabCream,
+                            color = ElectricSlateTokens.TextPrimary,
                             fontSize = 16.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold
@@ -633,16 +630,17 @@ private fun ClockFaceView(
                     }
 
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shape = FotaraShapes.ElementMicro
+                        color = ElectricSlateTokens.SurfaceElevated,
+                        shape = RoundedCornerShape(999.dp),
+                        border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle)
                     ) {
                         Text(
                             text = "${alarms.count { it.isEnabled }} Active",
-                            color = AccentGold,
+                            color = ElectricSlateTokens.PrimaryAccent,
                             fontSize = 11.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                         )
                     }
                 }
@@ -657,14 +655,18 @@ private fun ClockFaceView(
                     OutlinedTextField(
                         value = newAlarmHour,
                         onValueChange = onNewAlarmHourChange,
-                        label = { Text("Hour (00-23)", color = TextMuted) },
+                        label = { Text("Hour (00-23)", color = ElectricSlateTokens.TextMuted) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentGold,
-                            unfocusedBorderColor = HomeCardBorder,
-                            focusedTextColor = FolderTabCream,
-                            unfocusedTextColor = FolderTabCream
+                            focusedBorderColor = ElectricSlateTokens.PrimaryAccent,
+                            unfocusedBorderColor = ElectricSlateTokens.BorderSubtle,
+                            focusedTextColor = ElectricSlateTokens.TextPrimary,
+                            unfocusedTextColor = ElectricSlateTokens.TextPrimary,
+                            focusedContainerColor = ElectricSlateTokens.SurfaceElevated,
+                            unfocusedContainerColor = ElectricSlateTokens.SurfaceElevated,
+                            focusedLabelColor = ElectricSlateTokens.PrimaryAccent,
+                            unfocusedLabelColor = ElectricSlateTokens.TextMuted
                         )
                     )
 
@@ -673,70 +675,67 @@ private fun ClockFaceView(
                     OutlinedTextField(
                         value = newAlarmMinute,
                         onValueChange = onNewAlarmMinuteChange,
-                        label = { Text("Minute (00-59)", color = TextMuted) },
+                        label = { Text("Minute (00-59)", color = ElectricSlateTokens.TextMuted) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentGold,
-                            unfocusedBorderColor = HomeCardBorder,
-                            focusedTextColor = FolderTabCream,
-                            unfocusedTextColor = FolderTabCream
+                            focusedBorderColor = ElectricSlateTokens.PrimaryAccent,
+                            unfocusedBorderColor = ElectricSlateTokens.BorderSubtle,
+                            focusedTextColor = ElectricSlateTokens.TextPrimary,
+                            unfocusedTextColor = ElectricSlateTokens.TextPrimary,
+                            focusedContainerColor = ElectricSlateTokens.SurfaceElevated,
+                            unfocusedContainerColor = ElectricSlateTokens.SurfaceElevated,
+                            focusedLabelColor = ElectricSlateTokens.PrimaryAccent,
+                            unfocusedLabelColor = ElectricSlateTokens.TextMuted
                         )
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Quick Preset Suggestions
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     val presets = listOf("Study Session", "Exam Prep", "Problem Set", "Formula Review")
                     items(presets) { preset ->
-                        Surface(
-                            color = Color(0xFF131A30),
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, Color(0xFF1E294B)),
-                            modifier = Modifier.clickable { onNewAlarmLabelChange(preset) }
-                        ) {
-                            Text(
-                                text = preset,
-                                color = if (newAlarmLabel == preset) AccentGold else FolderTabCream,
-                                fontSize = 11.sp,
-                                fontFamily = ElmsSans,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
+                        AppPillChip(
+                            label = preset,
+                            isSelected = newAlarmLabel == preset,
+                            onClick = { onNewAlarmLabelChange(preset) }
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 OutlinedTextField(
                     value = newAlarmLabel,
                     onValueChange = onNewAlarmLabelChange,
-                    label = { Text("Custom Alarm Label", color = TextMuted) },
+                    label = { Text("Custom Alarm Label", color = ElectricSlateTokens.TextMuted) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentGold,
-                        unfocusedBorderColor = HomeCardBorder,
-                        focusedTextColor = FolderTabCream,
-                        unfocusedTextColor = FolderTabCream
+                        focusedBorderColor = ElectricSlateTokens.PrimaryAccent,
+                        unfocusedBorderColor = ElectricSlateTokens.BorderSubtle,
+                        focusedTextColor = ElectricSlateTokens.TextPrimary,
+                        unfocusedTextColor = ElectricSlateTokens.TextPrimary,
+                        focusedContainerColor = ElectricSlateTokens.SurfaceElevated,
+                        unfocusedContainerColor = ElectricSlateTokens.SurfaceElevated,
+                        focusedLabelColor = ElectricSlateTokens.PrimaryAccent,
+                        unfocusedLabelColor = ElectricSlateTokens.TextMuted
                     )
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Button(
+                AppButton(
+                    text = "Schedule Alarm",
                     onClick = onAddAlarm,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
-                    shape = RoundedCornerShape(12.dp),
+                    variant = AppButtonVariant.PRIMARY,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Schedule Alarm", color = Color.Black, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
-                }
+                )
             }
         }
 
@@ -750,7 +749,7 @@ private fun ClockFaceView(
             ) {
                 Text(
                     text = "Configured Alarms (${alarms.size})",
-                    color = TextMuted,
+                    color = ElectricSlateTokens.TextMuted,
                     fontSize = 13.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Medium,
@@ -759,9 +758,9 @@ private fun ClockFaceView(
 
                 alarms.forEach { alarm ->
                     Surface(
-                        color = HomeCardSurface,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, if (alarm.isEnabled) HomeCardBorder else Color(0xFF1E2848)),
+                        color = ElectricSlateTokens.SurfaceElevated,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, if (alarm.isEnabled) ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.4f) else ElectricSlateTokens.BorderSubtle),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -772,14 +771,14 @@ private fun ClockFaceView(
                             Column {
                                 Text(
                                     text = alarm.getFormattedTime(),
-                                    color = if (alarm.isEnabled) FolderTabCream else TextMuted,
+                                    color = if (alarm.isEnabled) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted,
                                     fontSize = 26.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
                                     text = alarm.label,
-                                    color = if (alarm.isEnabled) AccentGold else TextMuted,
+                                    color = if (alarm.isEnabled) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextMuted,
                                     fontSize = 13.sp,
                                     fontFamily = ElmsSans,
                                     fontWeight = FontWeight.Medium
@@ -791,20 +790,23 @@ private fun ClockFaceView(
                                     checked = alarm.isEnabled,
                                     onCheckedChange = { onToggleAlarm(alarm.id, it) },
                                     colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.Black,
-                                        checkedTrackColor = AccentGold,
-                                        uncheckedThumbColor = TextMuted,
-                                        uncheckedTrackColor = Color(0xFF1E2848)
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = ElectricSlateTokens.PrimaryAccent,
+                                        uncheckedThumbColor = ElectricSlateTokens.TextMuted,
+                                        uncheckedTrackColor = ElectricSlateTokens.TrackInactive
                                     )
                                 )
 
                                 Spacer(modifier = Modifier.width(6.dp))
 
-                                IconButton(onClick = { onDeleteAlarm(alarm.id) }) {
+                                IconButton(
+                                    onClick = { onDeleteAlarm(alarm.id) },
+                                    modifier = Modifier.jigglePressClickable { onDeleteAlarm(alarm.id) }
+                                ) {
                                     Icon(
                                         imageVector = Icons.Default.Delete,
                                         contentDescription = "Delete Alarm",
-                                        tint = TagCrimson,
+                                        tint = ElectricSlateTokens.Destructive,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -815,14 +817,14 @@ private fun ClockFaceView(
             }
         } else {
             Surface(
-                color = HomeCardSurface.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, HomeCardBorder.copy(alpha = 0.5f)),
+                color = ElectricSlateTokens.SurfacePanel,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = "No academic alarms configured yet. Create one above.",
-                    color = TextMuted,
+                    color = ElectricSlateTokens.TextMuted,
                     fontSize = 12.sp,
                     fontFamily = ElmsSans,
                     modifier = Modifier.padding(16.dp)
@@ -858,9 +860,9 @@ private fun TimerFaceView(
 
         // Timer Display Capsule
         Surface(
-            color = Color(0xFF0F1528),
+            color = ElectricSlateTokens.SurfacePanel,
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.5.dp, if (isRunning) Color(0xFF2563EB) else Color(0xFF1E2848)),
+            border = BorderStroke(1.dp, if (isRunning) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -873,7 +875,7 @@ private fun TimerFaceView(
                 ) {
                     Text(
                         text = String.format(Locale.US, "%02d:%02d", m, s),
-                        color = FolderTabCream,
+                        color = ElectricSlateTokens.TextPrimary,
                         fontSize = 62.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
@@ -882,7 +884,7 @@ private fun TimerFaceView(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = String.format(Locale.US, ".%02d", ms),
-                        color = FolderTabCream.copy(alpha = 0.5f),
+                        color = ElectricSlateTokens.TextMuted,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Medium,
                         fontFamily = FontFamily.Monospace,
@@ -890,7 +892,7 @@ private fun TimerFaceView(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Control Actions: Start/Pause, Lap/Flag, Reset
                 Row(
@@ -899,29 +901,31 @@ private fun TimerFaceView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Reset button
-                    IconButton(
-                        onClick = onReset,
-                        enabled = elapsedMs > 0,
+                    Box(
                         modifier = Modifier
                             .size(52.dp)
                             .clip(CircleShape)
-                            .background(HomeCardSurface)
-                            .border(1.dp, HomeCardBorder, CircleShape)
+                            .background(ElectricSlateTokens.SurfaceElevated)
+                            .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
+                            .jigglePressClickable(enabled = elapsedMs > 0) { onReset() },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Reset",
-                            tint = if (elapsedMs > 0) FolderTabCream else TextMuted
+                            tint = if (elapsedMs > 0) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
 
                     // Main Start / Pause button
-                    IconButton(
-                        onClick = onStartPause,
+                    Box(
                         modifier = Modifier
                             .size(72.dp)
                             .clip(CircleShape)
-                            .background(if (isRunning) TagCrimson else Color(0xFF2563EB))
+                            .background(if (isRunning) ElectricSlateTokens.Destructive else ElectricSlateTokens.PrimaryAccent)
+                            .jigglePressClickable { onStartPause() },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -932,40 +936,54 @@ private fun TimerFaceView(
                     }
 
                     // Lap / Flag button
-                    IconButton(
-                        onClick = onLap,
-                        enabled = isRunning,
+                    Box(
                         modifier = Modifier
                             .size(52.dp)
                             .clip(CircleShape)
-                            .background(HomeCardSurface)
-                            .border(1.dp, HomeCardBorder, CircleShape)
+                            .background(ElectricSlateTokens.SurfaceElevated)
+                            .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
+                            .jigglePressClickable(enabled = isRunning) { onLap() },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Flag,
                             contentDescription = "Lap",
-                            tint = if (isRunning) AccentGold else TextMuted
+                            tint = if (isRunning) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextMuted,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 // Floating Pill Overlay Trigger
-                Button(
-                    onClick = onLaunchFloatingPill,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0xFF38BDF8))
+                Surface(
+                    color = ElectricSlateTokens.SurfaceElevated,
+                    shape = RoundedCornerShape(999.dp),
+                    border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .jigglePressClickable { onLaunchFloatingPill() }
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = null,
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Float Pill Over Apps", color = Color(0xFF38BDF8), fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = null,
+                            tint = ElectricSlateTokens.PrimaryAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Float Pill Over Apps",
+                            color = ElectricSlateTokens.TextPrimary,
+                            fontFamily = ElmsSans,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
@@ -980,18 +998,18 @@ private fun TimerFaceView(
         ) {
             Text(
                 text = "Laps & Splits (${laps.size})",
-                color = TextMuted,
+                color = ElectricSlateTokens.TextMuted,
                 fontSize = 13.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Medium
             )
             Text(
                 text = "Flip back to Clock",
-                color = AccentGold,
+                color = ElectricSlateTokens.PrimaryAccent,
                 fontSize = 12.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { onFlipBack() }
+                modifier = Modifier.jigglePressClickable { onFlipBack() }
             )
         }
 
@@ -1002,7 +1020,7 @@ private fun TimerFaceView(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             itemsIndexed(laps.reversed()) { _, lap ->
                 val splitSec = lap.splitTimeMs / 1000
@@ -1016,32 +1034,32 @@ private fun TimerFaceView(
                 val totalMsL = (lap.totalTimeMs % 1000) / 10
 
                 Surface(
-                    color = HomeCardSurface,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, HomeCardBorder),
+                    color = ElectricSlateTokens.SurfaceElevated,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "Lap ${lap.lapIndex}",
-                            color = AccentGold,
+                            color = ElectricSlateTokens.PrimaryAccent,
                             fontSize = 13.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = String.format(Locale.US, "+%02d:%02d.%02d", splitM, splitS, splitMs),
-                            color = TextMuted,
+                            color = ElectricSlateTokens.TextMuted,
                             fontSize = 13.sp,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
                             text = String.format(Locale.US, "%02d:%02d.%02d", totalML, totalSL, totalMsL),
-                            color = FolderTabCream,
+                            color = ElectricSlateTokens.TextPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
@@ -1072,7 +1090,7 @@ private fun GlobeFaceView(
         ) {
             Text(
                 text = "Interactive 3D Tech Globe",
-                color = FolderTabCream,
+                color = ElectricSlateTokens.TextPrimary,
                 fontSize = 15.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Bold
@@ -1080,11 +1098,11 @@ private fun GlobeFaceView(
 
             Text(
                 text = "Flip to Clock",
-                color = AccentGold,
+                color = ElectricSlateTokens.PrimaryAccent,
                 fontSize = 12.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { onConfirmLocation() }
+                modifier = Modifier.jigglePressClickable { onConfirmLocation() }
             )
         }
 
@@ -1101,22 +1119,22 @@ private fun GlobeFaceView(
 
         // Selected Timezone Info Card
         Surface(
-            color = HomeCardSurface,
+            color = ElectricSlateTokens.SurfacePanel,
             shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, HomeCardBorder),
+            border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "Selected Timezone",
-                    color = TextMuted,
+                    color = ElectricSlateTokens.TextMuted,
                     fontSize = 12.sp,
                     fontFamily = ElmsSans
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "[${selectedLocation.countryCode}] ${selectedLocation.name}",
-                    color = FolderTabCream,
+                    color = ElectricSlateTokens.TextPrimary,
                     fontSize = 17.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold
@@ -1124,26 +1142,19 @@ private fun GlobeFaceView(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Zone ID: ${selectedLocation.timeZoneId} · Coordinates: ${selectedLocation.latitudeDeg}°N, ${selectedLocation.longitudeDeg}°E",
-                    color = TextMuted,
+                    color = ElectricSlateTokens.TextMuted,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                Button(
+                AppButton(
+                    text = "Confirm & View Clock",
                     onClick = onConfirmLocation,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
-                    shape = RoundedCornerShape(12.dp),
+                    variant = AppButtonVariant.PRIMARY,
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Confirm & View Clock",
-                        color = Color.Black,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                )
             }
         }
     }

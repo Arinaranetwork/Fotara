@@ -134,16 +134,16 @@ class TimerFloatingPillService : Service() {
                 setPadding(32, 16, 32, 16)
                 gravity = Gravity.CENTER_VERTICAL
                 background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(0xD90B1020.toInt())
+                    setColor(0xF0161C26.toInt())
                     cornerRadius = 64f
-                    setStroke(3, 0xFF38BDF8.toInt())
+                    setStroke(3, 0xFF7A5AF8.toInt())
                 }
             }
 
             val timerText = TextView(context).apply {
                 id = android.R.id.text1
                 text = formatTime(elapsedSeconds)
-                setTextColor(0xFFE2E8F0.toInt())
+                setTextColor(0xFFF8FAFC.toInt())
                 textSize = 15f
                 typeface = android.graphics.Typeface.MONOSPACE
             }

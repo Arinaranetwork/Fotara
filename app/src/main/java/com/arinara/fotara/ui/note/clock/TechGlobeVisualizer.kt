@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -53,9 +54,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.theme.ElmsSans
-import com.arinara.fotara.theme.FolderTabCream
-import com.arinara.fotara.theme.HomeCardBorder
-import com.arinara.fotara.theme.HomeCardSurface
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -119,7 +119,8 @@ fun TechGlobeVisualizer(
                 .fillMaxWidth()
                 .height(300.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF070B18))
+                .background(ElectricSlateTokens.SurfacePanel)
+                .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(20.dp))
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
@@ -134,9 +135,9 @@ fun TechGlobeVisualizer(
                 val cy = size.height / 2f
                 val radius = minOf(cx, cy) * 0.78f
 
-                val gridColor = Color(0xFF283B6B)
-                val highlightColor = Color(0xFF38BDF8)
-                val goldPinColor = Color(0xFFF77F00)
+                val gridColor = ElectricSlateTokens.TrackInactive
+                val highlightColor = ElectricSlateTokens.PrimaryAccent
+                val pinAccentColor = ElectricSlateTokens.PrimaryAccent
 
                 // Outer glowing tech ring
                 drawCircle(
@@ -228,7 +229,7 @@ fun TechGlobeVisualizer(
                     val (pinX, pinY, _) = project(loc.latitudeDeg, loc.longitudeDeg, 1.18f)
 
                     if (baseZ > 0) {
-                        val pinColor = if (isSelected) goldPinColor else highlightColor
+                        val pinColor = if (isSelected) pinAccentColor else highlightColor
                         val stemWidth = if (isSelected) 2.5.dp.toPx() else 1.5.dp.toPx()
 
                         // Pointer stem
@@ -259,7 +260,7 @@ fun TechGlobeVisualizer(
                         val textLayout = textMeasurer.measure(
                             text = labelText,
                             style = TextStyle(
-                                color = if (isSelected) Color.Black else FolderTabCream,
+                                color = if (isSelected) Color.White else ElectricSlateTokens.TextPrimary,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = ElmsSans
@@ -273,7 +274,7 @@ fun TechGlobeVisualizer(
                         val chipTop = pinY - chipH - 4.dp.toPx()
 
                         drawRoundRect(
-                            color = if (isSelected) goldPinColor else Color(0xFF1E293B),
+                            color = if (isSelected) pinAccentColor else ElectricSlateTokens.SurfaceElevated,
                             topLeft = Offset(chipLeft, chipTop),
                             size = androidx.compose.ui.geometry.Size(chipW, chipH),
                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
@@ -290,7 +291,7 @@ fun TechGlobeVisualizer(
             // Drag hint at bottom
             Text(
                 text = "Drag to rotate 3D Tech Globe · 1:1 World Timezones",
-                color = Color(0xFF94A3B8),
+                color = ElectricSlateTokens.TextMuted,
                 fontSize = 11.sp,
                 fontFamily = ElmsSans,
                 modifier = Modifier
@@ -309,18 +310,20 @@ fun TechGlobeVisualizer(
                 items(locations) { loc ->
                     val isSelected = loc.id == selectedLocation.id
                     Surface(
-                        color = if (isSelected) Color(0xFFF77F00) else HomeCardSurface,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (isSelected) Color(0xFFF77F00) else HomeCardBorder),
-                        modifier = Modifier.clickable { onSelectLocation(loc) }
+                        color = if (isSelected) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.SurfaceElevated,
+                        shape = RoundedCornerShape(999.dp),
+                        border = BorderStroke(1.dp, if (isSelected) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .jigglePressClickable { onSelectLocation(loc) }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = "[${loc.countryCode}] ${loc.id}",
-                                color = if (isSelected) Color.Black else FolderTabCream,
+                                color = if (isSelected) Color.White else ElectricSlateTokens.TextPrimary,
                                 fontSize = 12.sp,
                                 fontFamily = ElmsSans,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
