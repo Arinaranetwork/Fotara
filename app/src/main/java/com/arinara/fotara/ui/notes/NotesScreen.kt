@@ -33,7 +33,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.arinara.fotara.ui.components.PullToRefreshLayout
 import com.arinara.fotara.ui.components.PullToRefreshHelper
 import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
@@ -83,11 +82,14 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.arinara.fotara.theme.FotaraShapes
+import com.arinara.fotara.theme.FotaraSpacing
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -203,12 +205,12 @@ fun NotesScreen(
                             expanded = showHeaderOverflowMenu,
                             onDismissRequest = { showHeaderOverflowMenu = false },
                             modifier = Modifier
-                                .background(HomeCardSurface)
-                                .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, FotaraShapes.InputField)
                         ) {
                             DropdownMenuItem(
                                 text = { Text("What's New", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                leadingIcon = { Icon(Icons.Default.NewReleases, contentDescription = null, tint = Color(0xFFF59E0B)) },
+                                leadingIcon = { Icon(Icons.Default.NewReleases, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary) },
                                 onClick = {
                                     showHeaderOverflowMenu = false
                                     onOpenWhatsNew()
@@ -341,8 +343,8 @@ fun NotesScreen(
     itemToDelete?.let { item ->
         AlertDialog(
             onDismissRequest = { itemToDelete = null },
-            containerColor = Color(0xFF0F1422),
-            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = FotaraShapes.Dialog,
             title = {
                 Text(
                     text = stringResource(R.string.confirm_delete_title),
@@ -369,7 +371,7 @@ fun NotesScreen(
                         itemToDelete = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = TagCrimson),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = FotaraShapes.Button
                 ) {
                     Text(stringResource(R.string.confirm_delete_confirm), color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
                 }
@@ -386,8 +388,8 @@ fun NotesScreen(
     itemToRename?.let { item ->
         AlertDialog(
             onDismissRequest = { itemToRename = null },
-            containerColor = Color(0xFF0F1422),
-            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = FotaraShapes.Dialog,
             title = {
                 Text(
                     text = stringResource(R.string.action_rename),
@@ -406,12 +408,12 @@ fun NotesScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
-                        focusedBorderColor = HomeMainButtonBlue,
-                        unfocusedBorderColor = HomeCardBorder,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary
                     ),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = FotaraShapes.InputField,
                     modifier = Modifier.fillMaxWidth()
                 )
             },
@@ -421,8 +423,8 @@ fun NotesScreen(
                         viewModel.renameNote(item, renameInputText)
                         itemToRename = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
-                    shape = RoundedCornerShape(8.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = FotaraShapes.Button
                 ) {
                     Text("Save", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
                 }
@@ -439,8 +441,8 @@ fun NotesScreen(
     itemToMove?.let { item ->
         AlertDialog(
             onDismissRequest = { itemToMove = null },
-            containerColor = Color(0xFF0F1422),
-            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = FotaraShapes.Dialog,
             title = {
                 Text(
                     text = stringResource(R.string.action_move),
@@ -464,8 +466,8 @@ fun NotesScreen(
                             keyPrefix = "notes_move"
                         ) { folder ->
                             Surface(
-                                color = if (folder.id == item.folderId) HomeMainButtonBlue.copy(alpha = 0.2f) else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp),
+                                color = if (folder.id == item.folderId) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) else Color.Transparent,
+                                shape = FotaraShapes.Button,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
@@ -478,7 +480,7 @@ fun NotesScreen(
                                     Icon(
                                         imageVector = Icons.Outlined.Folder,
                                         contentDescription = null,
-                                        tint = Color(0xFF60A5FA),
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
@@ -509,8 +511,8 @@ fun NotesScreen(
     pendingCreateAction?.let { action ->
         AlertDialog(
             onDismissRequest = { pendingCreateAction = null },
-            containerColor = Color(0xFF0F1422),
-            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = FotaraShapes.Dialog,
             title = {
                 Text(
                     text = stringResource(R.string.select_destination_folder),
@@ -535,7 +537,7 @@ fun NotesScreen(
                         ) { folder ->
                             Surface(
                                 color = Color.Transparent,
-                                shape = RoundedCornerShape(8.dp),
+                                shape = FotaraShapes.Button,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
@@ -548,7 +550,7 @@ fun NotesScreen(
                                     Icon(
                                         imageVector = Icons.Outlined.Folder,
                                         contentDescription = null,
-                                        tint = Color(0xFF60A5FA),
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
@@ -723,14 +725,14 @@ private fun NotesFilterChipsRow(
             val isSelected = chip == selectedFilter
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(FotaraShapes.Pill)
                     .then(
                         if (isSelected) {
-                            Modifier.background(HomeMainButtonBlue)
+                            Modifier.background(MaterialTheme.colorScheme.primaryContainer)
                         } else {
                             Modifier
-                                .background(Color(0xFF111726))
-                                .border(1.dp, Color(0xFF222F46), RoundedCornerShape(20.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, FotaraShapes.Pill)
                         }
                     )
                     .clickable { onFilterSelected(chip) }
@@ -739,7 +741,7 @@ private fun NotesFilterChipsRow(
             ) {
                 Text(
                     text = stringResource(chip.labelRes),
-                    color = if (isSelected) TextPrimary else Color(0xFF94A3B8),
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                     fontFamily = ElmsSans,
@@ -808,9 +810,9 @@ private fun DateGroupSection(
 
         // Single rounded card container for all items in this group
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1220)),
-            shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(1.dp, HomeCardBorder),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            shape = FotaraShapes.CardLarge,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -825,7 +827,7 @@ private fun DateGroupSection(
                     )
                     if (index < group.items.size - 1) {
                         HorizontalDivider(
-                            color = Color(0xFF1C273C),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                             thickness = 0.5.dp,
                             modifier = Modifier.padding(start = 80.dp, end = 16.dp)
                         )
@@ -881,13 +883,13 @@ private fun NoteItemRow(
                 Icon(
                     imageVector = Icons.Outlined.Folder,
                     contentDescription = null,
-                    tint = Color(0xFF94A3B8),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = item.folderName,
-                    color = Color(0xFF94A3B8),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                     fontFamily = ElmsSans,
@@ -919,7 +921,7 @@ private fun NoteItemRow(
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "Options",
-                    tint = Color(0xFF94A3B8),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -928,8 +930,8 @@ private fun NoteItemRow(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
                 modifier = Modifier
-                    .background(HomeCardSurface)
-                    .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, FotaraShapes.InputField)
             ) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_open), color = TextPrimary, fontFamily = ElmsSans) },
@@ -941,7 +943,7 @@ private fun NoteItemRow(
                 )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_rename), color = TextPrimary, fontFamily = ElmsSans) },
-                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(20.dp)) },
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
                     onClick = {
                         showMenu = false
                         onRenameClick()
@@ -949,13 +951,13 @@ private fun NoteItemRow(
                 )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_move), color = TextPrimary, fontFamily = ElmsSans) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(20.dp)) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp)) },
                     onClick = {
                         showMenu = false
                         onMoveClick()
                     }
                 )
-                HorizontalDivider(color = HomeCardBorder)
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_delete), color = TagCrimson, fontFamily = ElmsSans) },
                     leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = TagCrimson, modifier = Modifier.size(20.dp)) },
@@ -975,7 +977,7 @@ private fun NoteThumbnailTile(
     modifier: Modifier = Modifier
 ) {
     val tileSize = 58.dp
-    val tileShape = RoundedCornerShape(12.dp)
+    val tileShape = FotaraShapes.InputField
 
     when (item.type) {
         UnifiedNoteType.PHOTO -> {
@@ -983,7 +985,7 @@ private fun NoteThumbnailTile(
                 modifier = modifier
                     .size(tileSize)
                     .clip(tileShape)
-                    .background(Color(0xFF161F30)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
                 AsyncImage(
@@ -1001,7 +1003,7 @@ private fun NoteThumbnailTile(
                 modifier = modifier
                     .size(tileSize)
                     .clip(tileShape)
-                    .background(Color(0xFF0F2347)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -1011,13 +1013,13 @@ private fun NoteThumbnailTile(
                     Icon(
                         imageVector = Icons.Outlined.Description,
                         contentDescription = docLabel,
-                        tint = Color(0xFF3B82F6),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = docLabel,
-                        color = Color(0xFF3B82F6),
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 11.sp,
                         lineHeight = 14.sp,
                         fontWeight = FontWeight.Bold,
@@ -1032,7 +1034,7 @@ private fun NoteThumbnailTile(
                 modifier = modifier
                     .size(tileSize)
                     .clip(tileShape)
-                    .background(Color(0xFF16233B)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -1042,13 +1044,13 @@ private fun NoteThumbnailTile(
                     Icon(
                         imageVector = Icons.Outlined.Description,
                         contentDescription = "Text Note",
-                        tint = Color(0xFF60A5FA),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "TXT",
-                        color = Color(0xFF60A5FA),
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 11.sp,
                         lineHeight = 14.sp,
                         fontWeight = FontWeight.Bold,
@@ -1064,7 +1066,7 @@ private fun NoteThumbnailTile(
                     modifier = modifier
                         .size(tileSize)
                         .clip(tileShape)
-                        .background(Color(0xFF1F1D38)),
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
@@ -1079,7 +1081,7 @@ private fun NoteThumbnailTile(
                     modifier = modifier
                         .size(tileSize)
                         .clip(tileShape)
-                        .background(Color(0xFF1F1D38)),
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -1089,13 +1091,13 @@ private fun NoteThumbnailTile(
                         Icon(
                             imageVector = Icons.Outlined.Draw,
                             contentDescription = "Canvas Note",
-                            tint = Color(0xFFA78BFA),
+                            tint = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "CANVAS",
-                            color = Color(0xFFA78BFA),
+                            color = MaterialTheme.colorScheme.tertiary,
                             fontSize = 11.sp,
                             lineHeight = 14.sp,
                             fontWeight = FontWeight.Bold,
@@ -1125,13 +1127,13 @@ private fun NotesEmptyState(
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF161F30)),
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Outlined.Description,
                 contentDescription = null,
-                tint = Color(0xFF3B82F6).copy(alpha = 0.7f),
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier.size(36.dp)
             )
         }

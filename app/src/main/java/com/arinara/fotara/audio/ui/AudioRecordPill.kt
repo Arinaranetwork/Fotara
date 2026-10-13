@@ -57,8 +57,10 @@ import com.arinara.fotara.theme.TextPrimary
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import com.arinara.fotara.theme.AccentGold
+import androidx.compose.ui.graphics.Color
 import kotlin.math.sin
+
+private val AccentGold = Color(0xFFFBBF24)
 
 @Composable
 fun AudioRecordPill(
@@ -158,7 +160,7 @@ fun AudioRecordPill(
                             modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Filled.PlayArrow,
+                                imageVector = Icons.Filled.PlayArrow,
                                 contentDescription = "Resume Recording",
                                 tint = AccentGold,
                                 modifier = Modifier.size(20.dp)
@@ -170,7 +172,7 @@ fun AudioRecordPill(
                             modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Filled.Pause,
+                                imageVector = Icons.Filled.Pause,
                                 contentDescription = "Pause Recording",
                                 tint = FolderTabCream,
                                 modifier = Modifier.size(20.dp)

@@ -356,8 +356,8 @@ class CanvasToolController(
             // Check if eraser brush traverses across image elements or text blocks
             for (ns in nonStrokes) {
                 val isHit = when (ns) {
-                    is ImageElement -> hitTestImage(wx2, wy2, ns) || ns.bounds.expand(worldRadius).contains(wx2, wy2)
-                    is TextLayerElement -> ns.computeDynamicBounds().expand(worldRadius).contains(wx2, wy2)
+                    is ImageElement -> hitTestImage(wx2, wy2, ns) || ns.bounds.expanded(worldRadius).contains(wx2, wy2)
+                    is TextLayerElement -> ns.computeDynamicBounds().expanded(worldRadius).contains(wx2, wy2)
                     else -> false
                 }
                 if (isHit) {
@@ -417,7 +417,17 @@ class CanvasToolController(
 
         val targetLayer = activeLayerId ?: document.getPrimaryLayerId()
         val eraserStroke = if (hasErasedOverNonStrokes && activeEraserPoints.size >= 2) {
-            val strokeBounds = CanvasRect.fromPoints(activeEraserPoints.map { Pair(it.x, it.y) }).expand(toolState.eraserRadius)
+            var minX = Float.MAX_VALUE
+            var minY = Float.MAX_VALUE
+            var maxX = -Float.MAX_VALUE
+            var maxY = -Float.MAX_VALUE
+            for (p in activeEraserPoints) {
+                minX = minOf(minX, p.x)
+                minY = minOf(minY, p.y)
+                maxX = maxOf(maxX, p.x)
+                maxY = maxOf(maxY, p.y)
+            }
+            val strokeBounds = CanvasRect(minX, minY, maxX, maxY).expanded(toolState.eraserRadius)
             StrokeElement(
                 id = java.util.UUID.randomUUID().toString(),
                 layerId = targetLayer,

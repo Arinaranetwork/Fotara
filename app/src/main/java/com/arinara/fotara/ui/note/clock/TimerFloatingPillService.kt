@@ -189,6 +189,7 @@ class TimerFloatingPillService : Service() {
                             // Tapped: Bring Fotara to front
                             val appIntent = Intent(context, MainActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                putExtra("OPEN_CLOCK_SCREEN", true)
                             }
                             startActivity(appIntent)
                         }
@@ -215,7 +216,9 @@ class TimerFloatingPillService : Service() {
                 PendingIntent.getActivity(
                     this,
                     0,
-                    Intent(this, MainActivity::class.java),
+                    Intent(this, MainActivity::class.java).apply {
+                        putExtra("OPEN_CLOCK_SCREEN", true)
+                    },
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
             )

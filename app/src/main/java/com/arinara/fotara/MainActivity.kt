@@ -57,6 +57,7 @@ class MainActivity : FragmentActivity() {
     private var appContainer: AppContainer? by mutableStateOf(null)
     private var startupError: String? by mutableStateOf(null)
     private var openUpdateScreenRequested: Boolean by mutableStateOf(false)
+    private var openClockScreenRequested: Boolean by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,6 +84,9 @@ class MainActivity : FragmentActivity() {
         if (intent?.getBooleanExtra("OPEN_UPDATE_SCREEN", false) == true) {
             openUpdateScreenRequested = true
         }
+        if (intent?.getBooleanExtra("OPEN_CLOCK_SCREEN", false) == true) {
+            openClockScreenRequested = true
+        }
 
         setContent {
             FotaraTheme {
@@ -100,7 +104,9 @@ class MainActivity : FragmentActivity() {
                                     deepLinkPhotoId = deepLinkPhotoId,
                                     deepLinkDirectView = deepLinkDirectView,
                                     openUpdateScreen = openUpdateScreenRequested,
-                                    onUpdateScreenOpened = { openUpdateScreenRequested = false }
+                                    onUpdateScreenOpened = { openUpdateScreenRequested = false },
+                                    openClockScreen = openClockScreenRequested,
+                                    onClockScreenOpened = { openClockScreenRequested = false }
                                 )
                                 AppDialogCoordinatorHost(
                                     appContainer = container
@@ -161,6 +167,9 @@ class MainActivity : FragmentActivity() {
         setIntent(intent)
         if (intent.getBooleanExtra("OPEN_UPDATE_SCREEN", false)) {
             openUpdateScreenRequested = true
+        }
+        if (intent.getBooleanExtra("OPEN_CLOCK_SCREEN", false)) {
+            openClockScreenRequested = true
         }
     }
 }

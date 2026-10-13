@@ -8,28 +8,50 @@ package com.arinara.fotara.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Core Brand Palette from UI reference
-val MidnightNavy = Color(0xFF03071E)
-val MidnightSurface = Color(0xFF070D2B)
-val MidnightCardOutline = Color(0xFF142055)
+// ============================================================================
+// 1. CENTRALIZED SEMANTIC COLOR TOKENS
+// Strict adherence to Android.md (Base #0A0D14, Primary #2563EB, Accent #EFE8DA)
+// ============================================================================
 
-// Distinct Folder Card Palette
-val FolderTabCream = Color(0xFFEFE8DA)
-val FolderTabCreamBorder = Color(0xFFD8CFBF)
-val FolderBodyBlue = Color(0xFF0316A8)
-val FolderBodyBlueDark = Color(0xFF020F7A)
-val FolderTextWhite = Color(0xFFFFFFFF)
+// Base Canvas Backgrounds
+val BaseBackgroundDark = Color(0xFF0A0D14)
+val BaseBackgroundLight = Color(0xFFF8FAFC)
 
-// "+New" Folder Card
-val NewFolderBody = Color(0xFF060B24)
-val NewFolderBorder = Color(0xFF18224D)
-val NewFolderText = Color(0xFFEEEEEE)
+// Surface Level 1 (Cards, Main Containers, subtle depth separation)
+val SurfaceLevel1Dark = Color(0xFF111726) // Base +4% Card tint per Android.md
+val SurfaceLevel1Light = Color(0xFFFFFFFF)
 
-// Floating Dock / Search Pill
-val DockSlatePill = Color(0xFF4A4C68)
-val DockSlatePillLight = Color(0xFF6B6E94)
+// Surface Level 2 (Toolbars, Search Pills, elevated modals)
+val SurfaceLevel2Dark = Color(0xFF141B2A) // Base +8% Search tint per Android.md
+val SurfaceLevel2Light = Color(0xFFF1F5F9)
 
-// Category / Subject Tag Colors
+// Surface Level 2 High (Active highlight, elevated panels)
+val SurfaceLevel2HighDark = Color(0xFF182236) // Base +12% Active Highlight per Android.md
+val SurfaceLevel2HighLight = Color(0xFFE2E8F0)
+
+// Surface Level 3 (Dialogs, Menus, Hover Sheets)
+val SurfaceLevel3Dark = Color(0xFF1F293D)
+val SurfaceLevel3Light = Color(0xFFCBD5E1)
+
+// Surface Lowest
+val SurfaceLowestDark = Color(0xFF070A10)
+val SurfaceLowestLight = Color(0xFFFFFFFF)
+
+// Outlines & Borders
+val OutlineDark = Color(0xFF2A354D)
+val OutlineVariantDark = Color(0xFF161E30) // Crisp, ultra-subtle 1dp border
+val OutlineLight = Color(0xFF94A3B8)
+val OutlineVariantLight = Color(0xFFE2E8F0)
+
+// Brand Primaries & Accents
+val BrandPrimary = Color(0xFF2563EB) // Primary action blue
+val BrandPrimaryContainer = Color(0xFF1D4ED8)
+val BrandPrimaryLight = Color(0xFF60A5FA)
+val BrandAccentCream = Color(0xFFEFE8DA) // Distinct folder accent cream
+val BrandAccentCreamBorder = Color(0xFFD8CFBF)
+val BrandSecondarySlate = Color(0xFF4A4C68)
+
+// Subject / Category Tag Palette
 val TagCrimson = Color(0xFFE63946)
 val TagAmber = Color(0xFFF4A261)
 val TagEmerald = Color(0xFF2A9D8F)
@@ -37,30 +59,50 @@ val TagViolet = Color(0xFF9D4EDD)
 val TagSky = Color(0xFF00B4D8)
 val TagRose = Color(0xFFE76F51)
 
-// Muted & Secondary
+// Typography Neutrals
 val TextPrimary = Color(0xFFFFFFFF)
 val TextSecondary = Color(0xFFA0A5C2)
 val TextMuted = Color(0xFF6F7491)
-val DividerColor = Color(0xFF161E42)
 
-// --- Home Screen Redesign Tokens (IMAGE A) ---
-val HomeNearBlack = Color(0xFF0A0D14)
-val HomeCardSurface = Color(0xFF111726)
-val HomeCardBorder = Color(0xFF161E30)
-val HomeHeaderButtonSurface = Color(0xFF131925)
-val HomeHeaderButtonBg = HomeHeaderButtonSurface
-val HomeTabBarContainer = Color(0xFF121826)
-val HomeTabBarSelectedPill = Color(0xFF1B4FC4)
-val HomeSegmentSelectedPill = HomeTabBarSelectedPill
-val HomeSearchBarSurface = Color(0xFF141B2A)
-val HomeSearchBarBorder = Color(0xFF1C2538)
-val HomeAddButtonBlue = Color(0xFF2563EB)
-val HomeMainButtonBlue = HomeAddButtonBlue
-val HomeBottomNavSurface = Color(0xFF111726)
-val HomeBottomNavBorder = Color(0xFF1C2333)
-val HomeBottomNavActiveHighlight = Color(0xFF182236)
-val HomeSubtitleGray = Color(0xFF6B7280)
-val HomeUnselectedGray = Color(0xFF6B7280)
+// ============================================================================
+// 2. BACKWARDS-COMPATIBLE ALIASES
+// Maps legacy identifiers directly to centralized semantic tokens
+// ============================================================================
+val MidnightNavy = BaseBackgroundDark
+val MidnightSurface = SurfaceLevel1Dark
+val MidnightCardOutline = OutlineDark
+
+val FolderTabCream = BrandAccentCream
+val FolderTabCreamBorder = BrandAccentCreamBorder
+val FolderBodyBlue = BrandPrimary
+val FolderBodyBlueDark = BrandPrimaryContainer
+val FolderTextWhite = Color(0xFFFFFFFF)
+
+val NewFolderBody = SurfaceLevel2Dark
+val NewFolderBorder = OutlineVariantDark
+val NewFolderText = Color(0xFFEEEEEE)
+
+val DockSlatePill = BrandSecondarySlate
+val DockSlatePillLight = Color(0xFF6B6E94)
+val DividerColor = OutlineVariantDark
+
+val HomeNearBlack = BaseBackgroundDark
+val HomeCardSurface = SurfaceLevel1Dark
+val HomeCardBorder = OutlineVariantDark
+val HomeHeaderButtonSurface = SurfaceLevel2Dark
+val HomeHeaderButtonBg = SurfaceLevel2Dark
+val HomeTabBarContainer = SurfaceLevel1Dark
+val HomeTabBarSelectedPill = BrandPrimary
+val HomeSegmentSelectedPill = BrandPrimary
+val HomeSearchBarSurface = SurfaceLevel2Dark
+val HomeSearchBarBorder = OutlineDark
+val HomeAddButtonBlue = BrandPrimary
+val HomeMainButtonBlue = BrandPrimary
+val HomeBottomNavSurface = SurfaceLevel1Dark
+val HomeBottomNavBorder = OutlineVariantDark
+val HomeBottomNavActiveHighlight = SurfaceLevel2HighDark
+val HomeSubtitleGray = TextMuted
+val HomeUnselectedGray = TextMuted
 
 /**
  * Modern folder accent colors for icon tiles and LinkIt corner glows.

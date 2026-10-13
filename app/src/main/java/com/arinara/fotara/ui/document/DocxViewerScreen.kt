@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
@@ -94,9 +95,11 @@ private val TableBorderColor = Color(0xFF2A3362)
 fun DocxViewerScreen(
     documentNote: DocumentNote,
     onBack: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onOpenClock: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    var showClockFullscreen by remember { mutableStateOf(false) }
     var elements by remember { mutableStateOf<List<DocxElement>?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -214,6 +217,14 @@ fun DocxViewerScreen(
                             .border(1.dp, Color(0xFF28325E), RoundedCornerShape(8.dp))
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Clock", color = TabCream) },
+                            leadingIcon = { Icon(Icons.Default.AccessTime, null, tint = AccentGold) },
+                            onClick = {
+                                showOverflowMenu = false
+                                onOpenClock?.invoke() ?: run { showClockFullscreen = true }
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Schedule...", color = TabCream) },
                             leadingIcon = { Icon(Icons.Default.Alarm, null, tint = AccentGold) },
                             onClick = {
@@ -226,6 +237,13 @@ fun DocxViewerScreen(
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
         )
+
+        if (showClockFullscreen) {
+            com.arinara.fotara.ui.note.clock.NoteClockScreen(
+                onBack = { showClockFullscreen = false }
+            )
+            return
+        }
 
         when {
             isLoading -> {

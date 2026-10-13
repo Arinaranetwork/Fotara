@@ -190,11 +190,20 @@ fun TextNoteEditorScreen(
     val isLatexInstalled = remember(installedPackages) { packageManager.isPackageInstalled(LatexAddonManager.PACKAGE_ID) }
     var showLatexPromoSheet by remember { mutableStateOf(false) }
     var showPackageHubScreen by remember { mutableStateOf(false) }
+    var showClockFullscreen by remember { mutableStateOf(false) }
 
     if (showPackageHubScreen) {
         PackageManagementHubScreen(
             packageManager = packageManager,
             onBackClick = { showPackageHubScreen = false },
+            modifier = Modifier.fillMaxSize()
+        )
+        return
+    }
+
+    if (showClockFullscreen) {
+        com.arinara.fotara.ui.note.clock.NoteClockScreen(
+            onBack = { showClockFullscreen = false },
             modifier = Modifier.fillMaxSize()
         )
         return
@@ -452,7 +461,7 @@ fun TextNoteEditorScreen(
                             leadingIcon = { Icon(Icons.Default.AccessTime, null, tint = AccentGold) },
                             onClick = {
                                 showOverflowMenu = false
-                                onOpenClock?.invoke()
+                                onOpenClock?.invoke() ?: run { showClockFullscreen = true }
                             }
                         )
 

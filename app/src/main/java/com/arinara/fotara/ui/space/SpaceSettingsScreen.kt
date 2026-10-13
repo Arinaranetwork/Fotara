@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -48,6 +47,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -69,6 +69,7 @@ import com.arinara.fotara.data.model.Space
 import com.arinara.fotara.data.model.WorkspaceIcons
 import com.arinara.fotara.data.repository.SpaceRepository
 import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.theme.FotaraShapes
 import com.arinara.fotara.theme.HomeCardBorder
 import com.arinara.fotara.theme.HomeCardSurface
 import com.arinara.fotara.theme.HomeMainButtonBlue
@@ -121,7 +122,7 @@ fun SpaceSettingsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(HomeNearBlack)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -143,8 +144,8 @@ fun SpaceSettingsScreen(
             AnimatedVisibility(visible = userFeedback != null) {
                 userFeedback?.let { msg ->
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E36)),
-                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                        shape = FotaraShapes.CardSmall,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 16.dp)
@@ -153,7 +154,7 @@ fun SpaceSettingsScreen(
                             modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Check, null, tint = HomeMainButtonBlue, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(msg, color = TextPrimary, fontSize = 13.sp, fontFamily = ElmsSans)
                         }
@@ -173,9 +174,9 @@ fun SpaceSettingsScreen(
             )
 
             Card(
-                colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, HomeCardBorder),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                shape = FotaraShapes.Card,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -194,12 +195,12 @@ fun SpaceSettingsScreen(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
-                            focusedBorderColor = HomeMainButtonBlue,
-                            unfocusedBorderColor = HomeCardBorder,
-                            focusedContainerColor = Color(0xFF0B101D),
-                            unfocusedContainerColor = Color(0xFF0B101D)
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                            focusedContainerColor = MaterialTheme.colorScheme.background,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.background
                         ),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = FotaraShapes.InputField,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -220,16 +221,16 @@ fun SpaceSettingsScreen(
                     ) {
                         WorkspaceIcons.ALL_ICONS.take(12).forEach { item ->
                             val isSelected = selectedIconKey == item.key
-                            val iconColor = if (isSelected) HomeMainButtonBlue else TextMuted
+                            val iconColor = if (isSelected) MaterialTheme.colorScheme.primary else TextMuted
                             Box(
                                 modifier = Modifier
                                     .size(42.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isSelected) HomeMainButtonBlue.copy(alpha = 0.2f) else Color(0xFF0B101D))
+                                    .clip(FotaraShapes.InputField)
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
                                     .border(
                                         width = if (isSelected) 1.5.dp else 1.dp,
-                                        color = if (isSelected) HomeMainButtonBlue else HomeCardBorder,
-                                        shape = RoundedCornerShape(10.dp)
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                        shape = FotaraShapes.InputField
                                     )
                                     .clickable { selectedIconKey = item.key },
                                 contentAlignment = Alignment.Center
@@ -291,7 +292,7 @@ fun SpaceSettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Lock, null, tint = Color(0xFFA78BFA), modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
@@ -313,10 +314,10 @@ fun SpaceSettingsScreen(
                             checked = isPrivateVault,
                             onCheckedChange = { isPrivateVault = it },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = Color(0xFFA78BFA),
-                                uncheckedThumbColor = TextMuted,
-                                uncheckedTrackColor = Color(0xFF0B101D)
+                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                             )
                         )
                     }
@@ -340,15 +341,15 @@ fun SpaceSettingsScreen(
                                 userFeedback = "Space settings successfully saved"
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
-                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = FotaraShapes.Button,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
                     ) {
-                        Icon(Icons.Default.Save, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Save, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Save Space Changes", fontFamily = ElmsSans, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Save Space Changes", fontFamily = ElmsSans, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                     }
 
                     if (currentSpace?.id != null && currentSpace?.id != Space.DEFAULT_SPACE_ID) {
@@ -357,9 +358,9 @@ fun SpaceSettingsScreen(
                             onClick = { showDeleteConfirmDialog = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Delete, null, tint = TagCrimson, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Delete This Space", color = TagCrimson, fontFamily = ElmsSans, fontSize = 13.sp)
+                            Text("Delete This Space", color = MaterialTheme.colorScheme.error, fontFamily = ElmsSans, fontSize = 13.sp)
                         }
                     }
                 }
@@ -373,8 +374,8 @@ fun SpaceSettingsScreen(
     if (showDeleteConfirmDialog && currentSpace != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            containerColor = Color(0xFF0F1422),
-            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shape = FotaraShapes.Dialog,
             title = {
                 Text("Delete Space?", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
             },
@@ -395,9 +396,10 @@ fun SpaceSettingsScreen(
                             onBack()
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = TagCrimson)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = FotaraShapes.Button
                 ) {
-                    Text("Delete", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+                    Text("Delete", color = MaterialTheme.colorScheme.onError, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

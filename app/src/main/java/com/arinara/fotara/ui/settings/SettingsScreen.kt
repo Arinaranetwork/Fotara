@@ -58,7 +58,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -155,6 +154,8 @@ import com.arinara.fotara.data.model.StorageLocation
 import com.arinara.fotara.data.model.ThemeMode
 import com.arinara.fotara.R
 import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.theme.FotaraShapes
+import com.arinara.fotara.theme.FotaraSpacing
 import com.arinara.fotara.theme.HomeCardBorder
 import com.arinara.fotara.theme.HomeCardSurface
 import com.arinara.fotara.theme.HomeMainButtonBlue
@@ -162,6 +163,8 @@ import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagCrimson
+import com.arinara.fotara.theme.TagEmerald
+import androidx.compose.material3.MaterialTheme
 import kotlinx.coroutines.launch
 
 /**
@@ -221,6 +224,8 @@ fun SettingsScreen(
     var showFriendsScreen by rememberSaveable { mutableStateOf(false) }
     var showPackageHubScreen by rememberSaveable { mutableStateOf(false) }
     var showBackupRestoreScreen by rememberSaveable { mutableStateOf(false) }
+    var showDesignSystemDebugScreen by rememberSaveable { mutableStateOf(false) }
+    var showHomeRefinedShowcaseScreen by rememberSaveable { mutableStateOf(false) }
 
     val actualFriendsRepo = remember(context, friendsRepository) {
         friendsRepository ?: LocalFriendsRepository(context)
@@ -240,14 +245,16 @@ fun SettingsScreen(
             showFriendsScreen = false
             showPackageHubScreen = false
             showBackupRestoreScreen = false
+            showDesignSystemDebugScreen = false
+            showHomeRefinedShowcaseScreen = false
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(activeSection, activeLegalDocument, showFriendsScreen, showPackageHubScreen, showBackupRestoreScreen) {
-        onSubScreenStateChanged?.invoke(activeSection != null || activeLegalDocument != null || showFriendsScreen || showPackageHubScreen || showBackupRestoreScreen)
+    androidx.compose.runtime.LaunchedEffect(activeSection, activeLegalDocument, showFriendsScreen, showPackageHubScreen, showBackupRestoreScreen, showDesignSystemDebugScreen, showHomeRefinedShowcaseScreen) {
+        onSubScreenStateChanged?.invoke(activeSection != null || activeLegalDocument != null || showFriendsScreen || showPackageHubScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen)
     }
 
-    BackHandler(enabled = activeLegalDocument != null || showFriendsScreen || showPackageHubScreen || showBackupRestoreScreen || activeSection != null) {
+    BackHandler(enabled = activeLegalDocument != null || showFriendsScreen || showPackageHubScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen || activeSection != null) {
         if (activeLegalDocument != null) {
             activeLegalDocument = null
         } else if (showFriendsScreen) {
@@ -256,6 +263,10 @@ fun SettingsScreen(
             showPackageHubScreen = false
         } else if (showBackupRestoreScreen) {
             showBackupRestoreScreen = false
+        } else if (showDesignSystemDebugScreen) {
+            showDesignSystemDebugScreen = false
+        } else if (showHomeRefinedShowcaseScreen) {
+            showHomeRefinedShowcaseScreen = false
         } else {
             activeSection = null
         }
@@ -294,6 +305,22 @@ fun SettingsScreen(
             spaceRepository = spaceRepository,
             workspaceRepository = workspaceRepository,
             onDataRestored = { viewModel.refreshStorageBreakdown() }
+        )
+        return
+    }
+
+    if (showDesignSystemDebugScreen) {
+        DesignSystemDebugScreen(
+            onBack = { showDesignSystemDebugScreen = false },
+            modifier = Modifier.fillMaxSize()
+        )
+        return
+    }
+
+    if (showHomeRefinedShowcaseScreen) {
+        com.arinara.fotara.ui.showcase.HomeRefinedShowcaseScreen(
+            onBack = { showHomeRefinedShowcaseScreen = false },
+            modifier = Modifier.fillMaxSize()
         )
         return
     }
@@ -465,8 +492,8 @@ fun SettingsScreen(
     if (showBannerSourceDialog) {
         AlertDialog(
             onDismissRequest = { showBannerSourceDialog = false },
-            containerColor = HomeCardSurface,
-            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = FotaraShapes.Dialog,
             title = {
                 Text(
                     text = stringResource(R.string.profile_action_change_banner),
@@ -493,7 +520,7 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.Default.Image,
                             contentDescription = null,
-                            tint = Color(0xFF60A5FA),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -505,7 +532,7 @@ fun SettingsScreen(
                         )
                     }
 
-                    HorizontalDivider(color = HomeCardBorder.copy(alpha = 0.5f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -520,7 +547,7 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.Default.Movie,
                             contentDescription = null,
-                            tint = Color(0xFF34D399),
+                            tint = TagEmerald,
                             modifier = Modifier.size(22.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -916,7 +943,7 @@ fun SettingsScreen(
                                 title = "Study Alarms & Anti-Procrastination",
                                 subtitle = "Photo-proof challenge alarms (Temporarily Disabled)",
                                 icon = Icons.Default.Alarm,
-                                iconTint = Color(0xFF6B7280),
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                 enabled = false,
                                 onClick = {}
                             )
@@ -1040,7 +1067,7 @@ fun SettingsScreen(
                         item {
                             Text(
                                 text = stringResource(R.string.settings_privacy_header),
-                                color = Color(0xFF60A5FA),
+                                color = MaterialTheme.colorScheme.primary,
                                 fontSize = 13.sp,
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Bold,
@@ -1077,6 +1104,33 @@ fun SettingsScreen(
                                 subtitle = "View third-party software attributions",
                                 icon = Icons.AutoMirrored.Filled.MenuBook,
                                 onClick = { viewModel.setLicensesDialogVisible(true) }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            Text(
+                                text = "DEVELOPER / ADVANCED",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 13.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 8.dp, top = 16.dp, bottom = 4.dp)
+                            )
+                        }
+                        item {
+                            SettingsRowItem(
+                                title = "Design System Showcase",
+                                subtitle = "Interactive preview of all Electric Slate UI presets",
+                                icon = Icons.Default.Palette,
+                                onClick = { showDesignSystemDebugScreen = true }
+                            )
+                        }
+                        item {
+                            SettingsRowItem(
+                                title = "Refined Home UI Replica",
+                                subtitle = "Full interactive preview of Home screen with 10 presets",
+                                icon = Icons.Default.GridView,
+                                onClick = { showHomeRefinedShowcaseScreen = true }
                             )
                         }
                     }
@@ -1271,13 +1325,14 @@ private fun SettingsCardItem(
     title: String,
     subtitle: String? = null,
     icon: ImageVector,
-    iconTint: Color = Color(0xFF94A3B8),
+    iconTint: Color = Color.Unspecified,
     onClick: () -> Unit
 ) {
+    val resolvedIconTint = if (iconTint != Color.Unspecified) iconTint else MaterialTheme.colorScheme.onSurfaceVariant
     Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
-        border = BorderStroke(1.dp, HomeCardBorder),
+        shape = FotaraShapes.CardLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -1288,18 +1343,18 @@ private fun SettingsCardItem(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // ~42dp neutral slate icon tile (same style as folder tiles)
+            // ~42dp neutral icon tile (same style as folder tiles)
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1E2638)),
+                    .clip(FotaraShapes.InputField)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = iconTint,
+                    tint = resolvedIconTint,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -1333,7 +1388,7 @@ private fun SettingsCardItem(
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = Color(0xFF64748B),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -1352,9 +1407,9 @@ private fun SettingsCardToggle(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
-        border = BorderStroke(1.dp, HomeCardBorder),
+        shape = FotaraShapes.CardLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
@@ -1368,14 +1423,14 @@ private fun SettingsCardToggle(
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1E2638)),
+                    .clip(FotaraShapes.InputField)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color(0xFF94A3B8),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -1410,10 +1465,10 @@ private fun SettingsCardToggle(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = HomeMainButtonBlue,
-                    uncheckedThumbColor = Color(0xFF94A3B8),
-                    uncheckedTrackColor = Color(0xFF1E2638)
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 )
             )
         }
@@ -1433,9 +1488,9 @@ private fun SettingsCardAction(
     onClick: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
-        border = BorderStroke(1.dp, HomeCardBorder),
+        shape = FotaraShapes.CardLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !isLoading, onClick = onClick)
@@ -1449,14 +1504,14 @@ private fun SettingsCardAction(
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1E2638)),
+                    .clip(FotaraShapes.InputField)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color(0xFF94A3B8),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -1489,7 +1544,7 @@ private fun SettingsCardAction(
 
             if (isLoading) {
                 CircularProgressIndicator(
-                    color = HomeMainButtonBlue,
+                    color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 2.dp,
                     modifier = Modifier.size(22.dp)
                 )
@@ -1498,7 +1553,7 @@ private fun SettingsCardAction(
                     Icon(
                         imageVector = actionIcon,
                         contentDescription = title,
-                        tint = Color(0xFF94A3B8),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1518,9 +1573,9 @@ private fun SettingsStorageBreakdownCard(
     formattedTotal: String
 ) {
     Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
-        border = BorderStroke(1.dp, HomeCardBorder),
+        shape = FotaraShapes.CardLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1532,14 +1587,14 @@ private fun SettingsStorageBreakdownCard(
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1E2638)),
+                        .clip(FotaraShapes.InputField)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Storage,
                         contentDescription = null,
-                        tint = Color(0xFF94A3B8),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -1580,9 +1635,9 @@ private fun SettingsStorageBreakdownCard(
 private fun StoragePill(label: String, size: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .background(Color(0xFF131925), RoundedCornerShape(10.dp))
-            .border(1.dp, HomeCardBorder, RoundedCornerShape(10.dp))
-            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, FotaraShapes.InputField)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, FotaraShapes.InputField)
+            .padding(horizontal = FotaraSpacing.Small, vertical = FotaraSpacing.Small)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -1609,9 +1664,9 @@ private fun SettingsAppResidueCard(
     onCleanClick: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
-        border = BorderStroke(1.dp, HomeCardBorder),
+        shape = FotaraShapes.CardLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1623,14 +1678,14 @@ private fun SettingsAppResidueCard(
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1E2638)),
+                        .clip(FotaraShapes.InputField)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = null,
-                        tint = Color(0xFF60A5FA),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -1659,9 +1714,9 @@ private fun SettingsAppResidueCard(
 
             // Total disk used indicator row
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF161A22),
-                border = BorderStroke(1.dp, Color(0xFF283248)),
+                shape = FotaraShapes.InputField,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -1673,14 +1728,14 @@ private fun SettingsAppResidueCard(
                 ) {
                     Text(
                         text = "Total Disk Used",
-                        color = Color(0xFF94A3B8),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp,
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = if (fileCount > 0) "$formattedSize ($fileCount ${if (fileCount == 1) "file" else "files"})" else "$formattedSize (0 files)",
-                        color = if (fileCount > 0) Color(0xFFE2E8F0) else Color(0xFF64748B),
+                        color = if (fileCount > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         fontSize = 13.5.sp,
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.SemiBold
@@ -1697,13 +1752,13 @@ private fun SettingsAppResidueCard(
                     ) {
                         Text(
                             text = "Cleaning temporary residue...",
-                            color = Color(0xFF60A5FA),
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 12.sp,
                             fontFamily = ElmsSans
                         )
                         Text(
                             text = "${(progress * 100).toInt().coerceIn(0, 100)}%",
-                            color = Color(0xFF60A5FA),
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 12.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Bold
@@ -1715,9 +1770,9 @@ private fun SettingsAppResidueCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = Color(0xFF3B82F6),
-                        trackColor = Color(0xFF1E293B)
+                            .clip(FotaraShapes.Pill),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                     )
                 }
             }
@@ -1728,10 +1783,10 @@ private fun SettingsAppResidueCard(
                 onClick = onCleanClick,
                 enabled = !isCleaning && fileCount > 0,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = HomeMainButtonBlue,
-                    disabledContainerColor = Color(0xFF202636)
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 ),
-                shape = RoundedCornerShape(12.dp),
+                shape = FotaraShapes.InputField,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp)
@@ -1739,13 +1794,13 @@ private fun SettingsAppResidueCard(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = null,
-                    tint = if (!isCleaning && fileCount > 0) Color.White else Color(0xFF64748B),
+                    tint = if (!isCleaning && fileCount > 0) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = if (fileCount > 0) "Clean Residue Now" else "No Residue to Clean",
-                    color = if (!isCleaning && fileCount > 0) Color.White else Color(0xFF64748B),
+                    color = if (!isCleaning && fileCount > 0) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     fontSize = 14.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.SemiBold
@@ -1761,9 +1816,9 @@ private fun SettingsAppResidueCard(
 @Composable
 private fun SettingsAboutCard(versionName: String, versionCode: Long) {
     Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = HomeCardSurface),
-        border = BorderStroke(1.dp, HomeCardBorder),
+        shape = FotaraShapes.CardLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1775,14 +1830,14 @@ private fun SettingsAboutCard(versionName: String, versionCode: Long) {
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1E2638)),
+                    .clip(FotaraShapes.InputField)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Info,
                     contentDescription = null,
-                    tint = Color(0xFF94A3B8),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -1807,7 +1862,7 @@ private fun SettingsAboutCard(versionName: String, versionCode: Long) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Build $versionCode",
-                    color = Color(0xFF60A5FA),
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 12.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Medium
@@ -1824,7 +1879,7 @@ private fun SettingsAboutCard(versionName: String, versionCode: Long) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Arinara Network • 100% Offline Architecture",
-                    color = Color(0xFF475569),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     fontSize = 12.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Light
@@ -1838,10 +1893,10 @@ private fun SettingsAboutCard(versionName: String, versionCode: Long) {
 private fun LicenseItem(name: String, license: String, copyright: String) {
     Column(modifier = Modifier.padding(vertical = 8.dp)) {
         Text(text = name, color = Color.White, fontSize = 14.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
-        Text(text = license, color = Color(0xFF60A5FA), fontSize = 12.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Light)
+        Text(text = license, color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Light)
         Text(text = copyright, color = HomeSubtitleGray, fontSize = 11.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Light)
         Spacer(modifier = Modifier.height(6.dp))
-        HorizontalDivider(color = HomeCardBorder)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -1855,7 +1910,8 @@ private fun <T> OptionSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = HomeCardSurface,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shape = FotaraShapes.Dialog,
         title = {
             Text(
                 text = title,
@@ -1879,8 +1935,8 @@ private fun <T> OptionSelectionDialog(
                             selected = option == selectedOption,
                             onClick = { onOptionSelected(option) },
                             colors = RadioButtonDefaults.colors(
-                                selectedColor = HomeMainButtonBlue,
-                                unselectedColor = Color(0xFF64748B)
+                                selectedColor = MaterialTheme.colorScheme.primary,
+                                unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -1912,10 +1968,11 @@ private fun SettingsRowItem(
     title: String,
     subtitle: String? = null,
     icon: ImageVector? = null,
-    iconTint: Color = Color(0xFF94A3B8),
+    iconTint: Color = Color.Unspecified,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val resolvedIconTint = if (iconTint != Color.Unspecified) iconTint else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -1927,7 +1984,7 @@ private fun SettingsRowItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (enabled) iconTint else Color(0xFF6B7280),
+                tint = if (enabled) resolvedIconTint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(14.dp))
@@ -1936,7 +1993,7 @@ private fun SettingsRowItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                color = if (enabled) Color.White else Color(0xFF94A3B8),
+                color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 fontSize = 15.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Medium
@@ -1945,7 +2002,7 @@ private fun SettingsRowItem(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    color = if (enabled) HomeSubtitleGray else Color(0xFF6B7280),
+                    color = if (enabled) HomeSubtitleGray else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     fontSize = 13.sp,
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Light,
@@ -1960,13 +2017,13 @@ private fun SettingsRowItem(
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = Color(0xFF64748B),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.size(20.dp)
             )
         } else {
             Text(
                 text = "Disabled",
-                color = Color(0xFF6B7280),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 fontSize = 12.sp,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Medium
@@ -1997,7 +2054,7 @@ private fun SettingsRowToggle(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color(0xFF94A3B8),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(14.dp))
@@ -2030,10 +2087,10 @@ private fun SettingsRowToggle(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = HomeMainButtonBlue,
-                uncheckedThumbColor = Color(0xFF94A3B8),
-                uncheckedTrackColor = Color(0xFF1E2638)
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
             )
         )
     }
@@ -2062,7 +2119,7 @@ private fun SettingsRowAction(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color(0xFF94A3B8),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(14.dp))
@@ -2093,7 +2150,7 @@ private fun SettingsRowAction(
 
         if (isLoading) {
             CircularProgressIndicator(
-                color = HomeMainButtonBlue,
+                color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(22.dp)
             )
@@ -2102,7 +2159,7 @@ private fun SettingsRowAction(
                 Icon(
                     imageVector = actionIcon,
                     contentDescription = title,
-                    tint = Color(0xFF94A3B8),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -2113,7 +2170,7 @@ private fun SettingsRowAction(
 @Composable
 private fun SettingsListDivider() {
     HorizontalDivider(
-        color = Color(0xFF161E30),
+        color = MaterialTheme.colorScheme.outlineVariant,
         thickness = 0.8.dp,
         modifier = Modifier.padding(horizontal = 4.dp)
     )
@@ -2127,9 +2184,9 @@ private fun DeviceIdExpandablePanel(
     var isExpanded by rememberSaveable { mutableStateOf(false) }
 
     Surface(
-        color = Color(0xFF111726),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, Color(0xFF1E293B)),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = FotaraShapes.Button,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 6.dp)
@@ -2149,7 +2206,7 @@ private fun DeviceIdExpandablePanel(
                 Icon(
                     imageVector = Icons.Default.Info,
                     contentDescription = null,
-                    tint = Color(0xFF94A3B8),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -2172,7 +2229,7 @@ private fun DeviceIdExpandablePanel(
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = Color(0xFF94A3B8),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -2188,20 +2245,20 @@ private fun DeviceIdExpandablePanel(
                         .padding(top = 8.dp, bottom = 4.dp)
                 ) {
                     HorizontalDivider(
-                        color = Color(0xFF1E293B),
+                        color = MaterialTheme.colorScheme.outlineVariant,
                         thickness = 1.dp
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Surface(
-                        color = Color(0xFF0A0D14),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                        color = MaterialTheme.colorScheme.background,
+                        shape = FotaraShapes.Button,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = deviceId,
-                            color = Color(0xFFE2E8F0),
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Normal,
@@ -2218,7 +2275,7 @@ private fun DeviceIdExpandablePanel(
                     ) {
                         Text(
                             text = "Random local UUID v4. No hardware identifiers or personal data are collected.",
-                            color = Color(0xFF6F7491),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             fontSize = 11.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Light,
@@ -2230,8 +2287,8 @@ private fun DeviceIdExpandablePanel(
 
                         Button(
                             onClick = { onCopy(deviceId) },
-                            colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
-                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = FotaraShapes.Button,
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                             modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 36.dp)
                         ) {
@@ -2281,8 +2338,8 @@ private fun SavedImageLocationDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = HomeCardSurface,
-        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shape = FotaraShapes.Dialog,
         title = {
             Text(
                 text = stringResource(R.string.settings_saved_image_location_title),
@@ -2315,8 +2372,8 @@ private fun SavedImageLocationDialog(
                         selected = selectedOption == "pictures_fotara",
                         onClick = { selectedOption = "pictures_fotara" },
                         colors = RadioButtonDefaults.colors(
-                            selectedColor = HomeMainButtonBlue,
-                            unselectedColor = Color(0xFF64748B)
+                            selectedColor = MaterialTheme.colorScheme.primary,
+                            unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -2340,8 +2397,8 @@ private fun SavedImageLocationDialog(
                         selected = selectedOption == "dcim_fotara",
                         onClick = { selectedOption = "dcim_fotara" },
                         colors = RadioButtonDefaults.colors(
-                            selectedColor = HomeMainButtonBlue,
-                            unselectedColor = Color(0xFF64748B)
+                            selectedColor = MaterialTheme.colorScheme.primary,
+                            unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -2365,8 +2422,8 @@ private fun SavedImageLocationDialog(
                         selected = selectedOption == "custom",
                         onClick = { selectedOption = "custom" },
                         colors = RadioButtonDefaults.colors(
-                            selectedColor = HomeMainButtonBlue,
-                            unselectedColor = Color(0xFF64748B)
+                            selectedColor = MaterialTheme.colorScheme.primary,
+                            unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -2388,13 +2445,14 @@ private fun SavedImageLocationDialog(
                         },
                         label = { Text(stringResource(R.string.settings_saved_image_custom_folder_hint)) },
                         singleLine = true,
+                        shape = FotaraShapes.InputField,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = HomeMainButtonBlue,
-                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
-                            focusedLabelColor = HomeMainButtonBlue,
-                            unfocusedLabelColor = Color(0xFF94A3B8)
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -2404,7 +2462,7 @@ private fun SavedImageLocationDialog(
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = stringResource(R.string.settings_saved_image_legacy_notice),
-                        color = Color(0xFF94A3B8),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         fontFamily = ElmsSans
                     )
@@ -2416,10 +2474,10 @@ private fun SavedImageLocationDialog(
                 onClick = { onSave(selectedOption, customNameText.trim()) },
                 enabled = isCustomValid,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = HomeMainButtonBlue,
-                    disabledContainerColor = HomeMainButtonBlue.copy(alpha = 0.38f)
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
                 ),
-                shape = RoundedCornerShape(12.dp)
+                shape = FotaraShapes.Button
             ) {
                 Text("Save", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
             }

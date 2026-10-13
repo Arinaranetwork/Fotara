@@ -43,6 +43,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CallSplit
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Close
@@ -177,8 +178,10 @@ fun PdfViewerScreen(
     settingsRepository: SettingsRepository? = null,
     searchQuery: String? = null,
     onNavigateToEditor: ((Long, Int) -> Unit)? = null,
-    audioAnnotationRepository: com.arinara.fotara.audio.repository.AudioAnnotationRepository? = null
+    audioAnnotationRepository: com.arinara.fotara.audio.repository.AudioAnnotationRepository? = null,
+    onOpenClock: (() -> Unit)? = null
 ) {
+    var showClockFullscreen by remember { mutableStateOf(false) }
     var showSplitConfirmDialog by remember { mutableStateOf(false) }
     var pageToClearDrawing by remember { mutableStateOf<Int?>(null) }
     var isReadingMode by rememberSaveable { mutableStateOf(false) }
@@ -564,6 +567,15 @@ fun PdfViewerScreen(
                         )
 
                         DropdownMenuItem(
+                            text = { Text("Clock", color = TabCream) },
+                            leadingIcon = { Icon(Icons.Default.AccessTime, null, tint = AccentGold) },
+                            onClick = {
+                                showOverflowMenu = false
+                                onOpenClock?.invoke() ?: run { showClockFullscreen = true }
+                            }
+                        )
+
+                        DropdownMenuItem(
                             text = { Text("Schedule...", color = TabCream) },
                             leadingIcon = { Icon(Icons.Default.Alarm, null, tint = AccentGold) },
                             onClick = {
@@ -576,6 +588,13 @@ fun PdfViewerScreen(
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
         )
+
+        if (showClockFullscreen) {
+            com.arinara.fotara.ui.note.clock.NoteClockScreen(
+                onBack = { showClockFullscreen = false }
+            )
+            return
+        }
 
         // Pinned Pages Chip Row (Task 3)
         if (pinnedPages.isNotEmpty()) {

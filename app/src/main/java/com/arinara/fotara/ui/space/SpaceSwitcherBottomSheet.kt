@@ -31,6 +31,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.arinara.fotara.theme.FotaraShapes
+import com.arinara.fotara.theme.FotaraSpacing
+import com.arinara.fotara.theme.TagCrimson
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -82,13 +86,6 @@ import com.arinara.fotara.data.model.Space
 import com.arinara.fotara.data.model.WorkspaceIcons
 import com.arinara.fotara.theme.ElmsSans
 
-private val SpaceBaseColor = Color(0xFF0A0D14)
-private val SpaceCardColor = Color(0xFF111726)
-private val SpacePrimaryColor = Color(0xFF2563EB)
-private val SpaceAccentColor = Color(0xFFEFE8DA)
-private val SpaceTextSecondary = Color(0xFFA0A5C2)
-private val SpaceBorderColor = Color(0xFF1E283D)
-
 private val SpacePresetColors = listOf(
     "#2563EB", // Blue
     "#7C3AED", // Purple
@@ -124,8 +121,8 @@ fun SpaceSwitcherBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = SpaceBaseColor,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.background,
+        shape = FotaraShapes.BottomSheet,
         modifier = modifier
     ) {
         Column(
@@ -151,14 +148,14 @@ fun SpaceSwitcherBottomSheet(
                         text = "Isolated vaults for courses and projects",
                         fontFamily = ElmsSans,
                         fontSize = 14.sp,
-                        color = SpaceTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 IconButton(onClick = onDismiss) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Close",
-                        tint = SpaceTextSecondary
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -192,9 +189,9 @@ fun SpaceSwitcherBottomSheet(
                 item {
                     Spacer(modifier = Modifier.height(6.dp))
                     Surface(
-                        color = if (isPrivateUnlocked) Color(0xFF1E1438) else Color(0xFF13172C),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (isPrivateUnlocked) Color(0xFF8B5CF6) else Color(0xFF374151)),
+                        color = if (isPrivateUnlocked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = FotaraShapes.InputField,
+                        border = BorderStroke(1.dp, if (isPrivateUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
@@ -212,14 +209,14 @@ fun SpaceSwitcherBottomSheet(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isPrivateUnlocked) Color(0xFF8B5CF6).copy(alpha = 0.25f) else Color(0xFF4B5563).copy(alpha = 0.25f)),
+                                    .clip(FotaraShapes.Button)
+                                    .background(if (isPrivateUnlocked) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHighest),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = if (isPrivateUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
                                     contentDescription = "Private Space",
-                                    tint = if (isPrivateUnlocked) Color(0xFFA78BFA) else Color(0xFF9CA3AF),
+                                    tint = if (isPrivateUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -243,7 +240,7 @@ fun SpaceSwitcherBottomSheet(
                             ) {
                                 Text(
                                     text = if (isPrivateUnlocked) "Lock" else "Unlock",
-                                    color = if (isPrivateUnlocked) Color(0xFFEF4444) else Color(0xFFA78BFA),
+                                    color = if (isPrivateUnlocked) TagCrimson else MaterialTheme.colorScheme.primary,
                                     fontFamily = ElmsSans,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
@@ -279,17 +276,17 @@ fun SpaceSwitcherBottomSheet(
 
             Button(
                 onClick = { showCreateDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = SpaceCardColor),
-                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                shape = FotaraShapes.Button,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
-                    .border(1.dp, SpaceBorderColor, RoundedCornerShape(8.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, FotaraShapes.Button)
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = null,
-                    tint = SpacePrimaryColor,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -333,21 +330,22 @@ private fun SpaceItemRow(
     onClick: () -> Unit,
     onOpenSettings: (() -> Unit)? = null
 ) {
+    val defaultPrimary = MaterialTheme.colorScheme.primary
     val accentColor = try {
         Color(android.graphics.Color.parseColor(space.colorHex))
     } catch (_: Exception) {
-        SpacePrimaryColor
+        defaultPrimary
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isActive) SpaceCardColor else Color(0xFF0F1420))
+            .clip(FotaraShapes.InputField)
+            .background(if (isActive) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.background)
             .border(
                 width = if (isActive) 1.5.dp else 1.dp,
-                color = if (isActive) SpacePrimaryColor else SpaceBorderColor,
-                shape = RoundedCornerShape(12.dp)
+                color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                shape = FotaraShapes.InputField
             )
             .clickable(onClick = onClick)
             .padding(16.dp),
@@ -356,9 +354,9 @@ private fun SpaceItemRow(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(FotaraShapes.Button)
                 .background(accentColor.copy(alpha = 0.2f))
-                .border(1.dp, accentColor, RoundedCornerShape(8.dp)),
+                .border(1.dp, accentColor, FotaraShapes.Button),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -385,7 +383,7 @@ private fun SpaceItemRow(
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "Private Vault",
-                        tint = Color(0xFFA78BFA),
+                        tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(14.dp)
                     )
                 }
@@ -394,7 +392,7 @@ private fun SpaceItemRow(
                 text = if (space.id == Space.DEFAULT_SPACE_ID) "Academic Space (Default)" else "Academic Space #${space.id}",
                 fontFamily = ElmsSans,
                 fontSize = 12.sp,
-                color = SpaceTextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -406,7 +404,7 @@ private fun SpaceItemRow(
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Space Settings",
-                    tint = SpaceTextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -418,7 +416,7 @@ private fun SpaceItemRow(
                 modifier = Modifier
                     .size(24.dp)
                     .clip(CircleShape)
-                    .background(SpacePrimaryColor),
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -446,9 +444,9 @@ fun CreateSpaceDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(SpaceCardColor)
-                .border(1.dp, SpaceBorderColor, RoundedCornerShape(20.dp))
+                .clip(FotaraShapes.Dialog)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, FotaraShapes.Dialog)
                 .padding(20.dp)
         ) {
             Text(
@@ -462,7 +460,7 @@ fun CreateSpaceDialog(
                 text = "Set up a distinct vault for your studies or projects.",
                 fontFamily = ElmsSans,
                 fontSize = 13.sp,
-                color = SpaceTextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -470,16 +468,16 @@ fun CreateSpaceDialog(
             OutlinedTextField(
                 value = name,
                 onValueChange = { if (it.length <= 30) name = it },
-                label = { Text("Space Name", color = SpaceTextSecondary) },
-                placeholder = { Text("e.g. Semester 5, Research Lab", color = Color(0xFF6B7280)) },
+                label = { Text("Space Name", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                placeholder = { Text("e.g. Semester 5, Research Lab", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    focusedBorderColor = SpacePrimaryColor,
-                    unfocusedBorderColor = SpaceBorderColor
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
                 ),
-                shape = RoundedCornerShape(8.dp),
+                shape = FotaraShapes.InputField,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -539,12 +537,12 @@ fun CreateSpaceDialog(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) SpacePrimaryColor.copy(alpha = 0.3f) else Color(0xFF1E283D))
+                            .clip(FotaraShapes.Button)
+                            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceContainerHigh)
                             .border(
                                 width = if (isSelected) 1.5.dp else 1.dp,
-                                color = if (isSelected) SpacePrimaryColor else Color.Transparent,
-                                shape = RoundedCornerShape(8.dp)
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                shape = FotaraShapes.Button
                             )
                             .clickable { selectedIcon = iconKey },
                         contentAlignment = Alignment.Center
@@ -552,7 +550,7 @@ fun CreateSpaceDialog(
                         Icon(
                             painter = painterResource(id = WorkspaceIcons.getIconResId(iconKey)),
                             contentDescription = null,
-                            tint = if (isSelected) SpacePrimaryColor else Color.White,
+                            tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -564,8 +562,8 @@ fun CreateSpaceDialog(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF0F1420))
+                    .clip(FotaraShapes.Button)
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -582,7 +580,7 @@ fun CreateSpaceDialog(
                         text = "Shields contents and requires biometric unlock",
                         fontFamily = ElmsSans,
                         fontSize = 11.sp,
-                        color = SpaceTextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(
@@ -590,7 +588,7 @@ fun CreateSpaceDialog(
                     onCheckedChange = { isPrivate = it },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
-                        checkedTrackColor = SpacePrimaryColor
+                        checkedTrackColor = MaterialTheme.colorScheme.primary
                     )
                 )
             }
@@ -605,14 +603,14 @@ fun CreateSpaceDialog(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
                 ) {
-                    Text("Cancel", color = SpaceTextSecondary, fontFamily = ElmsSans)
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = ElmsSans)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = { onCreate(name, selectedIcon, selectedColor, isPrivate) },
                     enabled = name.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = SpacePrimaryColor),
-                    shape = RoundedCornerShape(8.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = FotaraShapes.Button
                 ) {
                     Text("Create", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Medium)
                 }
@@ -647,19 +645,19 @@ fun PrivateSpaceSecurityGateDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF141936),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     shape = CircleShape,
-                    color = Color(0xFF7C3AED).copy(alpha = 0.25f),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
                     modifier = Modifier.size(38.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = null,
-                            tint = Color(0xFFA78BFA),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -675,7 +673,7 @@ fun PrivateSpaceSecurityGateDialog(
                     )
                     Text(
                         text = "Security Verification",
-                        color = Color(0xFF8E9AAF),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         fontFamily = ElmsSans
                     )
@@ -686,7 +684,7 @@ fun PrivateSpaceSecurityGateDialog(
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Enter your security PIN or authenticate using device biometrics to access locked spaces.",
-                    color = Color(0xFFEAE3D2).copy(alpha = 0.85f),
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 13.5.sp,
                     fontFamily = ElmsSans
                 )
@@ -701,10 +699,11 @@ fun PrivateSpaceSecurityGateDialog(
                             errorMsg = null
                         }
                     },
-                    label = { Text("4-6 Digit Security PIN", color = Color(0xFF8E9AAF)) },
-                    placeholder = { Text("••••", color = Color(0xFF8E9AAF).copy(alpha = 0.5f)) },
+                    label = { Text("4-6 Digit Security PIN", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    placeholder = { Text("••••", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
                     singleLine = true,
                     isError = errorMsg != null,
+                    shape = FotaraShapes.InputField,
                     visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.NumberPassword,
@@ -718,16 +717,16 @@ fun PrivateSpaceSecurityGateDialog(
                             Icon(
                                 imageVector = if (isPinVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                 contentDescription = if (isPinVisible) "Hide PIN" else "Show PIN",
-                                tint = Color(0xFF8E9AAF)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF7C3AED),
-                        unfocusedBorderColor = Color(0xFF28325E),
-                        focusedTextColor = Color(0xFFEAE3D2),
-                        unfocusedTextColor = Color(0xFFEAE3D2),
-                        cursorColor = Color(0xFF7C3AED)
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        cursorColor = MaterialTheme.colorScheme.primary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -736,7 +735,7 @@ fun PrivateSpaceSecurityGateDialog(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = errorMsg!!,
-                        color = Color(0xFFEF4444),
+                        color = TagCrimson,
                         fontSize = 12.sp,
                         fontFamily = ElmsSans
                     )
@@ -785,9 +784,9 @@ fun PrivateSpaceSecurityGateDialog(
                             errorMsg = "Device authentication not available"
                         }
                     },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFA78BFA)),
-                    border = BorderStroke(1.dp, Color(0xFF7C3AED).copy(alpha = 0.6f)),
-                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    shape = FotaraShapes.Button,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
@@ -809,18 +808,18 @@ fun PrivateSpaceSecurityGateDialog(
             Button(
                 onClick = { submitPin() },
                 enabled = pin.length >= 4,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
-                shape = RoundedCornerShape(10.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = FotaraShapes.Button
             ) {
                 Text("Unlock", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = ElmsSans)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color(0xFF8E9AAF), fontFamily = ElmsSans)
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = ElmsSans)
             }
         },
-        shape = RoundedCornerShape(16.dp)
+        shape = FotaraShapes.Dialog
     )
 }
 

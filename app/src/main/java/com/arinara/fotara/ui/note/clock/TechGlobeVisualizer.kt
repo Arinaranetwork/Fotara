@@ -6,17 +6,33 @@
 
 package com.arinara.fotara.ui.note.clock
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -30,7 +46,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -39,12 +54,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderTabCream
-import java.util.TimeZone
+import com.arinara.fotara.theme.HomeCardBorder
+import com.arinara.fotara.theme.HomeCardSurface
 import kotlin.math.cos
 import kotlin.math.sin
 
 data class GlobeTimezoneLocation(
     val id: String,
+    val countryCode: String,
     val name: String,
     val timeZoneId: String,
     val latitudeDeg: Float,
@@ -52,217 +69,266 @@ data class GlobeTimezoneLocation(
 )
 
 val DEFAULT_GLOBE_LOCATIONS = listOf(
-    GlobeTimezoneLocation("UTC", "UTC (Universal)", "UTC", 0f, 0f),
-    GlobeTimezoneLocation("LON", "London (GMT/BST)", "Europe/London", 51.5f, -0.12f),
-    GlobeTimezoneLocation("NYC", "New York (EST/EDT)", "America/New_York", 40.7f, -74.0f),
-    GlobeTimezoneLocation("SFO", "San Francisco (PST)", "America/Los_Angeles", 37.7f, -122.4f),
-    GlobeTimezoneLocation("JKT", "Jakarta (WIB)", "Asia/Jakarta", -6.2f, 106.8f),
-    GlobeTimezoneLocation("TYO", "Tokyo (JST)", "Asia/Tokyo", 35.6f, 139.7f),
-    GlobeTimezoneLocation("DXB", "Dubai (GST)", "Asia/Dubai", 25.2f, 55.3f),
-    GlobeTimezoneLocation("SYD", "Sydney (AEST)", "Australia/Sydney", -33.8f, 151.2f)
+    GlobeTimezoneLocation("UTC", "INT", "UTC (Universal)", "UTC", 0f, 0f),
+    GlobeTimezoneLocation("LON", "GBR", "London (GMT/BST)", "Europe/London", 51.5f, -0.12f),
+    GlobeTimezoneLocation("NYC", "USA", "New York (EST/EDT)", "America/New_York", 40.7f, -74.0f),
+    GlobeTimezoneLocation("SFO", "USA", "San Francisco (PST)", "America/Los_Angeles", 37.7f, -122.4f),
+    GlobeTimezoneLocation("JKT", "IDN", "Jakarta (WIB)", "Asia/Jakarta", -6.2f, 106.8f),
+    GlobeTimezoneLocation("TYO", "JPN", "Tokyo (JST)", "Asia/Tokyo", 35.6f, 139.7f),
+    GlobeTimezoneLocation("DXB", "UAE", "Dubai (GST)", "Asia/Dubai", 25.2f, 55.3f),
+    GlobeTimezoneLocation("SYD", "AUS", "Sydney (AEST)", "Australia/Sydney", -33.8f, 151.2f)
 )
 
 /**
  * Pure native Jetpack Compose 3D Low-Poly Tech Globe visualizer.
  * Supports touch rotation (yaw and pitch), rendering wireframe tech meridians,
- * and 1:1 3D timezone pointers. Strictly NO WebView.
+ * auto-spin towards selected timezone, and 1:1 3D timezone pointers.
+ * Strictly NO WebView.
  */
 @Composable
 fun TechGlobeVisualizer(
     selectedLocation: GlobeTimezoneLocation,
     onSelectLocation: (GlobeTimezoneLocation) -> Unit,
     modifier: Modifier = Modifier,
-    locations: List<GlobeTimezoneLocation> = DEFAULT_GLOBE_LOCATIONS
+    locations: List<GlobeTimezoneLocation> = DEFAULT_GLOBE_LOCATIONS,
+    showLocationChips: Boolean = true
 ) {
     var yaw by remember { mutableFloatStateOf(0f) }
     var pitch by remember { mutableFloatStateOf(0.2f) }
     val textMeasurer = rememberTextMeasurer()
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(300.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF070B18))
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    yaw += dragAmount.x * 0.008f
-                    pitch = (pitch - dragAmount.y * 0.008f).coerceIn(-1.3f, 1.3f)
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val cx = size.width / 2f
-            val cy = size.height / 2f
-            val radius = minOf(cx, cy) * 0.78f
+    // Smooth auto-rotation to selected location
+    LaunchedEffect(selectedLocation) {
+        val targetYaw = -Math.toRadians(selectedLocation.longitudeDeg.toDouble()).toFloat()
+        val targetPitch = (Math.toRadians(selectedLocation.latitudeDeg.toDouble()).toFloat() * 0.4f).coerceIn(-1.2f, 1.2f)
+        val startYaw = yaw
+        val startPitch = pitch
+        val anim = Animatable(0f)
+        anim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
+        ) {
+            yaw = startYaw + (targetYaw - startYaw) * value
+            pitch = startPitch + (targetPitch - startPitch) * value
+        }
+    }
 
-            val globeColor = Color(0xFF1E294B)
-            val gridColor = Color(0xFF283B6B)
-            val highlightColor = Color(0xFF38BDF8)
-            val goldPinColor = Color(0xFFF59E0B)
-
-            // Outer glowing tech ring
-            drawCircle(
-                color = gridColor.copy(alpha = 0.35f),
-                radius = radius,
-                center = Offset(cx, cy),
-                style = Stroke(width = 1.5.dp.toPx())
-            )
-
-            // 3D coordinate rotation helper
-            fun project(latDeg: Float, lonDeg: Float, elevation: Float = 1.0f): Triple<Float, Float, Float> {
-                val latRad = Math.toRadians(latDeg.toDouble()).toFloat()
-                val lonRad = Math.toRadians(lonDeg.toDouble()).toFloat()
-
-                val r = radius * elevation
-                // Standard spherical to Cartesian
-                val x0 = r * cos(latRad) * sin(lonRad)
-                val y0 = -r * sin(latRad)
-                val z0 = r * cos(latRad) * cos(lonRad)
-
-                // Rotate around X (pitch)
-                val y1 = y0 * cos(pitch) - z0 * sin(pitch)
-                val z1 = y0 * sin(pitch) + z0 * cos(pitch)
-
-                // Rotate around Y (yaw)
-                val x2 = x0 * cos(yaw) + z1 * sin(yaw)
-                val z2 = -x0 * sin(yaw) + z1 * cos(yaw)
-
-                val screenX = cx + x2
-                val screenY = cy + y1
-                return Triple(screenX, screenY, z2)
-            }
-
-            // Draw latitude lines (parallels)
-            val latitudes = listOf(-60f, -30f, 0f, 30f, 60f)
-            for (lat in latitudes) {
-                val path = Path()
-                var first = true
-                for (lonStep in 0..36) {
-                    val lon = lonStep * 10f
-                    val (sx, sy, z) = project(lat, lon)
-                    if (z > -radius * 0.2f) {
-                        if (first) {
-                            path.moveTo(sx, sy)
-                            first = false
-                        } else {
-                            path.lineTo(sx, sy)
-                        }
-                    } else {
-                        first = true
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFF070B18))
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        yaw += dragAmount.x * 0.008f
+                        pitch = (pitch - dragAmount.y * 0.008f).coerceIn(-1.3f, 1.3f)
                     }
-                }
-                drawPath(
-                    path = path,
-                    color = if (lat == 0f) highlightColor.copy(alpha = 0.5f) else gridColor.copy(alpha = 0.35f),
-                    style = Stroke(width = if (lat == 0f) 1.5.dp.toPx() else 1.dp.toPx())
-                )
-            }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val cx = size.width / 2f
+                val cy = size.height / 2f
+                val radius = minOf(cx, cy) * 0.78f
 
-            // Draw longitude lines (meridians)
-            val longitudes = (0 until 12).map { it * 30f }
-            for (lon in longitudes) {
-                val path = Path()
-                var first = true
-                for (latStep in -9..9) {
-                    val lat = latStep * 10f
-                    val (sx, sy, z) = project(lat, lon)
-                    if (z > -radius * 0.2f) {
-                        if (first) {
-                            path.moveTo(sx, sy)
-                            first = false
-                        } else {
-                            path.lineTo(sx, sy)
-                        }
-                    } else {
-                        first = true
-                    }
-                }
-                drawPath(
-                    path = path,
+                val gridColor = Color(0xFF283B6B)
+                val highlightColor = Color(0xFF38BDF8)
+                val goldPinColor = Color(0xFFF77F00)
+
+                // Outer glowing tech ring
+                drawCircle(
                     color = gridColor.copy(alpha = 0.35f),
-                    style = Stroke(width = 1.dp.toPx())
+                    radius = radius,
+                    center = Offset(cx, cy),
+                    style = Stroke(width = 1.5.dp.toPx())
                 )
+
+                // 3D coordinate projection helper
+                fun project(latDeg: Float, lonDeg: Float, elevation: Float = 1.0f): Triple<Float, Float, Float> {
+                    val latRad = Math.toRadians(latDeg.toDouble()).toFloat()
+                    val lonRad = Math.toRadians(lonDeg.toDouble()).toFloat()
+
+                    val r = radius * elevation
+                    val x0 = r * cos(latRad) * sin(lonRad)
+                    val y0 = -r * sin(latRad)
+                    val z0 = r * cos(latRad) * cos(lonRad)
+
+                    // Rotate around X (pitch)
+                    val y1 = y0 * cos(pitch) - z0 * sin(pitch)
+                    val z1 = y0 * sin(pitch) + z0 * cos(pitch)
+
+                    // Rotate around Y (yaw)
+                    val x2 = x0 * cos(yaw) + z1 * sin(yaw)
+                    val z2 = -x0 * sin(yaw) + z1 * cos(yaw)
+
+                    val screenX = cx + x2
+                    val screenY = cy + y1
+                    return Triple(screenX, screenY, z2)
+                }
+
+                // Draw latitude lines (parallels)
+                val latitudes = listOf(-60f, -30f, 0f, 30f, 60f)
+                for (lat in latitudes) {
+                    val path = Path()
+                    var first = true
+                    for (lonStep in 0..36) {
+                        val lon = lonStep * 10f
+                        val (sx, sy, z) = project(lat, lon)
+                        if (z > -radius * 0.2f) {
+                            if (first) {
+                                path.moveTo(sx, sy)
+                                first = false
+                            } else {
+                                path.lineTo(sx, sy)
+                            }
+                        } else {
+                            first = true
+                        }
+                    }
+                    drawPath(
+                        path = path,
+                        color = if (lat == 0f) highlightColor.copy(alpha = 0.5f) else gridColor.copy(alpha = 0.35f),
+                        style = Stroke(width = if (lat == 0f) 1.5.dp.toPx() else 1.dp.toPx())
+                    )
+                }
+
+                // Draw longitude lines (meridians)
+                val longitudes = (0 until 12).map { it * 30f }
+                for (lon in longitudes) {
+                    val path = Path()
+                    var first = true
+                    for (latStep in -9..9) {
+                        val lat = latStep * 10f
+                        val (sx, sy, z) = project(lat, lon)
+                        if (z > -radius * 0.2f) {
+                            if (first) {
+                                path.moveTo(sx, sy)
+                                first = false
+                            } else {
+                                path.lineTo(sx, sy)
+                            }
+                        } else {
+                            first = true
+                        }
+                    }
+                    drawPath(
+                        path = path,
+                        color = gridColor.copy(alpha = 0.35f),
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                }
+
+                // Draw 3D Timezone Pointers with 1:1 real-time coordinates
+                for (loc in locations) {
+                    val isSelected = loc.id == selectedLocation.id
+                    val (baseX, baseY, baseZ) = project(loc.latitudeDeg, loc.longitudeDeg, 1.0f)
+                    val (pinX, pinY, _) = project(loc.latitudeDeg, loc.longitudeDeg, 1.18f)
+
+                    if (baseZ > 0) {
+                        val pinColor = if (isSelected) goldPinColor else highlightColor
+                        val stemWidth = if (isSelected) 2.5.dp.toPx() else 1.5.dp.toPx()
+
+                        // Pointer stem
+                        drawLine(
+                            color = pinColor,
+                            start = Offset(baseX, baseY),
+                            end = Offset(pinX, pinY),
+                            strokeWidth = stemWidth,
+                            cap = StrokeCap.Round
+                        )
+
+                        // Base anchor dot
+                        drawCircle(
+                            color = pinColor.copy(alpha = 0.8f),
+                            radius = if (isSelected) 4.dp.toPx() else 2.5.dp.toPx(),
+                            center = Offset(baseX, baseY)
+                        )
+
+                        // Pin head
+                        drawCircle(
+                            color = pinColor,
+                            radius = if (isSelected) 6.dp.toPx() else 4.dp.toPx(),
+                            center = Offset(pinX, pinY)
+                        )
+
+                        // Label chip
+                        val labelText = "${loc.countryCode} · ${loc.id}"
+                        val textLayout = textMeasurer.measure(
+                            text = labelText,
+                            style = TextStyle(
+                                color = if (isSelected) Color.Black else FolderTabCream,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = ElmsSans
+                            )
+                        )
+
+                        val chipPadding = 4.dp.toPx()
+                        val chipW = textLayout.size.width + chipPadding * 2
+                        val chipH = textLayout.size.height + chipPadding * 1.5f
+                        val chipLeft = pinX - chipW / 2f
+                        val chipTop = pinY - chipH - 4.dp.toPx()
+
+                        drawRoundRect(
+                            color = if (isSelected) goldPinColor else Color(0xFF1E293B),
+                            topLeft = Offset(chipLeft, chipTop),
+                            size = androidx.compose.ui.geometry.Size(chipW, chipH),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
+                        )
+
+                        drawText(
+                            textLayoutResult = textLayout,
+                            topLeft = Offset(chipLeft + chipPadding, chipTop + chipPadding * 0.75f)
+                        )
+                    }
+                }
             }
 
-            // Draw 3D Timezone Pointers
-            for (loc in locations) {
-                val isSelected = loc.id == selectedLocation.id
-                val (baseX, baseY, baseZ) = project(loc.latitudeDeg, loc.longitudeDeg, 1.0f)
-                val (pinX, pinY, _) = project(loc.latitudeDeg, loc.longitudeDeg, 1.15f)
+            // Drag hint at bottom
+            Text(
+                text = "Drag to rotate 3D Tech Globe · 1:1 World Timezones",
+                color = Color(0xFF94A3B8),
+                fontSize = 11.sp,
+                fontFamily = ElmsSans,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp)
+            )
+        }
 
-                // Only render pointers on visible front hemisphere
-                if (baseZ > 0) {
-                    val pinColor = if (isSelected) goldPinColor else highlightColor
-                    val stemWidth = if (isSelected) 2.2.dp.toPx() else 1.5.dp.toPx()
-
-                    // Pointer stem
-                    drawLine(
-                        color = pinColor,
-                        start = Offset(baseX, baseY),
-                        end = Offset(pinX, pinY),
-                        strokeWidth = stemWidth,
-                        cap = StrokeCap.Round
-                    )
-
-                    // Base anchor dot
-                    drawCircle(
-                        color = pinColor.copy(alpha = 0.7f),
-                        radius = if (isSelected) 3.5.dp.toPx() else 2.5.dp.toPx(),
-                        center = Offset(baseX, baseY)
-                    )
-
-                    // Pin head
-                    drawCircle(
-                        color = pinColor,
-                        radius = if (isSelected) 6.dp.toPx() else 4.dp.toPx(),
-                        center = Offset(pinX, pinY)
-                    )
-
-                    // Label chip
-                    val labelText = "${loc.id}"
-                    val textLayout = textMeasurer.measure(
-                        text = labelText,
-                        style = TextStyle(
-                            color = if (isSelected) Color.Black else FolderTabCream,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = ElmsSans
-                        )
-                    )
-
-                    val chipPadding = 4.dp.toPx()
-                    val chipW = textLayout.size.width + chipPadding * 2
-                    val chipH = textLayout.size.height + chipPadding * 1.5f
-                    val chipLeft = pinX - chipW / 2f
-                    val chipTop = pinY - chipH - 4.dp.toPx()
-
-                    drawRoundRect(
-                        color = if (isSelected) goldPinColor else Color(0xFF1E293B),
-                        topLeft = Offset(chipLeft, chipTop),
-                        size = androidx.compose.ui.geometry.Size(chipW, chipH),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
-                    )
-
-                    drawText(
-                        textLayoutResult = textLayout,
-                        topLeft = Offset(chipLeft + chipPadding, chipTop + chipPadding * 0.75f)
-                    )
+        if (showLocationChips) {
+            Spacer(modifier = Modifier.height(10.dp))
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(locations) { loc ->
+                    val isSelected = loc.id == selectedLocation.id
+                    Surface(
+                        color = if (isSelected) Color(0xFFF77F00) else HomeCardSurface,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, if (isSelected) Color(0xFFF77F00) else HomeCardBorder),
+                        modifier = Modifier.clickable { onSelectLocation(loc) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "[${loc.countryCode}] ${loc.id}",
+                                color = if (isSelected) Color.Black else FolderTabCream,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
                 }
             }
         }
-
-        // Hint overlay at bottom
-        Text(
-            text = "Drag to rotate 3D Tech Globe · 1:1 Timezones",
-            color = Color(0xFF94A3B8),
-            fontSize = 11.sp,
-            fontFamily = ElmsSans,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 8.dp)
-        )
     }
 }

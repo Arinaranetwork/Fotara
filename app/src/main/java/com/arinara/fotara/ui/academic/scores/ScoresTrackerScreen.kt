@@ -37,7 +37,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -87,6 +86,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.MaterialTheme
+import com.arinara.fotara.theme.FotaraShapes
+import com.arinara.fotara.theme.TagAmber
+import com.arinara.fotara.theme.TagEmerald
 import com.arinara.fotara.data.model.AcademicScore
 import com.arinara.fotara.data.model.ScoreCalculationMode
 import com.arinara.fotara.data.repository.ScoreRepository
@@ -96,16 +99,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-
-private val ScreenNavy = Color(0xFF0F172A)
-private val CardSurface = Color(0xFF1E293B)
-private val CardBorder = Color(0xFF334155)
-private val AccentGold = Color(0xFFFBBF24)
-private val AccentPurple = Color(0xFF8B5CF6)
-private val SuccessGreen = Color(0xFF10B981)
-private val DangerRed = Color(0xFFEF4444)
-private val TextWhite = Color(0xFFF8FAFC)
-private val TextMuted = Color(0xFF94A3B8)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -178,7 +171,7 @@ fun ScoresTrackerScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(ScreenNavy)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
     ) {
         // Top App Bar
@@ -190,16 +183,16 @@ fun ScoresTrackerScreen(
                         fontFamily = ElmsSans,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = TextWhite
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Surface(
-                        color = AccentPurple.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(6.dp)
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                        shape = FotaraShapes.ElementMicro
                     ) {
                         Text(
                             text = "BETA",
-                            color = AccentPurple,
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -212,16 +205,16 @@ fun ScoresTrackerScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = TextWhite
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
             },
             actions = {
                 OutlinedButton(
                     onClick = { showTargetGpaDialog = true },
-                    border = BorderStroke(1.dp, CardBorder),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentGold),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    shape = FotaraShapes.Pill,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.tertiary),
                     modifier = Modifier.height(34.dp)
                 ) {
                     Text(
@@ -236,11 +229,11 @@ fun ScoresTrackerScreen(
                     Icon(
                         imageVector = Icons.Default.IosShare,
                         contentDescription = "Presets",
-                        tint = TextWhite
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
         )
 
         LazyColumn(
@@ -253,9 +246,9 @@ fun ScoresTrackerScreen(
             // Metrics and Mode Card
             item {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, CardBorder),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    shape = FotaraShapes.Card,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -267,14 +260,14 @@ fun ScoresTrackerScreen(
                             Column {
                                 Text(
                                     text = if (calculationMode == ScoreCalculationMode.PURE_AVERAGE) "Pure Average" else "Weighted Average",
-                                    color = TextMuted,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 12.sp,
                                     fontFamily = ElmsSans
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "${"%.1f".format(Locale.US, currentScore)}%",
-                                    color = TextWhite,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                     fontSize = 28.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = ElmsSans
@@ -290,19 +283,19 @@ fun ScoresTrackerScreen(
                                         ScoreCalculationMode.PURE_AVERAGE
                                     }
                                 },
-                                border = BorderStroke(1.dp, AccentPurple.copy(alpha = 0.5f)),
-                                shape = RoundedCornerShape(10.dp)
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                                shape = FotaraShapes.Pill
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Scale,
                                     contentDescription = null,
-                                    tint = AccentPurple,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = if (calculationMode == ScoreCalculationMode.PURE_AVERAGE) "Average" else "Weighted",
-                                    color = AccentPurple,
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontSize = 12.sp,
                                     fontFamily = ElmsSans,
                                     fontWeight = FontWeight.SemiBold
@@ -315,9 +308,9 @@ fun ScoresTrackerScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                             val isBalanced = totalWeight in 99.9..100.1
                             Surface(
-                                color = if (isBalanced) SuccessGreen.copy(alpha = 0.15f) else AccentGold.copy(alpha = 0.15f),
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, if (isBalanced) SuccessGreen else AccentGold.copy(alpha = 0.5f)),
+                                color = if (isBalanced) TagEmerald.copy(alpha = 0.15f) else TagAmber.copy(alpha = 0.15f),
+                                shape = FotaraShapes.InputField,
+                                border = BorderStroke(1.dp, if (isBalanced) TagEmerald else TagAmber.copy(alpha = 0.5f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -327,7 +320,7 @@ fun ScoresTrackerScreen(
                                     Icon(
                                         imageVector = if (isBalanced) Icons.Default.Check else Icons.Default.Warning,
                                         contentDescription = null,
-                                        tint = if (isBalanced) SuccessGreen else AccentGold,
+                                        tint = if (isBalanced) TagEmerald else TagAmber,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -337,7 +330,7 @@ fun ScoresTrackerScreen(
                                         } else {
                                             "Weights Total: ${"%.1f".format(Locale.US, totalWeight)}% (Target: 100%)"
                                         },
-                                        color = if (isBalanced) SuccessGreen else AccentGold,
+                                        color = if (isBalanced) TagEmerald else TagAmber,
                                         fontSize = 12.sp,
                                         fontFamily = ElmsSans,
                                         fontWeight = FontWeight.Medium
@@ -350,16 +343,16 @@ fun ScoresTrackerScreen(
                         if (projectedFinalExamNeeded != null || daysUntilFinalExam != null) {
                             Spacer(modifier = Modifier.height(10.dp))
                             Surface(
-                                color = AccentPurple.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, AccentPurple.copy(alpha = 0.3f)),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                shape = FotaraShapes.InputField,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(10.dp)) {
                                     if (projectedFinalExamNeeded != null) {
                                         Text(
                                             text = "Needed on Final Exam: ${"%.1f".format(Locale.US, projectedFinalExamNeeded)}% to hit target (${"%.1f".format(Locale.US, targetGpaPercentage)}%)",
-                                            color = AccentPurple,
+                                            color = MaterialTheme.colorScheme.primary,
                                             fontSize = 12.5.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             fontFamily = ElmsSans
@@ -369,7 +362,7 @@ fun ScoresTrackerScreen(
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
                                             text = "Upcoming Exam in $daysUntilFinalExam day(s)",
-                                            color = TextMuted,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 11.5.sp,
                                             fontFamily = ElmsSans
                                         )
@@ -393,14 +386,15 @@ fun ScoresTrackerScreen(
                     FilterChip(
                         selected = selectedCategoryFilter == null,
                         onClick = { selectedCategoryFilter = null },
+                        shape = FotaraShapes.Pill,
                         label = { Text("All (${allScores.size})", fontFamily = ElmsSans, fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentPurple,
-                            selectedLabelColor = Color.White,
-                            containerColor = CardSurface,
-                            labelColor = TextMuted
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
-                        border = BorderStroke(1.dp, if (selectedCategoryFilter == null) AccentPurple else CardBorder)
+                        border = BorderStroke(1.dp, if (selectedCategoryFilter == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
                     )
 
                     AcademicScore.CATEGORIES.forEach { category ->
@@ -408,14 +402,15 @@ fun ScoresTrackerScreen(
                         FilterChip(
                             selected = selectedCategoryFilter == category,
                             onClick = { selectedCategoryFilter = if (selectedCategoryFilter == category) null else category },
+                            shape = FotaraShapes.Pill,
                             label = { Text("$category ($count)", fontFamily = ElmsSans, fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = AccentPurple,
-                                selectedLabelColor = Color.White,
-                                containerColor = CardSurface,
-                                labelColor = TextMuted
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                             ),
-                            border = BorderStroke(1.dp, if (selectedCategoryFilter == category) AccentPurple else CardBorder)
+                            border = BorderStroke(1.dp, if (selectedCategoryFilter == category) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
                         )
                     }
                 }
@@ -428,8 +423,8 @@ fun ScoresTrackerScreen(
                         editingScore = null
                         showAddDialog = true
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
-                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                    shape = FotaraShapes.Button,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
@@ -458,13 +453,13 @@ fun ScoresTrackerScreen(
                             Icon(
                                 imageVector = Icons.Default.Scale,
                                 contentDescription = null,
-                                tint = TextMuted.copy(alpha = 0.5f),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                 modifier = Modifier.size(48.dp)
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 text = "No academic scores recorded yet",
-                                color = TextMuted,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 14.sp,
                                 fontFamily = ElmsSans
                             )
@@ -554,9 +549,9 @@ private fun ScoreCard(
     onOpenEvidence: (String) -> Unit
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = CardSurface),
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, CardBorder),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = FotaraShapes.Card,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -567,12 +562,12 @@ private fun ScoreCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
-                        color = AccentPurple.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(6.dp)
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                        shape = FotaraShapes.ElementMicro
                     ) {
                         Text(
                             text = score.category,
-                            color = AccentPurple,
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -581,7 +576,7 @@ private fun ScoreCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = score.subject,
-                        color = TextMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         fontFamily = ElmsSans
                     )
@@ -592,7 +587,7 @@ private fun ScoreCard(
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit",
-                            tint = TextMuted,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -600,7 +595,7 @@ private fun ScoreCard(
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete",
-                            tint = DangerRed.copy(alpha = 0.8f),
+                            tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -617,7 +612,7 @@ private fun ScoreCard(
                 Column {
                     Text(
                         text = score.title,
-                        color = TextWhite,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = ElmsSans,
@@ -627,7 +622,7 @@ private fun ScoreCard(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Weight: ${"%.1f".format(Locale.US, score.weight)}%",
-                        color = TextMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         fontFamily = ElmsSans
                     )
@@ -636,14 +631,14 @@ private fun ScoreCard(
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "${"%.1f".format(Locale.US, score.percentage)}%",
-                        color = if (score.percentage >= 80.0) SuccessGreen else if (score.percentage >= 60.0) AccentGold else DangerRed,
+                        color = if (score.percentage >= 80.0) TagEmerald else if (score.percentage >= 60.0) TagAmber else MaterialTheme.colorScheme.error,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = ElmsSans
                     )
                     Text(
                         text = "${score.score} / ${score.maxScore}",
-                        color = TextMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 11.5.sp,
                         fontFamily = ElmsSans
                     )
@@ -654,9 +649,9 @@ private fun ScoreCard(
             if (!score.evidenceUri.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
-                    color = ScreenNavy,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, CardBorder),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = FotaraShapes.InputField,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
                     modifier = Modifier.clickable { onOpenEvidence(score.evidenceUri) }
                 ) {
                     Row(
@@ -666,13 +661,13 @@ private fun ScoreCard(
                         Icon(
                             imageVector = Icons.Default.AttachFile,
                             contentDescription = null,
-                            tint = AccentGold,
+                            tint = MaterialTheme.colorScheme.tertiary,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = score.evidenceName ?: "Evidence Attachment",
-                            color = TextWhite,
+                            color = MaterialTheme.colorScheme.onBackground,
                             fontSize = 11.sp,
                             fontFamily = ElmsSans,
                             maxLines = 1,
@@ -682,7 +677,7 @@ private fun ScoreCard(
                         Icon(
                             imageVector = Icons.Default.OpenInNew,
                             contentDescription = null,
-                            tint = TextMuted,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(12.dp)
                         )
                     }
@@ -720,11 +715,11 @@ private fun ScoreEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = CardSurface,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
             Text(
                 text = if (initialScore == null) "Add Score" else "Edit Score",
-                color = TextWhite,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = ElmsSans
@@ -738,13 +733,14 @@ private fun ScoreEditDialog(
                 OutlinedTextField(
                     value = subject,
                     onValueChange = { subject = it },
-                    label = { Text("Course / Subject", color = TextMuted) },
+                    label = { Text("Course / Subject", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     singleLine = true,
+                    shape = FotaraShapes.InputField,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite,
-                        focusedBorderColor = AccentPurple,
-                        unfocusedBorderColor = CardBorder
+                        focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -752,19 +748,20 @@ private fun ScoreEditDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Assessment Title", color = TextMuted) },
+                    label = { Text("Assessment Title", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     singleLine = true,
+                    shape = FotaraShapes.InputField,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite,
-                        focusedBorderColor = AccentPurple,
-                        unfocusedBorderColor = CardBorder
+                        focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 // Category Chips Selector
-                Text("Category", color = TextMuted, fontSize = 12.sp, fontFamily = ElmsSans)
+                Text("Category", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontFamily = ElmsSans)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -775,12 +772,13 @@ private fun ScoreEditDialog(
                         FilterChip(
                             selected = category == cat,
                             onClick = { category = cat },
+                            shape = FotaraShapes.Pill,
                             label = { Text(cat, fontSize = 11.sp, fontFamily = ElmsSans) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = AccentPurple,
-                                selectedLabelColor = Color.White,
-                                containerColor = ScreenNavy,
-                                labelColor = TextMuted
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         )
                     }
@@ -793,39 +791,42 @@ private fun ScoreEditDialog(
                     OutlinedTextField(
                         value = scoreStr,
                         onValueChange = { scoreStr = it },
-                        label = { Text("Score", color = TextMuted) },
+                        label = { Text("Score", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
+                        shape = FotaraShapes.InputField,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite,
-                            focusedBorderColor = AccentPurple,
-                            unfocusedBorderColor = CardBorder
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                         ),
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = maxScoreStr,
                         onValueChange = { maxScoreStr = it },
-                        label = { Text("Max", color = TextMuted) },
+                        label = { Text("Max", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
+                        shape = FotaraShapes.InputField,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite,
-                            focusedBorderColor = AccentPurple,
-                            unfocusedBorderColor = CardBorder
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                         ),
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = weightStr,
                         onValueChange = { weightStr = it },
-                        label = { Text("Weight %", color = TextMuted) },
+                        label = { Text("Weight %", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         singleLine = true,
+                        shape = FotaraShapes.InputField,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite,
-                            focusedBorderColor = AccentPurple,
-                            unfocusedBorderColor = CardBorder
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                         ),
                         modifier = Modifier.weight(1f)
                     )
@@ -834,15 +835,15 @@ private fun ScoreEditDialog(
                 // Evidence Attachment
                 OutlinedButton(
                     onClick = { filePickerLauncher.launch("*/*") },
-                    border = BorderStroke(1.dp, CardBorder),
-                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    shape = FotaraShapes.InputField,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(imageVector = Icons.Default.AttachFile, contentDescription = null, tint = AccentGold, modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Default.AttachFile, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (evidenceUri != null) (evidenceName ?: "Evidence Attached") else "Attach Evidence (Photo / PDF)",
-                        color = TextWhite,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 12.sp,
                         fontFamily = ElmsSans,
                         maxLines = 1,
@@ -875,18 +876,18 @@ private fun ScoreEditDialog(
                     )
                     onSave(updated)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
-                shape = RoundedCornerShape(8.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                shape = FotaraShapes.Button
             ) {
-                Text("Save", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+                Text("Save", color = MaterialTheme.colorScheme.onPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextMuted, fontFamily = ElmsSans)
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = ElmsSans)
             }
         },
-        shape = RoundedCornerShape(16.dp)
+        shape = FotaraShapes.Dialog
     )
 }
 
@@ -900,15 +901,15 @@ private fun TargetGpaDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = CardSurface,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
-            Text("Set Target Academic Goal", color = TextWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = ElmsSans)
+            Text("Set Target Academic Goal", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = ElmsSans)
         },
         text = {
             Column {
                 Text(
                     text = "Specify your target score percentage to calculate required scores on remaining exams.",
-                    color = TextMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp,
                     fontFamily = ElmsSans
                 )
@@ -916,13 +917,14 @@ private fun TargetGpaDialog(
                 OutlinedTextField(
                     value = textVal,
                     onValueChange = { textVal = it },
-                    label = { Text("Target Percentage (e.g. 85.0%)", color = TextMuted) },
+                    label = { Text("Target Percentage (e.g. 85.0%)", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                     singleLine = true,
+                    shape = FotaraShapes.InputField,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite,
-                        focusedBorderColor = AccentPurple,
-                        unfocusedBorderColor = CardBorder
+                        focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -934,18 +936,18 @@ private fun TargetGpaDialog(
                     val p = textVal.toDoubleOrNull() ?: 85.0
                     onSave(p)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
-                shape = RoundedCornerShape(8.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                shape = FotaraShapes.Button
             ) {
-                Text("Apply", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+                Text("Apply", color = MaterialTheme.colorScheme.onPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextMuted, fontFamily = ElmsSans)
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = ElmsSans)
             }
         },
-        shape = RoundedCornerShape(16.dp)
+        shape = FotaraShapes.Dialog
     )
 }
 
@@ -961,16 +963,16 @@ private fun SchemePresetDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = CardSurface,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
-            Text("Scheme Preset Sharing", color = TextWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = ElmsSans)
+            Text("Scheme Preset Sharing", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = ElmsSans)
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (!isImportMode) {
                     Text(
                         text = "Export your grading scheme and assessment weights to share with classmates.",
-                        color = TextMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp,
                         fontFamily = ElmsSans
                     )
@@ -994,26 +996,26 @@ private fun SchemePresetDialog(
                             clipboard.setPrimaryClip(ClipData.newPlainText("Fotara Scheme Preset", jsonString))
                             Toast.makeText(context, "Scheme preset copied to clipboard", Toast.LENGTH_SHORT).show()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentPurple),
-                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                        shape = FotaraShapes.Button,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Copy Scheme to Clipboard", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+                        Text("Copy Scheme to Clipboard", color = MaterialTheme.colorScheme.onPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
                     OutlinedButton(
                         onClick = { isImportMode = true },
-                        border = BorderStroke(1.dp, CardBorder),
-                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                        shape = FotaraShapes.Button,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Import Preset from Classmate", color = TextWhite, fontFamily = ElmsSans)
+                        Text("Import Preset from Classmate", color = MaterialTheme.colorScheme.onBackground, fontFamily = ElmsSans)
                     }
                 } else {
                     Text(
                         text = "Paste JSON scheme preset below to load weights and assessment structure:",
-                        color = TextMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp,
                         fontFamily = ElmsSans
                     )
@@ -1021,12 +1023,13 @@ private fun SchemePresetDialog(
                     OutlinedTextField(
                         value = importJsonText,
                         onValueChange = { importJsonText = it },
-                        placeholder = { Text("[{\"subject\":\"Math\", ...}]", color = TextMuted.copy(alpha = 0.5f)) },
+                        placeholder = { Text("[{\"subject\":\"Math\", ...}]", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
+                        shape = FotaraShapes.InputField,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite,
-                            focusedBorderColor = AccentPurple,
-                            unfocusedBorderColor = CardBorder
+                            focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1056,8 +1059,8 @@ private fun SchemePresetDialog(
                                 Toast.makeText(context, "Invalid JSON preset format: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
-                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = TagEmerald, contentColor = Color.White),
+                        shape = FotaraShapes.Button,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Load Imported Preset", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
@@ -1068,9 +1071,9 @@ private fun SchemePresetDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close", color = TextMuted, fontFamily = ElmsSans)
+                Text("Close", color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = ElmsSans)
             }
         },
-        shape = RoundedCornerShape(16.dp)
+        shape = FotaraShapes.Dialog
     )
 }

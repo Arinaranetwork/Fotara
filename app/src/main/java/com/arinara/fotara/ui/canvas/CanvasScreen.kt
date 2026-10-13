@@ -15,13 +15,17 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -200,11 +204,13 @@ import kotlinx.coroutines.delay
 fun CanvasScreen(
     viewModel: CanvasViewModel,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenClock: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    var showClockFullscreen by remember { mutableStateOf(false) }
 
     // Ensure changes are flushed on system Back or app pause/stop
     BackHandler {
@@ -247,6 +253,7 @@ fun CanvasScreen(
     val renameFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var showMoveElementsLayerPicker by remember { mutableStateOf(false) }
+    var showSecondaryTools by remember { mutableStateOf(false) }
     var topCapsulesHeightPx by remember { mutableIntStateOf(0) }
     var dockHeightPx by remember { mutableIntStateOf(0) }
     val haptic = LocalHapticFeedback.current
@@ -270,6 +277,14 @@ fun CanvasScreen(
                 viewModel.addImage(uri, v.viewport, v.width.toFloat(), v.height.toFloat())
             }
         }
+    }
+
+    if (showClockFullscreen) {
+        com.arinara.fotara.ui.note.clock.NoteClockScreen(
+            onBack = { showClockFullscreen = false },
+            modifier = Modifier.fillMaxSize()
+        )
+        return
     }
 
     Box(
@@ -356,7 +371,7 @@ fun CanvasScreen(
                         }
                     },
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
                         .background(MidnightSurface.copy(alpha = 0.85f))
                 ) {
@@ -371,21 +386,23 @@ fun CanvasScreen(
 
                 Surface(
                     color = MidnightSurface.copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(22.dp),
                     border = BorderStroke(1.dp, MidnightCardOutline),
-                    modifier = Modifier.clickable {
-                        renameInput = uiState.title
-                        viewModel.setRenameDialogVisible(true)
-                    }
+                    modifier = Modifier
+                        .height(44.dp)
+                        .clickable {
+                            renameInput = uiState.title
+                            viewModel.setRenameDialogVisible(true)
+                        }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = uiState.title,
                             color = TextPrimary,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
@@ -395,46 +412,32 @@ fun CanvasScreen(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-
-                        // Interactive Save state indicator
+                        // Interactive Save state indicator (Icon-only, no text)
                         when (uiState.saveState) {
                             SaveState.SAVING -> {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp,
-                                        color = TagAmber
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Saving", color = TextMuted, fontSize = 11.sp)
-                                }
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = TagAmber
+                                )
                             }
                             SaveState.SAVED -> {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Saved",
-                                        tint = FolderTabCream.copy(alpha = 0.8f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Saved", color = TextMuted, fontSize = 11.sp)
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Saved",
+                                    tint = FolderTabCream.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
                             SaveState.ERROR -> {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.clickable { viewModel.retrySave() }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Retry Save",
-                                        tint = TagCrimson,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Retry", color = TagCrimson, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Retry Save",
+                                    tint = TagCrimson,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { viewModel.retrySave() }
+                                )
                             }
                         }
                     }
@@ -446,8 +449,9 @@ fun CanvasScreen(
             // Right: Operations capsule (Undo, Redo, Layers, Add Image, Overflow Menu)
             Surface(
                 color = MidnightSurface.copy(alpha = 0.85f),
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, MidnightCardOutline)
+                shape = RoundedCornerShape(22.dp),
+                border = BorderStroke(1.dp, MidnightCardOutline),
+                modifier = Modifier.height(44.dp)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
@@ -522,6 +526,14 @@ fun CanvasScreen(
                             onDismissRequest = { showOverflowMenu = false },
                             modifier = Modifier.background(MidnightSurface)
                         ) {
+                            DropdownMenuItem(
+                                text = { Text("Clock", color = TextPrimary) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    onOpenClock?.invoke() ?: run { showClockFullscreen = true }
+                                },
+                                leadingIcon = { Icon(Icons.Default.AccessTime, null, tint = FolderTabCream) }
+                            )
                             DropdownMenuItem(
                                 text = { Text("Share Note", color = TextPrimary) },
                                 onClick = {
@@ -1088,59 +1100,71 @@ fun CanvasScreen(
                 }
             }
 
-            Surface(
-                color = DockSlatePill,
-                shape = RoundedCornerShape(24.dp),
-                shadowElevation = 12.dp,
-                border = androidx.compose.foundation.BorderStroke(1.dp, MidnightCardOutline)
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            if (uiState.isBottomDockCollapsed) {
+                // Slim bottom edge pill (Requirement 5.5)
+                Surface(
+                    color = DockSlatePill,
+                    shape = RoundedCornerShape(12.dp),
+                    shadowElevation = 8.dp,
+                    border = BorderStroke(1.dp, MidnightCardOutline),
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .width(72.dp)
+                        .height(20.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { viewModel.toggleBottomDock() }
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures { _, dragAmount ->
+                                if (dragAmount < -6f) {
+                                    viewModel.toggleBottomDock()
+                                }
+                            }
+                        }
                 ) {
-                    // Collapsible Handle (Sleeker smaller handle)
-                    IconButton(
-                        onClick = { viewModel.toggleBottomDock() },
-                        modifier = Modifier
-                            .size(width = 36.dp, height = 16.dp)
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        Icon(
-                            imageVector = if (uiState.isBottomDockCollapsed) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Collapse Dock",
-                            tint = FolderTabCream.copy(alpha = 0.6f),
-                            modifier = Modifier.size(16.dp)
+                        Box(
+                            modifier = Modifier
+                                .width(28.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(FolderTabCream.copy(alpha = 0.7f))
                         )
                     }
-
-                    AnimatedVisibility(
-                        visible = !uiState.isBottomDockCollapsed,
-                        enter = fadeIn() + slideInVertically(),
-                        exit = fadeOut() + slideOutVertically()
+                }
+            } else {
+                Surface(
+                    color = DockSlatePill,
+                    shape = RoundedCornerShape(24.dp),
+                    shadowElevation = 12.dp,
+                    border = BorderStroke(1.dp, MidnightCardOutline)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
+                        // Minimize Handle
+                        IconButton(
+                            onClick = { viewModel.toggleBottomDock() },
+                            modifier = Modifier
+                                .size(width = 36.dp, height = 16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Minimize Dock",
+                                tint = FolderTabCream.copy(alpha = 0.6f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 4.dp)
                         ) {
-                            // Select & Move
-                            val isSelect = uiState.toolState.activeTool == CanvasToolType.SELECT
-                            IconButton(
-                                onClick = { viewModel.setTool(CanvasToolType.SELECT) },
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSelect) FolderTabCream else Color.Transparent)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.NearMe,
-                                    contentDescription = stringResource(R.string.canvas_tool_select),
-                                    tint = if (isSelect) MidnightNavy else FolderTabCream,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(4.dp))
-
-                            // Pen (Tap selects, Long-press opens Z4 options popup with haptics)
+                            // --- LEFT SECTION: Drawing Tools (Pen, Highlighter, Eraser, Select) ---
+                            // 1. Pen
                             val isPen = uiState.toolState.activeTool == CanvasToolType.PEN
                             Box(
                                 modifier = Modifier
@@ -1166,7 +1190,7 @@ fun CanvasScreen(
 
                             Spacer(modifier = Modifier.width(4.dp))
 
-                            // Highlighter (Tap selects, Long-press opens Z4 options popup with haptics)
+                            // 2. Highlighter
                             val isHighlighter = uiState.toolState.activeTool == CanvasToolType.HIGHLIGHTER
                             Box(
                                 modifier = Modifier
@@ -1192,7 +1216,7 @@ fun CanvasScreen(
 
                             Spacer(modifier = Modifier.width(4.dp))
 
-                            // Eraser (Plain tap selects tool; Long-press opens Z4 options popup)
+                            // 3. Eraser
                             val isEraser = uiState.toolState.activeTool == CanvasToolType.ERASER
                             Box(
                                 modifier = Modifier
@@ -1218,70 +1242,116 @@ fun CanvasScreen(
 
                             Spacer(modifier = Modifier.width(4.dp))
 
-                            // Text Tool [ T ]
-                            val isText = uiState.toolState.activeTool == CanvasToolType.TEXT
-                            Box(
+                            // 4. Select & Move
+                            val isSelect = uiState.toolState.activeTool == CanvasToolType.SELECT
+                            IconButton(
+                                onClick = { viewModel.setTool(CanvasToolType.SELECT) },
                                 modifier = Modifier
                                     .size(44.dp)
                                     .clip(CircleShape)
-                                    .background(if (isText) FolderTabCream else Color.Transparent)
-                                    .combinedClickable(
-                                        onClick = {
-                                            viewModel.setTool(CanvasToolType.TEXT)
-                                            viewModel.showTextOptions()
-                                        },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            viewModel.showTextOptions()
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "T",
-                                    color = if (isText) MidnightNavy else FolderTabCream,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(4.dp))
-
-                            // Shapes & Smooth Tool
-                            val isShape = uiState.toolState.activeTool == CanvasToolType.SHAPE
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isShape) FolderTabCream else Color.Transparent)
-                                    .combinedClickable(
-                                        onClick = {
-                                            viewModel.setTool(CanvasToolType.SHAPE)
-                                            viewModel.showShapeOptions()
-                                        },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            viewModel.showShapeOptions()
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
+                                    .background(if (isSelect) FolderTabCream else Color.Transparent)
                             ) {
                                 Icon(
-                                    painter = painterResource(id = R.drawable.ic_shapes),
-                                    contentDescription = "Shapes & Smooth",
-                                    tint = if (isShape) MidnightNavy else FolderTabCream,
+                                    imageVector = Icons.Default.NearMe,
+                                    contentDescription = stringResource(R.string.canvas_tool_select),
+                                    tint = if (isSelect) MidnightNavy else FolderTabCream,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
 
-                            Spacer(modifier = Modifier.width(8.dp))
+                            // Subtle Divider
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(24.dp)
+                                    .background(MidnightCardOutline)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
 
-                            // Active Color Swatch (Tapping opens Z4)
+                            // --- RIGHT SECTION: Color Circle default; Long-press expands to Text and Shape tools ---
+                            val isTextOrShapeActive = uiState.toolState.activeTool == CanvasToolType.TEXT || uiState.toolState.activeTool == CanvasToolType.SHAPE
+                            val secondaryToolsExpanded = showSecondaryTools || isTextOrShapeActive
+
+                            AnimatedVisibility(
+                                visible = secondaryToolsExpanded,
+                                enter = fadeIn() + slideInHorizontally(),
+                                exit = fadeOut() + slideOutHorizontally()
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Text Tool [ T ]
+                                    val isText = uiState.toolState.activeTool == CanvasToolType.TEXT
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isText) FolderTabCream else Color.Transparent)
+                                            .combinedClickable(
+                                                onClick = {
+                                                    viewModel.setTool(CanvasToolType.TEXT)
+                                                    viewModel.showTextOptions()
+                                                },
+                                                onLongClick = {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    viewModel.showTextOptions()
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "T",
+                                            color = if (isText) MidnightNavy else FolderTabCream,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(4.dp))
+
+                                    // Shapes & Smooth Tool
+                                    val isShape = uiState.toolState.activeTool == CanvasToolType.SHAPE
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isShape) FolderTabCream else Color.Transparent)
+                                            .combinedClickable(
+                                                onClick = {
+                                                    viewModel.setTool(CanvasToolType.SHAPE)
+                                                    viewModel.showShapeOptions()
+                                                },
+                                                onLongClick = {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    viewModel.showShapeOptions()
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_shapes),
+                                            contentDescription = "Shapes & Smooth",
+                                            tint = if (isShape) MidnightNavy else FolderTabCream,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                            }
+
+                            // Active Color Swatch (Tap opens Z4 color picker, Long-press expands/collapses Text and Shape tools)
                             val currentColor = if (isHighlighter) uiState.toolState.highlighterColor else uiState.toolState.penColor
                             Box(
                                 modifier = Modifier
                                     .size(44.dp)
-                                    .clickable { viewModel.toggleToolOptions() },
+                                    .clip(CircleShape)
+                                    .combinedClickable(
+                                        onClick = { viewModel.toggleToolOptions() },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            showSecondaryTools = !showSecondaryTools
+                                        }
+                                    ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Box(
@@ -1316,12 +1386,13 @@ fun CanvasScreen(
             ) {
                 Surface(
                     color = MidnightSurface,
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(22.dp),
                     border = BorderStroke(1.dp, FolderTabCream.copy(alpha = if (hasSelection) 0.5f else 0.2f)),
-                    shadowElevation = 16.dp
+                    shadowElevation = 16.dp,
+                    modifier = Modifier.height(44.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val selectedTextElement = if (hasSelection) {
@@ -1333,7 +1404,7 @@ fun CanvasScreen(
                         if (selectedTextElement != null) {
                             IconButton(
                                 onClick = { viewModel.showTextOptions(selectedTextElement) },
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Edit,
@@ -1360,11 +1431,11 @@ fun CanvasScreen(
                                         showVfxJitDialog = true
                                     }
                                 },
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Palette,
-                                    contentDescription = "Visual Effects (VFX)",
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Image Effects",
                                     tint = FolderTabCream,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -1375,7 +1446,7 @@ fun CanvasScreen(
                         IconButton(
                             onClick = { viewModel.duplicateSelectedElements() },
                             enabled = hasSelection,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 Icons.Default.ContentCopy,
@@ -1389,7 +1460,7 @@ fun CanvasScreen(
                         IconButton(
                             onClick = { showMoveElementsLayerPicker = true },
                             enabled = hasSelection,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 Icons.Default.Layers,
@@ -1403,7 +1474,7 @@ fun CanvasScreen(
                         IconButton(
                             onClick = { viewModel.deleteSelectedElements() },
                             enabled = hasSelection,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 Icons.Default.Delete,
@@ -1938,21 +2009,28 @@ fun CanvasScreen(
             }
         }
 
-        // Visual Effects (VFX) Bottom Sheet & JIT Feature Interception Dialog
+        // Visual Effects (VFX) Left-Side Docked Panel & JIT Feature Interception Dialog
         if (showVfxBottomSheet && activeVfxImageElement != null) {
-            com.arinara.fotara.canvas.vfx.VfxControlBottomSheet(
-                parameters = activeVfxImageElement!!.vfxParams,
-                onParametersChanged = { newParams ->
-                    val el = activeVfxImageElement ?: return@VfxControlBottomSheet
-                    val updated = el.copy(vfxParams = newParams)
-                    activeVfxImageElement = updated
-                    viewModel.updateImageVfx(el.id, newParams)
-                },
-                onDismiss = {
-                    showVfxBottomSheet = false
-                    activeVfxImageElement = null
-                }
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(25f),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                com.arinara.fotara.canvas.vfx.VfxSidebarPanel(
+                    parameters = activeVfxImageElement!!.vfxParams,
+                    onParametersChanged = { newParams ->
+                        val el = activeVfxImageElement ?: return@VfxSidebarPanel
+                        val updated = el.copy(vfxParams = newParams)
+                        activeVfxImageElement = updated
+                        viewModel.updateImageVfx(el.id, newParams)
+                    },
+                    onDismiss = {
+                        showVfxBottomSheet = false
+                        activeVfxImageElement = null
+                    }
+                )
+            }
         }
 
         if (showVfxJitDialog) {

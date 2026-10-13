@@ -6,8 +6,6 @@
 
 package com.arinara.fotara.ui.note.clock
 
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -36,6 +34,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,7 +43,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.FlipCameraAndroid
 import androidx.compose.material.icons.filled.OpenInNew
@@ -51,7 +53,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -62,11 +63,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -85,14 +87,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.arinara.fotara.MainActivity
+import androidx.compose.material3.MaterialTheme
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.theme.FolderTabCream
+import com.arinara.fotara.theme.FotaraShapes
 import com.arinara.fotara.theme.HomeCardBorder
 import com.arinara.fotara.theme.HomeCardSurface
+import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
-import com.arinara.fotara.theme.TextPrimary
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -100,8 +103,13 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-private val AccentGold = Color(0xFFF77F00)
-private val ScreenNavy = Color(0xFF03071E)
+private val AccentGold = TagAmber
+
+enum class ClockScreenFace {
+    CLOCK,
+    TIMER,
+    GLOBE
+}
 
 data class TimerLapRecord(
     val lapIndex: Int,
@@ -117,24 +125,30 @@ fun NoteClockScreen(
 ) {
     val context = LocalContext.current
 
-    // Flip state: false = Clock & Timezone Mode, true = Timer Mode
-    var isTimerMode by remember { mutableStateOf(false) }
+    // 3D Flip state: CLOCK, TIMER, or GLOBE
+    var currentFace by remember { mutableStateOf(ClockScreenFace.CLOCK) }
+    var previousNonClockFace by remember { mutableStateOf(ClockScreenFace.TIMER) }
+
     val flipAngle by animateFloatAsState(
-        targetValue = if (isTimerMode) 180f else 0f,
+        targetValue = if (currentFace == ClockScreenFace.CLOCK) 0f else 180f,
         animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
         label = "clockCard3DFlip"
     )
 
     // Current Time state
     var currentTimeMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var selectedLocation by remember { mutableStateOf(DEFAULT_GLOBE_LOCATIONS[0]) }
-    var showGlobeVisualizer by remember { mutableStateOf(false) }
+    var selectedLocation by remember { mutableStateOf(DEFAULT_GLOBE_LOCATIONS[4]) } // Default to JKT
     var showTimezoneDropdown by remember { mutableStateOf(false) }
 
-    // Alarm configuration state
-    var alarmHour by remember { mutableStateOf("08") }
-    var alarmMinute by remember { mutableStateOf("00") }
-    var alarmLabel by remember { mutableStateOf("Academic Focus Session") }
+    // Multi-Alarm state
+    var alarms by remember { mutableStateOf<List<NoteClockAlarm>>(emptyList()) }
+    var newAlarmHour by remember { mutableStateOf("08") }
+    var newAlarmMinute by remember { mutableStateOf("00") }
+    var newAlarmLabel by remember { mutableStateOf("Study Session") }
+
+    LaunchedEffect(Unit) {
+        alarms = NoteClockAlarmManager.loadAlarms(context)
+    }
 
     // Timer / Stopwatch state
     var isTimerRunning by remember { mutableStateOf(false) }
@@ -161,13 +175,17 @@ fun NoteClockScreen(
     }
 
     BackHandler {
-        onBack()
+        if (currentFace != ClockScreenFace.CLOCK) {
+            currentFace = ClockScreenFace.CLOCK
+        } else {
+            onBack()
+        }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(ScreenNavy)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -175,7 +193,11 @@ fun NoteClockScreen(
         TopAppBar(
             title = {
                 Text(
-                    text = if (flipAngle >= 90f) "Focus Timer" else "World Clock & Timezone",
+                    text = when (if (flipAngle >= 90f) previousNonClockFace else currentFace) {
+                        ClockScreenFace.TIMER -> "Focus Timer"
+                        ClockScreenFace.GLOBE -> "3D Tech Globe"
+                        ClockScreenFace.CLOCK -> "World Clock & Timezone"
+                    },
                     color = FolderTabCream,
                     fontSize = 22.sp,
                     fontFamily = ElmsSans,
@@ -183,7 +205,13 @@ fun NoteClockScreen(
                 )
             },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = {
+                    if (currentFace != ClockScreenFace.CLOCK) {
+                        currentFace = ClockScreenFace.CLOCK
+                    } else {
+                        onBack()
+                    }
+                }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
@@ -192,21 +220,28 @@ fun NoteClockScreen(
                 }
             },
             actions = {
-                // 3D Flip toggle button
+                // Quick Flip mode toggle
                 IconButton(
-                    onClick = { isTimerMode = !isTimerMode }
+                    onClick = {
+                        if (currentFace == ClockScreenFace.CLOCK) {
+                            previousNonClockFace = ClockScreenFace.TIMER
+                            currentFace = ClockScreenFace.TIMER
+                        } else {
+                            currentFace = ClockScreenFace.CLOCK
+                        }
+                    }
                 ) {
                     Icon(
                         imageVector = Icons.Default.FlipCameraAndroid,
-                        contentDescription = "Flip 3D View",
+                        contentDescription = "Flip 3D Surface",
                         tint = AccentGold
                     )
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
         )
 
-        // 3D Flip Container with realistic depth cameraDistance
+        // 3D Flip Container with realistic depth camera distance
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -218,106 +253,120 @@ fun NoteClockScreen(
                 }
         ) {
             if (flipAngle < 90f) {
-                // SIDE A: World Clock, 3D Tech Globe & Alarm Settings
+                // SIDE A: World Clock, Timezone Selector & Multi-Alarm Management
                 ClockFaceView(
                     currentTimeMillis = currentTimeMillis,
                     selectedLocation = selectedLocation,
-                    showGlobeVisualizer = showGlobeVisualizer,
                     showTimezoneDropdown = showTimezoneDropdown,
-                    alarmHour = alarmHour,
-                    alarmMinute = alarmMinute,
-                    alarmLabel = alarmLabel,
-                    onToggleGlobe = { showGlobeVisualizer = !showGlobeVisualizer },
+                    alarms = alarms,
+                    newAlarmHour = newAlarmHour,
+                    newAlarmMinute = newAlarmMinute,
+                    newAlarmLabel = newAlarmLabel,
                     onTimezoneDropdownToggle = { showTimezoneDropdown = it },
-                    onSelectLocation = {
-                        selectedLocation = it
+                    onSelectLocation = { loc ->
+                        selectedLocation = loc
                         showTimezoneDropdown = false
                     },
-                    onAlarmHourChange = { alarmHour = it.filter { ch -> ch.isDigit() }.take(2) },
-                    onAlarmMinuteChange = { alarmMinute = it.filter { ch -> ch.isDigit() }.take(2) },
-                    onAlarmLabelChange = { alarmLabel = it },
-                    onSetAlarm = {
-                        val h = alarmHour.toIntOrNull() ?: 8
-                        val m = alarmMinute.toIntOrNull() ?: 0
-                        val cal = Calendar.getInstance().apply {
-                            set(Calendar.HOUR_OF_DAY, h)
-                            set(Calendar.MINUTE, m)
-                            set(Calendar.SECOND, 0)
-                            if (before(Calendar.getInstance())) {
-                                add(Calendar.DATE, 1)
-                            }
-                        }
-                        try {
-                            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                            val intent = Intent(context, MainActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                            }
-                            val pi = PendingIntent.getActivity(
-                                context,
-                                5050,
-                                intent,
-                                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                            )
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
-                            } else {
-                                am.setExact(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
-                            }
-                            Toast.makeText(context, "Alarm set for ${String.format("%02d:%02d", h, m)}: $alarmLabel", Toast.LENGTH_SHORT).show()
-                        } catch (_: Exception) {
-                            Toast.makeText(context, "Scheduled alarm saved for ${String.format("%02d:%02d", h, m)}", Toast.LENGTH_SHORT).show()
-                        }
+                    onOpenGlobeMode = {
+                        previousNonClockFace = ClockScreenFace.GLOBE
+                        currentFace = ClockScreenFace.GLOBE
                     },
-                    onStartTimerMode = { isTimerMode = true }
+                    onOpenTimerMode = {
+                        previousNonClockFace = ClockScreenFace.TIMER
+                        currentFace = ClockScreenFace.TIMER
+                    },
+                    onNewAlarmHourChange = { newAlarmHour = it.filter { ch -> ch.isDigit() }.take(2) },
+                    onNewAlarmMinuteChange = { newAlarmMinute = it.filter { ch -> ch.isDigit() }.take(2) },
+                    onNewAlarmLabelChange = { newAlarmLabel = it },
+                    onAddAlarm = {
+                        val h = (newAlarmHour.toIntOrNull() ?: 8).coerceIn(0, 23)
+                        val m = (newAlarmMinute.toIntOrNull() ?: 0).coerceIn(0, 59)
+                        val label = if (newAlarmLabel.isBlank()) "Study Session" else newAlarmLabel.trim()
+                        val alarm = NoteClockAlarm(
+                            hour = h,
+                            minute = m,
+                            label = label,
+                            isEnabled = true
+                        )
+                        alarms = NoteClockAlarmManager.addAlarm(context, alarm)
+                        val nextTrigger = NoteClockAlarmManager.calculateNextTriggerMillis(h, m)
+                        val triggerCal = Calendar.getInstance().apply { timeInMillis = nextTrigger }
+                        val timeStr = String.format(Locale.US, "%02d:%02d", h, m)
+                        val dayStr = if (triggerCal.get(Calendar.DAY_OF_YEAR) == Calendar.getInstance().get(Calendar.DAY_OF_YEAR)) "today" else "tomorrow"
+                        Toast.makeText(context, "Alarm set for $timeStr $dayStr ($label)", Toast.LENGTH_SHORT).show()
+                    },
+                    onToggleAlarm = { alarmId, enabled ->
+                        alarms = NoteClockAlarmManager.toggleAlarm(context, alarmId, enabled)
+                    },
+                    onDeleteAlarm = { alarmId ->
+                        alarms = NoteClockAlarmManager.deleteAlarm(context, alarmId)
+                        Toast.makeText(context, "Alarm removed", Toast.LENGTH_SHORT).show()
+                    }
                 )
             } else {
-                // SIDE B: 3D Timer / Stopwatch with Floating Pill
+                // SIDE B: 3D Flipped Surface (Timer or Globe View)
                 Box(modifier = Modifier.graphicsLayer { rotationY = 180f }) {
-                    TimerFaceView(
-                        elapsedMs = currentTimerElapsedMs,
-                        isRunning = isTimerRunning,
-                        laps = laps,
-                        onStartPause = {
-                            if (!isTimerRunning) {
-                                timerStartEpochMs = System.currentTimeMillis()
-                                isTimerRunning = true
-                            } else {
-                                timerAccumulatedMs = currentTimerElapsedMs
-                                isTimerRunning = false
-                            }
-                        },
-                        onReset = {
-                            isTimerRunning = false
-                            timerAccumulatedMs = 0L
-                            currentTimerElapsedMs = 0L
-                            laps.clear()
-                        },
-                        onLap = {
-                            val lastTotal = laps.lastOrNull()?.totalTimeMs ?: 0L
-                            val split = currentTimerElapsedMs - lastTotal
-                            laps.add(
-                                TimerLapRecord(
-                                    lapIndex = laps.size + 1,
-                                    splitTimeMs = split,
-                                    totalTimeMs = currentTimerElapsedMs
-                                )
+                    when (previousNonClockFace) {
+                        ClockScreenFace.TIMER -> {
+                            TimerFaceView(
+                                elapsedMs = currentTimerElapsedMs,
+                                isRunning = isTimerRunning,
+                                laps = laps,
+                                onStartPause = {
+                                    if (!isTimerRunning) {
+                                        timerStartEpochMs = System.currentTimeMillis()
+                                        isTimerRunning = true
+                                    } else {
+                                        timerAccumulatedMs = currentTimerElapsedMs
+                                        isTimerRunning = false
+                                    }
+                                },
+                                onReset = {
+                                    isTimerRunning = false
+                                    timerAccumulatedMs = 0L
+                                    currentTimerElapsedMs = 0L
+                                    laps.clear()
+                                },
+                                onLap = {
+                                    val lastTotal = laps.lastOrNull()?.totalTimeMs ?: 0L
+                                    val split = currentTimerElapsedMs - lastTotal
+                                    laps.add(
+                                        TimerLapRecord(
+                                            lapIndex = laps.size + 1,
+                                            splitTimeMs = split,
+                                            totalTimeMs = currentTimerElapsedMs
+                                        )
+                                    )
+                                },
+                                onLaunchFloatingPill = {
+                                    if (!Settings.canDrawOverlays(context)) {
+                                        Toast.makeText(context, "Please grant Draw Over Other Apps permission to display Floating Pill", Toast.LENGTH_LONG).show()
+                                        val intent = Intent(
+                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                            Uri.parse("package:${context.packageName}")
+                                        ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                                        context.startActivity(intent)
+                                    } else {
+                                        TimerFloatingPillService.startService(context, currentTimerElapsedMs / 1000L)
+                                        Toast.makeText(context, "Floating Pill active over applications", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                onFlipBack = { currentFace = ClockScreenFace.CLOCK }
                             )
-                        },
-                        onLaunchFloatingPill = {
-                            if (!Settings.canDrawOverlays(context)) {
-                                Toast.makeText(context, "Please permit Draw Over Other Apps to display Floating Pill", Toast.LENGTH_LONG).show()
-                                val intent = Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${context.packageName}")
-                                ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
-                                context.startActivity(intent)
-                            } else {
-                                TimerFloatingPillService.startService(context, currentTimerElapsedMs / 1000L)
-                                Toast.makeText(context, "Floating Pill active over apps", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onFlipBack = { isTimerMode = false }
-                    )
+                        }
+                        ClockScreenFace.GLOBE -> {
+                            GlobeFaceView(
+                                selectedLocation = selectedLocation,
+                                onSelectLocation = { loc ->
+                                    selectedLocation = loc
+                                },
+                                onConfirmLocation = {
+                                    currentFace = ClockScreenFace.CLOCK
+                                }
+                            )
+                        }
+                        ClockScreenFace.CLOCK -> {}
+                    }
                 }
             }
         }
@@ -328,19 +377,21 @@ fun NoteClockScreen(
 private fun ClockFaceView(
     currentTimeMillis: Long,
     selectedLocation: GlobeTimezoneLocation,
-    showGlobeVisualizer: Boolean,
     showTimezoneDropdown: Boolean,
-    alarmHour: String,
-    alarmMinute: String,
-    alarmLabel: String,
-    onToggleGlobe: () -> Unit,
+    alarms: List<NoteClockAlarm>,
+    newAlarmHour: String,
+    newAlarmMinute: String,
+    newAlarmLabel: String,
     onTimezoneDropdownToggle: (Boolean) -> Unit,
     onSelectLocation: (GlobeTimezoneLocation) -> Unit,
-    onAlarmHourChange: (String) -> Unit,
-    onAlarmMinuteChange: (String) -> Unit,
-    onAlarmLabelChange: (String) -> Unit,
-    onSetAlarm: () -> Unit,
-    onStartTimerMode: () -> Unit
+    onOpenGlobeMode: () -> Unit,
+    onOpenTimerMode: () -> Unit,
+    onNewAlarmHourChange: (String) -> Unit,
+    onNewAlarmMinuteChange: (String) -> Unit,
+    onNewAlarmLabelChange: (String) -> Unit,
+    onAddAlarm: () -> Unit,
+    onToggleAlarm: (String, Boolean) -> Unit,
+    onDeleteAlarm: (String) -> Unit
 ) {
     val scrollState = rememberScrollState()
 
@@ -373,52 +424,81 @@ private fun ClockFaceView(
     ) {
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Timezone Selector Header
-        Box {
-            Surface(
-                color = HomeCardSurface,
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, HomeCardBorder),
-                modifier = Modifier.clickable { onTimezoneDropdownToggle(true) }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        // Timezone Selector Header at Top
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = FotaraShapes.Pill,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                    modifier = Modifier.clickable { onTimezoneDropdownToggle(true) }
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Public,
-                        contentDescription = null,
-                        tint = AccentGold,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = selectedLocation.name,
-                        color = FolderTabCream,
-                        fontSize = 14.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = "Timezone",
+                            tint = AccentGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "[${selectedLocation.countryCode}] ${selectedLocation.name}",
+                            color = FolderTabCream,
+                            fontSize = 13.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = showTimezoneDropdown,
+                    onDismissRequest = { onTimezoneDropdownToggle(false) },
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), FotaraShapes.CardSmall)
+                ) {
+                    DEFAULT_GLOBE_LOCATIONS.forEach { loc ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = "[${loc.countryCode}] ${loc.name}",
+                                    color = if (loc.id == selectedLocation.id) AccentGold else FolderTabCream,
+                                    fontFamily = ElmsSans
+                                )
+                            },
+                            onClick = { onSelectLocation(loc) }
+                        )
+                    }
                 }
             }
 
-            DropdownMenu(
-                expanded = showTimezoneDropdown,
-                onDismissRequest = { onTimezoneDropdownToggle(false) },
-                modifier = Modifier
-                    .background(HomeCardSurface)
-                    .border(1.dp, HomeCardBorder, RoundedCornerShape(8.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // 3D Globe Visualizer Mode Pill
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = FotaraShapes.Pill,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                modifier = Modifier.clickable { onOpenGlobeMode() }
             ) {
-                DEFAULT_GLOBE_LOCATIONS.forEach { loc ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = loc.name,
-                                color = if (loc.id == selectedLocation.id) AccentGold else FolderTabCream,
-                                fontFamily = ElmsSans
-                            )
-                        },
-                        onClick = { onSelectLocation(loc) }
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "3D Globe",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 12.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -426,15 +506,15 @@ private fun ClockFaceView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Large Digital Clock with Small Faded Seconds & Milliseconds
+        // Large Digital Clock with Tabular Monospace Digits and Play Button Pill Beside Clock
         Surface(
-            color = Color(0xFF0F1528),
-            shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, Color(0xFF1E2848)),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = FotaraShapes.CardLarge,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(vertical = 24.dp, horizontal = 16.dp),
+                modifier = Modifier.padding(vertical = 22.dp, horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -447,132 +527,136 @@ private fun ClockFaceView(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.Center
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Big HH:MM
-                    Text(
-                        text = String.format(Locale.US, "%02d:%02d", hours, minutes),
-                        color = FolderTabCream,
-                        fontSize = 58.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = (-1).sp
-                    )
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // Small faded :SS .MMM
-                    Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                        Text(
-                            text = String.format(Locale.US, ":%02d", seconds),
-                            color = FolderTabCream.copy(alpha = 0.55f),
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Medium,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = String.format(Locale.US, ".%03d", millis),
-                            color = FolderTabCream.copy(alpha = 0.35f),
-                            fontSize = 14.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Action buttons: 3D Globe Visualizer toggle & Flip to Timer
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Button(
-                        onClick = onToggleGlobe,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (showGlobeVisualizer) AccentGold else HomeCardSurface),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, HomeCardBorder)
+                    // Digital Time Column
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Public,
-                            contentDescription = null,
-                            tint = if (showGlobeVisualizer) Color.Black else AccentGold,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        // Big Tabular Monospace HH:MM
                         Text(
-                            text = if (showGlobeVisualizer) "Hide 3D Globe" else "3D Tech Globe",
-                            color = if (showGlobeVisualizer) Color.Black else FolderTabCream,
-                            fontFamily = ElmsSans,
-                            fontWeight = FontWeight.Bold
+                            text = String.format(Locale.US, "%02d:%02d", hours, minutes),
+                            color = FolderTabCream,
+                            fontSize = 56.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = (-1).sp
                         )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // Running Seconds & Faded Milliseconds Counter
+                        Column(modifier = Modifier.padding(bottom = 6.dp)) {
+                            Text(
+                                text = String.format(Locale.US, ":%02d", seconds),
+                                color = FolderTabCream.copy(alpha = 0.65f),
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Medium,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = String.format(Locale.US, ".%03d", millis),
+                                color = FolderTabCream.copy(alpha = 0.35f),
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
 
-                    Button(
-                        onClick = onStartTimerMode,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                        shape = RoundedCornerShape(12.dp)
+                    // Play Button Pill Beside Clock Display (Triggers 3D Flip to Timer)
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = FotaraShapes.Pill,
+                        modifier = Modifier
+                            .clip(FotaraShapes.Pill)
+                            .clickable { onOpenTimerMode() }
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("3D Timer", color = Color.White, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "3D Flip to Timer",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Timer",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // 3D Low-Poly Tech Globe Visualizer
-        if (showGlobeVisualizer) {
-            Spacer(modifier = Modifier.height(16.dp))
-            TechGlobeVisualizer(
-                selectedLocation = selectedLocation,
-                onSelectLocation = onSelectLocation
-            )
-        }
-
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Custom Labeled Alarm Configuration
+        // Multi-Alarm Management Section
         Surface(
-            color = HomeCardSurface,
-            shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(1.dp, HomeCardBorder),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = FotaraShapes.CardLarge,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Alarm,
-                        contentDescription = null,
-                        tint = AccentGold,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Set Custom Academic Alarm",
-                        color = FolderTabCream,
-                        fontSize = 15.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Bold
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = null,
+                            tint = AccentGold,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Academic Alarms",
+                            color = FolderTabCream,
+                            fontSize = 16.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = FotaraShapes.ElementMicro
+                    ) {
+                        Text(
+                            text = "${alarms.count { it.isEnabled }} Active",
+                            color = AccentGold,
+                            fontSize = 11.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
+                // Time Picker Inputs (Hour & Minute)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedTextField(
-                        value = alarmHour,
-                        onValueChange = onAlarmHourChange,
+                        value = newAlarmHour,
+                        onValueChange = onNewAlarmHourChange,
                         label = { Text("Hour (00-23)", color = TextMuted) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
@@ -587,8 +671,8 @@ private fun ClockFaceView(
                     Spacer(modifier = Modifier.width(12.dp))
 
                     OutlinedTextField(
-                        value = alarmMinute,
-                        onValueChange = onAlarmMinuteChange,
+                        value = newAlarmMinute,
+                        onValueChange = onNewAlarmMinuteChange,
                         label = { Text("Minute (00-59)", color = TextMuted) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
@@ -601,11 +685,37 @@ private fun ClockFaceView(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Quick Preset Suggestions
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val presets = listOf("Study Session", "Exam Prep", "Problem Set", "Formula Review")
+                    items(presets) { preset ->
+                        Surface(
+                            color = Color(0xFF131A30),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFF1E294B)),
+                            modifier = Modifier.clickable { onNewAlarmLabelChange(preset) }
+                        ) {
+                            Text(
+                                text = preset,
+                                color = if (newAlarmLabel == preset) AccentGold else FolderTabCream,
+                                fontSize = 11.sp,
+                                fontFamily = ElmsSans,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
-                    value = alarmLabel,
-                    onValueChange = onAlarmLabelChange,
+                    value = newAlarmLabel,
+                    onValueChange = onNewAlarmLabelChange,
                     label = { Text("Custom Alarm Label", color = TextMuted) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -620,13 +730,103 @@ private fun ClockFaceView(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Button(
-                    onClick = onSetAlarm,
+                    onClick = onAddAlarm,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Confirm Alarm", color = Color.Black, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
+                    Text("Schedule Alarm", color = Color.Black, fontFamily = ElmsSans, fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Scheduled Alarms List
+        if (alarms.isNotEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Configured Alarms (${alarms.size})",
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+
+                alarms.forEach { alarm ->
+                    Surface(
+                        color = HomeCardSurface,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, if (alarm.isEnabled) HomeCardBorder else Color(0xFF1E2848)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = alarm.getFormattedTime(),
+                                    color = if (alarm.isEnabled) FolderTabCream else TextMuted,
+                                    fontSize = 26.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = alarm.label,
+                                    color = if (alarm.isEnabled) AccentGold else TextMuted,
+                                    fontSize = 13.sp,
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(
+                                    checked = alarm.isEnabled,
+                                    onCheckedChange = { onToggleAlarm(alarm.id, it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.Black,
+                                        checkedTrackColor = AccentGold,
+                                        uncheckedThumbColor = TextMuted,
+                                        uncheckedTrackColor = Color(0xFF1E2848)
+                                    )
+                                )
+
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                IconButton(onClick = { onDeleteAlarm(alarm.id) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete Alarm",
+                                        tint = TagCrimson,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Surface(
+                color = HomeCardSurface.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, HomeCardBorder.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "No academic alarms configured yet. Create one above.",
+                    color = TextMuted,
+                    fontSize = 12.sp,
+                    fontFamily = ElmsSans,
+                    modifier = Modifier.padding(16.dp)
+                )
             }
         }
 
@@ -759,7 +959,7 @@ private fun TimerFaceView(
                     border = BorderStroke(1.dp, Color(0xFF38BDF8))
                 ) {
                     Icon(
-                        imageVector = Icons.Default.OpenInNew,
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = null,
                         tint = Color(0xFF38BDF8),
                         modifier = Modifier.size(18.dp)
@@ -786,10 +986,11 @@ private fun TimerFaceView(
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = "Tap 3D Flip to return to Clock",
+                text = "Flip back to Clock",
                 color = AccentGold,
                 fontSize = 12.sp,
                 fontFamily = ElmsSans,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable { onFlipBack() }
             )
         }
@@ -846,6 +1047,102 @@ private fun TimerFaceView(
                             fontFamily = FontFamily.Monospace
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlobeFaceView(
+    selectedLocation: GlobeTimezoneLocation,
+    onSelectLocation: (GlobeTimezoneLocation) -> Unit,
+    onConfirmLocation: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Interactive 3D Tech Globe",
+                color = FolderTabCream,
+                fontSize = 15.sp,
+                fontFamily = ElmsSans,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = "Flip to Clock",
+                color = AccentGold,
+                fontSize = 12.sp,
+                fontFamily = ElmsSans,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { onConfirmLocation() }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Full Interactive 3D Tech Globe Visualizer
+        TechGlobeVisualizer(
+            selectedLocation = selectedLocation,
+            onSelectLocation = onSelectLocation,
+            showLocationChips = true
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Selected Timezone Info Card
+        Surface(
+            color = HomeCardSurface,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, HomeCardBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Selected Timezone",
+                    color = TextMuted,
+                    fontSize = 12.sp,
+                    fontFamily = ElmsSans
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "[${selectedLocation.countryCode}] ${selectedLocation.name}",
+                    color = FolderTabCream,
+                    fontSize = 17.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Zone ID: ${selectedLocation.timeZoneId} · Coordinates: ${selectedLocation.latitudeDeg}°N, ${selectedLocation.longitudeDeg}°E",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = onConfirmLocation,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Confirm & View Clock",
+                        color = Color.Black,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

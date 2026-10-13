@@ -40,7 +40,9 @@ fun MainNavigation(
     deepLinkPhotoId: Long? = null,
     deepLinkDirectView: Boolean = false,
     openUpdateScreen: Boolean = false,
-    onUpdateScreenOpened: (() -> Unit)? = null
+    onUpdateScreenOpened: (() -> Unit)? = null,
+    openClockScreen: Boolean = false,
+    onClockScreenOpened: (() -> Unit)? = null
 ) {
     val initialKey = remember {
         if (appContainer.settingsRepository.isOnboardingCompleted()) HomeNavKey else OnboardingNavKey
@@ -53,6 +55,15 @@ fun MainNavigation(
                 backStack.add(UpdateNavKey)
             }
             onUpdateScreenOpened?.invoke()
+        }
+    }
+
+    LaunchedEffect(openClockScreen) {
+        if (openClockScreen) {
+            if (backStack.none { it is NoteClockNavKey }) {
+                backStack.add(NoteClockNavKey)
+            }
+            onClockScreenOpened?.invoke()
         }
     }
 
@@ -339,6 +350,7 @@ fun MainNavigation(
                     com.arinara.fotara.ui.document.DocxViewerScreen(
                         documentNote = doc,
                         onBack = { safePopBack() },
+                        onOpenClock = { backStack.add(NoteClockNavKey) },
                         onDelete = {
                             coroutineScope.launch {
                                 appContainer.documentRepository.deleteDocumentNote(doc.id)
@@ -369,6 +381,7 @@ fun MainNavigation(
                         pdfPageDrawingRepository = appContainer.pdfPageDrawingRepository,
                         settingsRepository = appContainer.settingsRepository,
                         onBack = { safePopBack() },
+                        onOpenClock = { backStack.add(NoteClockNavKey) },
                         onSplitToImages = {},
                         onDelete = {
                             coroutineScope.launch {
@@ -468,7 +481,8 @@ fun MainNavigation(
                 )
                 com.arinara.fotara.ui.canvas.CanvasScreen(
                     viewModel = canvasViewModel,
-                    onBack = { safePopBack() }
+                    onBack = { safePopBack() },
+                    onOpenClock = { backStack.add(NoteClockNavKey) }
                 )
             }
 

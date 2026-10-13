@@ -18,7 +18,8 @@ enum class CanvasBackgroundStyle {
 
 enum class StrokeToolType {
     PEN,
-    HIGHLIGHTER
+    HIGHLIGHTER,
+    ERASER
 }
 
 enum class StrokeBlendMode {
