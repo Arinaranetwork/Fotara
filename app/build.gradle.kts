@@ -16,7 +16,7 @@ android {
     namespace = "com.arinara.fotara"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.arinara.fotara.debugui"
+        applicationId = "com.arinara.fotara"
         minSdk = 24
         targetSdk = 36
         versionCode = appVersionCode
