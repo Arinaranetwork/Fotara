@@ -178,7 +178,7 @@ class DefaultCanvasRepository(
         val doc = CanvasDocument(
             id = canvasId,
             title = title,
-            backgroundStyle = CanvasBackgroundStyle.GRID,
+            backgroundStyle = CanvasBackgroundStyle.DOTS,
             createdAt = createdAt,
             updatedAt = updatedAt,
             layers = layers,

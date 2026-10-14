@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -93,6 +94,17 @@ import com.arinara.fotara.theme.TagEmerald
 import com.arinara.fotara.data.model.AcademicScore
 import com.arinara.fotara.data.model.ScoreCalculationMode
 import com.arinara.fotara.data.repository.ScoreRepository
+import com.arinara.fotara.ui.components.presets.AppScreen
+import com.arinara.fotara.ui.components.presets.AppTopBar
+import com.arinara.fotara.ui.components.presets.AppCard
+import com.arinara.fotara.ui.components.presets.AppPillChip
+import com.arinara.fotara.ui.components.presets.AppButton
+import com.arinara.fotara.ui.components.presets.AppButtonVariant
+import com.arinara.fotara.ui.components.presets.AppListItem
+import com.arinara.fotara.ui.components.presets.AppListItemAction
+import com.arinara.fotara.ui.components.presets.BottomClearanceSpacer
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import com.arinara.fotara.theme.ElmsSans
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -168,53 +180,21 @@ fun ScoresTrackerScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
+    AppScreen(
+        modifier = modifier,
+        containerColor = ElectricSlateTokens.BgCanvas
     ) {
         // Top App Bar
-        TopAppBar(
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Scores",
-                        fontFamily = ElmsSans,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                        shape = FotaraShapes.ElementMicro
-                    ) {
-                        Text(
-                            text = "BETA",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-            },
+        AppTopBar(
+            title = "Scores",
+            onBackClick = onBack,
+            containerColor = ElectricSlateTokens.BgCanvas,
             actions = {
                 OutlinedButton(
                     onClick = { showTargetGpaDialog = true },
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
-                    shape = FotaraShapes.Pill,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.tertiary),
+                    border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
+                    shape = RoundedCornerShape(999.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricSlateTokens.PrimaryAccent),
                     modifier = Modifier.height(34.dp)
                 ) {
                     Text(
@@ -229,144 +209,142 @@ fun ScoresTrackerScreen(
                     Icon(
                         imageVector = Icons.Default.IosShare,
                         contentDescription = "Presets",
-                        tint = MaterialTheme.colorScheme.onBackground
+                        tint = ElectricSlateTokens.TextPrimary
                     )
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+            }
         )
 
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .navigationBarsPadding()
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Metrics and Mode Card
             item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                    shape = FotaraShapes.Card,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+                AppCard(
+                    cornerRadius = 24.dp,
+                    containerColor = ElectricSlateTokens.SurfacePanel,
+                    borderColor = ElectricSlateTokens.BorderSubtle,
+                    isGlow = true,
+                    glowColor = ElectricSlateTokens.PrimaryAccent,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = if (calculationMode == ScoreCalculationMode.PURE_AVERAGE) "Pure Average" else "Weighted Average",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 12.sp,
-                                    fontFamily = ElmsSans
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "${"%.1f".format(Locale.US, currentScore)}%",
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    fontSize = 28.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = ElmsSans
-                                )
-                            }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = if (calculationMode == ScoreCalculationMode.PURE_AVERAGE) "Pure Average" else "Weighted Average",
+                                color = ElectricSlateTokens.TextMuted,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "${"%.1f".format(Locale.US, currentScore)}%",
+                                color = ElectricSlateTokens.TextPrimary,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = ElmsSans
+                            )
+                        }
 
-                            // Mode toggle button
-                            OutlinedButton(
-                                onClick = {
-                                    calculationMode = if (calculationMode == ScoreCalculationMode.PURE_AVERAGE) {
-                                        ScoreCalculationMode.CUSTOM_WEIGHTS
-                                    } else {
-                                        ScoreCalculationMode.PURE_AVERAGE
-                                    }
-                                },
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                                shape = FotaraShapes.Pill
+                        // Mode toggle button
+                        OutlinedButton(
+                            onClick = {
+                                calculationMode = if (calculationMode == ScoreCalculationMode.PURE_AVERAGE) {
+                                    ScoreCalculationMode.CUSTOM_WEIGHTS
+                                } else {
+                                    ScoreCalculationMode.PURE_AVERAGE
+                                }
+                            },
+                            border = BorderStroke(1.dp, ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(999.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Scale,
+                                contentDescription = null,
+                                tint = ElectricSlateTokens.PrimaryAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (calculationMode == ScoreCalculationMode.PURE_AVERAGE) "Average" else "Weighted",
+                                color = ElectricSlateTokens.PrimaryAccent,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Weight balance visual indicator in Weighted Mode
+                    if (calculationMode == ScoreCalculationMode.CUSTOM_WEIGHTS) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        val isBalanced = totalWeight in 99.9..100.1
+                        Surface(
+                            color = if (isBalanced) TagEmerald.copy(alpha = 0.15f) else TagAmber.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, if (isBalanced) TagEmerald else TagAmber.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Scale,
+                                    imageVector = if (isBalanced) Icons.Default.Check else Icons.Default.Warning,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = if (isBalanced) TagEmerald else TagAmber,
                                     modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (calculationMode == ScoreCalculationMode.PURE_AVERAGE) "Average" else "Weighted",
-                                    color = MaterialTheme.colorScheme.primary,
+                                    text = if (isBalanced) {
+                                        "Weights Total: 100% (Balanced)"
+                                    } else {
+                                        "Weights Total: ${"%.1f".format(Locale.US, totalWeight)}% (Target: 100%)"
+                                    },
+                                    color = if (isBalanced) TagEmerald else TagAmber,
                                     fontSize = 12.sp,
                                     fontFamily = ElmsSans,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
+                    }
 
-                        // Weight balance visual indicator in Weighted Mode
-                        if (calculationMode == ScoreCalculationMode.CUSTOM_WEIGHTS) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            val isBalanced = totalWeight in 99.9..100.1
-                            Surface(
-                                color = if (isBalanced) TagEmerald.copy(alpha = 0.15f) else TagAmber.copy(alpha = 0.15f),
-                                shape = FotaraShapes.InputField,
-                                border = BorderStroke(1.dp, if (isBalanced) TagEmerald else TagAmber.copy(alpha = 0.5f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (isBalanced) Icons.Default.Check else Icons.Default.Warning,
-                                        contentDescription = null,
-                                        tint = if (isBalanced) TagEmerald else TagAmber,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
+                    // Projection & Countdown Banner
+                    if (projectedFinalExamNeeded != null || daysUntilFinalExam != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            color = ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                if (projectedFinalExamNeeded != null) {
                                     Text(
-                                        text = if (isBalanced) {
-                                            "Weights Total: 100% (Balanced)"
-                                        } else {
-                                            "Weights Total: ${"%.1f".format(Locale.US, totalWeight)}% (Target: 100%)"
-                                        },
-                                        color = if (isBalanced) TagEmerald else TagAmber,
-                                        fontSize = 12.sp,
-                                        fontFamily = ElmsSans,
-                                        fontWeight = FontWeight.Medium
+                                        text = "Needed on Final Exam: ${"%.1f".format(Locale.US, projectedFinalExamNeeded)}% to hit target (${"%.1f".format(Locale.US, targetGpaPercentage)}%)",
+                                        color = ElectricSlateTokens.PrimaryAccent,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = ElmsSans
                                     )
                                 }
-                            }
-                        }
-
-                        // Projection & Countdown Banner
-                        if (projectedFinalExamNeeded != null || daysUntilFinalExam != null) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Surface(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                shape = FotaraShapes.InputField,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    if (projectedFinalExamNeeded != null) {
-                                        Text(
-                                            text = "Needed on Final Exam: ${"%.1f".format(Locale.US, projectedFinalExamNeeded)}% to hit target (${"%.1f".format(Locale.US, targetGpaPercentage)}%)",
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 12.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontFamily = ElmsSans
-                                        )
-                                    }
-                                    if (daysUntilFinalExam != null) {
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "Upcoming Exam in $daysUntilFinalExam day(s)",
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 11.5.sp,
-                                            fontFamily = ElmsSans
-                                        )
-                                    }
+                                if (daysUntilFinalExam != null) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Upcoming Exam in $daysUntilFinalExam day(s)",
+                                        color = ElectricSlateTokens.TextMuted,
+                                        fontSize = 11.5.sp,
+                                        fontFamily = ElmsSans
+                                    )
                                 }
                             }
                         }
@@ -383,34 +361,18 @@ fun ScoresTrackerScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    FilterChip(
-                        selected = selectedCategoryFilter == null,
-                        onClick = { selectedCategoryFilter = null },
-                        shape = FotaraShapes.Pill,
-                        label = { Text("All (${allScores.size})", fontFamily = ElmsSans, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        border = BorderStroke(1.dp, if (selectedCategoryFilter == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+                    AppPillChip(
+                        label = "All (${allScores.size})",
+                        isSelected = selectedCategoryFilter == null,
+                        onClick = { selectedCategoryFilter = null }
                     )
 
                     AcademicScore.CATEGORIES.forEach { category ->
                         val count = allScores.count { it.category.equals(category, ignoreCase = true) }
-                        FilterChip(
-                            selected = selectedCategoryFilter == category,
-                            onClick = { selectedCategoryFilter = if (selectedCategoryFilter == category) null else category },
-                            shape = FotaraShapes.Pill,
-                            label = { Text("$category ($count)", fontFamily = ElmsSans, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            border = BorderStroke(1.dp, if (selectedCategoryFilter == category) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+                        AppPillChip(
+                            label = "$category ($count)",
+                            isSelected = selectedCategoryFilter == category,
+                            onClick = { selectedCategoryFilter = if (selectedCategoryFilter == category) null else category }
                         )
                     }
                 }
@@ -418,26 +380,16 @@ fun ScoresTrackerScreen(
 
             // Add Score Button
             item {
-                Button(
+                AppButton(
+                    text = "Add Score Entry",
+                    leadingIcon = Icons.Default.Add,
+                    variant = AppButtonVariant.PRIMARY,
                     onClick = {
                         editingScore = null
                         showAddDialog = true
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
-                    shape = FotaraShapes.Button,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Add Score Entry",
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp
-                    )
-                }
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             // Empty state or Scores List
@@ -453,13 +405,13 @@ fun ScoresTrackerScreen(
                             Icon(
                                 imageVector = Icons.Default.Scale,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                tint = ElectricSlateTokens.TextMuted.copy(alpha = 0.5f),
                                 modifier = Modifier.size(48.dp)
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 text = "No academic scores recorded yet",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = ElectricSlateTokens.TextMuted,
                                 fontSize = 14.sp,
                                 fontFamily = ElmsSans
                             )
@@ -492,6 +444,10 @@ fun ScoresTrackerScreen(
                         }
                     )
                 }
+            }
+
+            item {
+                BottomClearanceSpacer(100.dp)
             }
         }
     }
@@ -548,139 +504,137 @@ private fun ScoreCard(
     onDelete: () -> Unit,
     onOpenEvidence: (String) -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        shape = FotaraShapes.Card,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
+    AppCard(
+        cornerRadius = 24.dp,
+        containerColor = ElectricSlateTokens.SurfacePanel,
+        borderColor = ElectricSlateTokens.BorderSubtle,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                        shape = FotaraShapes.ElementMicro
-                    ) {
-                        Text(
-                            text = score.category,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
                     Text(
-                        text = score.subject,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        fontFamily = ElmsSans
+                        text = score.category,
+                        color = ElectricSlateTokens.PrimaryAccent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = score.subject,
+                    color = ElectricSlateTokens.TextMuted,
+                    fontSize = 12.sp,
+                    fontFamily = ElmsSans
+                )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit",
+                        tint = ElectricSlateTokens.TextMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = ElectricSlateTokens.Destructive,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Column {
+                Text(
+                    text = score.title,
+                    color = ElectricSlateTokens.TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = ElmsSans,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Weight: ${"%.1f".format(Locale.US, score.weight)}%",
+                    color = ElectricSlateTokens.TextMuted,
+                    fontSize = 12.sp,
+                    fontFamily = ElmsSans
+                )
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "${"%.1f".format(Locale.US, score.percentage)}%",
+                    color = if (score.percentage >= 80.0) TagEmerald else if (score.percentage >= 60.0) TagAmber else ElectricSlateTokens.Destructive,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = ElmsSans
+                )
+                Text(
+                    text = "${score.score} / ${score.maxScore}",
+                    color = ElectricSlateTokens.TextMuted,
+                    fontSize = 11.5.sp,
+                    fontFamily = ElmsSans
+                )
+            }
+        }
+
+        // Evidence link pill if attached
+        if (!score.evidenceUri.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Surface(
+                color = ElectricSlateTokens.SurfaceElevated,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
+                modifier = Modifier.clickable { onOpenEvidence(score.evidenceUri) }
             ) {
-                Column {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AttachFile,
+                        contentDescription = null,
+                        tint = ElectricSlateTokens.PrimaryAccent,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = score.title,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        text = score.evidenceName ?: "Evidence Attachment",
+                        color = ElectricSlateTokens.TextPrimary,
+                        fontSize = 11.sp,
                         fontFamily = ElmsSans,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Weight: ${"%.1f".format(Locale.US, score.weight)}%",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        fontFamily = ElmsSans
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.OpenInNew,
+                        contentDescription = null,
+                        tint = ElectricSlateTokens.TextMuted,
+                        modifier = Modifier.size(12.dp)
                     )
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "${"%.1f".format(Locale.US, score.percentage)}%",
-                        color = if (score.percentage >= 80.0) TagEmerald else if (score.percentage >= 60.0) TagAmber else MaterialTheme.colorScheme.error,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = ElmsSans
-                    )
-                    Text(
-                        text = "${score.score} / ${score.maxScore}",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.5.sp,
-                        fontFamily = ElmsSans
-                    )
-                }
-            }
-
-            // Evidence link pill if attached
-            if (!score.evidenceUri.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = FotaraShapes.InputField,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)),
-                    modifier = Modifier.clickable { onOpenEvidence(score.evidenceUri) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AttachFile,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = score.evidenceName ?: "Evidence Attachment",
-                            color = MaterialTheme.colorScheme.onBackground,
-                            fontSize = 11.sp,
-                            fontFamily = ElmsSans,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.OpenInNew,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
                 }
             }
         }

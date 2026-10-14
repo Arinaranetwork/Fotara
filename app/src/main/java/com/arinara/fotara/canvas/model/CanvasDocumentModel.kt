@@ -228,7 +228,7 @@ data class CanvasSheet(
     val id: String = UUID.randomUUID().toString(),
     val title: String = "Sheet 1",
     val elements: List<CanvasElement> = emptyList(),
-    val backgroundStyle: CanvasBackgroundStyle = CanvasBackgroundStyle.GRID
+    val backgroundStyle: CanvasBackgroundStyle = CanvasBackgroundStyle.DOTS
 )
 
 /**
@@ -250,7 +250,7 @@ data class CanvasLayer(
 data class CanvasDocument(
     val id: Long = 0L,
     val title: String = "Untitled Canvas",
-    val backgroundStyle: CanvasBackgroundStyle = CanvasBackgroundStyle.GRID,
+    val backgroundStyle: CanvasBackgroundStyle = CanvasBackgroundStyle.DOTS,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val formatVersion: Int = 1,

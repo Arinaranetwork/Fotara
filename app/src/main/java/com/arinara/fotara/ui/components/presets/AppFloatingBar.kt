@@ -40,12 +40,19 @@ import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import com.arinara.fotara.ui.theme.SpringPhysics
 import com.arinara.fotara.ui.theme.jigglePressClickable
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.unit.Dp
+
 @Composable
 fun AppFloatingBar(
     modifier: Modifier = Modifier,
     visible: Boolean = true,
     containerColor: Color = ElectricSlateTokens.SurfaceElevated,
     borderColor: Color = ElectricSlateTokens.BorderSubtle,
+    applyWindowInsets: Boolean = true,
     content: @Composable RowScope.() -> Unit
 ) {
     val offsetYAnim = remember { Animatable(100f) }
@@ -65,11 +72,17 @@ fun AppFloatingBar(
     }
 
     if (offsetYAnim.value < 119f) {
-        Box(
-            modifier = modifier
+        val outerModifier = if (applyWindowInsets) {
+            modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(bottom = 16.dp),
+                .padding(bottom = 16.dp)
+        } else {
+            modifier
+        }
+
+        Box(
+            modifier = outerModifier,
             contentAlignment = Alignment.Center
         ) {
             Box(
@@ -80,12 +93,12 @@ fun AppFloatingBar(
                     .clip(CircleShape)
                     .background(containerColor)
                     .border(BorderStroke(1.dp, borderColor), CircleShape)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     content()
                 }
@@ -94,6 +107,7 @@ fun AppFloatingBar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppFloatingBarItem(
     icon: ImageVector,
@@ -101,27 +115,115 @@ fun AppFloatingBarItem(
     isSelected: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     activeColor: Color = ElectricSlateTokens.PrimaryAccent,
-    inactiveColor: Color = ElectricSlateTokens.TextMuted
+    inactiveColor: Color = ElectricSlateTokens.TextSecondary,
+    itemSize: Dp = 42.dp,
+    iconSize: Dp = 20.dp
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val clickableModifier = if (onLongClick != null) {
+        Modifier.combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    } else {
+        Modifier.jigglePressClickable(onClick = onClick)
+    }
+
     Box(
         modifier = modifier
-            .size(48.dp)
+            .size(itemSize)
             .clip(CircleShape)
-            .background(if (isSelected) activeColor.copy(alpha = 0.2f) else Color.Transparent)
-            .border(
-                width = if (isSelected) 1.dp else 0.dp,
-                color = if (isSelected) activeColor else Color.Transparent,
-                shape = CircleShape
-            )
-            .jigglePressClickable(onClick = onClick),
+            .background(if (isSelected) activeColor else Color.Transparent)
+            .then(clickableModifier),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = if (isSelected) activeColor else inactiveColor,
-            modifier = Modifier.size(22.dp)
+            tint = if (isSelected) Color.White else inactiveColor,
+            modifier = Modifier.size(iconSize)
         )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun AppFloatingBarItem(
+    painter: Painter,
+    contentDescription: String,
+    isSelected: Boolean = false,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    activeColor: Color = ElectricSlateTokens.PrimaryAccent,
+    inactiveColor: Color = ElectricSlateTokens.TextSecondary,
+    itemSize: Dp = 42.dp,
+    iconSize: Dp = 20.dp
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val clickableModifier = if (onLongClick != null) {
+        Modifier.combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    } else {
+        Modifier.jigglePressClickable(onClick = onClick)
+    }
+
+    Box(
+        modifier = modifier
+            .size(itemSize)
+            .clip(CircleShape)
+            .background(if (isSelected) activeColor else Color.Transparent)
+            .then(clickableModifier),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painter,
+            contentDescription = contentDescription,
+            tint = if (isSelected) Color.White else inactiveColor,
+            modifier = Modifier.size(iconSize)
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun AppFloatingBarCustomItem(
+    isSelected: Boolean = false,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
+    activeColor: Color = ElectricSlateTokens.PrimaryAccent,
+    itemSize: Dp = 42.dp,
+    content: @Composable () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val clickableModifier = if (onLongClick != null) {
+        Modifier.combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    } else {
+        Modifier.jigglePressClickable(onClick = onClick)
+    }
+
+    Box(
+        modifier = modifier
+            .size(itemSize)
+            .clip(CircleShape)
+            .background(if (isSelected) activeColor else Color.Transparent)
+            .then(clickableModifier),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }

@@ -46,6 +46,9 @@ import com.arinara.fotara.theme.HomeBottomNavActiveHighlight
 import com.arinara.fotara.theme.HomeBottomNavBorder
 import com.arinara.fotara.theme.HomeBottomNavSurface
 
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import com.arinara.fotara.ui.theme.jigglePressClickable
+
 enum class HomeNavTab { HOME, NOTES, SETTINGS }
 
 /**
@@ -55,9 +58,9 @@ enum class HomeNavTab { HOME, NOTES, SETTINGS }
 val LocalBottomOverlayPadding = androidx.compose.runtime.compositionLocalOf { 0.dp }
 
 /**
- * Floating bottom navigation pill matching IMAGE A.
- * Features a ~66dp floating pill container with 12dp side margins, #111726 surface,
- * subtle border, and 3 equal tabs: Home, Notes, Settings.
+ * Floating bottom navigation pill adhering strictly to Electric Slate tokens and presets.
+ * Features a 999dp capsule pill container with #1F2736 surface,
+ * 1dp BorderSubtle, and 3 equal tabs: Home, Notes, Settings.
  */
 @Composable
 fun HomeBottomNavBar(
@@ -70,11 +73,11 @@ fun HomeBottomNavBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = 16.dp)
             .height(64.dp)
             .clip(CircleShape)
-            .background(HomeBottomNavSurface)
-            .border(1.dp, HomeBottomNavBorder, CircleShape)
+            .background(ElectricSlateTokens.SurfaceElevated)
+            .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Row(
@@ -140,8 +143,8 @@ private fun HomeNavItem(
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val activeBlue = Color(0xFF3B82F6)
-    val inactiveGray = Color(0xFF6B7280)
+    val activeColor = ElectricSlateTokens.PrimaryAccent
+    val inactiveColor = ElectricSlateTokens.TextMuted
 
     Box(
         modifier = modifier
@@ -149,7 +152,9 @@ private fun HomeNavItem(
             .clip(CircleShape)
             .then(
                 if (isSelected) {
-                    Modifier.background(HomeBottomNavActiveHighlight)
+                    Modifier
+                        .background(activeColor.copy(alpha = 0.18f))
+                        .border(1.dp, activeColor.copy(alpha = 0.4f), CircleShape)
                 } else Modifier
             )
             .then(
@@ -159,7 +164,7 @@ private fun HomeNavItem(
                         onLongClick = onLongClick
                     )
                 } else {
-                    Modifier.clickable(onClick = onClick)
+                    Modifier.jigglePressClickable(onClick = onClick)
                 }
             ),
         contentAlignment = Alignment.Center
@@ -171,16 +176,16 @@ private fun HomeNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isSelected) activeBlue else inactiveGray,
-                modifier = Modifier.size(24.dp)
+                tint = if (isSelected) activeColor else inactiveColor,
+                modifier = Modifier.size(22.dp)
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = label,
-                color = if (isSelected) activeBlue else inactiveGray,
-                fontSize = 12.sp,
-                lineHeight = 16.sp,
-                fontWeight = FontWeight.Medium,
+                color = if (isSelected) activeColor else inactiveColor,
+                fontSize = 11.5.sp,
+                lineHeight = 15.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 fontFamily = ElmsSans
             )
         }

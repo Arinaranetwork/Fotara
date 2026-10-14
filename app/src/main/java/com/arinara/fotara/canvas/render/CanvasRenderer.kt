@@ -49,12 +49,12 @@ class CanvasRenderer(
     // Pre-allocated reusable Paint objects (strictly zero allocations during onDraw)
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x26EBD8B8 // Subtle cream grid
+        color = 0x1A94A3B8 // Subtle electric slate grid
         strokeWidth = 1.0f
         style = Paint.Style.STROKE
     }
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x40EBD8B8
+        color = 0x3394A3B8 // Electric slate dot grid
         style = Paint.Style.FILL
     }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -230,7 +230,7 @@ class CanvasRenderer(
         style: CanvasBackgroundStyle
     ) {
         // Base dark background fill
-        bgPaint.color = 0xFF0D1B2A.toInt() // MidnightNavy
+        bgPaint.color = 0xFF0D1117.toInt() // Electric Slate BackgroundDeep
         bgPaint.style = Paint.Style.FILL
         canvas.drawRect(0f, 0f, screenWidth, screenHeight, bgPaint)
 

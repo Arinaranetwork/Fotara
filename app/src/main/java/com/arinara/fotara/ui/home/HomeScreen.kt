@@ -46,6 +46,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -105,6 +107,7 @@ import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -154,6 +157,13 @@ import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import com.arinara.fotara.ui.components.presets.AppScreen
+import com.arinara.fotara.ui.components.presets.AppTopBar
+import com.arinara.fotara.ui.components.presets.AppPillChip
+import com.arinara.fotara.ui.components.presets.BottomClearanceSpacer
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
 import com.arinara.fotara.ui.components.FolderCard
 import com.arinara.fotara.ui.components.FolderUnlockDialog
@@ -252,6 +262,25 @@ fun HomeScreen(
     val spaces by (spaceRepository?.observeSpaces() ?: kotlinx.coroutines.flow.flowOf(emptyList())).collectAsStateWithLifecycle(emptyList())
     val activeSpace by (spaceRepository?.activeSpace ?: kotlinx.coroutines.flow.flowOf(Space.DEFAULT_SPACE)).collectAsStateWithLifecycle(Space.DEFAULT_SPACE)
     val isPrivateUnlocked by (spaceRepository?.isPrivateSpaceUnlocked ?: kotlinx.coroutines.flow.flowOf(false)).collectAsStateWithLifecycle(false)
+
+    val spaceCategories = listOf("All", "Study", "Personal", "Locked")
+    var selectedCategoryIndex by rememberSaveable { mutableIntStateOf(0) }
+
+    val displayedFolders = remember(uiState.folders, selectedCategoryIndex) {
+        when (selectedCategoryIndex) {
+            0 -> uiState.folders
+            1 -> uiState.folders.filter { folder ->
+                folder.name.contains("study", ignoreCase = true) ||
+                folder.name.contains("math", ignoreCase = true) ||
+                folder.name.contains("exam", ignoreCase = true) ||
+                folder.name.contains("class", ignoreCase = true) ||
+                folder.name.contains("lecture", ignoreCase = true)
+            }.ifEmpty { uiState.folders }
+            2 -> uiState.folders.filter { !it.isLocked }
+            3 -> uiState.folders.filter { it.isLocked }
+            else -> uiState.folders
+        }
+    }
 
     var activeContextFolder by remember { mutableStateOf<Folder?>(null) }
     var folderToRename by remember { mutableStateOf<Folder?>(null) }
@@ -451,7 +480,7 @@ fun HomeScreen(
     val bottomOverlayPaddingDp = bottomBarState.bottomOverlayPaddingDp
 
     CompositionLocalProvider(LocalBottomOverlayPadding provides bottomOverlayPaddingDp) {
-        Scaffold(
+        AppScreen(
             snackbarHost = {
                 SnackbarHost(
                     hostState = snackbarHostState,
@@ -460,11 +489,9 @@ fun HomeScreen(
                         .imePadding()
                 )
             },
-            containerColor = HomeNearBlack,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {},
-        modifier = modifier.fillMaxSize()
-    ) { innerPadding ->
+            containerColor = ElectricSlateTokens.BgCanvas,
+            modifier = modifier.fillMaxSize()
+        ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -562,54 +589,89 @@ fun HomeScreen(
                                         alpha = if (uiState.isMultiSelectMode) 0f else 1f
                                     }
                             ) {
-                                ScreenHeader(
+                                AppTopBar(
                                     title = uiState.selectedWorkspace?.name ?: "Home",
-                                    spaceName = activeSpace.name,
-                                    onTitleClick = {
-                                        if (spaceRepository != null) {
-                                            showSpaceSwitcher = true
-                                        }
-                                    },
-                                    onTitleLongClick = {
-                                        if (activeSpaceManager != null) {
-                                            coroutineScope.launch {
-                                                val isUnlocked = activeSpaceManager.toggleStealthVault()
-                                                snackbarHostState.showSnackbar(
-                                                    if (isUnlocked) "Stealth Space Vault Unlocked" else "Stealth Space Vault Locked"
+                                    subtitle = if (activeSpace.name.isNotBlank() && activeSpace.name != "Personal") activeSpace.name else null,
+                                    onBackClick = null,
+                                    containerColor = ElectricSlateTokens.BgCanvas,
+                                    actions = {
+                                        // Workspace switcher pill
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(ElectricSlateTokens.SurfacePanel)
+                                                .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
+                                                .jigglePressClickable {
+                                                    if (spaceRepository != null) {
+                                                        showSpaceSwitcher = true
+                                                    }
+                                                }
+                                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.SelectAll,
+                                                    contentDescription = "Spaces",
+                                                    tint = ElectricSlateTokens.PrimaryAccent,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Text(
+                                                    text = activeSpace.name,
+                                                    color = ElectricSlateTokens.TextPrimary,
+                                                    fontSize = 12.sp,
+                                                    fontFamily = ElmsSans,
+                                                    fontWeight = FontWeight.Medium
                                                 )
                                             }
                                         }
-                                    },
-                                    tagline = null,
-                                    actions = {
-                                        // 1: Magnifier search trigger
-                                        ScreenHeaderActionButton(
-                                            onClick = { if (!uiState.isMultiSelectMode) viewModel.activateSearch() },
-                                            icon = Icons.Default.Search,
-                                            contentDescription = "Search"
-                                        )
 
-                                        // 2: Vertical dots menu trigger
+                                        // Search action trigger
                                         Box(
-                                            modifier = Modifier.size(ScreenHeaderDefaults.ActionButtonSize),
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .jigglePressClickable {
+                                                    if (!uiState.isMultiSelectMode) viewModel.activateSearch()
+                                                },
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            ScreenHeaderActionButton(
-                                                onClick = { if (!uiState.isMultiSelectMode) showHomeOverflowMenu = true },
-                                                icon = Icons.Default.MoreVert,
-                                                contentDescription = "Options"
+                                            Icon(
+                                                imageVector = Icons.Default.Search,
+                                                contentDescription = "Search",
+                                                tint = ElectricSlateTokens.TextPrimary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+
+                                        // More options menu trigger
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .jigglePressClickable {
+                                                    if (!uiState.isMultiSelectMode) showHomeOverflowMenu = true
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.MoreVert,
+                                                contentDescription = "Options",
+                                                tint = ElectricSlateTokens.TextPrimary,
+                                                modifier = Modifier.size(20.dp)
                                             )
 
                                             DropdownMenu(
                                                 expanded = showHomeOverflowMenu && !uiState.isMultiSelectMode,
                                                 onDismissRequest = { showHomeOverflowMenu = false },
                                                 modifier = Modifier
-                                                    .background(HomeCardSurface)
-                                                    .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                                                    .background(ElectricSlateTokens.SurfaceElevated)
+                                                    .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
                                             ) {
-
                                                 DropdownMenuItem(
-                                                    text = { Text("What's New", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("What's New", color = ElectricSlateTokens.TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.NewReleases,
@@ -623,12 +685,12 @@ fun HomeScreen(
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Scores (Beta)", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Scores (Beta)", color = ElectricSlateTokens.TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.Scale,
                                                             contentDescription = null,
-                                                            tint = FolderBodyBlue
+                                                            tint = ElectricSlateTokens.PrimaryAccent
                                                         )
                                                     },
                                                     onClick = {
@@ -637,12 +699,12 @@ fun HomeScreen(
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Check for Updates", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Check for Updates", color = ElectricSlateTokens.TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.SystemUpdate,
                                                             contentDescription = null,
-                                                            tint = TextPrimary
+                                                            tint = ElectricSlateTokens.TextPrimary
                                                         )
                                                     },
                                                     onClick = {
@@ -651,12 +713,12 @@ fun HomeScreen(
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Send Feedback", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Send Feedback", color = ElectricSlateTokens.TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.Feedback,
                                                             contentDescription = null,
-                                                            tint = TextPrimary
+                                                            tint = ElectricSlateTokens.TextPrimary
                                                         )
                                                     },
                                                     onClick = {
@@ -665,7 +727,7 @@ fun HomeScreen(
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Support Fotara", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Support Fotara", color = ElectricSlateTokens.TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.VolunteerActivism,
@@ -678,14 +740,14 @@ fun HomeScreen(
                                                         onOpenSupport()
                                                     }
                                                 )
-                                                HorizontalDivider(color = HomeCardBorder)
+                                                HorizontalDivider(color = ElectricSlateTokens.BorderSubtle)
                                                 DropdownMenuItem(
-                                                    text = { Text("Trash", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
+                                                    text = { Text("Trash", color = ElectricSlateTokens.Destructive, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Default.Delete,
                                                             contentDescription = null,
-                                                            tint = TagCrimson
+                                                            tint = ElectricSlateTokens.Destructive
                                                         )
                                                     },
                                                     onClick = {
@@ -813,6 +875,21 @@ fun HomeScreen(
                                 onReorderWorkspaces = { ids -> viewModel.reorderWorkspaces(ids) }
                             )
 
+                            // Space categories: AppPillChip filter row (All, Study, Personal, Locked)
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(count = spaceCategories.size) { index ->
+                                    AppPillChip(
+                                        label = spaceCategories[index],
+                                        isSelected = selectedCategoryIndex == index,
+                                        onClick = { selectedCategoryIndex = index }
+                                    )
+                                }
+                            }
+
                             // Due Tomorrow Deadline Summary (if active)
                             if (uiState.photosDueTomorrow.isNotEmpty()) {
                                 HomeHeader(
@@ -920,7 +997,7 @@ fun HomeScreen(
                                         .verticalEdgeFade(top = 20.dp)
                                 ) {
                                     items(
-                                        items = uiState.folders,
+                                        items = displayedFolders,
                                         key = { it.id },
                                         contentType = { "folder_card" }
                                     ) { folder ->

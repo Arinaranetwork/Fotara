@@ -47,20 +47,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.arinara.fotara.theme.FolderTabCream
-import com.arinara.fotara.theme.HomeAddButtonBlue
-import com.arinara.fotara.theme.HomeCardBorder
-import com.arinara.fotara.theme.HomeCardSurface
-import com.arinara.fotara.theme.TextMuted
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
 
-private val ToolbarBg = HomeCardSurface
-private val ToolbarBorder = HomeCardBorder
-private val TabCream = FolderTabCream
-private val ActiveBlue = HomeAddButtonBlue
-private val TextMutedColor = TextMuted
+private val ToolbarBg = ElectricSlateTokens.SurfaceElevated
+private val ToolbarBorder = ElectricSlateTokens.BorderSubtle
+private val TabCream = ElectricSlateTokens.TextPrimary
+private val ActiveBlue = ElectricSlateTokens.PrimaryAccent
+private val TextMutedColor = ElectricSlateTokens.TextMuted
 
 @Composable
 fun EditorToolbar(
@@ -72,8 +69,12 @@ fun EditorToolbar(
     onInsertImageClick: () -> Unit = {}
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         color = ToolbarBg,
+        shape = RoundedCornerShape(999.dp),
+        border = BorderStroke(1.dp, ToolbarBorder),
         shadowElevation = 8.dp
     ) {
         Row(

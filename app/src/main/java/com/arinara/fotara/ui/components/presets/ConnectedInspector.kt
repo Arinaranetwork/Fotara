@@ -41,6 +41,7 @@ fun ConnectedInspector(
     borderColor: Color = ElectricSlateTokens.BorderSubtle,
     panelWidth: Dp = 280.dp,
     neckHeight: Dp = 20.dp,
+    showDragHandle: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val scaleAnim = remember { Animatable(if (visible) 1f else 0f) }
@@ -77,6 +78,17 @@ fun ConnectedInspector(
                     .padding(16.dp)
             ) {
                 Column {
+                    if (showDragHandle) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .width(32.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(borderColor)
+                        )
+                        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(12.dp))
+                    }
                     content()
                 }
             }
@@ -89,7 +101,7 @@ fun ConnectedInspector(
             ) {
                 val canvasWidth = size.width
                 val canvasHeight = size.height
-                val anchorCenterX = canvasWidth * neckAnchorOffsetRatio.coerceIn(0.15f, 0.85f)
+                val anchorCenterX = canvasWidth * neckAnchorOffsetRatio.coerceIn(0.12f, 0.88f)
 
                 val topNeckHalfWidth = 24.dp.toPx()
                 val bottomNeckHalfWidth = 14.dp.toPx()
@@ -119,6 +131,27 @@ fun ConnectedInspector(
                 }
 
                 drawPath(path = path, color = containerColor)
+
+                // Draw subtle lateral outlines matching BorderSubtle
+                val lateralPath = Path().apply {
+                    moveTo(anchorCenterX + topNeckHalfWidth, 0f)
+                    cubicTo(
+                        anchorCenterX + topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
+                        anchorCenterX + bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
+                        anchorCenterX + bottomNeckHalfWidth, canvasHeight
+                    )
+                    moveTo(anchorCenterX - bottomNeckHalfWidth, canvasHeight)
+                    cubicTo(
+                        anchorCenterX - bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
+                        anchorCenterX - topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
+                        anchorCenterX - topNeckHalfWidth, 0f
+                    )
+                }
+                drawPath(
+                    path = lateralPath,
+                    color = borderColor,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                )
             }
         }
     }

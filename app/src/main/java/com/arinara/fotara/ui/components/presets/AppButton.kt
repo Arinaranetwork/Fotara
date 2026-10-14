@@ -52,9 +52,11 @@ fun AppButton(
     enabled: Boolean = true,
     leadingIcon: ImageVector? = null,
     trailingIcon: ImageVector? = null,
+    icon: ImageVector? = null,
     height: Dp = 48.dp,
     cornerRadius: Dp = 12.dp
 ) {
+    val effectiveLeadingIcon = icon ?: leadingIcon
     val containerColor = when (variant) {
         AppButtonVariant.PRIMARY -> ElectricSlateTokens.PrimaryAccent
         AppButtonVariant.SECONDARY -> ElectricSlateTokens.TrackInactive
@@ -98,9 +100,9 @@ fun AppButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            if (leadingIcon != null) {
+            if (effectiveLeadingIcon != null) {
                 Icon(
-                    imageVector = leadingIcon,
+                    imageVector = effectiveLeadingIcon,
                     contentDescription = null,
                     tint = contentColor,
                     modifier = Modifier.size(18.dp)

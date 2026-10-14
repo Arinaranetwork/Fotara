@@ -102,14 +102,14 @@ data class CanvasUiState(
     val activeLayerId: String = "layer_default",
     val toolState: CanvasToolState = CanvasToolState(),
     val recentColors: List<Long> = listOf(
-        0xFFEFE8DA, // FolderTabCream
-        0xFFF4A261, // TagAmber
-        0xFFE63946, // TagCrimson
-        0xFF2A9D8F, // TagEmerald
-        0xFF2563EB, // Primary (HomeAddButtonBlue)
-        0xFFFFFFFF, // TextPrimary
-        0xFF6F7491, // TextMuted
-        0xFF0A0D14  // HomeNearBlack
+        0xFFF8FAFC, // Off-White / Cream
+        0xFF283245, // Slate Charcoal
+        0xFFEF4444, // Electric Red
+        0xFFF97316, // Warm Orange
+        0xFFFBBF24, // Amber Yellow
+        0xFF10B981, // Emerald Green
+        0xFF3B82F6, // Electric Blue
+        0xFF7A5AF8  // Primary Accent (Electric Violet)
     ),
     val zoomPercentage: Int = 100,
     val saveState: SaveState = SaveState.SAVED,

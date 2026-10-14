@@ -54,6 +54,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import com.arinara.fotara.ui.components.ScreenHeader
 import com.arinara.fotara.ui.components.ProfileBannerHeader
 import com.arinara.fotara.ui.components.SettingsSubScreenHeader
+import com.arinara.fotara.ui.components.presets.AppCard
+import com.arinara.fotara.ui.components.presets.AppListItem
+import com.arinara.fotara.ui.components.presets.AppListItemAction
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import com.arinara.fotara.ui.components.LocalBottomOverlayPadding
@@ -1328,70 +1332,21 @@ private fun SettingsCardItem(
     iconTint: Color = Color.Unspecified,
     onClick: () -> Unit
 ) {
-    val resolvedIconTint = if (iconTint != Color.Unspecified) iconTint else MaterialTheme.colorScheme.onSurfaceVariant
-    Card(
-        shape = FotaraShapes.CardLarge,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+    AppCard(
+        cornerRadius = 24.dp,
+        containerColor = ElectricSlateTokens.SurfacePanel,
+        borderColor = ElectricSlateTokens.BorderSubtle,
+        contentPadding = 0.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            // ~42dp neutral icon tile (same style as folder tiles)
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(FotaraShapes.InputField)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = resolvedIconTint,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Medium
-                )
-                if (subtitle != null) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = subtitle,
-                        color = HomeSubtitleGray,
-                        fontSize = 13.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Light,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
-        }
+        AppListItem(
+            title = title,
+            subtitle = subtitle,
+            leadingIcon = icon,
+            leadingIconTint = if (iconTint != Color.Unspecified) iconTint else ElectricSlateTokens.PrimaryAccent,
+            action = AppListItemAction.Chevron,
+            onClick = onClick
+        )
     }
 }
 
@@ -1406,72 +1361,21 @@ private fun SettingsCardToggle(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    Card(
-        shape = FotaraShapes.CardLarge,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
+    AppCard(
+        cornerRadius = 24.dp,
+        containerColor = ElectricSlateTokens.SurfacePanel,
+        borderColor = ElectricSlateTokens.BorderSubtle,
+        contentPadding = 0.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(FotaraShapes.InputField)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Medium
-                )
-                if (subtitle != null) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = subtitle,
-                        color = HomeSubtitleGray,
-                        fontSize = 13.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Light,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                )
-            )
-        }
+        AppListItem(
+            title = title,
+            subtitle = subtitle,
+            leadingIcon = icon,
+            leadingIconTint = ElectricSlateTokens.PrimaryAccent,
+            action = AppListItemAction.Toggle(checked = checked, onCheckedChange = onCheckedChange),
+            onClick = { onCheckedChange(!checked) }
+        )
     }
 }
 
@@ -1972,64 +1876,14 @@ private fun SettingsRowItem(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    val resolvedIconTint = if (iconTint != Color.Unspecified) iconTint else MaterialTheme.colorScheme.onSurfaceVariant
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 10.dp)
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (enabled) resolvedIconTint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(14.dp))
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                fontSize = 15.sp,
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.Medium
-            )
-            if (subtitle != null) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    color = if (enabled) HomeSubtitleGray else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    fontSize = 13.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Light,
-                    lineHeight = 17.sp
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        if (enabled) {
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
-        } else {
-            Text(
-                text = "Disabled",
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                fontSize = 12.sp,
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
+    AppListItem(
+        title = title,
+        subtitle = subtitle,
+        leadingIcon = icon,
+        leadingIconTint = if (iconTint != Color.Unspecified) iconTint else ElectricSlateTokens.PrimaryAccent,
+        action = if (enabled) AppListItemAction.Chevron else null,
+        onClick = if (enabled) onClick else null
+    )
 }
 
 /**
@@ -2043,57 +1897,14 @@ private fun SettingsRowToggle(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 4.dp, vertical = 10.dp)
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(14.dp))
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = Color.White,
-                fontSize = 15.sp,
-                fontFamily = ElmsSans,
-                fontWeight = FontWeight.Medium
-            )
-            if (subtitle != null) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    color = HomeSubtitleGray,
-                    fontSize = 13.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Light,
-                    lineHeight = 17.sp
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            )
-        )
-    }
+    AppListItem(
+        title = title,
+        subtitle = subtitle,
+        leadingIcon = icon,
+        leadingIconTint = ElectricSlateTokens.PrimaryAccent,
+        action = AppListItemAction.Toggle(checked = checked, onCheckedChange = onCheckedChange),
+        onClick = { onCheckedChange(!checked) }
+    )
 }
 
 /**

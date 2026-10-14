@@ -134,14 +134,21 @@ import kotlinx.coroutines.delay
 import com.arinara.fotara.util.NoteScheduleManager
 import com.arinara.fotara.util.ScheduleAlertType
 import com.arinara.fotara.util.ScheduleNoteType
+import com.arinara.fotara.ui.components.presets.AppScreen
+import com.arinara.fotara.ui.components.presets.AppTopBar
+import com.arinara.fotara.ui.components.presets.AppCard
+import com.arinara.fotara.ui.components.presets.AppButton
+import com.arinara.fotara.ui.components.presets.AppButtonVariant
+import com.arinara.fotara.ui.components.presets.AppBottomSheet
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import kotlinx.coroutines.launch
 
-private val ScreenNavy = Color(0xFF03071E)
-private val TabCream = Color(0xFFEAE3D2)
-private val AccentGold = Color(0xFFF77F00)
-private val CardBg = Color(0xFF141936)
-private val ToolbarBorder = Color(0xFF28325E)
-private val TextMuted = Color(0xFF8E9AAF)
+private val ScreenNavy = ElectricSlateTokens.BgCanvas
+private val TabCream = ElectricSlateTokens.TextPrimary
+private val AccentGold = ElectricSlateTokens.PrimaryAccent
+private val CardBg = ElectricSlateTokens.SurfacePanel
+private val ToolbarBorder = ElectricSlateTokens.BorderSubtle
+private val TextMuted = ElectricSlateTokens.TextMuted
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -296,47 +303,17 @@ fun TextNoteEditorScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(ScreenNavy)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
+    AppScreen(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = ScreenNavy
     ) {
-        // Top App Bar - Single line, centered, no subtitle clutter
-        TopAppBar(
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (state.noteId == null) stringResource(R.string.editor_title_new) else stringResource(R.string.editor_title_edit),
-                        color = TabCream,
-                        fontSize = 22.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (state.isSaving) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.editor_saving),
-                            color = AccentGold,
-                            fontSize = 11.sp,
-                            fontFamily = ElmsSans
-                        )
-                    }
-                }
-            },
-            navigationIcon = {
-                IconButton(onClick = { handleExit() }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = TabCream
-                    )
-                }
-            },
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Top App Bar
+        AppTopBar(
+            title = if (state.noteId == null) stringResource(R.string.editor_title_new) else stringResource(R.string.editor_title_edit),
+            subtitle = if (state.isSaving) stringResource(R.string.editor_saving) else null,
+            onBackClick = { handleExit() },
+            containerColor = ScreenNavy,
             actions = {
                 // Find & Replace toggle
                 IconButton(onClick = { state.showFindReplace = !state.showFindReplace }) {
@@ -475,8 +452,7 @@ fun TextNoteEditorScreen(
                         )
                     }
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
+            }
         )
 
         // Find & Replace Bar
@@ -1105,6 +1081,7 @@ fun TextNoteEditorScreen(
             )
         }
     }
+}
 
     // Link Insertion and Edit Dialog
     if (state.showLinkDialog) {

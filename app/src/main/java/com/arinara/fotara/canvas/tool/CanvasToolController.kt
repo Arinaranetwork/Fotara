@@ -62,17 +62,17 @@ enum class ShapePrimitiveType {
 
 data class CanvasToolState(
     val activeTool: CanvasToolType = CanvasToolType.PEN,
-    val penColor: Long = 0xFFEBD8B8, // FolderTabCream
+    val penColor: Long = 0xFFF8FAFC, // Electric Slate Off-White
     val penSize: Float = 4.0f,
     val penAlpha: Float = 1.0f,
-    val highlighterColor: Long = 0xFFF4D03F, // TagAmber
+    val highlighterColor: Long = 0xFFFBBF24, // Electric Slate Amber Gold
     val highlighterSize: Float = 20.0f,
     val highlighterBlendMode: StrokeBlendMode = StrokeBlendMode.MULTIPLY,
     val eraserRadius: Float = 24.0f,
     val stylusOnlyDrawing: Boolean = false,
     val selection: CanvasSelection = CanvasSelection.Empty,
     val textFontSizeSp: Float = 18f,
-    val textColor: Long = 0xFFF4F0E6,
+    val textColor: Long = 0xFFF8FAFC, // Electric Slate TextPrimary
     val textFontWeight: Int = 400,
     val textBackgroundStyle: com.arinara.fotara.canvas.model.TextBackgroundStyle = com.arinara.fotara.canvas.model.TextBackgroundStyle.TRANSPARENT,
     val autoSmoothen: Boolean = true,

@@ -43,6 +43,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import com.arinara.fotara.ui.components.presets.AppCard
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -142,12 +144,6 @@ fun FolderCard(
         }
     }
 
-    val borderModifier = if (isSelected) {
-        Modifier.border(2.5.dp, Color(0xFF2563EB), RoundedCornerShape(cornerRadiusDp))
-    } else {
-        Modifier.border(1.dp, HomeCardBorder, RoundedCornerShape(cornerRadiusDp))
-    }
-
     val effectiveAnchors = if (glowAnchors.isNotEmpty()) {
         glowAnchors
     } else if (glowCorner != null) {
@@ -156,12 +152,9 @@ fun FolderCard(
         emptySet()
     }
 
-    Box(
+    AppCard(
         modifier = modifier
             .aspectRatio(1f)
-            .then(borderModifier)
-            .clip(RoundedCornerShape(cornerRadiusDp))
-            .background(HomeCardSurface)
             .linkItGlow(
                 isLinked = effectiveAnchors.isNotEmpty(),
                 glowColor = accent.glowColor,
@@ -177,54 +170,61 @@ fun FolderCard(
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onCardLongClick()
                 }
-            )
+            ),
+        cornerRadius = 24.dp,
+        containerColor = ElectricSlateTokens.SurfacePanel,
+        borderColor = if (isSelected) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle,
+        isGlow = effectiveAnchors.isNotEmpty(),
+        glowColor = accent.glowColor,
+        contentPadding = 0.dp
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(18.dp)
-        ) {
-            // Top Row: Accent icon tile (left), Status Badges (middle), and 3-dots menu clearance (right)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(18.dp)
             ) {
-                // ~42dp icon tile with 12dp radius filled with muted accent color
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(accent.tileFill),
-                    contentAlignment = Alignment.Center
+                // Top Row: Accent icon tile (left), Status Badges (middle), and 3-dots menu clearance (right)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    if (isSelectionMode) {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .background(if (isSelected) Color(0xFF2563EB) else Color.Transparent)
-                                .border(1.5.dp, if (isSelected) Color(0xFF2563EB) else Color.White.copy(alpha = 0.6f), androidx.compose.foundation.shape.CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
+                    // ~42dp icon tile with 12dp radius filled with muted accent color
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(accent.tileFill),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelectionMode) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(if (isSelected) ElectricSlateTokens.PrimaryAccent else Color.Transparent)
+                                    .border(1.5.dp, if (isSelected) ElectricSlateTokens.PrimaryAccent else Color.White.copy(alpha = 0.6f), androidx.compose.foundation.shape.CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                             }
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.Folder,
+                                contentDescription = null,
+                                tint = accent.iconTint,
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
-                    } else {
-                        Icon(
-                            imageVector = Icons.Outlined.Folder,
-                            contentDescription = null,
-                            tint = accent.iconTint,
-                            modifier = Modifier.size(22.dp)
-                        )
                     }
-                }
 
                 // Middle Badges (Locked)
                 if (folder.isLocked) {
@@ -335,7 +335,7 @@ fun FolderCard(
                     val noteText = if (folder.photoCount == 1) "1 note" else "${folder.photoCount} notes"
                     Text(
                         text = noteText,
-                        color = Color(0xFF6B7280),
+                        color = ElectricSlateTokens.TextMuted,
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Light,
                         fontFamily = ElmsSans
@@ -360,7 +360,7 @@ fun FolderCard(
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "Folder options",
-                    tint = Color(0xFF94A3B8),
+                    tint = ElectricSlateTokens.TextMuted,
                     modifier = Modifier.size(FolderCardDefaults.ThreeDotIconSize)
                 )
             }
@@ -369,8 +369,8 @@ fun FolderCard(
                 expanded = isMenuExpanded,
                 onDismissRequest = { isMenuExpanded = false },
                 modifier = Modifier
-                    .background(HomeCardSurface)
-                    .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                    .background(ElectricSlateTokens.SurfaceElevated)
+                    .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
             ) {
                 // 1. Pin to Top
                 DropdownMenuItem(
@@ -545,5 +545,6 @@ fun FolderCard(
                 )
             }
         }
+    }
     }
 }

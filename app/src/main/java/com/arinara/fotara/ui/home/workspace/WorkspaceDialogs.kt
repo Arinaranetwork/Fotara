@@ -83,11 +83,16 @@ import androidx.compose.ui.semantics.semantics
 import com.arinara.fotara.data.model.WorkspaceIcons
 import com.arinara.fotara.data.model.getDisplay
 import com.arinara.fotara.theme.ElmsSans
-import com.arinara.fotara.theme.HomeCardBorder
-import com.arinara.fotara.theme.HomeCardSurface
-import com.arinara.fotara.theme.HomeMainButtonBlue
-import com.arinara.fotara.theme.HomeSubtitleGray
-import com.arinara.fotara.theme.TagCrimson
+import com.arinara.fotara.ui.components.presets.AppBottomSheet
+import com.arinara.fotara.ui.components.presets.AppButton
+import com.arinara.fotara.ui.components.presets.AppButtonVariant
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
+
+private val HomeCardBorder = ElectricSlateTokens.BorderSubtle
+private val HomeCardSurface = ElectricSlateTokens.SurfacePanel
+private val HomeMainButtonBlue = ElectricSlateTokens.PrimaryAccent
+private val HomeSubtitleGray = ElectricSlateTokens.TextMuted
+private val TagCrimson = ElectricSlateTokens.Destructive
 
 @Composable
 fun AddWorkspaceDialog(
@@ -223,28 +228,19 @@ fun AddWorkspaceDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = { submit() },
+            AppButton(
+                text = stringResource(R.string.action_create),
+                variant = AppButtonVariant.PRIMARY,
                 enabled = isSaveEnabled,
-                colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.action_create),
-                    color = Color.White,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+                onClick = { submit() }
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = stringResource(R.string.confirm_cancel),
-                    color = HomeSubtitleGray,
-                    fontFamily = ElmsSans
-                )
-            }
+            AppButton(
+                text = stringResource(R.string.confirm_cancel),
+                variant = AppButtonVariant.SECONDARY,
+                onClick = onDismiss
+            )
         }
     )
 }
@@ -397,28 +393,19 @@ fun EditWorkspaceDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = { submit() },
+            AppButton(
+                text = stringResource(R.string.action_save),
+                variant = AppButtonVariant.PRIMARY,
                 enabled = isSaveEnabled,
-                colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.action_save),
-                    color = Color.White,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+                onClick = { submit() }
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = stringResource(R.string.confirm_cancel),
-                    color = HomeSubtitleGray,
-                    fontFamily = ElmsSans
-                )
-            }
+            AppButton(
+                text = stringResource(R.string.confirm_cancel),
+                variant = AppButtonVariant.SECONDARY,
+                onClick = onDismiss
+            )
         }
     )
 }
@@ -820,27 +807,18 @@ fun DeleteWorkspaceConfirmDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = { onConfirmDelete(stats != null && stats.folderCount > 0 && alsoDeleteContents) },
-                colors = ButtonDefaults.buttonColors(containerColor = TagCrimson),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.action_delete_workspace),
-                    color = Color.White,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            AppButton(
+                text = stringResource(R.string.action_delete_workspace),
+                variant = AppButtonVariant.DESTRUCTIVE,
+                onClick = { onConfirmDelete(stats != null && stats.folderCount > 0 && alsoDeleteContents) }
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = stringResource(R.string.confirm_cancel),
-                    color = HomeSubtitleGray,
-                    fontFamily = ElmsSans
-                )
-            }
+            AppButton(
+                text = stringResource(R.string.confirm_cancel),
+                variant = AppButtonVariant.SECONDARY,
+                onClick = onDismiss
+            )
         }
     )
 }

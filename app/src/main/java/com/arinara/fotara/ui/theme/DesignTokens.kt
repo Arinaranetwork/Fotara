@@ -16,6 +16,7 @@ object ElectricSlateTokens {
     val PrimaryAccent = Color(0xFF7A5AF8)   // Electric violet for active states, thumbs, droplet
     val TrackInactive = Color(0xFF283245)   // Inactive tracks, neutral buttons
     val TextPrimary = Color(0xFFF8FAFC)     // High-contrast primary text
+    val TextSecondary = Color(0xFF94A3B8)   // Secondary labels and subtitles
     val TextMuted = Color(0xFF94A3B8)       // Secondary labels and descriptions
     val Destructive = Color(0xFFEF4444)     // Error states, delete actions, warnings
 
