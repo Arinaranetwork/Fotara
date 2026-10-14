@@ -67,6 +67,18 @@ Every screen and scrollable container must reserve a minimum of `100.dp` safe cl
 ### AR-007: Centralized Muted Tone Discipline
 Secondary text, descriptions, subtitles, inactive slider tracks, switch tracks, and structural dividers must strictly resolve to `TextMuted` (`#94A3B8`), `BorderSubtle` (`#262F3E`), or `TrackInactive` (`#283245`).
 
+### AR-008: Standardized Outlines and Photo Borders
+All element borders, image frames, and photo outlines must strictly use `1.dp` (`BorderSubtle`) or `2.dp` (`PrimaryAccent`) for active focus rings. Avatars must be clipped with `CircleShape`; image card containers must strictly use standard radii (`16.dp`, `20.dp`, `24.dp`). Arbitrary border widths (e.g., `3.dp`, `4.dp`) are forbidden.
+
+### AR-009: Mandatory Modal and Popup Presets
+Screens must never instantiate raw Compose `AlertDialog`, unstyled `Dialog`, or raw `ModalBottomSheet`. All secondary interactions, dialogs, and popups must be encapsulated in `AppBottomSheet` (with `28.dp` top corners and minimize-to-pill interaction) or `ConnectedInspector`.
+
+### AR-010: Standardized Typography Hierarchy
+Hardcoded `fontSize = X.sp` with arbitrary numbers is strictly prohibited. Font sizes must resolve to standard typography scale tokens: Title (`22.sp`), Subtitle (`16.sp`), Content (`14.sp`), Caption (`12.sp`), or Label (`11.sp`).
+
+### AR-011: Strict Surface Elevation & Shadow Discipline
+Raw drop shadow modifiers (`.shadow(...)`, `.dropShadow(...)`) are prohibited. Visual depth must be established through Material 3 tonal surface elevation (`surfaceContainerLow`, `surfaceContainer`, `surfaceContainerHigh`) paired with `1.dp` `BorderSubtle`.
+
 ---
 
 ## 4. Engineering & Execution Protocols
