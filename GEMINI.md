@@ -79,6 +79,21 @@ Hardcoded `fontSize = X.sp` with arbitrary numbers is strictly prohibited. Font 
 ### AR-011: Strict Surface Elevation & Shadow Discipline
 Raw drop shadow modifiers (`.shadow(...)`, `.dropShadow(...)`) are prohibited. Visual depth must be established through Material 3 tonal surface elevation (`surfaceContainerLow`, `surfaceContainer`, `surfaceContainerHigh`) paired with `1.dp` `BorderSubtle`.
 
+### AR-012: Prohibit White Component Borders
+Component borders must never use `Color.White`, `0xFFFFFFFF`, `#FFFFFF`, or white alpha variants (`Color.White.copy(...)`). All borders across UI components and editors (including canvas drawing editors, swatches, and photo selectors) must strictly resolve to `BorderSubtle` (`#262F3E`) for structural outlines or `PrimaryAccent` (`#7A5AF8`) for active focus/selection rings.
+
+### AR-013: Single Border Color Per Screen
+A single screen view must use at most one unified border color token across all of its component borders (e.g. `BorderSubtle` for structural borders, with `PrimaryAccent` reserved solely for the active selection state). Screens must never mix multiple ad-hoc or competing border colors.
+
+### AR-014: Settings Selection Rectangle Aspect Ratio and Uniform Color
+In settings screens and dialogs (e.g. `SettingsScreen`, `BorderPickerDialog`), all selection rectangles and option cards must enforce equal width and height (`Modifier.aspectRatio(1f)`) and resolve to uniform token colors (`SurfacePanel`, `BorderSubtle`, and `PrimaryAccent` for active selection).
+
+### AR-015: Hardware UI Clearance & Overflow Prevention
+All screens must position their contents strictly above hardware UI boundaries: the top status bar (battery, time, notification icons) and the bottom system navigation bar. Content overflow behind the hardware UI is prohibited. Screens must use `AppScreen`, `statusBarsPadding()`, `navigationBarsPadding()`, or `WindowInsets.statusBars` / `WindowInsets.navigationBars`.
+
+### AR-016: Compact Top Layer Spacing
+The top layer and heading section of screens must maintain compact vertical spacing without excessive vertical gaps. Spacers at the top level or within top bars must not exceed 24.dp (no `Spacer(modifier = Modifier.height(X.dp))` where X > 24dp at the top layer), and header heights must not exceed 56.dp (`AppTopBar`).
+
 ---
 
 ## 4. Engineering & Execution Protocols
