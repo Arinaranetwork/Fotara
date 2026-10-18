@@ -1,0 +1,336 @@
+<resources>
+    <string name="app_name">Fotara 1.9.11 Alpha</string>
+    <string name="widget_due_tomorrow_name">Due Tomorrow</string>
+    <string name="widget_due_tomorrow_description">Displays notes and coursework due tomorrow.</string>
+    <string name="widget_schedule_name">Schedule</string>
+    <string name="widget_schedule_description">Displays your daily class schedule or None.</string>
+    <string name="widget_timetable_name">Schedule</string>
+    <string name="widget_timetable_description">Displays your daily class schedule or None.</string>
+    <string name="widget_photo_pin_name">Fotara Pinned Coursework</string>
+    <string name="widget_photo_pin_description">Pin a formula sheet or study photo to your home screen.</string>
+    <string name="widget_photo_carousel_name">Fotara Photo Carousel</string>
+    <string name="widget_photo_carousel_description">Cycle through your recent coursework slides and captures.</string>
+    <string name="widget_no_deadlines">No deadlines due tomorrow</string>
+    <string name="workspace_home">Home</string>
+
+    <string name="workspace_archive">Archive</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_notes">Notes</string>
+    <string name="nav_settings">Settings</string>
+    <string name="search_hint">Search notes, subjects, text...</string>
+    <string name="menu_new_folder">New folder</string>
+
+    <!-- Notes Screen -->
+    <string name="notes_title">Notes</string>
+    <string name="filter_all">All</string>
+    <string name="filter_photos">Photos</string>
+    <string name="filter_documents">Documents</string>
+    <string name="filter_text">Text</string>
+    <string name="filter_canvas">Canvas</string>
+    <string name="date_today">TODAY</string>
+    <string name="date_yesterday">YESTERDAY</string>
+    <string name="items_count">%1$d items</string>
+    <string name="item_count_singular">%1$d item</string>
+    <string name="yesterday_prefix">Yesterday • %1$s</string>
+    <string name="older_date_prefix">%1$s • %2$s</string>
+    <string name="empty_notes_title">No notes found</string>
+    <string name="empty_notes_subtitle">Your notes will appear here once created or imported</string>
+    <string name="empty_notes_filter_subtitle">No notes match the selected filter</string>
+    <string name="action_open">Open</string>
+    <string name="action_rename">Rename</string>
+    <string name="action_move">Move to Folder</string>
+    <string name="action_delete">Delete</string>
+    <string name="confirm_delete_title">Move to Trash?</string>
+    <string name="confirm_delete_message">Are you sure you want to move \"%1$s\" to Trash?</string>
+    <string name="confirm_delete_confirm">Move to Trash</string>
+    <string name="confirm_cancel">Cancel</string>
+    <string name="menu_new_photo_note">Capture Photo Note</string>
+    <string name="menu_new_text_note">New Text Note</string>
+    <string name="menu_new_canvas_note">New Canvas Note</string>
+    <string name="menu_import_document">Import Document</string>
+    <string name="create_note">Create Note</string>
+    <string name="search_notes_hint">Search notes, subjects, text...</string>
+    <string name="select_destination_folder">Select Destination Folder</string>
+    <string name="no_folders_available">Please create a folder first</string>
+
+    <!-- New Update Popup -->
+    <string name="update_popup_title">New Update %1$s</string>
+    <string name="update_popup_default_notes">• Bug fixes and performance improvements\n• Enhanced stability and UI responsiveness</string>
+    <string name="update_action_later">Later</string>
+    <string name="update_action_skip">Skip this version</string>
+    <string name="close">Close</string>
+
+    <!-- Viewer Info Section & Reading Mode -->
+    <string name="viewer_info_header">Info</string>
+    <string name="viewer_info_pinch_or_double_tap">Pinch or double-tap to zoom</string>
+    <string name="viewer_info_offline">100% Offline</string>
+    <string name="viewer_info_reading_mode_available">Zoom is available in reading mode</string>
+    <string name="viewer_info_zoomed">Zoomed: Pan enabled · Double-tap to reset</string>
+    <string name="viewer_action_reading_mode_enter">Enter reading mode</string>
+    <string name="viewer_action_reading_mode_exit">Exit reading mode</string>
+
+    <!-- Text Note Editor Strings -->
+    <string name="editor_info_counts">%1$d words • %2$d characters</string>
+    <string name="editor_title_new">New Text Note</string>
+    <string name="editor_title_edit">Edit Text Note</string>
+    <string name="editor_saving">Saving…</string>
+    <string name="editor_find_in_note">Find in note…</string>
+    <string name="editor_replace_with">Replace with…</string>
+    <string name="editor_matches_count">%1$d/%2$d</string>
+    <string name="editor_no_matches">0 matches</string>
+    <string name="editor_replace_one">Replace</string>
+    <string name="editor_replace_all">All</string>
+    <string name="editor_empty_preview">This note is empty. Switch to edit mode to start typing.</string>
+    <string name="editor_placeholder_title">Note Title…</string>
+    <string name="editor_placeholder_body">Start writing with markdown formatting (e.g. **bold**, *italic*, # heading, - list, - [ ] checklist)…</string>
+    <string name="editor_dialog_link_title">Insert or Edit Link</string>
+    <string name="editor_dialog_link_label">Link Text</string>
+    <string name="editor_dialog_link_url">Web URL</string>
+    <string name="editor_dialog_link_apply">Apply</string>
+    <string name="editor_dialog_link_cancel">Cancel</string>
+
+    <!-- Photo Edit -->
+    <string name="photo_edit_failed">Unable to edit photo. Original file preserved.</string>
+
+    <!-- Canvas Layers -->
+    <string name="canvas_default_layer_name">Layer %1$d</string>
+    <string name="canvas_rename_layer">Rename layer</string>
+
+    <!-- Canvas Selection & Eraser (Phase 18) -->
+    <string name="canvas_action_duplicate">Duplicate</string>
+    <string name="canvas_action_move_to_layer">Move to layer</string>
+    <string name="canvas_action_delete_selection">Delete</string>
+    <string name="canvas_tool_eraser">Eraser</string>
+    <string name="canvas_tool_select">Select</string>
+    <string name="canvas_eraser_size">Eraser Size</string>
+
+    <!-- Canvas Tools & Blending (Phase 19) -->
+    <string name="canvas_tool_pen">Pen</string>
+    <string name="canvas_tool_highlighter">Highlighter</string>
+    <string name="canvas_blend_mode">Blending</string>
+    <string name="canvas_blend_normal">Normal</string>
+    <string name="canvas_blend_multiply">Multiply</string>
+    <string name="canvas_blend_darken">Darken</string>
+    <string name="canvas_blend_screen">Screen</string>
+    <string name="canvas_blend_hint">Blends with content on the same layer</string>
+
+    <!-- Pull to Refresh (Phase 20) -->
+    <string name="pull_to_refresh_content_description">Pull to refresh</string>
+    <string name="refreshing_content_description">Refreshing content</string>
+
+    <!-- Add to Group (Phase 20) -->
+    <string name="add_to_group_title">Add to Group</string>
+    <string name="add_to_group_other_folder_caption">Groups in other folders move your notes to that folder.</string>
+    <string name="add_to_group_this_folder_header">This folder: %1$s</string>
+    <string name="add_to_group_no_groups">No existing note groups in this coursework notebook.</string>
+
+    <!-- Share As File Name (Phase 20) -->
+    <string name="share_file_name_label">File name (optional)</string>
+    <string name="share_file_name_helper">Applies to PDF and Word. Original Files keep their own names.</string>
+
+    <!-- Combined File Name Preset (Phase 20) -->
+    <string name="setting_combine_file_name_title">Combined file name</string>
+    <string name="setting_combine_file_name_dialog_title">Combined File Name</string>
+    <string name="setting_combine_file_name_dialog_desc">Edit the file name template used when combining notes into PDF or Word.</string>
+    <string name="setting_combine_file_name_preview_label">Preview: %1$s</string>
+    <string name="setting_combine_file_name_reset">Reset to default</string>
+    <string name="setting_combine_file_name_err_unknown_tokens">Invalid token(s) found: %1$s. Allowed tokens are {folder}, {date}, {time}, and {count}.</string>
+    <string name="setting_combine_file_name_err_empty">Preset must not resolve to an empty name.</string>
+    <string name="setting_combine_file_name_err_too_long">Preset must be 80 characters or fewer.</string>
+    <string name="setting_combine_file_name_save">Save</string>
+    <string name="setting_combine_file_name_cancel">Cancel</string>
+
+    <!-- Verification and Repair (Phase 22) -->
+    <string name="doc_card_single_page">%1$d page</string>
+    <string name="doc_card_multiple_pages">%1$d pages</string>
+    <string name="doc_card_page_short">%1$d p</string>
+    <string name="folder_menu_pin">Pin to Top</string>
+    <string name="folder_menu_unpin">Unpin from Top</string>
+    <string name="folder_menu_rename">Rename Folder</string>
+    <string name="folder_menu_select">Select</string>
+    <string name="folder_menu_lock">Lock Folder (PIN)</string>
+    <string name="folder_menu_unlock">Remove Folder Lock</string>
+    <string name="folder_menu_unlink">Unlink Folder</string>
+    <string name="folder_menu_trash">Move to Trash</string>
+    <string name="action_invert_selection">Invert Selection</string>
+
+    <!-- Settings Redesign & Profile (Phase 23) -->
+    <string name="profile_default_name">Fotara User</string>
+    <string name="profile_title">Profile</string>
+    <string name="profile_subtitle">Photo, border, banner, name, email</string>
+    <string name="settings_category_general">General</string>
+    <string name="settings_category_general_sub">Grid density, default sort order</string>
+    <string name="settings_category_appearance">Appearance</string>
+    <string name="settings_category_appearance_sub">Theme mode and display options</string>
+    <string name="settings_category_ocr">OCR &amp; Recognition</string>
+    <string name="settings_category_ocr_sub">On-device text extraction</string>
+    <string name="settings_category_notifications">Notifications &amp; Deadlines</string>
+    <string name="settings_category_notifications_sub">Reminders and test alert</string>
+    <string name="settings_category_storage">Storage &amp; Data Management</string>
+    <string name="settings_category_storage_sub">Usage, trash, backup, re-indexing</string>
+    <string name="settings_category_about">About &amp; Legal</string>
+    <string name="settings_category_about_sub">Version info and offline architecture</string>
+    <string name="profile_action_change_picture">Change profile picture</string>
+    <string name="profile_action_remove_picture">Remove picture</string>
+    <string name="profile_action_choose_border">Choose border</string>
+    <string name="profile_action_change_banner">Change banner</string>
+    <string name="profile_action_remove_banner">Remove banner</string>
+    <string name="profile_action_edit_name_email">Edit name and email</string>
+    <string name="profile_name_label">Name</string>
+    <string name="profile_email_label">Email (optional)</string>
+    <string name="profile_email_helper">Shown on your profile only. No account is connected.</string>
+    <string name="profile_crop_title_avatar">Edit picture</string>
+    <string name="profile_crop_title_picture">Edit picture</string>
+    <string name="profile_crop_title_banner">Edit banner</string>
+    <string name="profile_crop_save">Save</string>
+    <string name="profile_crop_cancel">Cancel</string>
+    <string name="profile_crop_reset">Reset</string>
+    <string name="profile_crop_hint">Drag to move. Pinch or drag corners to resize.</string>
+    <string name="profile_border_picker_title">Choose Profile Border</string>
+    <string name="profile_save_failed">Failed to save profile changes</string>
+    <string name="profile_load_failed">Failed to load selected image</string>
+
+    <!-- Workspaces (Phase 27 - Batch 2A) -->
+    <string name="menu_add_workspace">Add workspace</string>
+    <string name="dialog_add_workspace_title">Add workspace</string>
+    <string name="dialog_rename_workspace_title">Rename workspace</string>
+    <string name="action_rename_workspace">Rename</string>
+    <string name="action_create">Create</string>
+    <string name="action_save">Save</string>
+    <string name="workspace_name_label">Workspace name</string>
+    <string name="workspace_empty_state_title">No folders in %1$s yet</string>
+    <string name="workspace_empty_state_hint">Tap + to create one</string>
+    <string name="workspace_limit_reached">You can have up to 10 workspaces.</string>
+    <string name="workspace_error_name_empty">Workspace name cannot be empty</string>
+    <string name="workspace_error_name_length">Name must be between 1 and 20 characters</string>
+    <string name="workspace_error_name_duplicate">A workspace with this name already exists</string>
+    <string name="workspace_error_reserved">Name is reserved for built-in workspaces</string>
+    <string name="cd_add_workspace">Add workspace</string>
+    <string name="cd_workspace_tab">%1$s workspace tab</string>
+    <string name="cd_workspace_options">Workspace options</string>
+
+    <!-- Workspaces Part 2 (Phase 28 - Batch 2B) -->
+    <string name="folder_menu_move_to_workspace">Move to...</string>
+    <string name="dialog_move_to_workspace_title_single">Move %1$s</string>
+    <string name="dialog_move_to_workspace_title_plural">Move %1$d folders</string>
+    <string name="action_move_confirm">Move</string>
+    <string name="workspace_current_badge">(Current)</string>
+    <string name="msg_moved_to_workspace_single">Moved to %1$s</string>
+    <string name="msg_moved_to_workspace_plural">Moved %1$d folders to %1$s</string>
+
+    <string name="action_delete_workspace">Delete</string>
+    <string name="delete_workspace_confirm_title">Delete %1$s?</string>
+    <string name="delete_workspace_empty_msg">This workspace is empty.</string>
+    <string name="delete_workspace_checkbox_contents">Also delete everything inside</string>
+    <string name="delete_workspace_helper_unchecked">Folders will move to Home.</string>
+    <string name="delete_workspace_helper_checked">You will choose what happens to them next.</string>
+    <string name="delete_workspace_contents_title">What should happen to the contents?</string>
+    <string name="delete_workspace_choice_trash">Move to Trash</string>
+    <string name="delete_workspace_choice_trash_sub">Recoverable for 30 days</string>
+    <string name="delete_workspace_choice_perm">Delete permanently</string>
+    <string name="delete_workspace_choice_perm_sub">Cannot be undone. Frees %1$s.</string>
+    <string name="delete_workspace_perm_title">Delete permanently?</string>
+    <string name="delete_workspace_perm_body">%1$s will be erased for good.</string>
+    <string name="delete_workspace_perm_confirm_btn">Delete forever</string>
+    <string name="deleting_workspace_progress_title">Deleting %1$s...</string>
+    <string name="deleting_workspace_folder_progress">Folder %1$d of %2$d (%3$d%%)</string>
+    <string name="msg_workspace_deleted_folders_moved_home">Workspace deleted. Folders moved to Home.</string>
+    <string name="msg_workspace_deleted_empty">Workspace deleted.</string>
+    <string name="msg_workspace_deleted_trashed">Workspace deleted. %1$d folders moved to Trash.</string>
+    <string name="msg_workspace_deleted_permanent">Workspace deleted permanently.</string>
+    <string name="msg_workspace_delete_partial_failure">Could not finish deleting. %1$d folders remain.</string>
+
+    <string name="dialog_restore_workspace_title">Restore to which workspace?</string>
+    <string name="action_restore_confirm">Restore</string>
+    <string name="msg_restored_to_workspace">Restored to %1$s</string>
+
+    <string name="search_no_results_in_workspace">No results in %1$s</string>
+    <string name="cd_show_filters">Show filters</string>
+    <string name="cd_hide_filters">Hide filters</string>
+    <string name="workspace_notes_empty_state">No notes in %1$s yet</string>
+    <string name="cd_edit_profile">Edit profile picture</string>
+    <string name="profile_banner_gif_too_large">GIF exceeds 8 MB limit</string>
+    <string name="profile_banner_decode_failed">Failed to load banner GIF</string>
+    <string name="drawing_no_longer_matches">Drawing no longer matches this photo</string>
+    <string name="action_draw">Draw</string>
+    <string name="action_edit_drawing">Edit drawing</string>
+    <string name="action_hide_drawing">Hide drawing</string>
+    <string name="action_show_drawing">Show drawing</string>
+    <string name="action_clear_drawing">Clear drawing</string>
+    <string name="dialog_clear_drawing_title">Clear drawing?</string>
+    <string name="dialog_clear_drawing_message">This removes every stroke from this photo and cannot be undone.</string>
+    <string name="action_clear">Clear</string>
+    <string name="cd_draw_done">Done</string>
+    <string name="cd_draw_undo">Undo</string>
+    <string name="cd_draw_redo">Redo</string>
+    <string name="cd_draw_visibility">Toggle drawing visibility</string>
+    <string name="tool_pen">Pen</string>
+    <string name="tool_highlighter">Highlighter</string>
+    <string name="tool_eraser">Eraser</string>
+    <string name="drawing_save_failed">Could not save drawing</string>
+    <string name="action_copy_frame_stats">Copy frame stats</string>
+    <string name="msg_frame_stats_copied">Frame stats copied to clipboard</string>
+    <string name="profile_banner_choose_image">Choose image</string>
+    <string name="profile_banner_choose_gif">Choose a GIF</string>
+    <string name="profile_banner_not_a_gif">Selected file is not a valid GIF</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="privacy_policy_title">Privacy Policy</string>
+    <string name="terms_of_service_title">Terms of Service</string>
+    <string name="privacy_policy_subtitle">Review our student-first local data principles</string>
+    <string name="terms_of_service_subtitle">Review software license and terms</string>
+    <string name="consent_dialog_title">Terms of Service and Privacy Policy</string>
+    <string name="device_count_switch_title">Share anonymous device count</string>
+    <string name="device_count_switch_desc">Sends a random ID and the app version so the developer can count active devices. No personal data. You can change this anytime in Settings.</string>
+    <string name="consent_accept_statement">By tapping Accept you agree to the Privacy Policy and the Terms of Service.</string>
+    <string name="consent_accept_button">Accept and continue</string>
+    <string name="settings_privacy_header">Privacy</string>
+
+    <!-- 1.8.0 Final Batch -->
+    <string name="action_edit_workspace">Edit</string>
+    <string name="dialog_edit_workspace_title">Edit workspace</string>
+    <string name="workspace_icon_label">Select icon</string>
+    <string name="cd_workspace_icon">Icon %1$s</string>
+
+    <!-- PDF Page Menu & Pins -->
+    <string name="cd_page_options">Page options</string>
+    <string name="pdf_page_menu_save_to_gallery">Save to gallery</string>
+    <string name="pdf_page_menu_pin_page">Pin page</string>
+    <string name="pdf_page_menu_unpin_page">Unpin page</string>
+    <string name="pdf_page_menu_draw_on_page">Draw on page</string>
+    <string name="pdf_page_menu_edit_drawing">Edit drawing</string>
+    <string name="pdf_page_menu_hide_drawing">Hide drawing</string>
+    <string name="pdf_page_menu_show_drawing">Show drawing</string>
+    <string name="pdf_page_menu_clear_drawing">Clear drawing</string>
+    <string name="pdf_clear_drawing_confirm_title">Clear drawing?</string>
+    <string name="pdf_clear_drawing_confirm_msg">This removes every stroke from this page and cannot be undone.</string>
+    <string name="pdf_pin_limit_reached">You can pin up to 3 pages.</string>
+    <string name="pdf_pinned_page_chip">Page %1$d</string>
+    <string name="action_unpin">Unpin</string>
+
+    <!-- Save to gallery & Saved image location -->
+    <string name="settings_saved_image_location_title">Saved image location</string>
+    <string name="settings_saved_image_location_pictures">Pictures/Fotara</string>
+    <string name="settings_saved_image_location_dcim">DCIM/Fotara</string>
+    <string name="settings_saved_image_location_custom">Custom folder under Pictures</string>
+    <string name="settings_saved_image_custom_folder_hint">Folder name</string>
+    <string name="settings_saved_image_legacy_notice">On Android 9 and older you choose the location each time you save.</string>
+    <string name="msg_saved_to_path">Saved to %1$s</string>
+    <string name="msg_saved">Saved</string>
+    <string name="msg_save_failed">Failed to save image</string>
+
+    <!-- PDF Page Drawing Editor -->
+    <string name="pdf_editor_title">Page %1$d of %2$d</string>
+    <string name="pdf_drawing_size_mismatch">Drawing size does not match page size.</string>
+    <string name="pdf_drawing_save_failed">Failed to save drawing</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_more_options">More options</string>
+    <string name="cd_close">Close</string>
+
+    <!-- Friends System -->
+    <string name="friends_title">Friends</string>
+    <string name="friends_subtitle">Academic peer network &amp; presence</string>
+    <string name="friends_empty_title">No Friends Yet</string>
+    <string name="friends_empty_subtitle">Connect with classmates by academic @handle or scan their QR code to study together, share lecture notes, and collaborate.</string>
+    <string name="friends_add_friend">Add Friend</string>
+    <string name="friends_remove_friend">Remove Friend</string>
+</resources>

@@ -1,0 +1,187 @@
+// --- Arinara Network (c) 2026 ---
+// Exclusive property of Arinara Network.
+// Unauthorized use, reproduction, distribution, or modification of this code,
+// in whole or in part, for any purpose, is strictly prohibited without prior
+// written consent from Arinara Network as sole legal owner of this codebase.
+
+package com.arinara.fotara.ui.components
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import com.arinara.fotara.ui.components.presets.AppButton
+import com.arinara.fotara.ui.components.presets.AppButtonVariant
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import com.arinara.fotara.R
+import com.arinara.fotara.online.ReleaseInfo
+import com.arinara.fotara.theme.ElmsSans
+
+/**
+ * Centered New Update modal dialog matching Screenshot 2:
+ * - Large rounded corners (~28dp), dark surface, subtle border, dimmed backdrop.
+ * - Top: Landscape banner illustration filling dialog width with rounded top corners.
+ * - Top-right: Translucent circular 'X' close button overlaid on image.
+ * - Overlaid title: "New Update {version}" in bold white with dark shadow outline.
+ * - Dark body: Scrollable release notes / "What's new" bullets.
+ * - Bottom: Two equal-width tonal pill buttons ("Later" and "Skip this version").
+ */
+@Composable
+fun NewUpdateDialog(
+    release: ReleaseInfo,
+    onLater: () -> Unit,
+    onSkipVersion: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Dialog(
+        onDismissRequest = onLater,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(ElectricSlateTokens.BgCanvas.copy(alpha = 0.65f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onLater
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth(0.92f)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(ElectricSlateTokens.SurfacePanel)
+                    .border(BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle), RoundedCornerShape(28.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {} // Consume click to prevent dismissing
+                    )
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Top: Built-in Update Banner
+                    val relInfo = com.arinara.fotara.online.VersionInfo.parse(release.version, release.isPrerelease)
+                    UpdateBanner(
+                        version = relInfo.displayVersion,
+                        releaseUrl = release.htmlUrl,
+                        channel = relInfo.channelLabel,
+                        bannerImageUrl = release.bannerUrl,
+                        onClose = onLater,
+                        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                    )
+
+                    // Body: Release notes rendered with shared ReleaseNotesRenderer
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 22.dp, vertical = 16.dp)
+                    ) {
+                        if (release.title.isNotBlank()) {
+                            Text(
+                                text = release.title,
+                                color = ElectricSlateTokens.TextPrimary,
+                                fontSize = 16.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 260.dp, max = 440.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            if (release.releaseNotes.isNullOrBlank()) {
+                                Text(
+                                    text = stringResource(R.string.update_popup_default_notes),
+                                    color = ElectricSlateTokens.TextPrimary.copy(alpha = 0.85f),
+                                    fontSize = 14.sp,
+                                    fontFamily = ElmsSans,
+                                    lineHeight = 20.sp
+                                )
+                            } else {
+                                ReleaseNotesRenderer(
+                                    markdown = release.releaseNotes,
+                                    primaryTextColor = ElectricSlateTokens.TextPrimary,
+                                    accentColor = ElectricSlateTokens.PrimaryAccent,
+                                    cardBorder = ElectricSlateTokens.BorderSubtle
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        // Bottom: Two equal-width tonal pill buttons side by side
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppButton(
+                                text = stringResource(R.string.update_action_later),
+                                onClick = onLater,
+                                variant = AppButtonVariant.SECONDARY,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            AppButton(
+                                text = stringResource(R.string.update_action_skip),
+                                onClick = onSkipVersion,
+                                variant = AppButtonVariant.SECONDARY,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

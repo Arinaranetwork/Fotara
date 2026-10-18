@@ -19,6 +19,7 @@ local.properties
 
 # Generated output & release binaries
 /Output/
+_Backups/
 
 # Security, Agent, and Internal Assets
 .env
@@ -42,5 +43,3 @@ fotara-app-brief.md
 /Icon/
 package.json
 package-lock.json
-/app/
-

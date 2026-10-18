@@ -1,0 +1,47 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arinara Network (c) 2026
+  Exclusive property of Arinara Network.
+  Unauthorized use, reproduction, distribution, or modification of this code,
+  in whole or in part, for any purpose, is strictly prohibited without prior
+  written consent from Arinara Network as sole legal owner of this codebase.
+-->
+<resources>
+    <string name="search_title">Search</string>
+    <string name="search_nav_back">Navigate back</string>
+    <string name="search_sort_pill">Sort</string>
+    <string name="search_sort_newest">Newest</string>
+    <string name="search_sort_oldest">Oldest</string>
+    <string name="search_date_pill">Date</string>
+    <string name="search_date_all">All dates</string>
+    <string name="search_filter_pill">Filter</string>
+    <string name="search_filter_clear">Clear Filters</string>
+    <string name="search_filter_color_tags">Color Tags</string>
+    <string name="search_filter_smart_tags">Smart Tags</string>
+    <string name="search_placeholder">Search notes, subjects, text...</string>
+    <string name="search_clear_input">Clear search query</string>
+    <string name="search_recent_title">Recent Searches</string>
+    <string name="search_recent_clear_all">Clear Recents</string>
+    <string name="search_recent_remove_item">Remove recent search</string>
+    <string name="search_scope_all">All</string>
+    <string name="search_idle_title">Search your notes</string>
+    <string name="search_idle_subtitle">Type keywords to find handwritten formulas, slide diagrams and lecture notes indexed offline.</string>
+    <string name="search_idle_illustration_desc">Search notes illustration</string>
+    <string name="search_empty_matching_query">No notes found matching \"%1$s\"</string>
+    <string name="search_empty_matching_filters">No notes found matching filters</string>
+    <string name="search_empty_date_hint">No coursework or notes added during the selected date period.</string>
+    <string name="search_empty_general_hint">Check spelling or search by general coursework topic or chapter.</string>
+    <string name="search_reset_filters">Reset Filters</string>
+    <string name="search_section_folders">SUBJECT FOLDERS (%1$d)</string>
+    <string name="search_section_groups">NOTE GROUPS (%1$d)</string>
+    <string name="search_section_photos">PHOTO NOTES (%1$d)</string>
+    <string name="search_section_text_notes">TEXT NOTES (%1$d)</string>
+    <string name="search_section_documents">DOCUMENT NOTES (%1$d)</string>
+    <string name="search_section_canvas_notes">CANVAS NOTES (%1$d)</string>
+    <string name="search_date_single_day_title">Select Single Day</string>
+    <string name="search_date_single_day_subtitle">Filter notes added on specific day</string>
+    <string name="search_date_range_title">Select Date Range</string>
+    <string name="search_date_range_subtitle">Filter notes added between dates</string>
+    <string name="search_apply">Apply</string>
+    <string name="search_cancel">Cancel</string>
+</resources>
