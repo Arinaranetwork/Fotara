@@ -63,12 +63,14 @@ class CanvasDrawingView(
         get() = _documentSnapshot
         set(value) {
             _documentSnapshot = value
+            canvasRenderer.invalidateVisibilityCache()
             spatialIndex.rebuild(value.elements)
             invalidate()
         }
 
     fun setDocumentTransient(value: CanvasDocument) {
         _documentSnapshot = value
+        canvasRenderer.invalidateVisibilityCache()
         invalidate()
     }
 
@@ -353,7 +355,7 @@ class CanvasDrawingView(
                     postInvalidateOnAnimation()
                 }
                 is PointerAction.StartEraser -> {
-                    toolController.startEraser(action.screenX, action.screenY)
+                    toolController.startEraser(action.screenX, action.screenY, viewport, documentSnapshot)
                 }
                 is PointerAction.EraseSweep -> {
                     val (liveDoc, dirtyBounds) = toolController.sweepEraser(
@@ -372,6 +374,7 @@ class CanvasDrawingView(
                         historyManager = historyManager
                     )
                     if (dirtyBounds != null) {
+                        canvasRenderer.invalidateVisibilityCache()
                         documentSnapshot = committedDoc
                         tileCacheManager.invalidateRegion(dirtyBounds)
                         onDocumentChanged?.invoke(committedDoc, dirtyBounds)

@@ -168,6 +168,10 @@ class CanvasRenderer(
      */
     private var cachedVisibleElements: List<CanvasElement>? = null
 
+    fun invalidateVisibilityCache() {
+        cachedVisibleElements = null
+    }
+
     fun drawCanvas(
         canvas: Canvas,
         viewport: ViewportState,

@@ -63,14 +63,17 @@ class CanvasEraserStrokeCarveTest {
         // Live preview must preserve the image and provide live carve stroke
         assertNotNull(dirtyBounds)
         assertTrue("Live preview must preserve image", previewDoc.elements.any { it.id == "img_1" })
-        assertTrue("Live carve overlay present", previewDoc.elements.any { it.id == "__eraser_live_carve__" })
+        assertTrue("Live carve overlay present", previewDoc.elements.any { it.id.startsWith("__eraser_live_carve__") })
 
         // Finish the eraser sweep
         val (finalDoc, _) = controller.finishEraser(previewDoc, historyManager)
 
         // The image entity must be preserved and a DST_OUT carve stroke added along the path
         assertTrue("ImageElement must be preserved in document", finalDoc.elements.any { it.id == "img_1" })
-        assertTrue("Carve stroke added along path", finalDoc.elements.any { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
+        val carve = finalDoc.elements.firstOrNull { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT } as? StrokeElement
+        assertNotNull("Carve stroke must exist", carve)
+        val imageEl = finalDoc.elements.first { it.id == "img_1" }
+        assertTrue("Carve stroke zIndex (${carve!!.zIndex}) must be higher than image zIndex (${imageEl.zIndex})", carve.zIndex > imageEl.zIndex)
 
         // Undo must remove carve stroke and restore original uncarved document
         val undoneDoc = historyManager.undo(finalDoc)
@@ -91,7 +94,8 @@ class CanvasEraserStrokeCarveTest {
             y = 50f,
             width = 200f,
             height = 80f,
-            bounds = CanvasRect(50f, 50f, 250f, 130f)
+            bounds = CanvasRect(50f, 50f, 250f, 130f),
+            zIndex = 2
         )
         val initialDoc = CanvasDocument(
             id = 1L,
@@ -117,7 +121,10 @@ class CanvasEraserStrokeCarveTest {
 
         // Text element must be preserved in document with carve stroke
         assertTrue("TextLayerElement must be preserved in document", finalDoc.elements.any { it.id == "txt_1" })
-        assertTrue("Carve stroke added along path", finalDoc.elements.any { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
+        val carve = finalDoc.elements.firstOrNull { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT } as? StrokeElement
+        assertNotNull("Carve stroke must exist", carve)
+        val textEl = finalDoc.elements.first { it.id == "txt_1" }
+        assertTrue("Carve stroke zIndex (${carve!!.zIndex}) must be higher than text zIndex (${textEl.zIndex})", carve.zIndex > textEl.zIndex)
 
         // Undo must restore text element
         val undoneDoc = historyManager.undo(finalDoc)
@@ -125,5 +132,41 @@ class CanvasEraserStrokeCarveTest {
         assertEquals(1, undoneDoc?.elements?.size)
         assertEquals("txt_1", undoneDoc?.elements?.first()?.id)
         assertTrue("No carve stroke after undo", undoneDoc?.elements?.none { it is StrokeElement } == true)
+    }
+
+    @Test
+    fun testEraserTapOnImage_CarvesImmediatelyWithHigherZIndex() {
+        val layer = CanvasLayer(id = "layer_1", name = "Layer 1")
+        val image = ImageElement(
+            id = "img_tap",
+            layerId = "layer_1",
+            assetId = "dummy_asset",
+            x = 100f,
+            y = 100f,
+            width = 200f,
+            height = 200f,
+            bounds = CanvasRect(100f, 100f, 300f, 300f),
+            zIndex = 5
+        )
+        val initialDoc = CanvasDocument(
+            id = 1L,
+            layers = listOf(layer),
+            elements = listOf(image)
+        )
+        val controller = CanvasToolController(
+            toolState = CanvasToolState(activeTool = CanvasToolType.ERASER, eraserRadius = 25f)
+        )
+        val historyManager = CanvasHistoryManager()
+        val viewport = ViewportState(scale = 1.0f)
+
+        // Tap directly inside image bounds without dragging
+        controller.startEraser(150f, 150f, viewport, initialDoc)
+        val (finalDoc, dirtyBounds) = controller.finishEraser(initialDoc, historyManager)
+
+        assertNotNull("Dirty bounds must be returned for tap carve", dirtyBounds)
+        assertTrue("Image preserved", finalDoc.elements.any { it.id == "img_tap" })
+        val carve = finalDoc.elements.firstOrNull { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT } as? StrokeElement
+        assertNotNull("Carve stroke created on tap", carve)
+        assertTrue("Carve stroke has higher zIndex than image (carve=${carve!!.zIndex}, img=5)", carve.zIndex > 5)
     }
 }

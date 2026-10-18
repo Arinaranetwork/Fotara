@@ -146,7 +146,7 @@ class FreeEraserTest {
 
         // Live preview must preserve the image and provide live carve stroke
         assertTrue("Live preview must preserve image", previewDoc.elements.any { it.id == "target_img" })
-        assertTrue("Live carve overlay present", previewDoc.elements.any { it.id == "__eraser_live_carve__" })
+        assertTrue("Live carve overlay present", previewDoc.elements.any { it.id.startsWith("__eraser_live_carve__") })
 
         val (committedDoc, _) = controller.finishEraser(previewDoc, historyManager)
 
