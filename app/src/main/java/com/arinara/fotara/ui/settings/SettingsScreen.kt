@@ -90,6 +90,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TextFields
@@ -221,6 +222,7 @@ fun SettingsScreen(
     var showBackupRestoreScreen by rememberSaveable { mutableStateOf(false) }
     var showDesignSystemDebugScreen by rememberSaveable { mutableStateOf(false) }
     var showHomeRefinedShowcaseScreen by rememberSaveable { mutableStateOf(false) }
+    var showDiagnosticScreen by rememberSaveable { mutableStateOf(false) }
 
     val actualFriendsRepo = remember(context, friendsRepository) {
         friendsRepository ?: LocalFriendsRepository(context)
@@ -238,14 +240,15 @@ fun SettingsScreen(
             showBackupRestoreScreen = false
             showDesignSystemDebugScreen = false
             showHomeRefinedShowcaseScreen = false
+            showDiagnosticScreen = false
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(activeSection, activeLegalDocument, showFriendsScreen, showBackupRestoreScreen, showDesignSystemDebugScreen, showHomeRefinedShowcaseScreen) {
-        onSubScreenStateChanged?.invoke(activeSection != null || activeLegalDocument != null || showFriendsScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen)
+    androidx.compose.runtime.LaunchedEffect(activeSection, activeLegalDocument, showFriendsScreen, showBackupRestoreScreen, showDesignSystemDebugScreen, showHomeRefinedShowcaseScreen, showDiagnosticScreen) {
+        onSubScreenStateChanged?.invoke(activeSection != null || activeLegalDocument != null || showFriendsScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen || showDiagnosticScreen)
     }
 
-    BackHandler(enabled = activeLegalDocument != null || showFriendsScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen || activeSection != null) {
+    BackHandler(enabled = activeLegalDocument != null || showFriendsScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen || showDiagnosticScreen || activeSection != null) {
         if (activeLegalDocument != null) {
             activeLegalDocument = null
         } else if (showFriendsScreen) {
@@ -256,6 +259,8 @@ fun SettingsScreen(
             showDesignSystemDebugScreen = false
         } else if (showHomeRefinedShowcaseScreen) {
             showHomeRefinedShowcaseScreen = false
+        } else if (showDiagnosticScreen) {
+            showDiagnosticScreen = false
         } else {
             activeSection = null
         }
@@ -300,6 +305,14 @@ fun SettingsScreen(
     if (showHomeRefinedShowcaseScreen) {
         com.arinara.fotara.ui.showcase.HomeRefinedShowcaseScreen(
             onBack = { showHomeRefinedShowcaseScreen = false },
+            modifier = Modifier.fillMaxSize()
+        )
+        return
+    }
+
+    if (showDiagnosticScreen) {
+        com.arinara.fotara.diagnostic.DiagnosticInfoScreen(
+            onBack = { showDiagnosticScreen = false },
             modifier = Modifier.fillMaxSize()
         )
         return
@@ -934,6 +947,15 @@ fun SettingsScreen(
                         item { SettingsListDivider() }
                         item {
                             SettingsRowItem(
+                                title = "Diagnostic & Performance Info",
+                                subtitle = "Hardware specs, startup breakdown, activity logs & ticker",
+                                icon = Icons.Default.Speed,
+                                onClick = { showDiagnosticScreen = true }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
                                 title = "App Updates & Version Rollback",
                                 subtitle = "Check for updates or rollback to a previous version",
                                 icon = Icons.Default.SystemUpdate,
@@ -1034,6 +1056,14 @@ fun SettingsScreen(
                                 subtitle = "Full interactive preview of Home screen with 10 presets",
                                 icon = Icons.Default.GridView,
                                 onClick = { showHomeRefinedShowcaseScreen = true }
+                            )
+                        }
+                        item {
+                            SettingsRowItem(
+                                title = "Diagnostic & Performance Info",
+                                subtitle = "Hardware specs, startup breakdown, activity logs & ticker",
+                                icon = Icons.Default.Speed,
+                                onClick = { showDiagnosticScreen = true }
                             )
                         }
                     }

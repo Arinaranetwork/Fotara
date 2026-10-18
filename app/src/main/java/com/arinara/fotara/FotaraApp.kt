@@ -15,6 +15,13 @@ import coil.decode.ImageDecoderDecoder
 
 class FotaraApp : Application(), ImageLoaderFactory {
 
+    override fun onCreate() {
+        super.onCreate()
+        com.arinara.fotara.diagnostic.AppDiagnosticLogger.recordAppCreateStart()
+        com.arinara.fotara.diagnostic.AppDiagnosticLogger.initialize(this)
+        com.arinara.fotara.diagnostic.AppDiagnosticLogger.recordAppCreateEnd()
+    }
+
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .components {

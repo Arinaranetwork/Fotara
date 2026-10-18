@@ -7,6 +7,7 @@
 package com.arinara.fotara
 
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
@@ -43,6 +44,8 @@ import com.arinara.fotara.coordinator.AppDialogRequest
 import com.arinara.fotara.data.AppContainer
 import com.arinara.fotara.data.DefaultAppContainer
 import com.arinara.fotara.data.db.FotaraDbHelper
+import com.arinara.fotara.diagnostic.AppDiagnosticLogger
+import com.arinara.fotara.diagnostic.ScrollingDebugOverlay
 import com.arinara.fotara.legal.LegalConsentManager
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FotaraTheme
@@ -57,8 +60,10 @@ class MainActivity : FragmentActivity() {
     private var appContainer: AppContainer? by mutableStateOf(null)
     private var startupError: String? by mutableStateOf(null)
     private var openUpdateScreenRequested: Boolean by mutableStateOf(false)
+    private var openDiagnosticScreenRequested: Boolean by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        AppDiagnosticLogger.recordActivityCreateStart()
         super.onCreate(savedInstanceState)
 
         // Install local crash logger to capture any uncaught exception to disk
@@ -83,7 +88,11 @@ class MainActivity : FragmentActivity() {
         if (intent?.getBooleanExtra("OPEN_UPDATE_SCREEN", false) == true) {
             openUpdateScreenRequested = true
         }
+        if (intent?.getBooleanExtra("OPEN_DIAGNOSTIC_SCREEN", false) == true) {
+            openDiagnosticScreenRequested = true
+        }
 
+        AppDiagnosticLogger.recordSetContent()
         setContent {
             FotaraTheme {
                 Surface(
@@ -100,10 +109,17 @@ class MainActivity : FragmentActivity() {
                                     deepLinkPhotoId = deepLinkPhotoId,
                                     deepLinkDirectView = deepLinkDirectView,
                                     openUpdateScreen = openUpdateScreenRequested,
-                                    onUpdateScreenOpened = { openUpdateScreenRequested = false }
+                                    onUpdateScreenOpened = { openUpdateScreenRequested = false },
+                                    openDiagnosticScreen = openDiagnosticScreenRequested,
+                                    onDiagnosticScreenOpened = { openDiagnosticScreenRequested = false }
                                 )
                                 AppDialogCoordinatorHost(
                                     appContainer = container
+                                )
+                                ScrollingDebugOverlay(
+                                    onOpenFullInfo = {
+                                        openDiagnosticScreenRequested = true
+                                    }
                                 )
                             }
                         }
@@ -126,10 +142,16 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun initializeContainer() {
+        val startUptime = SystemClock.elapsedRealtime()
         try {
             appContainer = DefaultAppContainer(applicationContext)
+            val duration = SystemClock.elapsedRealtime() - startUptime
+            AppDiagnosticLogger.recordContainerInit(duration)
             startupError = null
         } catch (e: Throwable) {
+            val duration = SystemClock.elapsedRealtime() - startUptime
+            AppDiagnosticLogger.recordContainerInit(duration)
+            AppDiagnosticLogger.recordEvent("Container", "Failed to initialize AppContainer: ${e.message}")
             Log.e("MainActivity", "Failed to initialize AppContainer: ${e.message}", e)
             startupError = e.message ?: e.toString()
         }
@@ -161,6 +183,9 @@ class MainActivity : FragmentActivity() {
         setIntent(intent)
         if (intent.getBooleanExtra("OPEN_UPDATE_SCREEN", false)) {
             openUpdateScreenRequested = true
+        }
+        if (intent.getBooleanExtra("OPEN_DIAGNOSTIC_SCREEN", false)) {
+            openDiagnosticScreenRequested = true
         }
     }
 }

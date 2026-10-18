@@ -244,6 +244,10 @@ fun HomeScreen(
     friendsRepository: FriendsRepository? = null,
     modifier: Modifier = Modifier
 ) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        com.arinara.fotara.diagnostic.AppDiagnosticLogger.recordFirstFrameRendered()
+    }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current

@@ -21,6 +21,8 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.arinara.fotara.data.AppContainer
+import com.arinara.fotara.diagnostic.AppDiagnosticLogger
+import com.arinara.fotara.diagnostic.DiagnosticInfoScreen
 import com.arinara.fotara.ui.folder.FolderDetailScreen
 import com.arinara.fotara.ui.folder.FolderDetailViewModel
 import com.arinara.fotara.ui.group.GroupDetailScreen
@@ -40,7 +42,9 @@ fun MainNavigation(
     deepLinkPhotoId: Long? = null,
     deepLinkDirectView: Boolean = false,
     openUpdateScreen: Boolean = false,
-    onUpdateScreenOpened: (() -> Unit)? = null
+    onUpdateScreenOpened: (() -> Unit)? = null,
+    openDiagnosticScreen: Boolean = false,
+    onDiagnosticScreenOpened: (() -> Unit)? = null
 ) {
     val initialKey = remember {
         if (appContainer.settingsRepository.isOnboardingCompleted()) HomeNavKey else OnboardingNavKey
@@ -54,6 +58,39 @@ fun MainNavigation(
             }
             onUpdateScreenOpened?.invoke()
         }
+    }
+
+    LaunchedEffect(openDiagnosticScreen) {
+        if (openDiagnosticScreen) {
+            if (backStack.none { it is DiagnosticNavKey }) {
+                backStack.add(DiagnosticNavKey)
+            }
+            onDiagnosticScreenOpened?.invoke()
+        }
+    }
+
+    LaunchedEffect(backStack.lastOrNull()) {
+        val currentKey = backStack.lastOrNull()
+        val screenName = when (currentKey) {
+            is HomeNavKey -> "Home"
+            is FolderDetailNavKey -> "FolderDetail"
+            is GroupDetailNavKey -> "GroupDetail"
+            is TrashNavKey -> "Trash"
+            is SettingsNavKey -> "Settings"
+            is OnboardingNavKey -> "Onboarding"
+            is PdfViewerNavKey -> "PdfViewer"
+            is DocxViewerNavKey -> "DocxViewer"
+            is TextNoteEditorNavKey -> "TextNoteEditor"
+            is UpdateNavKey -> "Updates"
+            is SupportNavKey -> "Support"
+            is WhatsNewNavKey -> "WhatsNew"
+            is CanvasNoteNavKey -> "CanvasNote"
+            is PdfPageEditorNavKey -> "PdfPageEditor"
+            is SpaceSettingsNavKey -> "SpaceSettings"
+            is DiagnosticNavKey -> "Diagnostic"
+            else -> currentKey?.let { it::class.simpleName } ?: "Unknown"
+        }
+        AppDiagnosticLogger.recordScreen(screenName)
     }
 
     LaunchedEffect(deepLinkPhotoId) {
@@ -491,6 +528,13 @@ fun MainNavigation(
                 com.arinara.fotara.ui.space.SpaceSettingsScreen(
                     spaceId = key.spaceId,
                     spaceRepository = appContainer.spaceRepository,
+                    onBack = { safePopBack() },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            entry<DiagnosticNavKey> {
+                DiagnosticInfoScreen(
                     onBack = { safePopBack() },
                     modifier = Modifier.fillMaxSize()
                 )
