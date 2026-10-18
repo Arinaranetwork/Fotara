@@ -36,33 +36,6 @@ class SqliteAudioAnnotationRepository(
 
     private val updateNotifier = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
-    init {
-        ensureTableExists()
-    }
-
-    private fun ensureTableExists() {
-        try {
-            val db = dbHelper.writableDatabase
-            db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS audio_annotations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    note_id INTEGER,
-                    pdf_doc_id INTEGER,
-                    pdf_page_index INTEGER,
-                    file_path TEXT NOT NULL,
-                    duration_ms INTEGER NOT NULL,
-                    created_at INTEGER NOT NULL
-                );
-                """.trimIndent()
-            )
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_audio_annotations_note_id ON audio_annotations(note_id)")
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_audio_annotations_pdf ON audio_annotations(pdf_doc_id, pdf_page_index)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to ensure audio_annotations table exists", e)
-        }
-    }
-
     override fun getAnnotationsForNote(noteId: Long): Flow<List<AudioAnnotation>> = flow {
         updateNotifier.onStart { emit(Unit) }.collect {
             emit(queryAnnotations("note_id = ?", arrayOf(noteId.toString())))
@@ -93,7 +66,6 @@ class SqliteAudioAnnotationRepository(
 
     override suspend fun insertAnnotation(annotation: AudioAnnotation): Long = withContext(Dispatchers.IO) {
         try {
-            ensureTableExists()
             val db = dbHelper.writableDatabase
             val values = ContentValues().apply {
                 if (annotation.noteId != null) put("note_id", annotation.noteId) else putNull("note_id")
@@ -144,7 +116,6 @@ class SqliteAudioAnnotationRepository(
     private fun queryAnnotations(selection: String, selectionArgs: Array<String>): List<AudioAnnotation> {
         val results = mutableListOf<AudioAnnotation>()
         try {
-            ensureTableExists()
             val db = dbHelper.readableDatabase
             db.query(
                 "audio_annotations",

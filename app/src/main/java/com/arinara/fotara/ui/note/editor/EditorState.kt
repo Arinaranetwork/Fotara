@@ -20,6 +20,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @Composable
 fun rememberEditorState(
@@ -53,6 +55,7 @@ class EditorState(
     private val textNoteRepository: TextNoteRepository,
     private val scope: CoroutineScope
 ) {
+    private val saveMutex = Mutex()
     var title by mutableStateOf("")
         private set
 
@@ -317,14 +320,29 @@ class EditorState(
         canOutdent = TextEditorOps.canOutdent(value.text, value.selection.start, value.selection.end)
 
         // 2. Counts
-        val trimmed = value.text.trim()
-        wordCount = if (trimmed.isEmpty()) 0 else trimmed.split(Regex("\\s+")).filter { it.isNotBlank() }.size
+        wordCount = countWords(value.text)
         charCount = value.text.length
 
         // 3. Search matches refresh if search bar open
         if (showFindReplace && searchQuery.isNotEmpty()) {
             updateSearchMatches()
         }
+    }
+
+    private fun countWords(text: String): Int {
+        var count = 0
+        var inWord = false
+        for (i in 0 until text.length) {
+            if (!text[i].isWhitespace()) {
+                if (!inWord) {
+                    count++
+                    inWord = true
+                }
+            } else {
+                inWord = false
+            }
+        }
+        return count
     }
 
     private fun scheduleAutosave() {
@@ -339,28 +357,34 @@ class EditorState(
     }
 
     suspend fun flushAutosaveNow() {
-        val currentTitle = title.ifBlank { "Untitled Note" }
-        val currentBody = bodyValue.text
-        if (currentTitle.isBlank() && currentBody.isBlank() && noteId == null) return
+        saveMutex.withLock {
+            autosaveJob?.cancel()
+            val currentTitle = title.ifBlank { "Untitled Note" }
+            val currentBody = bodyValue.text
+            if (currentTitle.isBlank() && currentBody.isBlank() && noteId == null) return@withLock
 
-        isSaving = true
-        val currentId = noteId
-        if (currentId == null || currentId <= 0) {
-            val createdId = textNoteRepository.createTextNote(
-                folderId = folderId,
-                subfolderId = subfolderId,
-                title = currentTitle,
-                bodyMarkdown = currentBody
-            )
-            noteId = createdId
-        } else {
-            textNoteRepository.updateTextNote(
-                id = currentId,
-                title = currentTitle,
-                bodyMarkdown = currentBody
-            )
+            isSaving = true
+            try {
+                val currentId = noteId
+                if (currentId == null || currentId <= 0) {
+                    val createdId = textNoteRepository.createTextNote(
+                        folderId = folderId,
+                        subfolderId = subfolderId,
+                        title = currentTitle,
+                        bodyMarkdown = currentBody
+                    )
+                    noteId = createdId
+                } else {
+                    textNoteRepository.updateTextNote(
+                        id = currentId,
+                        title = currentTitle,
+                        bodyMarkdown = currentBody
+                    )
+                }
+            } finally {
+                isSaving = false
+            }
         }
-        isSaving = false
     }
 
     suspend fun purgeIfCompletelyBlank(): Boolean {

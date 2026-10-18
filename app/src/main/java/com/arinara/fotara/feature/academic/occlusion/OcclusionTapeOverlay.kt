@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -98,19 +99,25 @@ fun OcclusionTapeOverlay(
         ) {
             val containerWidth = constraints.maxWidth.toFloat()
             val containerHeight = constraints.maxHeight.toFloat()
+            val currentEngine by rememberUpdatedState(engine)
+            val currentWidth by rememberUpdatedState(containerWidth)
+            val currentHeight by rememberUpdatedState(containerHeight)
+            val currentOnTapeTapped by rememberUpdatedState(onTapeTapped)
 
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(tapes, containerWidth, containerHeight) {
+                    .pointerInput(Unit) {
                         detectTapGestures { offset ->
-                            if (containerWidth > 0f && containerHeight > 0f) {
-                                val normX = offset.x / containerWidth
-                                val normY = offset.y / containerHeight
-                                val tappedTape = engine.findTapeAt(normX, normY)
+                            val w = currentWidth
+                            val h = currentHeight
+                            if (w > 0f && h > 0f) {
+                                val normX = offset.x / w
+                                val normY = offset.y / h
+                                val tappedTape = currentEngine.findTapeAt(normX, normY)
                                 if (tappedTape != null) {
-                                    engine.toggleReveal(tappedTape.id)
-                                    onTapeTapped?.invoke(tappedTape)
+                                    currentEngine.toggleReveal(tappedTape.id)
+                                    currentOnTapeTapped?.invoke(tappedTape)
                                 }
                             }
                         }

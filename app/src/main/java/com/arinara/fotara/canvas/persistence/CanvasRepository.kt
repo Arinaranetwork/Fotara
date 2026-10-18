@@ -85,7 +85,9 @@ class DefaultCanvasRepository(
                     latest = poll
                 }
 
-                writeDocumentToDisk(latest.canvasId, latest.document)
+                com.arinara.fotara.diagnostic.SubsystemMemoryTracker.trackSuspend("CanvasAutosave") {
+                    writeDocumentToDisk(latest.canvasId, latest.document)
+                }
             } catch (_: Exception) {}
         }
     }

@@ -46,8 +46,11 @@ class SqlitePdfPageDrawingRepository(
 
     private fun getFlowForDocument(documentId: Long): MutableStateFlow<Map<Int, PdfPageDrawing>> {
         return documentFlows.computeIfAbsent(documentId) {
-            val initial = loadDrawingsSync(documentId)
-            MutableStateFlow(initial)
+            val flow = MutableStateFlow<Map<Int, PdfPageDrawing>>(emptyMap())
+            scope.launch(Dispatchers.IO) {
+                flow.value = loadDrawingsSync(documentId)
+            }
+            flow
         }
     }
 

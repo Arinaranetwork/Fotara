@@ -108,6 +108,7 @@ class CanvasRenderer(
     private val imageDstRectF = RectF()
     private val imageBitmapCache = LinkedHashMap<String, Bitmap>(16, 0.75f, true)
     private val layerCompositePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val elementZOrderComparator = compareBy<CanvasElement> { it.zIndex }.thenBy { it.id }
 
     companion object {
         const val HIGHLIGHTER_BASE_ALPHA = 90
@@ -324,13 +325,15 @@ class CanvasRenderer(
         canvas.scale(viewport.scale, viewport.scale)
 
         var liveStrokeDrawn = false
+        val elementsByLayer = visibleElements.groupBy { it.layerId }
+        val previewsByLayer = previewElements?.groupBy { it.layerId }
         val sortedLayers = documentSnapshot.layers.sortedBy { it.order }
 
         for (layer in sortedLayers) {
             if (!layer.isVisible) continue
 
-            val layerElements = visibleElements.filter { it.layerId == layer.id }.sortedWith(compareBy<CanvasElement> { it.zIndex }.thenBy { it.id })
-            val layerPreviews = previewElements?.filter { it.layerId == layer.id }?.sortedWith(compareBy<CanvasElement> { it.zIndex }.thenBy { it.id })
+            val layerElements = elementsByLayer[layer.id]?.sortedWith(elementZOrderComparator) ?: emptyList()
+            val layerPreviews = previewsByLayer?.get(layer.id)?.sortedWith(elementZOrderComparator)
 
             val hasLiveOnThisLayer = inProgressPoints != null && inProgressPoints.isNotEmpty() &&
                     inProgressTool != null && inProgressLayerId == layer.id

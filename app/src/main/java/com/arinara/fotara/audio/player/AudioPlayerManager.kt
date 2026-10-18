@@ -19,8 +19,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
-import java.io.FileInputStream
-import java.util.Locale
 
 sealed interface AudioPlayerState {
     object Idle : AudioPlayerState
@@ -33,15 +31,15 @@ sealed interface AudioPlayerState {
 class AudioPlayerManager(
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main)
 ) {
-
+    private val lock = Any()
     private var mediaPlayer: MediaPlayer? = null
-    private var currentFilePath: String? = null
     private var progressTrackingJob: Job? = null
+    private var currentFilePath: String? = null
 
     private val _playerState = MutableStateFlow<AudioPlayerState>(AudioPlayerState.Idle)
     val playerState: StateFlow<AudioPlayerState> = _playerState.asStateFlow()
 
-    fun play(filePath: String): Boolean {
+    fun play(filePath: String): Boolean = synchronized(lock) {
         val file = File(filePath)
         if (!file.exists() || file.length() == 0L) {
             val errorMsg = "Cannot play non-existent or empty audio file: $filePath"
@@ -50,38 +48,44 @@ class AudioPlayerManager(
             return false
         }
 
-        stop()
+        stopInternal()
 
+        var playerToCleanup: MediaPlayer? = null
         return try {
             val player = MediaPlayer().apply {
+                playerToCleanup = this
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .build()
                 )
-                FileInputStream(file).use { fis ->
-                    setDataSource(fis.fd)
-                }
-                prepare()
+                setDataSource(file.absolutePath)
             }
+            player.prepare()
 
-            currentFilePath = filePath
             mediaPlayer = player
+            playerToCleanup = null
+            currentFilePath = filePath
 
             val duration = player.duration.toLong().coerceAtLeast(0L)
 
             player.setOnCompletionListener {
                 Log.i(TAG, "Audio playback completed: $filePath")
-                progressTrackingJob?.cancel()
-                _playerState.value = AudioPlayerState.Completed(filePath, duration)
+                synchronized(lock) {
+                    progressTrackingJob?.cancel()
+                    progressTrackingJob = null
+                    _playerState.value = AudioPlayerState.Completed(filePath, duration)
+                }
             }
 
             player.setOnErrorListener { _, what, extra ->
                 val errorMsg = "MediaPlayer error: what=$what, extra=$extra"
                 Log.e(TAG, errorMsg)
-                progressTrackingJob?.cancel()
-                _playerState.value = AudioPlayerState.Error(errorMsg)
+                synchronized(lock) {
+                    stopInternal()
+                    _playerState.value = AudioPlayerState.Error(errorMsg)
+                }
                 true
             }
 
@@ -93,95 +97,133 @@ class AudioPlayerManager(
         } catch (e: Exception) {
             val errorMsg = "Failed to start audio playback: ${e.message}"
             Log.e(TAG, errorMsg, e)
+            try {
+                playerToCleanup?.release()
+            } catch (_: Exception) {}
+            stopInternal()
             _playerState.value = AudioPlayerState.Error(errorMsg)
-            release()
             false
         }
     }
 
     fun pause() {
-        try {
-            val player = mediaPlayer ?: return
-            if (player.isPlaying) {
-                player.pause()
-                val currentPos = player.currentPosition.toLong()
-                val duration = player.duration.toLong()
-                val path = currentFilePath ?: ""
-                progressTrackingJob?.cancel()
-                _playerState.value = AudioPlayerState.Paused(currentPos, duration, path)
-                Log.i(TAG, "Audio playback paused at ${currentPos}ms")
+        synchronized(lock) {
+            try {
+                val player = mediaPlayer ?: return
+                val isPlaying = try { player.isPlaying } catch (_: Exception) { false }
+                if (isPlaying) {
+                    player.pause()
+                    val currentPos = try { player.currentPosition.toLong() } catch (_: Exception) { 0L }
+                    val duration = try { player.duration.toLong() } catch (_: Exception) { 0L }
+                    val path = currentFilePath ?: ""
+                    progressTrackingJob?.cancel()
+                    progressTrackingJob = null
+                    _playerState.value = AudioPlayerState.Paused(currentPos, duration, path)
+                    Log.i(TAG, "Audio playback paused at ${currentPos}ms")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to pause MediaPlayer", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to pause MediaPlayer", e)
         }
     }
 
     fun resume() {
-        try {
-            val player = mediaPlayer ?: return
-            val path = currentFilePath ?: return
-            if (!player.isPlaying) {
-                player.start()
-                val duration = player.duration.toLong()
-                startProgressTracking(duration, path)
-                Log.i(TAG, "Audio playback resumed at ${player.currentPosition}ms")
+        synchronized(lock) {
+            try {
+                val player = mediaPlayer ?: return
+                val path = currentFilePath ?: return
+                val isPlaying = try { player.isPlaying } catch (_: Exception) { false }
+                if (!isPlaying) {
+                    player.start()
+                    val duration = try { player.duration.toLong() } catch (_: Exception) { 0L }
+                    startProgressTracking(duration, path)
+                    Log.i(TAG, "Audio playback resumed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to resume MediaPlayer", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to resume MediaPlayer", e)
         }
     }
 
     fun seekTo(positionMs: Long) {
-        try {
-            val player = mediaPlayer ?: return
-            val target = positionMs.coerceIn(0L, player.duration.toLong())
-            player.seekTo(target.toInt())
-            val duration = player.duration.toLong()
-            val path = currentFilePath ?: ""
+        synchronized(lock) {
+            try {
+                val player = mediaPlayer ?: return
+                val totalDur = try { player.duration.toLong() } catch (_: Exception) { 0L }
+                val target = positionMs.coerceIn(0L, totalDur)
+                player.seekTo(target.toInt())
+                val path = currentFilePath ?: ""
 
-            if (player.isPlaying) {
-                _playerState.value = AudioPlayerState.Playing(target, duration, path)
-            } else {
-                _playerState.value = AudioPlayerState.Paused(target, duration, path)
+                val isPlaying = try { player.isPlaying } catch (_: Exception) { false }
+                if (isPlaying) {
+                    _playerState.value = AudioPlayerState.Playing(target, totalDur, path)
+                } else {
+                    _playerState.value = AudioPlayerState.Paused(target, totalDur, path)
+                }
+                Log.d(TAG, "Seek to position: ${target}ms")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to seek in MediaPlayer", e)
             }
-            Log.d(TAG, "Seek to position: ${target}ms")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to seek in MediaPlayer", e)
         }
     }
 
     fun stop() {
-        progressTrackingJob?.cancel()
-        progressTrackingJob = null
-        try {
-            mediaPlayer?.apply {
-                if (isPlaying) {
-                    stop()
-                }
-                release()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping MediaPlayer", e)
-        } finally {
-            mediaPlayer = null
-            _playerState.value = AudioPlayerState.Idle
+        synchronized(lock) {
+            stopInternal()
         }
     }
 
+    private fun stopInternal() {
+        progressTrackingJob?.cancel()
+        progressTrackingJob = null
+        val player = mediaPlayer
+        mediaPlayer = null
+        if (player != null) {
+            try {
+                try {
+                    if (player.isPlaying) {
+                        player.stop()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exception while stopping MediaPlayer playback", e)
+                } finally {
+                    player.release()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error releasing MediaPlayer", e)
+            }
+        }
+        _playerState.value = AudioPlayerState.Idle
+    }
+
     fun release() {
-        stop()
-        currentFilePath = null
+        synchronized(lock) {
+            stopInternal()
+            currentFilePath = null
+        }
     }
 
     private fun startProgressTracking(duration: Long, filePath: String) {
         progressTrackingJob?.cancel()
         progressTrackingJob = scope.launch {
             while (isActive) {
-                val player = mediaPlayer
-                if (player != null && player.isPlaying) {
-                    val pos = player.currentPosition.toLong()
-                    _playerState.value = AudioPlayerState.Playing(pos, duration, filePath)
+                val player = synchronized(lock) { mediaPlayer }
+                if (player == null) break
+
+                val isPlaying = try {
+                    player.isPlaying
+                } catch (_: Exception) {
+                    break
                 }
+                if (!isPlaying) break
+
+                val pos = try {
+                    player.currentPosition.toLong()
+                } catch (_: Exception) {
+                    break
+                }
+
+                _playerState.value = AudioPlayerState.Playing(pos, duration, filePath)
                 delay(SCRUBBER_POLL_INTERVAL_MS)
             }
         }
@@ -195,7 +237,7 @@ class AudioPlayerManager(
             val totalSeconds = (ms / 1000).coerceAtLeast(0)
             val minutes = totalSeconds / 60
             val seconds = totalSeconds % 60
-            return String.format(Locale.US, "%02d:%02d", minutes, seconds)
+            return String.format(java.util.Locale.US, "%02d:%02d", minutes, seconds)
         }
     }
 }

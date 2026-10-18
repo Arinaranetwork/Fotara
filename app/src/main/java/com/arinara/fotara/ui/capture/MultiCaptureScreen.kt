@@ -102,6 +102,7 @@ import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagEmerald
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
 
@@ -438,11 +439,21 @@ fun MultiCaptureScreen(
                                 executor,
                                 object : ImageCapture.OnImageCapturedCallback() {
                                     override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                                        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                                        val bitmap = imageProxyToBitmap(imageProxy, rotationDegrees)
-                                        imageProxy.close()
+                                        coroutineScope.launch(Dispatchers.Default) {
+                                            val bitmap = try {
+                                                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                                                imageProxyToBitmap(imageProxy, rotationDegrees)
+                                            } catch (_: Throwable) {
+                                                null
+                                            } finally {
+                                                imageProxy.close()
+                                            }
 
-                                        coroutineScope.launch {
+                                            if (bitmap == null) {
+                                                isCapturing = false
+                                                return@launch
+                                            }
+
                                             try {
                                                 val saved = photoStorageManager.saveBitmapAsPhoto(bitmap)
                                                 val ocr = ocrEngine.extractText(saved.filePath)
@@ -459,6 +470,7 @@ fun MultiCaptureScreen(
                                                 capturedPhotos.add(newPhoto)
                                             } catch (_: Exception) {
                                             } finally {
+                                                bitmap.recycle()
                                                 isCapturing = false
                                             }
                                         }
@@ -530,19 +542,23 @@ fun MultiCaptureScreen(
     }
 }
 
-private fun imageProxyToBitmap(image: ImageProxy, rotationDegrees: Int): Bitmap {
-    val planeProxy = image.planes[0]
-    val buffer: ByteBuffer = planeProxy.buffer
-    val bytes = ByteArray(buffer.remaining())
-    buffer.get(bytes)
-    val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+private fun imageProxyToBitmap(image: ImageProxy, rotationDegrees: Int): Bitmap? {
+    return try {
+        val planeProxy = image.planes[0]
+        val buffer: ByteBuffer = planeProxy.buffer
+        val bytes = ByteArray(buffer.remaining())
+        buffer.get(bytes)
+        val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
 
-    return if (rotationDegrees != 0) {
-        val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-        val rotated = Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
-        if (rotated != original) original.recycle()
-        rotated
-    } else {
-        original
+        if (rotationDegrees != 0) {
+            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+            val rotated = Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
+            if (rotated != original) original.recycle()
+            rotated
+        } else {
+            original
+        }
+    } catch (_: Throwable) {
+        null
     }
 }

@@ -400,50 +400,55 @@ class SharePlacementViewModel(
     }
 
     private fun generateImageThumbnail(file: File): String? {
+        var bmp: Bitmap? = null
         return try {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(file.absolutePath, bounds)
             val sample = maxOf(1, maxOf(bounds.outWidth / 300, bounds.outHeight / 300))
             val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-            val bmp = BitmapFactory.decodeFile(file.absolutePath, opts) ?: return null
+            bmp = BitmapFactory.decodeFile(file.absolutePath, opts) ?: return null
             val thumbFile = File(file.parentFile, "thumb_${file.name}.jpg")
             FileOutputStream(thumbFile).use { out ->
                 bmp.compress(Bitmap.CompressFormat.JPEG, 75, out)
             }
-            bmp.recycle()
             thumbFile.absolutePath
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             null
+        } finally {
+            bmp?.recycle()
         }
     }
 
     private fun generatePdfThumbnail(file: File): String? {
+        var pfd: ParcelFileDescriptor? = null
+        var renderer: PdfRenderer? = null
+        var page: PdfRenderer.Page? = null
+        var bmp: Bitmap? = null
         return try {
-            val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-            val renderer = PdfRenderer(pfd)
+            pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            renderer = PdfRenderer(pfd)
             if (renderer.pageCount > 0) {
-                val page = renderer.openPage(0)
+                page = renderer.openPage(0)
                 val w = 240
                 val h = (240f * page.height / page.width).toInt().coerceAtLeast(100)
-                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                 bmp.eraseColor(android.graphics.Color.WHITE)
                 page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                page.close()
-                renderer.close()
-                pfd.close()
                 val thumbFile = File(file.parentFile, "thumb_${file.name}.jpg")
                 FileOutputStream(thumbFile).use { out ->
                     bmp.compress(Bitmap.CompressFormat.JPEG, 80, out)
                 }
-                bmp.recycle()
                 thumbFile.absolutePath
             } else {
-                renderer.close()
-                pfd.close()
                 null
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             null
+        } finally {
+            bmp?.recycle()
+            try { page?.close() } catch (_: Throwable) {}
+            try { renderer?.close() } catch (_: Throwable) {}
+            try { pfd?.close() } catch (_: Throwable) {}
         }
     }
 

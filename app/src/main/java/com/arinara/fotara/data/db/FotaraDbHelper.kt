@@ -17,12 +17,13 @@ import com.arinara.fotara.data.model.PhotoSource
 import com.arinara.fotara.data.model.Subfolder
 import java.io.File
 
-class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
-    context,
+class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
+    context.applicationContext,
     DATABASE_NAME,
     null,
     DATABASE_VERSION
 ) {
+    val context: Context = context.applicationContext
 
     init {
         setWriteAheadLoggingEnabled(true)
@@ -298,6 +299,8 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_folder_trashed ON document_notes(folder_id, is_trashed)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_folder_trashed ON photo_groups(folder_id, is_trashed)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_subfolders_folder_trashed ON subfolders(folder_id, is_trashed)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_subfolders_trashed ON subfolders(is_trashed, created_at ASC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_updated_at ON text_notes(updated_at DESC)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_folders_trashed ON folders(is_trashed, is_pinned DESC, created_at DESC)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_trashed_added ON photos(is_trashed, added_at DESC)")
 
@@ -421,6 +424,28 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
             """.trimIndent()
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_class_schedules_day ON class_schedules(day_of_week, start_minute)")
+
+        // Audio annotations table and indexes
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS audio_annotations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                note_id INTEGER,
+                pdf_doc_id INTEGER,
+                pdf_page_index INTEGER,
+                file_path TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_audio_annotations_note_id ON audio_annotations(note_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_audio_annotations_pdf ON audio_annotations(pdf_doc_id, pdf_page_index)")
+
+        // Composite performance indexes
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_pages_doc_page ON document_pages(document_note_id, page_index)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_group_id ON photos(group_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_z ON canvas_elements(canvas_id, z_index)")
 
         createFtsTable(db)
     }
@@ -956,7 +981,29 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
 
     override fun onOpen(db: SQLiteDatabase) {
         super.onOpen(db)
-        // Cleanups moved to deferred background maintenance to keep startup snappy
+        // Ensure critical performance indexes and audio annotations exist without locking
+        try {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS audio_annotations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    note_id INTEGER,
+                    pdf_doc_id INTEGER,
+                    pdf_page_index INTEGER,
+                    file_path TEXT NOT NULL,
+                    duration_ms INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_audio_annotations_note_id ON audio_annotations(note_id)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_audio_annotations_pdf ON audio_annotations(pdf_doc_id, pdf_page_index)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_pages_doc_page ON document_pages(document_note_id, page_index)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_group_id ON photos(group_id)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_z ON canvas_elements(canvas_id, z_index)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_subfolders_trashed ON subfolders(is_trashed, created_at ASC)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_updated_at ON text_notes(updated_at DESC)")
+        } catch (_: Exception) {}
     }
 
     fun cleanOrphanPdfData() {
@@ -970,11 +1017,14 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
     fun getSafeReadableDatabase(): SQLiteDatabase {
         return try {
             readableDatabase
-        } catch (e: Exception) {
-            android.util.Log.e("FotaraDbHelper", "Unreadable database encountered, resetting...", e)
+        } catch (e: android.database.sqlite.SQLiteDatabaseCorruptException) {
+            android.util.Log.e("FotaraDbHelper", "Corrupted database encountered, resetting...", e)
             try {
                 context.deleteDatabase(DATABASE_NAME)
             } catch (_: Exception) {}
+            readableDatabase
+        } catch (e: Exception) {
+            android.util.Log.w("FotaraDbHelper", "Transient readable database failure, retrying...", e)
             readableDatabase
         }
     }
@@ -982,11 +1032,14 @@ class FotaraDbHelper(val context: Context) : SQLiteOpenHelper(
     fun getSafeWritableDatabase(): SQLiteDatabase {
         return try {
             writableDatabase
-        } catch (e: Exception) {
-            android.util.Log.e("FotaraDbHelper", "Unwritable database encountered, resetting...", e)
+        } catch (e: android.database.sqlite.SQLiteDatabaseCorruptException) {
+            android.util.Log.e("FotaraDbHelper", "Corrupted writable database encountered, resetting...", e)
             try {
                 context.deleteDatabase(DATABASE_NAME)
             } catch (_: Exception) {}
+            writableDatabase
+        } catch (e: Exception) {
+            android.util.Log.w("FotaraDbHelper", "Transient writable database failure, retrying...", e)
             writableDatabase
         }
     }

@@ -210,6 +210,7 @@ class CanvasViewModel(
             val note = canvasNoteRepository.getCanvasNoteByIdOnce(id)
             if (note != null) {
                 val doc = canvasRepository.loadDocument(id) ?: CanvasDocument(title = note.title)
+                historyManager.clear()
                 spatialIndex.rebuild(doc.elements)
                 tileCacheManager.invalidateAll()
 
@@ -310,8 +311,9 @@ class CanvasViewModel(
             try {
                 canvasRepository.saveDocumentImmediate(currentId, currentDoc)
 
+                var previewBitmap: Bitmap? = null
                 try {
-                    val previewBitmap = com.arinara.fotara.canvas.export.CanvasImageExporter.renderCanvasToBitmap(currentDoc, canvasAssetManager)
+                    previewBitmap = com.arinara.fotara.canvas.export.CanvasImageExporter.renderCanvasToBitmap(currentDoc, canvasAssetManager)
                     if (previewBitmap != null) {
                         val thumbPath = canvasAssetManager.saveThumbnail(currentId, previewBitmap)
                         if (thumbPath != null) {
@@ -320,11 +322,15 @@ class CanvasViewModel(
                     }
                 } catch (te: Exception) {
                     android.util.Log.w("CanvasAutosave", "Thumbnail generation skipped: ${te.message}")
+                } finally {
+                    previewBitmap?.recycle()
                 }
 
-                isDirty = false
+                if (_uiState.value.document === currentDoc) {
+                    isDirty = false
+                    _uiState.update { it.copy(saveState = SaveState.SAVED) }
+                }
                 retryAttempt = 0
-                _uiState.update { it.copy(saveState = SaveState.SAVED) }
                 true
             } catch (e: Exception) {
                 android.util.Log.e("CanvasAutosave", "Autosave failed: ${e.message}", e)
@@ -477,7 +483,7 @@ class CanvasViewModel(
     // ==========================================
     // Z3 & Z4: Tools, Colors, and Dock Controls
     // ==========================================
-    fun setTool(tool: CanvasToolType) {
+    fun setTool(tool: CanvasToolType, keepOptionsState: Boolean = true) {
         toolController.toolState = toolController.toolState.copy(activeTool = tool)
         pointerStateMachine.activeMode = when (tool) {
             CanvasToolType.SELECT -> com.arinara.fotara.canvas.gesture.ActiveMode.SELECT
@@ -488,7 +494,7 @@ class CanvasViewModel(
         _uiState.update {
             it.copy(
                 toolState = toolController.toolState,
-                showToolOptions = false
+                showToolOptions = if (keepOptionsState) it.showToolOptions else false
             )
         }
     }
@@ -1719,6 +1725,13 @@ class CanvasViewModel(
     fun setExistingNotesDialogVisible(visible: Boolean) = _uiState.update { it.copy(showExistingNotesDialog = visible) }
     fun dismissExperimentalNotice() = _uiState.update { it.copy(showExperimentalNotice = false) }
     fun clearUserMessage() = _uiState.update { it.copy(userMessage = null) }
+
+    override fun onCleared() {
+        super.onCleared()
+        autosaveJob?.cancel()
+        historyManager.clear()
+        tileCacheManager.release()
+    }
 }
 
 class CanvasViewModelFactory(

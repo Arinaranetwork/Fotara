@@ -300,7 +300,13 @@ object ProfileImageUtils {
                         }
                     }
                     val safeBmp = if (decoded.config != Bitmap.Config.ARGB_8888) {
-                        decoded.copy(Bitmap.Config.ARGB_8888, true) ?: decoded
+                        val copied = decoded.copy(Bitmap.Config.ARGB_8888, true)
+                        if (copied != null && copied != decoded) {
+                            decoded.recycle()
+                            copied
+                        } else {
+                            decoded
+                        }
                     } else {
                         decoded
                     }

@@ -43,52 +43,69 @@ object DocxParser {
 
         val mediaMap = mutableMapOf<String, String>() // rId -> local media file path
         var documentXmlBytes: ByteArray? = null
-        val tempMediaDir = File(context.cacheDir, "docx_media_${System.currentTimeMillis()}").apply { mkdirs() }
+        val tempMediaDir = File(context.applicationContext.cacheDir, "docx_media_${System.currentTimeMillis()}").apply { mkdirs() }
 
         try {
             docxFile.inputStream().use { fileInput ->
-                val zip = ZipInputStream(fileInput)
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    val name = entry.name
-                    when {
-                        name == "word/document.xml" -> {
-                            val buffer = ByteArrayOutputStream()
-                            zip.copyTo(buffer)
-                            documentXmlBytes = buffer.toByteArray()
-                        }
-                        name == "word/_rels/document.xml.rels" -> {
-                            parseRels(zip, mediaMap, tempMediaDir)
-                        }
-                        name.startsWith("word/media/") -> {
-                            val mediaName = File(name).name
-                            val dest = File(tempMediaDir, mediaName)
-                            FileOutputStream(dest).use { out ->
-                                zip.copyTo(out)
+                ZipInputStream(fileInput).use { zip ->
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        val name = entry.name
+                        if (!entry.isDirectory) {
+                            when {
+                                name == "word/document.xml" -> {
+                                    val buffer = ByteArrayOutputStream()
+                                    zip.copyTo(buffer)
+                                    documentXmlBytes = buffer.toByteArray()
+                                }
+                                name == "word/_rels/document.xml.rels" -> {
+                                    val relsBuffer = ByteArrayOutputStream()
+                                    zip.copyTo(relsBuffer)
+                                    parseRels(relsBuffer.toByteArray(), mediaMap, tempMediaDir)
+                                }
+                                name.startsWith("word/media/") -> {
+                                    val mediaName = File(name).name
+                                    if (mediaName.isNotEmpty()) {
+                                        val dest = File(tempMediaDir, mediaName)
+                                        FileOutputStream(dest).use { out ->
+                                            zip.copyTo(out)
+                                        }
+                                    }
+                                }
                             }
                         }
+                        zip.closeEntry()
+                        entry = zip.nextEntry
                     }
-                    entry = zip.nextEntry
                 }
             }
         } catch (e: Exception) {
+            tempMediaDir.deleteRecursively()
             throw PdfCorruptException("Failed to read Word document archive: ${e.message}")
         }
 
         val xmlBytes = documentXmlBytes
-            ?: throw PdfCorruptException("Invalid Word document: missing word/document.xml")
+            ?: run {
+                tempMediaDir.deleteRecursively()
+                throw PdfCorruptException("Invalid Word document: missing word/document.xml")
+            }
 
-        parseDocumentXml(xmlBytes, mediaMap)
+        try {
+            parseDocumentXml(xmlBytes, mediaMap)
+        } catch (e: Exception) {
+            tempMediaDir.deleteRecursively()
+            throw e
+        }
     }
 
     private fun parseRels(
-        zip: ZipInputStream,
+        relsBytes: ByteArray,
         mediaMap: MutableMap<String, String>,
         tempMediaDir: File
     ) {
         try {
             val parser = Xml.newPullParser()
-            parser.setInput(zip, "UTF-8")
+            parser.setInput(ByteArrayInputStream(relsBytes), "UTF-8")
             var event = parser.eventType
             while (event != XmlPullParser.END_DOCUMENT) {
                 if (event == XmlPullParser.START_TAG && parser.name == "Relationship") {

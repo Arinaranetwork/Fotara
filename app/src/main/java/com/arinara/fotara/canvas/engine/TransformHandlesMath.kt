@@ -65,7 +65,7 @@ object TransformHandlesMath {
         viewport: ViewportState,
         density: Float = 1.0f
     ): Int? {
-        if (bounds.isEmpty) return null
+        if (bounds.isEmpty || screenX.isNaN() || screenY.isNaN() || viewport.scale <= 0f || viewport.scale.isNaN() || rotationDegrees.isNaN()) return null
 
         val (scx, scy) = ViewportTransform.worldToScreen(bounds.centerX, bounds.centerY, viewport)
         val sW = bounds.width * viewport.scale
@@ -149,11 +149,12 @@ object TransformHandlesMath {
         density: Float = 1.0f
     ): List<StrokePoint> {
         if (originalPoints.isEmpty()) return emptyList()
+        val safeScale = viewport.scale.coerceAtLeast(0.001f)
 
         if (handleId == -1) {
             // Whole body move
-            val worldDx = (currentScreenX - startState.startScreenX) / viewport.scale
-            val worldDy = (currentScreenY - startState.startScreenY) / viewport.scale
+            val worldDx = (currentScreenX - startState.startScreenX) / safeScale
+            val worldDy = (currentScreenY - startState.startScreenY) / safeScale
             return originalPoints.map { p ->
                 val nx = p.x + worldDx
                 val ny = p.y + worldDy
@@ -248,15 +249,15 @@ object TransformHandlesMath {
         val scaleX = if (kotlin.math.abs(origDx) < 1e-3f) 1.0f else newDx / origDx
         val scaleY = if (kotlin.math.abs(origDy) < 1e-3f) 1.0f else newDy / origDy
 
-        val (worldAnchorX, worldAnchorY) = localToWorld(anchorX / viewport.scale, anchorY / viewport.scale, startState.worldCenter, rad)
+        val (worldAnchorX, worldAnchorY) = localToWorld(anchorX / safeScale, anchorY / safeScale, startState.worldCenter, rad)
 
         return originalPoints.map { p ->
             val (plx, ply) = worldToLocal(p.x, p.y, startState.worldCenter, rad)
-            val plxRel = plx - (anchorX / viewport.scale)
-            val plyRel = ply - (anchorY / viewport.scale)
+            val plxRel = plx - (anchorX / safeScale)
+            val plyRel = ply - (anchorY / safeScale)
 
-            val nlx = (anchorX / viewport.scale) + plxRel * scaleX
-            val nly = (anchorY / viewport.scale) + plyRel * scaleY
+            val nlx = (anchorX / safeScale) + plxRel * scaleX
+            val nly = (anchorY / safeScale) + plyRel * scaleY
 
             val (wx, wy) = localToWorld(nlx, nly, startState.worldCenter, rad)
             p.copy(
@@ -304,10 +305,11 @@ object TransformHandlesMath {
         density: Float = 1.0f,
         isOnlyImages: Boolean = true
     ): ImageElement {
+        val safeScale = viewport.scale.coerceAtLeast(0.001f)
         if (handleId == -1) {
             // Whole body move
-            val worldDx = (currentScreenX - startState.startScreenX) / viewport.scale
-            val worldDy = (currentScreenY - startState.startScreenY) / viewport.scale
+            val worldDx = (currentScreenX - startState.startScreenX) / safeScale
+            val worldDy = (currentScreenY - startState.startScreenY) / safeScale
             return clampImageToCanvas(originalImage.translated(worldDx, worldDy))
         }
 
@@ -403,7 +405,7 @@ object TransformHandlesMath {
 
             val minScaleX = if (kotlin.math.abs(origDx) > 1e-4f) minSize / kotlin.math.abs(origDx) else 0.05f
             val minScaleY = if (kotlin.math.abs(origDy) > 1e-4f) minSize / kotlin.math.abs(origDy) else 0.05f
-            val minScale = max(minScaleX, minScaleY)
+            val minScale = max(minScaleX, minScaleY).coerceIn(0.01f, 10.0f)
 
             val finalScale = max(rawScale, minScale)
             scaleX = finalScale
@@ -452,8 +454,8 @@ object TransformHandlesMath {
         }
 
         // Apply scaleX and scaleY relative to anchor point
-        val anchorWorldX = anchorX / viewport.scale
-        val anchorWorldY = anchorY / viewport.scale
+        val anchorWorldX = anchorX / safeScale
+        val anchorWorldY = anchorY / safeScale
 
         val origImgCenterX = originalImage.x + originalImage.width / 2f
         val origImgCenterY = originalImage.y + originalImage.height / 2f
@@ -510,10 +512,11 @@ object TransformHandlesMath {
         viewport: ViewportState,
         density: Float = 1.0f
     ): TextLayerElement {
+        val safeScale = viewport.scale.coerceAtLeast(0.001f)
         if (handleId == -1) {
             // Whole body move
-            val worldDx = (currentScreenX - startState.startScreenX) / viewport.scale
-            val worldDy = (currentScreenY - startState.startScreenY) / viewport.scale
+            val worldDx = (currentScreenX - startState.startScreenX) / safeScale
+            val worldDy = (currentScreenY - startState.startScreenY) / safeScale
             return clampTextToCanvas(originalText.translated(worldDx, worldDy))
         }
 
@@ -606,7 +609,7 @@ object TransformHandlesMath {
 
             val minScaleX = if (kotlin.math.abs(origDx) > 1e-4f) minSize / kotlin.math.abs(origDx) else 0.05f
             val minScaleY = if (kotlin.math.abs(origDy) > 1e-4f) minSize / kotlin.math.abs(origDy) else 0.05f
-            val minScale = max(minScaleX, minScaleY)
+            val minScale = max(minScaleX, minScaleY).coerceIn(0.01f, 10.0f)
 
             val finalScale = max(rawScale, minScale)
             scaleX = finalScale
@@ -636,8 +639,8 @@ object TransformHandlesMath {
             scaleY = 1.0f
         }
 
-        val anchorWorldX = anchorX / viewport.scale
-        val anchorWorldY = anchorY / viewport.scale
+        val anchorWorldX = anchorX / safeScale
+        val anchorWorldY = anchorY / safeScale
 
         val origTextCenterX = originalText.x + originalText.width / 2f
         val origTextCenterY = originalText.y + originalText.height / 2f
@@ -650,7 +653,7 @@ object TransformHandlesMath {
         val nly = anchorWorldY + plyRel * scaleY
 
         val (newCenterX, newCenterY) = localToWorld(nlx, nly, startState.worldCenter, rad)
-        val minDimension = minSize / viewport.scale
+        val minDimension = minSize / safeScale
         val newWidth = max(minDimension, originalText.width * scaleX)
         val newHeight = max(minDimension, originalText.height * scaleY)
 

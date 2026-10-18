@@ -116,10 +116,10 @@ class DefaultAppContainer(override val context: Context) : AppContainer {
     override val settingsRepository: SettingsRepository by lazy {
         DefaultSettingsRepository(
             context = context,
-            folderRepository = folderRepository,
-            photoRepository = photoRepository,
-            photoStorageManager = photoStorageManager,
-            workspaceRepository = workspaceRepository,
+            folderRepositoryProvider = { folderRepository },
+            photoRepositoryProvider = { photoRepository },
+            photoStorageManagerProvider = { photoStorageManager },
+            workspaceRepositoryProvider = { workspaceRepository },
             documentRepositoryProvider = { documentRepository }
         )
     }

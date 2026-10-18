@@ -173,7 +173,7 @@ class SqliteFolderRepository(
                     subMap.getOrPut(fId) { mutableListOf() }.add(sub)
                 }
             }
-            subfoldersFlow.value = subMap
+            subfoldersFlow.value = subMap.mapValues { it.value.toList() }
 
             // Load trashed folders
             val trashedList = mutableListOf<Folder>()
@@ -511,12 +511,18 @@ class SqliteFolderRepository(
                 if (docIds.isNotEmpty()) {
                     val placeholders = docIds.joinToString(",") { "?" }
                     val args = docIds.map { it.toString() }.toTypedArray()
+                    db.execSQL("DELETE FROM document_notes_fts WHERE document_id IN ($placeholders)", args)
                     db.execSQL("DELETE FROM pdf_page_pins WHERE document_id IN ($placeholders)", args)
                     db.execSQL("DELETE FROM pdf_page_drawings WHERE document_id IN ($placeholders)", args)
                 }
             } catch (_: Exception) {}
             db.execSQL("DELETE FROM document_notes WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM text_notes WHERE folder_id = ?", arrayOf(id.toString()))
+            try {
+                db.execSQL("DELETE FROM canvas_elements WHERE canvas_id IN (SELECT id FROM canvas_notes WHERE folder_id = ?)", arrayOf(id.toString()))
+                db.execSQL("DELETE FROM canvas_layers WHERE canvas_id IN (SELECT id FROM canvas_notes WHERE folder_id = ?)", arrayOf(id.toString()))
+                db.execSQL("DELETE FROM canvas_assets WHERE canvas_id IN (SELECT id FROM canvas_notes WHERE folder_id = ?)", arrayOf(id.toString()))
+            } catch (_: Exception) {}
             db.execSQL("DELETE FROM canvas_notes WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM subfolders WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("DELETE FROM folders WHERE id = ?", arrayOf(id.toString()))

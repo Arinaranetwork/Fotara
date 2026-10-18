@@ -73,10 +73,12 @@ object PdfExporter {
             FileOutputStream(outputFile).use { out ->
                 pdfDoc.writeTo(out)
             }
-            pdfDoc.close()
 
             outputFile
         } finally {
+            try {
+                pdfDoc.close()
+            } catch (_: Throwable) {}
             for (f in tempFilesToClean) {
                 if (f.exists()) f.delete()
             }
@@ -230,11 +232,17 @@ object PdfExporter {
                         paint.color = Color.GRAY
                         canvas.drawText("Page $currentPageNumber of $totalPages • Fotara Document Notes", 36f, 56f, paint)
 
+                        var bmp: Bitmap? = null
                         try {
-                            val bmp = BitmapFactory.decodeFile(docPage.imageUri)
+                            val availableWidth = (pageWidth - 72).toFloat()
+                            val availableHeight = (pageHeight - 120).toFloat()
+                            val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            BitmapFactory.decodeFile(docPage.imageUri, boundsOptions)
+                            val sample = calculateInSampleSize(boundsOptions, availableWidth.toInt(), availableHeight.toInt())
+                            val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sample }
+
+                            bmp = BitmapFactory.decodeFile(docPage.imageUri, decodeOptions)
                             if (bmp != null) {
-                                val availableWidth = (pageWidth - 72).toFloat()
-                                val availableHeight = (pageHeight - 120).toFloat()
                                 val scale = (availableWidth / bmp.width).coerceAtMost(availableHeight / bmp.height)
                                 val destWidth = bmp.width * scale
                                 val destHeight = bmp.height * scale
@@ -242,9 +250,14 @@ object PdfExporter {
                                 val top = 80f + (availableHeight - destHeight) / 2f
                                 val destRect = RectF(left, top, left + destWidth, top + destHeight)
                                 canvas.drawBitmap(bmp, null, destRect, paint)
-                                bmp.recycle()
                             }
-                        } catch (_: Exception) {}
+                        } catch (_: Throwable) {
+                            paint.color = Color.LTGRAY
+                            paint.textSize = 12f
+                            canvas.drawText("Page image unavailable", 36f, 120f, paint)
+                        } finally {
+                            bmp?.recycle()
+                        }
 
                         pdfDoc.finishPage(page)
                     }
@@ -261,10 +274,12 @@ object PdfExporter {
         FileOutputStream(outputFile).use { out ->
             pdfDoc.writeTo(out)
         }
-        pdfDoc.close()
 
         outputFile
         } finally {
+            try {
+                pdfDoc.close()
+            } catch (_: Throwable) {}
             for (f in tempFilesToClean) {
                 if (f.exists()) f.delete()
             }

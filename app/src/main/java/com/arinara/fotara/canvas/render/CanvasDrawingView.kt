@@ -57,12 +57,20 @@ class CanvasDrawingView(
     var viewport: ViewportState = ViewportState()
         private set
 
-    var documentSnapshot: CanvasDocument = CanvasDocument()
+    private var _documentSnapshot: CanvasDocument = CanvasDocument()
+
+    var documentSnapshot: CanvasDocument
+        get() = _documentSnapshot
         set(value) {
-            field = value
+            _documentSnapshot = value
             spatialIndex.rebuild(value.elements)
             invalidate()
         }
+
+    fun setDocumentTransient(value: CanvasDocument) {
+        _documentSnapshot = value
+        invalidate()
+    }
 
     var activeLayerId: String = "layer_default"
 
@@ -289,7 +297,6 @@ class CanvasDrawingView(
                     val (updatedDoc, strokeBounds) = toolController.finishStroke(documentSnapshot, historyManager, viewport.scale)
                     isShapeSnapped = false
                     documentSnapshot = updatedDoc
-                    spatialIndex.rebuild(updatedDoc.elements)
                     tileCacheManager.invalidateRegion(strokeBounds)
                     onDocumentChanged?.invoke(updatedDoc, strokeBounds)
                     needsInvalidate = true
@@ -345,8 +352,7 @@ class CanvasDrawingView(
                         document = documentSnapshot
                     )
                     if (dirtyBounds != null) {
-                        documentSnapshot = liveDoc
-                        spatialIndex.rebuild(liveDoc.elements)
+                        setDocumentTransient(liveDoc)
                         needsInvalidate = true
                     }
                 }
@@ -357,7 +363,6 @@ class CanvasDrawingView(
                     )
                     if (dirtyBounds != null) {
                         documentSnapshot = committedDoc
-                        spatialIndex.rebuild(committedDoc.elements)
                         tileCacheManager.invalidateRegion(dirtyBounds)
                         onDocumentChanged?.invoke(committedDoc, dirtyBounds)
                         needsInvalidate = true
@@ -412,7 +417,6 @@ class CanvasDrawingView(
                         density = resources.displayMetrics.density
                     )
                     documentSnapshot = updatedDoc
-                    spatialIndex.rebuild(updatedDoc.elements)
                     if (dirtyBounds != null) {
                         tileCacheManager.invalidateRegion(dirtyBounds)
                     }

@@ -84,7 +84,15 @@ class AntiProcrastinationRingtoneService : Service() {
             .setAutoCancel(false)
             .build()
 
-        startForeground(NOTIFICATION_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
 
         startAlarmSoundAndVibration()
 
@@ -157,6 +165,7 @@ class AntiProcrastinationRingtoneService : Service() {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "Fotara:AntiProcrastinationWakeLock"
             )?.apply {
+                setReferenceCounted(false)
                 acquire(10 * 60 * 1000L) // Safety cap: 10 minutes
             }
         } catch (e: Exception) {
@@ -184,7 +193,9 @@ class AntiProcrastinationRingtoneService : Service() {
         super.onDestroy()
         try {
             mediaPlayer?.apply {
-                if (isPlaying) stop()
+                try {
+                    if (isPlaying) stop()
+                } catch (_: Exception) {}
                 release()
             }
         } catch (e: Exception) {
@@ -202,7 +213,7 @@ class AntiProcrastinationRingtoneService : Service() {
         }
 
         try {
-            if (wakeLock?.isHeld == true) {
+            while (wakeLock?.isHeld == true) {
                 wakeLock?.release()
             }
         } catch (e: Exception) {

@@ -166,13 +166,9 @@ import com.arinara.fotara.canvas.render.CanvasDrawingView
 import com.arinara.fotara.canvas.tool.CanvasToolType
 import com.arinara.fotara.theme.DockSlatePill
 import com.arinara.fotara.theme.FolderBodyBlue
-import com.arinara.fotara.theme.FolderTabCream
 import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.MidnightCardOutline
 import com.arinara.fotara.theme.MidnightNavy
-import com.arinara.fotara.theme.MidnightSurface
-import com.arinara.fotara.theme.TagAmber
-import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextPrimary
 import com.arinara.fotara.theme.TextSecondary
@@ -246,6 +242,11 @@ fun CanvasScreen(
     }
 
     val collabEngine = remember { CollabSessionEngine() }
+    DisposableEffect(collabEngine) {
+        onDispose {
+            collabEngine.close()
+        }
+    }
     val collabRoomCode by collabEngine.roomCode.collectAsStateWithLifecycle()
     val collabPeersMap by collabEngine.activePeers.collectAsStateWithLifecycle()
     val collabPeers = remember(collabPeersMap) { collabPeersMap.values.toList() }
@@ -813,21 +814,25 @@ fun CanvasScreen(
                     // 3. Curated Color Swatches
                     Text("Palette", color = ElectricSlateTokens.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    val curatedPalette = listOf(
-                        0xFFF8FAFC, // Off-white / Cream
-                        0xFF283245, // Slate Charcoal
-                        0xFFEF4444, // Red
-                        0xFFF97316, // Orange
-                        0xFFFBBF24, // Amber Yellow
-                        0xFF10B981, // Emerald Green
-                        0xFF3B82F6  // Electric Blue
-                    )
+                    val activePalette = uiState.recentColors.ifEmpty {
+                        listOf(
+                            0xFFF8FAFC, // Off-white / Cream
+                            0xFF283245, // Slate Charcoal
+                            0xFFEF4444, // Red
+                            0xFFF97316, // Orange
+                            0xFFFBBF24, // Amber Yellow
+                            0xFF10B981, // Emerald Green
+                            0xFF3B82F6, // Electric Blue
+                            0xFF7A5AF8  // Primary Accent (Electric Violet)
+                        )
+                    }
+                    var showExtendedPalette by remember { mutableStateOf(false) }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        curatedPalette.forEach { colorLong ->
+                        activePalette.take(7).forEach { colorLong ->
                             val isSelected = if (isHighlighter) {
                                 uiState.toolState.highlighterColor == colorLong
                             } else {
@@ -859,23 +864,74 @@ fun CanvasScreen(
                             )
                         }
 
-                        // Trailing '+' Add Custom Color Button
+                        // Trailing '+' Toggle Extended Palette Button
                         Box(
                             modifier = Modifier
                                 .size(30.dp)
                                 .clip(CircleShape)
-                                .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
-                            .jigglePressClickable {
-                                viewModel.toggleToolOptions()
-                            },
+                                .border(1.dp, if (showExtendedPalette) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle, CircleShape)
+                                .jigglePressClickable {
+                                    showExtendedPalette = !showExtendedPalette
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
-                                contentDescription = "Custom Color",
-                                tint = ElectricSlateTokens.TextSecondary,
+                                contentDescription = "More Colors",
+                                tint = if (showExtendedPalette) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
+                        }
+                    }
+
+                    if (showExtendedPalette) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val extendedColors = listOf(
+                            0xFF7A5AF8, // Electric Violet
+                            0xFFA855F7, // Purple
+                            0xFFEC4899, // Pink
+                            0xFF06B6D4, // Cyan
+                            0xFF14B8A6, // Teal
+                            0xFF84CC16, // Lime
+                            0xFFEAB308  // Gold
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            extendedColors.forEach { colorLong ->
+                                val isSelected = if (isHighlighter) {
+                                    uiState.toolState.highlighterColor == colorLong
+                                } else {
+                                    uiState.toolState.penColor == colorLong
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .then(
+                                            if (isSelected) {
+                                                Modifier
+                                                    .border(2.dp, ElectricSlateTokens.PrimaryAccent, CircleShape)
+                                                    .padding(2.5.dp)
+                                            } else {
+                                                Modifier.padding(2.5.dp)
+                                            }
+                                        )
+                                        .clip(CircleShape)
+                                        .background(Color(colorLong.toInt()))
+                                        .border(0.5.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
+                                        .jigglePressClickable {
+                                            if (isHighlighter) {
+                                                viewModel.setHighlighterColor(colorLong)
+                                            } else {
+                                                viewModel.setPenColor(colorLong)
+                                            }
+                                        }
+                                )
+                            }
+                            Spacer(modifier = Modifier.size(30.dp))
                         }
                     }
 
@@ -1320,10 +1376,9 @@ fun CanvasScreen(
                     .zIndex(15f)
             ) {
                 Surface(
-                    color = MidnightSurface,
+                    color = ElectricSlateTokens.SurfaceElevated,
                     shape = RoundedCornerShape(999.dp),
-                    border = BorderStroke(1.dp, FolderTabCream.copy(alpha = if (hasSelection) 0.5f else 0.2f)),
-                    shadowElevation = 16.dp,
+                    border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
                     modifier = Modifier.height(44.dp)
                 ) {
                     Row(
@@ -1344,7 +1399,7 @@ fun CanvasScreen(
                                 Icon(
                                     Icons.Default.Edit,
                                     contentDescription = "Edit Text",
-                                    tint = FolderTabCream,
+                                    tint = ElectricSlateTokens.TextPrimary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -1367,7 +1422,7 @@ fun CanvasScreen(
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit Image Effects",
-                                    tint = FolderTabCream,
+                                    tint = ElectricSlateTokens.TextPrimary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -1382,7 +1437,7 @@ fun CanvasScreen(
                             Icon(
                                 Icons.Default.ContentCopy,
                                 contentDescription = stringResource(R.string.canvas_action_duplicate),
-                                tint = if (hasSelection) FolderTabCream else TextMuted.copy(alpha = 0.35f),
+                                tint = if (hasSelection) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1396,7 +1451,7 @@ fun CanvasScreen(
                             Icon(
                                 Icons.Default.Layers,
                                 contentDescription = stringResource(R.string.canvas_action_move_to_layer),
-                                tint = if (hasSelection) TagAmber else TextMuted.copy(alpha = 0.35f),
+                                tint = if (hasSelection) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1410,7 +1465,7 @@ fun CanvasScreen(
                             Icon(
                                 Icons.Default.Delete,
                                 contentDescription = stringResource(R.string.canvas_action_delete_selection),
-                                tint = if (hasSelection) TagCrimson else TextMuted.copy(alpha = 0.35f),
+                                tint = if (hasSelection) ElectricSlateTokens.Destructive else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1695,9 +1750,9 @@ fun CanvasScreen(
                     .zIndex(20f)
             ) {
                 Surface(
-                    color = TagCrimson,
+                    color = ElectricSlateTokens.Destructive,
                     shape = RoundedCornerShape(12.dp),
-                    shadowElevation = 8.dp
+                    border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

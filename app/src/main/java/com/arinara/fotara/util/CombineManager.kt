@@ -56,25 +56,25 @@ class PageLimitExceededException(val totalPages: Int) : Exception(
 )
 
 class CombineManager(
-    private val context: Context,
+    context: Context,
     private val canvasRepository: CanvasRepository? = null,
     private val canvasAssetManager: CanvasAssetManager? = null,
     private val photoDrawingRepository: PhotoDrawingRepository? = null
 ) {
-
-    private val docxExporter = DocxExporter(context)
+    private val appContext = context.applicationContext
+    private val docxExporter = DocxExporter(appContext)
 
     private val resolvedPhotoDrawingRepository by lazy {
         photoDrawingRepository ?: run {
-            val dbHelper = FotaraDbHelper(context)
+            val dbHelper = FotaraDbHelper(appContext)
             SqlitePhotoDrawingRepository(dbHelper)
         }
     }
 
     private val resolvedCanvasRepository by lazy {
         canvasRepository ?: run {
-            val dbHelper = FotaraDbHelper(context)
-            val assetMgr = canvasAssetManager ?: CanvasAssetManager(context)
+            val dbHelper = FotaraDbHelper(appContext)
+            val assetMgr = canvasAssetManager ?: CanvasAssetManager(appContext)
             com.arinara.fotara.canvas.persistence.DefaultCanvasRepository(
                 canvasDao = com.arinara.fotara.canvas.persistence.SqliteCanvasDao(dbHelper),
                 assetManager = assetMgr,
@@ -125,7 +125,7 @@ class CombineManager(
             throw PageLimitExceededException(totalPages)
         }
 
-        val exportsDir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
+        val exportsDir = File(appContext.cacheDir, "exports").apply { if (!exists()) mkdirs() }
         val targetName = outputFileName ?: "${title.replace(Regex("[^a-zA-Z0-9_-]"), "_")}_${System.currentTimeMillis()}.pdf"
         val outputFile = FileNamePresetHelper.ensureUniqueFile(exportsDir, targetName)
 
@@ -142,7 +142,7 @@ class CombineManager(
                 when (item) {
                     is CombineItem.StandalonePhoto -> {
                         currentPageNum++
-                        val flattenedFile = PhotoFlattener.flattenIfNeeded(context, item.photo, resolvedPhotoDrawingRepository)
+                        val flattenedFile = PhotoFlattener.flattenIfNeeded(appContext, item.photo, resolvedPhotoDrawingRepository)
                         if (flattenedFile.absolutePath != item.photo.fileUri) {
                             tempFilesToClean.add(flattenedFile)
                         }
@@ -153,7 +153,7 @@ class CombineManager(
                         for (photo in item.members) {
                             ensureActive()
                             currentPageNum++
-                            val flattenedFile = PhotoFlattener.flattenIfNeeded(context, photo, resolvedPhotoDrawingRepository)
+                            val flattenedFile = PhotoFlattener.flattenIfNeeded(appContext, photo, resolvedPhotoDrawingRepository)
                             if (flattenedFile.absolutePath != photo.fileUri) {
                                 tempFilesToClean.add(flattenedFile)
                             }
@@ -198,10 +198,13 @@ class CombineManager(
                         if (doc != null && !isCanvasEmpty(doc)) {
                             val bitmap = CanvasImageExporter.renderCanvasToBitmap(doc, canvasAssetManager)
                             if (bitmap != null) {
-                                currentPageNum++
-                                renderBitmapPage(pdfDoc, bitmap, item.canvasNote.title, currentPageNum, totalPages, pageWidth, pageHeight, paint)
-                                bitmap.recycle()
-                                onProgress?.invoke(currentPageNum, totalPages)
+                                try {
+                                    currentPageNum++
+                                    renderBitmapPage(pdfDoc, bitmap, item.canvasNote.title, currentPageNum, totalPages, pageWidth, pageHeight, paint)
+                                    onProgress?.invoke(currentPageNum, totalPages)
+                                } finally {
+                                    bitmap.recycle()
+                                }
                             }
                         }
                     }
@@ -239,7 +242,7 @@ class CombineManager(
             throw PageLimitExceededException(totalPages)
         }
 
-        val exportsDir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
+        val exportsDir = File(appContext.cacheDir, "exports").apply { if (!exists()) mkdirs() }
         val targetName = outputFileName ?: "${title.replace(Regex("[^a-zA-Z0-9_-]"), "_")}_${System.currentTimeMillis()}.docx"
         val outputFile = FileNamePresetHelper.ensureUniqueFile(exportsDir, targetName)
         val tempFilesToClean = mutableListOf<File>()
@@ -249,7 +252,7 @@ class CombineManager(
             ensureActive()
             when (item) {
                 is CombineItem.StandalonePhoto -> {
-                    val flattenedFile = PhotoFlattener.flattenIfNeeded(context, item.photo, resolvedPhotoDrawingRepository)
+                    val flattenedFile = PhotoFlattener.flattenIfNeeded(appContext, item.photo, resolvedPhotoDrawingRepository)
                     if (flattenedFile.absolutePath != item.photo.fileUri) {
                         tempFilesToClean.add(flattenedFile)
                     }
@@ -257,7 +260,7 @@ class CombineManager(
                 }
                 is CombineItem.Group -> {
                     for (photo in item.members) {
-                        val flattenedFile = PhotoFlattener.flattenIfNeeded(context, photo, resolvedPhotoDrawingRepository)
+                        val flattenedFile = PhotoFlattener.flattenIfNeeded(appContext, photo, resolvedPhotoDrawingRepository)
                         if (flattenedFile.absolutePath != photo.fileUri) {
                             tempFilesToClean.add(flattenedFile)
                         }
@@ -349,14 +352,17 @@ class CombineManager(
             val bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOpts)
 
             if (bitmap != null) {
-                val scale = minOf(maxW.toFloat() / bitmap.width, maxH.toFloat() / bitmap.height)
-                val dw = (bitmap.width * scale).toInt()
-                val dh = (bitmap.height * scale).toInt()
-                val left = (pageWidth - dw) / 2
-                val top = 70 + (maxH - dh) / 2
+                try {
+                    val scale = minOf(maxW.toFloat() / bitmap.width, maxH.toFloat() / bitmap.height)
+                    val dw = (bitmap.width * scale).toInt()
+                    val dh = (bitmap.height * scale).toInt()
+                    val left = (pageWidth - dw) / 2
+                    val top = 70 + (maxH - dh) / 2
 
-                canvas.drawBitmap(bitmap, null, Rect(left, top, left + dw, top + dh), paint)
-                bitmap.recycle()
+                    canvas.drawBitmap(bitmap, null, Rect(left, top, left + dw, top + dh), paint)
+                } finally {
+                    bitmap.recycle()
+                }
             }
         }
 

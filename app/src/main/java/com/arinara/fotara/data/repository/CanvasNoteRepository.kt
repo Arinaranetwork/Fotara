@@ -72,7 +72,7 @@ class SqliteCanvasNoteRepository(
 
             val cursor = db.rawQuery(
                 """
-                SELECT id, folder_id, subfolder_id, title, data_blob, thumbnail_path,
+                SELECT id, folder_id, subfolder_id, title, NULL, thumbnail_path,
                        created_at, updated_at, added_at, tag_color, linked_deadline,
                        scheduled_at, alert_type, is_trashed, deleted_at, is_pinned
                 FROM canvas_notes
@@ -142,7 +142,44 @@ class SqliteCanvasNoteRepository(
     }
 
     override suspend fun getCanvasNoteByIdOnce(id: Long): CanvasNote? = withContext(Dispatchers.IO) {
-        canvasNotesFlow.value.find { it.id == id }
+        val cached = canvasNotesFlow.value.find { it.id == id }
+        if (cached?.dataBlob != null) return@withContext cached
+
+        val db = dbHelper.getSafeReadableDatabase()
+        db.rawQuery(
+            """
+            SELECT id, folder_id, subfolder_id, title, data_blob, thumbnail_path,
+                   created_at, updated_at, added_at, tag_color, linked_deadline,
+                   scheduled_at, alert_type, is_trashed, deleted_at, is_pinned
+            FROM canvas_notes
+            WHERE id = ?
+            LIMIT 1
+            """.trimIndent(),
+            arrayOf(id.toString())
+        ).use { c ->
+            if (c.moveToNext()) {
+                CanvasNote(
+                    id = c.getLong(0),
+                    folderId = c.getLong(1),
+                    subfolderId = if (c.isNull(2)) null else c.getLong(2),
+                    title = c.getString(3),
+                    dataBlob = if (c.isNull(4)) null else c.getBlob(4),
+                    thumbnailPath = if (c.isNull(5)) null else c.getString(5),
+                    createdAt = c.getLong(6),
+                    updatedAt = c.getLong(7),
+                    addedAt = c.getLong(8),
+                    tagColor = if (c.isNull(9)) null else c.getString(9),
+                    linkedDeadline = if (c.isNull(10)) null else c.getLong(10),
+                    scheduledAt = if (!c.isNull(11)) c.getLong(11) else null,
+                    alertType = if (!c.isNull(12)) c.getString(12) else null,
+                    isTrashed = c.getInt(13) == 1,
+                    deletedAt = if (c.isNull(14)) null else c.getLong(14),
+                    isPinned = if (c.columnCount > 15 && !c.isNull(15)) c.getInt(15) == 1 else false
+                )
+            } else {
+                cached
+            }
+        }
     }
 
     override suspend fun createCanvasNote(

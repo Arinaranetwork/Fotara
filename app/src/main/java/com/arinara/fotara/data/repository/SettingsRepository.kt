@@ -105,13 +105,37 @@ interface SettingsRepository {
 
 class DefaultSettingsRepository(
     private val context: Context,
-    private val folderRepository: FolderRepository,
-    private val photoRepository: PhotoRepository,
-    private val photoStorageManager: PhotoStorageManager,
-    private val workspaceRepository: WorkspaceRepository? = null,
+    private val folderRepositoryProvider: () -> FolderRepository,
+    private val photoRepositoryProvider: () -> PhotoRepository,
+    private val photoStorageManagerProvider: () -> PhotoStorageManager,
+    private val workspaceRepositoryProvider: (() -> WorkspaceRepository?)? = null,
     private val documentRepositoryProvider: (() -> DocumentRepository?)? = null,
     private val coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) : SettingsRepository {
+
+    constructor(
+        context: Context,
+        folderRepository: FolderRepository,
+        photoRepository: PhotoRepository,
+        photoStorageManager: PhotoStorageManager,
+        workspaceRepository: WorkspaceRepository? = null,
+        documentRepositoryProvider: (() -> DocumentRepository?)? = null,
+        coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    ) : this(
+        context = context,
+        folderRepositoryProvider = { folderRepository },
+        photoRepositoryProvider = { photoRepository },
+        photoStorageManagerProvider = { photoStorageManager },
+        workspaceRepositoryProvider = { workspaceRepository },
+        documentRepositoryProvider = documentRepositoryProvider,
+        coroutineScope = coroutineScope
+    )
+
+    private val folderRepository get() = folderRepositoryProvider()
+    private val photoRepository get() = photoRepositoryProvider()
+    private val photoStorageManager get() = photoStorageManagerProvider()
+    private val workspaceRepository get() = workspaceRepositoryProvider?.invoke()
+
 
     private val prefs: SharedPreferences by lazy {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -436,7 +460,8 @@ class DefaultSettingsRepository(
                 workspaceUuidToIdMap[ws.uuid] = ws.id
             }
 
-            if (workspacesArray != null && workspaceRepository != null) {
+            val wsRepo = workspaceRepository
+            if (workspacesArray != null && wsRepo != null) {
                 var currentCustomCount = currentWorkspaces.count { it.kind == WorkspaceKind.CUSTOM }
                 for (i in 0 until workspacesArray.length()) {
                     val wObj = workspacesArray.getJSONObject(i)
@@ -459,7 +484,7 @@ class DefaultSettingsRepository(
                         workspaceUuidToIdMap[wUuid] = archiveTargetId
                     } else if (!workspaceUuidToIdMap.containsKey(wUuid)) {
                         if (currentCustomCount < WorkspaceValidator.MAX_CUSTOM_WORKSPACES) {
-                            val res = workspaceRepository.createWorkspace(wName, validIconKey)
+                            val res = wsRepo.createWorkspace(wName, validIconKey)
                             if (res is WorkspaceResult.Success) {
                                 workspaceUuidToIdMap[wUuid] = res.data.id
                                 currentCustomCount++

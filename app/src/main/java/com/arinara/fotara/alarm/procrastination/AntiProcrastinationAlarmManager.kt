@@ -73,7 +73,7 @@ class AntiProcrastinationAlarmManager(
             val intent = Intent(context, AntiProcrastinationAlarmReceiver::class.java)
             val pendingIntent = PendingIntent.getBroadcast(
                 context,
-                alarmId.toInt(),
+                getRequestCode(alarmId),
                 intent,
                 PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
             )
@@ -87,6 +87,8 @@ class AntiProcrastinationAlarmManager(
         }
     }
 
+    private fun getRequestCode(alarmId: Long): Int = (alarmId and 0x7FFFFFFF).toInt()
+
     private fun createPendingIntent(alarm: AntiProcrastinationAlarm): PendingIntent {
         val intent = Intent(context, AntiProcrastinationAlarmReceiver::class.java).apply {
             putExtra(EXTRA_ALARM_ID, alarm.id)
@@ -96,7 +98,7 @@ class AntiProcrastinationAlarmManager(
         }
         return PendingIntent.getBroadcast(
             context,
-            alarm.id.toInt(),
+            getRequestCode(alarm.id),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

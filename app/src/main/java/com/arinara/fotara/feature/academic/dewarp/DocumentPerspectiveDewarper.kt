@@ -283,7 +283,8 @@ class WhiteboardContrastFilter {
         contrastMultiplier: Float = 1.6f,
         shadowReductionThreshold: Int = 180
     ): IntArray {
-        val total = width * height
+        val total = kotlin.math.min(pixels.size, (width * height).coerceAtLeast(0))
+        if (total == 0) return IntArray(0)
         val out = IntArray(total)
 
         // 1. Calculate approximate luminance distribution to detect ambient lighting

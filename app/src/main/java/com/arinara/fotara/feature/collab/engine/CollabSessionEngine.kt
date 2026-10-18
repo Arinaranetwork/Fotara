@@ -38,18 +38,22 @@ class CollabSessionEngine(
     initialLocalPeerId: String = UUID.randomUUID().toString(),
     initialLocalUserTag: String = "Host",
     initialLocalColorHex: String = "#2563EB"
-) {
+) : AutoCloseable {
 
     companion object {
         const val DEFAULT_PEER_TIMEOUT_MS: Long = 15_000L
+        const val MAX_STROKE_BUFFER_SIZE: Int = 1_000
     }
 
+    @Volatile
     var localPeerId: String = initialLocalPeerId
         private set
 
+    @Volatile
     var localUserTag: String = initialLocalUserTag
         private set
 
+    @Volatile
     var localColorHex: String = initialLocalColorHex
         private set
 
@@ -73,7 +77,15 @@ class CollabSessionEngine(
     /**
      * Optional transport bridge callback for external networks (WebSockets / WebRTC data channels).
      */
+    @Volatile
     var transportBridge: ((CollabMessage) -> Unit)? = null
+
+    override fun close() {
+        leaveRoom()
+        transportBridge = null
+        strokeBuffer.clear()
+        _bufferedStrokesCount.value = 0
+    }
 
     /**
      * Creates a new collaborative study room, generating an official 6-digit room code `FT-XXXX`.
@@ -272,6 +284,9 @@ class CollabSessionEngine(
                     strokeWidth = message.strokeWidth,
                     timestamp = System.currentTimeMillis()
                 )
+                while (strokeBuffer.size >= MAX_STROKE_BUFFER_SIZE) {
+                    strokeBuffer.poll()
+                }
                 strokeBuffer.add(stroke)
                 _bufferedStrokesCount.value = strokeBuffer.size
             }

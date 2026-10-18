@@ -348,6 +348,7 @@ class CanvasToolController(
         val nonStrokes = document.elements.filter {
             (it is ImageElement || it is TextLayerElement) && it.layerId == targetLayerId
         }
+        val docElementsById = document.elements.associateBy { it.id }
 
         for (pt in points) {
             val (wx1, wy1) = ViewportTransform.screenToWorld(prev.first, prev.second, viewport)
@@ -378,6 +379,9 @@ class CanvasToolController(
 
             val strokesToCheck = eraserActiveSurvivingMap.values.toList()
             for (stroke in strokesToCheck) {
+                if (!capsuleIntersectsRect(wx1, wy1, wx2, wy2, worldRadius + stroke.width / 2f, stroke.bounds)) {
+                    continue
+                }
                 val splitParts = StrokeProcessor.eraseStrokeWithCapsule(
                     stroke = stroke,
                     ax = wx1, ay = wy1,
@@ -391,7 +395,7 @@ class CanvasToolController(
                     dirtyBounds = dirtyBounds?.union(stroke.bounds) ?: stroke.bounds
 
                     // Record original stroke from document
-                    val origInDoc = document.elements.find { it.id == stroke.id }
+                    val origInDoc = docElementsById[stroke.id]
                     if (origInDoc is StrokeElement && !eraserTouchedOriginals.containsKey(stroke.id)) {
                         eraserTouchedOriginals[stroke.id] = origInDoc
                     }

@@ -89,7 +89,7 @@ class PdfPageRenderer(val file: File) : Closeable {
         } catch (e: SecurityException) {
             close()
             throw PdfPasswordException("Password required to read: ${file.name}")
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             close()
             throw PdfCorruptException("Failed to initialize PdfRenderer: ${e.message}")
         }
@@ -155,17 +155,27 @@ class PdfPageRenderer(val file: File) : Closeable {
 
                 currentCoroutineContext().ensureActive()
 
-                val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+                var bitmap: Bitmap? = null
+                var success = false
+                try {
+                    val bmp = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+                    bitmap = bmp
 
-                // DEFECT FIX: Fill destination canvas with opaque white before rendering.
-                // PdfRenderer draws vectors/text over transparent pixels by default.
-                // Without an opaque white pre-fill, transparent areas render as black artifacts.
-                bitmap.eraseColor(Color.WHITE)
+                    // DEFECT FIX: Fill destination canvas with opaque white before rendering.
+                    // PdfRenderer draws vectors/text over transparent pixels by default.
+                    // Without an opaque white pre-fill, transparent areas render as black artifacts.
+                    bmp.eraseColor(Color.WHITE)
 
-                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                pageBitmapCache.put(cacheKey, bitmap)
-                bitmap
-            } catch (e: Exception) {
+                    page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    pageBitmapCache.put(cacheKey, bmp)
+                    success = true
+                    bmp
+                } finally {
+                    if (!success && bitmap != null && !bitmap.isRecycled) {
+                        bitmap.recycle()
+                    }
+                }
+            } catch (e: Throwable) {
                 Log.e("PdfPageRenderer", "Error rendering page $pageIndex: ${e.message}")
                 null
             } finally {
@@ -208,16 +218,23 @@ class PdfPageRenderer(val file: File) : Closeable {
             currentCoroutineContext().ensureActive()
             val r = renderer ?: return@withContext null
             var page: PdfRenderer.Page? = null
+            var bitmap: Bitmap? = null
+            var success = false
             try {
                 page = r.openPage(pageIndex)
-                val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-                bitmap.eraseColor(Color.WHITE)
-                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
-                bitmap
+                val bmp = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+                bitmap = bmp
+                bmp.eraseColor(Color.WHITE)
+                page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                success = true
+                bmp
             } catch (e: Exception) {
                 Log.e("PdfPageRenderer", "Error rendering export page $pageIndex: ${e.message}")
                 null
             } finally {
+                if (!success && bitmap != null && !bitmap.isRecycled) {
+                    bitmap.recycle()
+                }
                 try {
                     page?.close()
                 } catch (_: Exception) {}
@@ -246,12 +263,27 @@ class PdfPageRenderer(val file: File) : Closeable {
     override fun close() {
         pageBitmapCache.evictAll()
         try {
-            renderer?.close()
-        } catch (_: Exception) {}
-        try {
-            pfd?.close()
-        } catch (_: Exception) {}
-        renderer = null
-        pfd = null
+            kotlinx.coroutines.runBlocking {
+                renderMutex.withLock {
+                    try {
+                        renderer?.close()
+                    } catch (_: Exception) {}
+                    try {
+                        pfd?.close()
+                    } catch (_: Exception) {}
+                    renderer = null
+                    pfd = null
+                }
+            }
+        } catch (_: Exception) {
+            try {
+                renderer?.close()
+            } catch (_: Exception) {}
+            try {
+                pfd?.close()
+            } catch (_: Exception) {}
+            renderer = null
+            pfd = null
+        }
     }
 }

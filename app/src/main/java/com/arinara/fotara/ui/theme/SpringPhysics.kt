@@ -10,7 +10,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.LaunchedEffect
@@ -192,3 +194,58 @@ fun Modifier.jiggleShakeClickable(
             onClick = onClick
         )
 }
+
+/**
+ * Modifier extension supporting combinedClickable (click + long click) with JigglePress spring physics.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+fun Modifier.jigglePressCombinedClickable(
+    enabled: Boolean = true,
+    role: Role? = null,
+    onLongClick: (() -> Unit)? = null,
+    onDoubleClick: (() -> Unit)? = null,
+    onClick: () -> Unit
+): Modifier = composed {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scaleAnim = remember { Animatable(1.0f) }
+
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            scaleAnim.animateTo(
+                targetValue = 0.90f,
+                animationSpec = SpringPhysics.JigglePressSpec
+            )
+        } else if (scaleAnim.value < 0.99f) {
+            scaleAnim.animateTo(
+                targetValue = 1.08f,
+                animationSpec = SpringPhysics.JigglePressSpec
+            )
+            scaleAnim.animateTo(
+                targetValue = 1.00f,
+                animationSpec = SpringPhysics.JigglePressSpec
+            )
+        } else {
+            scaleAnim.animateTo(
+                targetValue = 1.00f,
+                animationSpec = SpringPhysics.JigglePressSpec
+            )
+        }
+    }
+
+    this
+        .graphicsLayer {
+            scaleX = scaleAnim.value
+            scaleY = scaleAnim.value
+        }
+        .combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
+            enabled = enabled,
+            role = role,
+            onLongClick = onLongClick,
+            onDoubleClick = onDoubleClick,
+            onClick = onClick
+        )
+}
+

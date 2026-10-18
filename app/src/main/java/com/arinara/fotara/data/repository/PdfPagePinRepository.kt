@@ -42,8 +42,11 @@ class SqlitePdfPagePinRepository(
 
     private fun getFlowForDocument(documentId: Long): MutableStateFlow<List<Int>> {
         return documentFlows.computeIfAbsent(documentId) {
-            val initial = loadPinsSync(documentId)
-            MutableStateFlow(initial)
+            val flow = MutableStateFlow<List<Int>>(emptyList())
+            scope.launch(Dispatchers.IO) {
+                flow.value = loadPinsSync(documentId)
+            }
+            flow
         }
     }
 

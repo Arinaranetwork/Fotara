@@ -42,6 +42,8 @@ import kotlinx.coroutines.CancellationException
 import com.arinara.fotara.util.PdfPasswordException
 import com.arinara.fotara.util.PdfCorruptException
 import com.arinara.fotara.util.PdfSplitManager
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
@@ -368,7 +370,7 @@ class SqliteDocumentRepository(
             }
 
             documentNotesFlow.value = notesWithCounts
-            documentPagesFlow.value = pagesMap
+            documentPagesFlow.value = pagesMap.mapValues { it.value.toList() }
             trashedDocumentNotesFlow.value = trashedWithCounts
         } catch (e: Exception) {
             android.util.Log.e("SqliteDocRepo", "Error refreshing document notes: ${e.message}")
@@ -501,20 +503,29 @@ class SqliteDocumentRepository(
             for (i in 0 until totalPages) {
                 currentCoroutineContext().ensureActive()
 
-                val page = renderer.openPage(i)
-                val renderWidth = (page.width * 2).coerceAtMost(2048)
-                val renderHeight = (page.height * 2).coerceAtMost(2048)
-                val bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+                var page: PdfRenderer.Page? = null
+                var bitmap: Bitmap? = null
+                val pageFile: File
+                try {
+                    page = renderer.openPage(i)
+                    val renderWidth = (page.width * 2).coerceAtMost(2048)
+                    val renderHeight = (page.height * 2).coerceAtMost(2048)
+                    val b = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+                    bitmap = b
 
-                // CRITICAL DEFECT FIX: Fill destination canvas with opaque white
-                bitmap.eraseColor(Color.WHITE)
+                    // Fill destination canvas with opaque white
+                    b.eraseColor(Color.WHITE)
 
-                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                page.close()
+                    page.render(b, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    page.close()
+                    page = null
 
-                val pageFile = photoStorageManager.saveDocumentPageBitmap(bitmap, docId, i)
-                pageFiles.add(pageFile)
-                bitmap.recycle()
+                    pageFile = photoStorageManager.saveDocumentPageBitmap(b, docId, i)
+                    pageFiles.add(pageFile)
+                } finally {
+                    try { page?.close() } catch (_: Exception) {}
+                    bitmap?.recycle()
+                }
 
                 val pageValues = ContentValues().apply {
                     put("document_note_id", docId)
@@ -539,13 +550,13 @@ class SqliteDocumentRepository(
             db.delete("document_notes", "id = ?", arrayOf(docId.toString()))
             refreshSync()
             throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             targetFile.delete()
             pageFiles.forEach { it.delete() }
             db.delete("document_pages", "document_note_id = ?", arrayOf(docId.toString()))
             db.delete("document_notes", "id = ?", arrayOf(docId.toString()))
             refreshSync()
-            throw e
+            if (e is Exception) throw e else throw RuntimeException(e)
         } finally {
             try { renderer.close() } catch (_: Exception) {}
             try { pfd.close() } catch (_: Exception) {}
@@ -613,10 +624,18 @@ class SqliteDocumentRepository(
             db.update("document_notes", upCv, "id = ?", arrayOf(docId.toString()))
 
             var docName = ""
-            val nameCursor = db.rawQuery("SELECT name FROM document_notes WHERE id = ?", arrayOf(docId.toString()))
-            nameCursor.use { if (it.moveToFirst()) docName = it.getString(0) ?: "" }
+            var currentFolderId = folderId
+            var currentSubfolderId = subfolderId
+            val nameCursor = db.rawQuery("SELECT name, folder_id, subfolder_id FROM document_notes WHERE id = ?", arrayOf(docId.toString()))
+            nameCursor.use {
+                if (it.moveToFirst()) {
+                    docName = it.getString(0) ?: ""
+                    currentFolderId = it.getLong(1)
+                    currentSubfolderId = if (it.isNull(2)) null else it.getLong(2)
+                }
+            }
 
-            indexDocumentFts(db, docId, folderId, subfolderId, docName.trim(), DocumentType.PDF.name, totalText)
+            indexDocumentFts(db, docId, currentFolderId, currentSubfolderId, docName.trim(), DocumentType.PDF.name, totalText)
         } catch (e: Exception) {
             Log.w("SqliteDocRepo", "Failed to update PDF OCR in document_notes: ${e.message}")
         }
@@ -660,61 +679,66 @@ class SqliteDocumentRepository(
     }
 
     private fun extractDocxText(inputStream: InputStream): String {
-        val zip = ZipInputStream(inputStream)
         val sb = StringBuilder()
-        var entry = zip.nextEntry
-        while (entry != null) {
-            if (entry.name == "word/document.xml") {
-                val parser = Xml.newPullParser()
-                parser.setInput(zip, "UTF-8")
-                var eventType = parser.eventType
-                var cellCountInRow = 0
-                while (eventType != XmlPullParser.END_DOCUMENT) {
-                    val tagName = parser.name?.substringAfter(":") ?: ""
-                    when (eventType) {
-                        XmlPullParser.START_TAG -> {
-                            when (tagName) {
-                                "p" -> {
-                                    if (sb.isNotEmpty() && !sb.endsWith("\n") && !sb.endsWith(" | ")) {
-                                        sb.append("\n")
-                                    }
-                                }
-                                "tr" -> {
-                                    if (sb.isNotEmpty() && !sb.endsWith("\n")) {
-                                        sb.append("\n")
-                                    }
-                                    cellCountInRow = 0
-                                }
-                                "tc" -> {
-                                    if (cellCountInRow > 0) {
-                                        sb.append(" | ")
-                                    }
-                                    cellCountInRow++
-                                }
-                                "t" -> {
-                                    try {
-                                        val text = parser.nextText()
-                                        if (text.isNotEmpty()) {
-                                            sb.append(text)
+        try {
+            ZipInputStream(inputStream).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    if (entry.name == "word/document.xml") {
+                        val buffer = ByteArrayOutputStream()
+                        zip.copyTo(buffer)
+                        val parser = Xml.newPullParser()
+                        parser.setInput(ByteArrayInputStream(buffer.toByteArray()), "UTF-8")
+                        var eventType = parser.eventType
+                        var cellCountInRow = 0
+                        while (eventType != XmlPullParser.END_DOCUMENT) {
+                            val tagName = parser.name?.substringAfter(":") ?: ""
+                            when (eventType) {
+                                XmlPullParser.START_TAG -> {
+                                    when (tagName) {
+                                        "p" -> {
+                                            if (sb.isNotEmpty() && !sb.endsWith("\n") && !sb.endsWith(" | ")) {
+                                                sb.append("\n")
+                                            }
                                         }
-                                    } catch (_: Exception) {}
+                                        "tr" -> {
+                                            if (sb.isNotEmpty() && !sb.endsWith("\n")) {
+                                                sb.append("\n")
+                                            }
+                                            cellCountInRow = 0
+                                        }
+                                        "tc" -> {
+                                            if (cellCountInRow > 0) {
+                                                sb.append(" | ")
+                                            }
+                                            cellCountInRow++
+                                        }
+                                        "t" -> {
+                                            try {
+                                                val text = parser.nextText()
+                                                if (text.isNotEmpty()) {
+                                                    sb.append(text)
+                                                }
+                                            } catch (_: Exception) {}
+                                        }
+                                        "tab" -> sb.append(" ")
+                                        "br" -> sb.append("\n")
+                                    }
                                 }
-                                "tab" -> sb.append(" ")
-                                "br" -> sb.append("\n")
+                                XmlPullParser.END_TAG -> {
+                                    if (tagName == "p" && !sb.endsWith("\n")) {
+                                        sb.append("\n")
+                                    }
+                                }
                             }
+                            eventType = parser.next()
                         }
-                        XmlPullParser.END_TAG -> {
-                            if (tagName == "p" && !sb.endsWith("\n")) {
-                                sb.append("\n")
-                            }
-                        }
+                        break
                     }
-                    eventType = parser.next()
+                    entry = zip.nextEntry
                 }
-                break
             }
-            entry = zip.nextEntry
-        }
+        } catch (_: Exception) {}
         return sb.toString().trim()
     }
 
@@ -748,23 +772,24 @@ class SqliteDocumentRepository(
                 onProgress?.invoke(i + 1, totalPages)
 
                 var page: PdfRenderer.Page? = null
+                var bitmap: Bitmap? = null
                 try {
                     page = renderer.openPage(i)
                     // High-fidelity density-scaled rendering matching the viewer
                     val renderWidth = (page.width * 2).coerceIn(1200, 2560)
                     val renderHeight = (page.height * 2).coerceIn(1200, 2560)
-                    val bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+                    val b = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+                    bitmap = b
 
                     // DEFECT REPAIR: Fill canvas with opaque white before rendering.
                     // Eliminates transparent/black compression artifacts.
-                    bitmap.eraseColor(Color.WHITE)
+                    b.eraseColor(Color.WHITE)
 
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    page.render(b, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
 
-                    val saved = photoStorageManager.saveBitmapAsPhoto(bitmap)
+                    val saved = photoStorageManager.saveBitmapAsPhoto(b)
                     createdPhotoFiles.add(File(saved.filePath))
                     createdPhotoFiles.add(File(saved.thumbnailPath))
-                    bitmap.recycle()
 
                     val photo = Photo(
                         fileUri = saved.filePath,
@@ -782,6 +807,7 @@ class SqliteDocumentRepository(
                     createdPhotoIds.add(newPhotoId)
                 } finally {
                     try { page?.close() } catch (_: Exception) {}
+                    bitmap?.let { if (!it.isRecycled) it.recycle() }
                 }
             }
 
@@ -903,13 +929,19 @@ class SqliteDocumentRepository(
         } catch (_: Exception) {}
 
         val db = dbHelper.getSafeWritableDatabase()
-        removeDocumentFts(db, id)
+        db.beginTransaction()
         try {
-            db.delete("pdf_page_pins", "document_id = ?", arrayOf(id.toString()))
-            db.delete("pdf_page_drawings", "document_id = ?", arrayOf(id.toString()))
-        } catch (_: Exception) {}
-        db.delete("document_pages", "document_note_id = ?", arrayOf(id.toString()))
-        db.delete("document_notes", "id = ?", arrayOf(id.toString()))
+            removeDocumentFts(db, id)
+            try {
+                db.delete("pdf_page_pins", "document_id = ?", arrayOf(id.toString()))
+                db.delete("pdf_page_drawings", "document_id = ?", arrayOf(id.toString()))
+            } catch (_: Exception) {}
+            db.delete("document_pages", "document_note_id = ?", arrayOf(id.toString()))
+            db.delete("document_notes", "id = ?", arrayOf(id.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
         refreshSync()
         folderRepository?.refresh()
         Unit
@@ -1133,6 +1165,7 @@ class SqliteDocumentRepository(
             db.setTransactionSuccessful()
         } catch (e: Exception) {
             Log.w("SqliteDocRepo", "rebuildSearchIndex error: ${e.message}")
+            count = 0
         } finally {
             db.endTransaction()
         }

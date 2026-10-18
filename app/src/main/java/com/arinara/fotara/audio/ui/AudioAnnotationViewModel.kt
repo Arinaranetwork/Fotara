@@ -151,7 +151,10 @@ class AudioAnnotationViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        recorderManager.safeFinalizeOnInterruption()
+        try {
+            recorderManager.safeFinalizeOnInterruption()
+        } catch (_: Exception) {}
+        recorderManager.release()
         playerManager.release()
     }
 }

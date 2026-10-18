@@ -171,9 +171,9 @@ fun TextNoteEditorScreen(
     )
 
     val audioRepo = remember(audioAnnotationRepository, context) {
-        audioAnnotationRepository ?: com.arinara.fotara.audio.repository.SqliteAudioAnnotationRepository(com.arinara.fotara.data.db.FotaraDbHelper(context))
+        audioAnnotationRepository ?: com.arinara.fotara.audio.repository.SqliteAudioAnnotationRepository(com.arinara.fotara.data.db.FotaraDbHelper(context.applicationContext))
     }
-    val audioRecorderManager = remember(context) { com.arinara.fotara.audio.recorder.AudioRecorderManager(context) }
+    val audioRecorderManager = remember(context) { com.arinara.fotara.audio.recorder.AudioRecorderManager(context.applicationContext) }
     val audioPlayerManager = remember { com.arinara.fotara.audio.player.AudioPlayerManager() }
     val audioViewModel: com.arinara.fotara.audio.ui.AudioAnnotationViewModel = viewModel(
         key = "audio_note_${state.noteId ?: 0L}",
@@ -255,6 +255,10 @@ fun TextNoteEditorScreen(
     }
 
     val handleExit = {
+        audioViewModel.stopPlayback()
+        audioViewModel.cancelRecording()
+        audioPlayerManager.release()
+        audioRecorderManager.release()
         coroutineScope.launch {
             val purged = state.purgeIfCompletelyBlank()
             if (!purged) {
@@ -270,6 +274,10 @@ fun TextNoteEditorScreen(
 
     DisposableEffect(Unit) {
         onDispose {
+            audioViewModel.stopPlayback()
+            audioViewModel.cancelRecording()
+            audioPlayerManager.release()
+            audioRecorderManager.release()
             coroutineScope.launch {
                 state.flushAutosaveNow()
             }

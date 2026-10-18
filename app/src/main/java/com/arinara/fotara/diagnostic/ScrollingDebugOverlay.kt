@@ -71,7 +71,7 @@ fun ScrollingDebugOverlay(
     val tickerScrollState = rememberScrollState()
 
     // Auto-scroll ticker to the latest event
-    LaunchedEffect(events.size) {
+    LaunchedEffect(events.lastOrNull()?.id) {
         if (events.isNotEmpty()) {
             tickerScrollState.animateScrollTo(tickerScrollState.maxValue)
         }

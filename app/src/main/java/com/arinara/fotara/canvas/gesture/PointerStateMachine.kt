@@ -459,17 +459,20 @@ class PointerStateMachine(
 
                         val deltaX = currentCenterX - current.lastCenterX
                         val deltaY = currentCenterY - current.lastCenterY
-                        val zoomFactor = currentDist / current.lastDistance
+                        val rawZoom = currentDist / current.lastDistance.coerceAtLeast(1f)
+                        val safeZoomFactor = if (rawZoom.isNaN() || rawZoom.isInfinite() || rawZoom <= 0f) 1.0f else rawZoom.coerceIn(0.1f, 10.0f)
+                        val safeDeltaX = if (deltaX.isNaN()) 0f else deltaX
+                        val safeDeltaY = if (deltaY.isNaN()) 0f else deltaY
 
-                        lastDeltaX = deltaX
-                        lastDeltaY = deltaY
+                        lastDeltaX = safeDeltaX
+                        lastDeltaY = safeDeltaY
                         lastMoveTimeMs = System.currentTimeMillis()
 
                         actions.add(
                             PointerAction.PanZoomDelta(
-                                deltaScreenX = deltaX,
-                                deltaScreenY = deltaY,
-                                zoomFactor = zoomFactor,
+                                deltaScreenX = safeDeltaX,
+                                deltaScreenY = safeDeltaY,
+                                zoomFactor = safeZoomFactor,
                                 focalScreenX = currentCenterX,
                                 focalScreenY = currentCenterY
                             )

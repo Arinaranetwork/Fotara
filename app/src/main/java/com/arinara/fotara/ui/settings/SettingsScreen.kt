@@ -139,6 +139,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -340,6 +341,8 @@ fun SettingsScreen(
     }
 
     var showSortOrderDialog by remember { mutableStateOf(false) }
+    var versionTapCount by remember { mutableIntStateOf(0) }
+    val isDevModeEnabled by com.arinara.fotara.diagnostic.AppDiagnosticLogger.isDeveloperModeEnabled.collectAsState()
     var showGridDensityDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showOcrLanguageDialog by remember { mutableStateOf(false) }
@@ -941,7 +944,16 @@ fun SettingsScreen(
                         item {
                             SettingsAboutCard(
                                 versionName = appVersionName,
-                                versionCode = appVersionCode
+                                versionCode = appVersionCode,
+                                onVersionTap = {
+                                    versionTapCount++
+                                    if (versionTapCount == 7) {
+                                        com.arinara.fotara.diagnostic.AppDiagnosticLogger.setDeveloperModeEnabled(context, true)
+                                        android.widget.Toast.makeText(context, "Developer Mode Unlocked!", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else if (versionTapCount in 4..6) {
+                                        android.widget.Toast.makeText(context, "${7 - versionTapCount} taps away from Developer Mode", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             )
                         }
                         item { SettingsListDivider() }
@@ -1040,6 +1052,15 @@ fun SettingsScreen(
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(start = 8.dp, top = 16.dp, bottom = 4.dp)
+                            )
+                        }
+                        item {
+                            SettingsRowToggle(
+                                title = "Extreme Developer Mode",
+                                subtitle = "Unlocks live RAM graph, worker memory delta tracking & leak hints",
+                                icon = Icons.Default.Speed,
+                                checked = isDevModeEnabled,
+                                onCheckedChange = { com.arinara.fotara.diagnostic.AppDiagnosticLogger.setDeveloperModeEnabled(context, it) }
                             )
                         }
                         item {
@@ -1582,13 +1603,19 @@ private fun SettingsAppResidueCard(
  * About Fotara card with app version and legal notices.
  */
 @Composable
-private fun SettingsAboutCard(versionName: String, versionCode: Long) {
+private fun SettingsAboutCard(
+    versionName: String,
+    versionCode: Long,
+    onVersionTap: () -> Unit = {}
+) {
     AppCard(
         cornerRadius = 24.dp,
         containerColor = ElectricSlateTokens.SurfacePanel,
         borderColor = ElectricSlateTokens.BorderSubtle,
         contentPadding = 16.dp,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onVersionTap)
     ) {
         Row(
             verticalAlignment = Alignment.Top,

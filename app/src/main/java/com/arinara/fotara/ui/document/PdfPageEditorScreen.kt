@@ -337,8 +337,8 @@ fun PdfPageEditorScreen(
                     val scaleToUse = userScale.coerceAtMost(3.0f)
                     val hiRes = viewModel.renderPage(
                         pageIndex = uiState.pageIndex,
-                        destWidth = (targetWidthPx * scaleToUse).toInt(),
-                        destHeight = (targetHeightPx * scaleToUse).toInt(),
+                        destWidth = targetWidthPx,
+                        destHeight = targetHeightPx,
                         renderScale = scaleToUse
                     )
                     if (hiRes != null) highResBitmap = hiRes

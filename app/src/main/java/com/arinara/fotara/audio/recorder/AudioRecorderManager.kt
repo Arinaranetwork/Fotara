@@ -13,6 +13,7 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,9 +38,11 @@ sealed interface AudioRecorderState {
 }
 
 class AudioRecorderManager(
-    private val context: Context,
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main)
+    context: Context,
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 ) {
+    private val context = context.applicationContext
+    private val lock = Any()
 
     private var mediaRecorder: MediaRecorder? = null
     private var currentOutputFile: File? = null
@@ -65,7 +68,7 @@ class AudioRecorderManager(
      * Starts audio recording in AAC (.m4a) with a hard cap of 5 minutes (300 seconds).
      * Returns true if recording started successfully, false otherwise.
      */
-    fun startRecording(): Boolean {
+    fun startRecording(): Boolean = synchronized(lock) {
         if (isCurrentlyRecording) {
             Log.w(TAG, "Recording already in progress")
             return false
@@ -83,6 +86,7 @@ class AudioRecorderManager(
                 @Suppress("DEPRECATION")
                 MediaRecorder()
             }
+            mediaRecorder = recorder
 
             recorder.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
@@ -92,7 +96,7 @@ class AudioRecorderManager(
                 setAudioEncodingBitRate(AUDIO_BIT_RATE) // 64kbps
                 setAudioSamplingRate(AUDIO_SAMPLE_RATE) // 44.1kHz
                 setOutputFile(outputFile.absolutePath)
-                
+
                 // Info listener for max duration reached
                 setMaxDuration(MAX_RECORDING_DURATION_MS.toInt())
                 setOnInfoListener { _, what, _ ->
@@ -101,7 +105,7 @@ class AudioRecorderManager(
                         stopRecording()
                     }
                 }
-                
+
                 setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "MediaRecorder error: what=$what, extra=$extra")
                     safeFinalizeOnInterruption()
@@ -111,7 +115,6 @@ class AudioRecorderManager(
                 start()
             }
 
-            mediaRecorder = recorder
             isCurrentlyRecording = true
             isPaused = false
             accumulatedDurationMs = 0L
@@ -125,6 +128,12 @@ class AudioRecorderManager(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start audio recording", e)
             _recorderState.value = AudioRecorderState.Error("Failed to start recording: ${e.message}")
+            currentOutputFile?.let { file ->
+                if (file.exists() && file.length() == 0L) {
+                    file.delete()
+                }
+            }
+            currentOutputFile = null
             cleanupRecorderResources()
             return false
         }
@@ -134,22 +143,25 @@ class AudioRecorderManager(
      * Pauses the active recording session.
      */
     fun pauseRecording() {
-        if (!isCurrentlyRecording || isPaused || mediaRecorder == null) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            try {
-                mediaRecorder?.pause()
-                accumulatedDurationMs += (System.currentTimeMillis() - lastResumeTimeMs)
-                isPaused = true
-                val currentFile = currentOutputFile?.absolutePath ?: ""
-                _recorderState.value = AudioRecorderState.Recording(
-                    elapsedMs = accumulatedDurationMs,
-                    filePath = currentFile,
-                    amplitude = 0,
+        synchronized(lock) {
+            if (!isCurrentlyRecording || isPaused || mediaRecorder == null) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    mediaRecorder?.pause()
                     isPaused = true
-                )
-                Log.i(TAG, "Audio recording paused at ${accumulatedDurationMs}ms")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error pausing recording", e)
+                    accumulatedDurationMs += (System.currentTimeMillis() - lastResumeTimeMs)
+                    val file = currentOutputFile
+                    val path = file?.absolutePath ?: ""
+                    _recorderState.value = AudioRecorderState.Recording(
+                        elapsedMs = accumulatedDurationMs,
+                        filePath = path,
+                        amplitude = 0,
+                        isPaused = true
+                    )
+                    Log.i(TAG, "Audio recording paused at ${accumulatedDurationMs}ms")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to pause MediaRecorder", e)
+                }
             }
         }
     }
@@ -158,30 +170,33 @@ class AudioRecorderManager(
      * Resumes the paused recording session.
      */
     fun resumeRecording() {
-        if (!isCurrentlyRecording || !isPaused || mediaRecorder == null) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            try {
-                mediaRecorder?.resume()
-                lastResumeTimeMs = System.currentTimeMillis()
-                isPaused = false
-                val currentFile = currentOutputFile?.absolutePath ?: ""
-                _recorderState.value = AudioRecorderState.Recording(
-                    elapsedMs = accumulatedDurationMs,
-                    filePath = currentFile,
-                    amplitude = 0,
+        synchronized(lock) {
+            if (!isCurrentlyRecording || !isPaused || mediaRecorder == null) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    mediaRecorder?.resume()
                     isPaused = false
-                )
-                Log.i(TAG, "Audio recording resumed")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error resuming recording", e)
+                    lastResumeTimeMs = System.currentTimeMillis()
+                    val file = currentOutputFile
+                    val path = file?.absolutePath ?: ""
+                    _recorderState.value = AudioRecorderState.Recording(
+                        elapsedMs = accumulatedDurationMs,
+                        filePath = path,
+                        amplitude = 0,
+                        isPaused = false
+                    )
+                    Log.i(TAG, "Audio recording resumed at ${accumulatedDurationMs}ms")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to resume MediaRecorder", e)
+                }
             }
         }
     }
 
     /**
-     * Stops the ongoing recording gracefully and finalizes the audio file.
+     * Stops recording and returns finalized audio info.
      */
-    fun stopRecording(): AudioRecorderState.Finalized? {
+    fun stopRecording(): AudioRecorderState.Finalized? = synchronized(lock) {
         if (!isCurrentlyRecording || mediaRecorder == null) {
             Log.w(TAG, "No active recording to stop")
             return null
@@ -193,35 +208,43 @@ class AudioRecorderManager(
         val currentResumeDuration = if (isPaused) 0L else (System.currentTimeMillis() - lastResumeTimeMs)
         val finalDurationMs = (accumulatedDurationMs + currentResumeDuration).coerceAtMost(MAX_RECORDING_DURATION_MS)
         val file = currentOutputFile
+        val recorder = mediaRecorder
+        mediaRecorder = null
+        isCurrentlyRecording = false
+        isPaused = false
 
-        return try {
-            mediaRecorder?.apply {
-                stop()
-                release()
+        var stopSuccessful = false
+        if (recorder != null) {
+            try {
+                recorder.stop()
+                stopSuccessful = true
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception while stopping MediaRecorder", e)
+            } finally {
+                try {
+                    recorder.release()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Exception while releasing MediaRecorder", e)
+                }
             }
-            mediaRecorder = null
-            isCurrentlyRecording = false
-            isPaused = false
+        }
 
-            if (file != null && file.exists() && file.length() > 0) {
-                val finalizedState = AudioRecorderState.Finalized(
-                    totalDurationMs = finalDurationMs,
-                    filePath = file.absolutePath
-                )
-                _recorderState.value = finalizedState
-                Log.i(TAG, "Audio recording finalized successfully: ${file.absolutePath}, duration: ${finalDurationMs}ms")
-                finalizedState
-            } else {
-                Log.e(TAG, "Recorded audio file is missing or empty")
-                _recorderState.value = AudioRecorderState.Error("Recorded file is empty")
-                null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Exception while stopping MediaRecorder", e)
-            safeFinalizeOnInterruption()
+        accumulatedDurationMs = 0L
+
+        return if (stopSuccessful && file != null && file.exists() && file.length() > 0) {
+            val finalizedState = AudioRecorderState.Finalized(
+                totalDurationMs = finalDurationMs,
+                filePath = file.absolutePath
+            )
+            _recorderState.value = finalizedState
+            Log.i(TAG, "Audio recording finalized successfully: ${file.absolutePath}, duration: ${finalDurationMs}ms")
+            finalizedState
+        } else {
+            file?.let { if (it.exists() && it.length() == 0L) it.delete() }
+            currentOutputFile = null
+            Log.e(TAG, "Recorded audio file is missing, empty, or stop failed")
+            _recorderState.value = AudioRecorderState.Error("Recording failed or was too short")
             null
-        } finally {
-            cleanupRecorderResources()
         }
     }
 
@@ -230,83 +253,110 @@ class AudioRecorderManager(
      * by safely finalizing and saving whatever audio data has been captured so far.
      */
     fun safeFinalizeOnInterruption() {
-        if (!isCurrentlyRecording) return
+        synchronized(lock) {
+            if (!isCurrentlyRecording) return
 
-        timerJob?.cancel()
-        timerJob = null
+            timerJob?.cancel()
+            timerJob = null
 
-        val currentResumeDuration = if (isPaused) 0L else (System.currentTimeMillis() - lastResumeTimeMs)
-        val finalDurationMs = (accumulatedDurationMs + currentResumeDuration).coerceAtMost(MAX_RECORDING_DURATION_MS)
-        val file = currentOutputFile
+            val currentResumeDuration = if (isPaused) 0L else (System.currentTimeMillis() - lastResumeTimeMs)
+            val finalDurationMs = (accumulatedDurationMs + currentResumeDuration).coerceAtMost(MAX_RECORDING_DURATION_MS)
+            val file = currentOutputFile
+            val recorder = mediaRecorder
+            mediaRecorder = null
+            isCurrentlyRecording = false
+            isPaused = false
 
-        try {
-            mediaRecorder?.stop()
-        } catch (e: Exception) {
-            Log.e(TAG, "Exception during emergency stop on interruption", e)
-        }
+            try {
+                recorder?.stop()
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception during emergency stop on interruption", e)
+            } finally {
+                try {
+                    recorder?.release()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Exception during emergency release on interruption", e)
+                }
+            }
 
-        cleanupRecorderResources()
+            accumulatedDurationMs = 0L
 
-        if (file != null && file.exists() && file.length() > 0) {
-            _recorderState.value = AudioRecorderState.Finalized(
-                totalDurationMs = finalDurationMs,
-                filePath = file.absolutePath
-            )
-            Log.i(TAG, "Safely saved partial recording upon interruption: ${file.absolutePath}")
-        } else {
-            _recorderState.value = AudioRecorderState.Error("Recording interrupted with zero bytes saved")
+            if (file != null && file.exists() && file.length() > 0) {
+                val finalizedState = AudioRecorderState.Finalized(
+                    totalDurationMs = finalDurationMs,
+                    filePath = file.absolutePath
+                )
+                _recorderState.value = finalizedState
+                Log.i(TAG, "Safely finalized interrupted recording: ${file.absolutePath}, duration: ${finalDurationMs}ms")
+            } else {
+                file?.let { if (it.exists() && it.length() == 0L) it.delete() }
+                currentOutputFile = null
+                _recorderState.value = AudioRecorderState.Idle
+            }
         }
     }
 
     /**
-     * Cancels and discards the current recording.
+     * Cancels the active recording session and deletes the partially recorded file.
      */
     fun cancelRecording() {
-        timerJob?.cancel()
-        timerJob = null
+        synchronized(lock) {
+            if (!isCurrentlyRecording && mediaRecorder == null) return
 
-        try {
-            mediaRecorder?.stop()
-        } catch (e: Exception) {
-            Log.e(TAG, "Exception while discarding recording", e)
-        }
-        cleanupRecorderResources()
+            timerJob?.cancel()
+            timerJob = null
+            val file = currentOutputFile
+            currentOutputFile = null
 
-        currentOutputFile?.let { file ->
-            if (file.exists()) {
+            cleanupRecorderResources()
+
+            if (file != null && file.exists()) {
                 file.delete()
+                Log.i(TAG, "Audio recording cancelled and file deleted: ${file.absolutePath}")
             }
+            _recorderState.value = AudioRecorderState.Idle
         }
-        currentOutputFile = null
-        _recorderState.value = AudioRecorderState.Idle
     }
 
     fun resetStateToIdle() {
-        _recorderState.value = AudioRecorderState.Idle
+        synchronized(lock) {
+            _recorderState.value = AudioRecorderState.Idle
+        }
     }
 
     private fun startDurationTimer(filePath: String) {
         timerJob?.cancel()
         timerJob = scope.launch {
-            while (isActive && isCurrentlyRecording) {
-                if (!isPaused) {
-                    val currentResumeDuration = System.currentTimeMillis() - lastResumeTimeMs
-                    val elapsed = accumulatedDurationMs + currentResumeDuration
+            while (isActive) {
+                val (elapsed, isRecording, paused) = synchronized(lock) {
+                    if (!isCurrentlyRecording) return@launch
+                    val currentResumeDuration = if (isPaused) 0L else (System.currentTimeMillis() - lastResumeTimeMs)
+                    val total = accumulatedDurationMs + currentResumeDuration
+                    Triple(total, isCurrentlyRecording, isPaused)
+                }
+
+                if (!isRecording) break
+
+                if (!paused) {
                     if (elapsed >= MAX_RECORDING_DURATION_MS) {
                         stopRecording()
                         break
                     }
                     val amp = try {
-                        mediaRecorder?.maxAmplitude ?: 0
-                    } catch (e: Exception) {
+                        synchronized(lock) { mediaRecorder?.maxAmplitude ?: 0 }
+                    } catch (_: Exception) {
                         0
                     }
-                    _recorderState.value = AudioRecorderState.Recording(
-                        elapsedMs = elapsed,
-                        filePath = filePath,
-                        amplitude = amp,
-                        isPaused = false
-                    )
+                    synchronized(lock) {
+                        if (isCurrentlyRecording && !isPaused) {
+                            _recorderState.value = AudioRecorderState.Recording(
+                                elapsedMs = elapsed,
+                                filePath = filePath,
+                                amplitude = amp,
+                                isPaused = false
+                            )
+                        }
+                    }
                 }
                 delay(TICK_INTERVAL_MS)
             }
@@ -314,15 +364,34 @@ class AudioRecorderManager(
     }
 
     private fun cleanupRecorderResources() {
-        try {
-            mediaRecorder?.release()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error releasing MediaRecorder", e)
-        }
+        timerJob?.cancel()
+        timerJob = null
+        val recorder = mediaRecorder
         mediaRecorder = null
+        if (recorder != null) {
+            try {
+                if (isCurrentlyRecording) {
+                    try {
+                        recorder.stop()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error stopping recorder during cleanup", e)
+                    }
+                }
+            } finally {
+                try {
+                    recorder.release()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error releasing MediaRecorder", e)
+                }
+            }
+        }
         isCurrentlyRecording = false
         isPaused = false
         accumulatedDurationMs = 0L
+    }
+
+    fun release() = synchronized(lock) {
+        cleanupRecorderResources()
     }
 
     companion object {

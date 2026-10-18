@@ -39,7 +39,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateMapOf
@@ -197,9 +199,11 @@ class FolderDetailViewModel(
             )
         }
 
+        val filterParamsFlow = _uiState.map { Pair(it.selectedSubfolderId, it.sortOption) }.distinctUntilChanged()
+
         viewModelScope.launch {
-            combine(_uiState, sourceBundleFlow) { state, bundle ->
-                val currentSubfolder = state.selectedSubfolderId
+            combine(filterParamsFlow, sourceBundleFlow) { (selectedSubfolderId, sortOption), bundle ->
+                val currentSubfolder = selectedSubfolderId
                 val filteredPhotos = if (currentSubfolder == null) bundle.allPhotos else bundle.allPhotos.filter { it.subfolderId == currentSubfolder }
                 val filteredGroups = if (currentSubfolder == null) bundle.allGroups else bundle.allGroups.filter { it.subfolderId == currentSubfolder }
                 val filteredDocs = if (currentSubfolder == null) bundle.allDocs else bundle.allDocs.filter { it.subfolderId == currentSubfolder }
@@ -259,7 +263,7 @@ class FolderDetailViewModel(
 
                 val allItems = standaloneItems + groupItems + docItems + textNoteItems + canvasNoteItems
 
-                val sortedItems = when (state.sortOption) {
+                val sortedItems = when (sortOption) {
                     PhotoSortOption.UPLOAD_DATE_DESC -> allItems.sortedWith(compareByDescending<FolderGridItem> { it.isPinned }.thenByDescending { it.sortCreatedAt })
                     PhotoSortOption.UPLOAD_DATE_ASC -> allItems.sortedWith(compareByDescending<FolderGridItem> { it.isPinned }.thenBy { it.sortCreatedAt })
                     PhotoSortOption.NEAREST_DEADLINE -> allItems.sortedWith(compareByDescending<FolderGridItem> { it.isPinned }.thenBy { it.sortDeadline ?: Long.MAX_VALUE })
@@ -291,7 +295,7 @@ class FolderDetailViewModel(
                     }
                 }
 
-                val sortedPhotos = when (state.sortOption) {
+                val sortedPhotos = when (sortOption) {
                     PhotoSortOption.UPLOAD_DATE_DESC -> filteredPhotos.sortedWith(compareByDescending<Photo> { it.isPinned }.thenByDescending { it.addedAt })
                     PhotoSortOption.UPLOAD_DATE_ASC -> filteredPhotos.sortedWith(compareByDescending<Photo> { it.isPinned }.thenBy { it.addedAt })
                     PhotoSortOption.NEAREST_DEADLINE -> filteredPhotos.sortedWith(compareByDescending<Photo> { it.isPinned }.thenBy { it.linkedDeadline ?: Long.MAX_VALUE })
@@ -330,15 +334,23 @@ class FolderDetailViewModel(
         _uiState.update { it.copy(showAddSubfolderDialog = false) }
     }
 
+    @Volatile private var isCreatingSubfolder = false
+
     fun createSubfolder(name: String) {
-        if (name.isBlank()) return
+        val trimmed = name.trim()
+        if (trimmed.isBlank() || isCreatingSubfolder) return
+        isCreatingSubfolder = true
         viewModelScope.launch {
-            folderRepository.createSubfolder(folderId, name.trim())
-            _uiState.update {
-                it.copy(
-                    showAddSubfolderDialog = false,
-                    userMessage = "Subfolder \"$name\" created"
-                )
+            try {
+                folderRepository.createSubfolder(folderId, trimmed)
+                _uiState.update {
+                    it.copy(
+                        showAddSubfolderDialog = false,
+                        userMessage = "Subfolder \"$trimmed\" created"
+                    )
+                }
+            } finally {
+                isCreatingSubfolder = false
             }
         }
     }
@@ -415,6 +427,7 @@ class FolderDetailViewModel(
                 val pdfFile = PdfExporter.exportFolderGridToPdf(context, folderName, gridItems)
                 onReady(pdfFile)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Failed to export PDF: ${e.message}") }
             }
         }
@@ -434,6 +447,7 @@ class FolderDetailViewModel(
                 }
                 onReady(exportedFile)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Export failed: ${e.message}") }
             }
         }
@@ -1231,6 +1245,7 @@ class FolderDetailViewModel(
                 }
                 onReady(file)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Export failed: ${e.message}") }
             }
         }
@@ -1555,7 +1570,8 @@ class FolderDetailViewModel(
                         canvasNoteRepository?.refresh()
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
             } finally {
                 isRefreshingData = false
                 _uiState.update { it.copy(isRefreshing = false) }

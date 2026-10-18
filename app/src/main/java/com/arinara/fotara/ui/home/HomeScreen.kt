@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -561,9 +562,7 @@ fun HomeScreen(
 
                 HomeNavTab.HOME -> {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .windowInsetsPadding(WindowInsets.statusBars)
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         // Dynamic Header Slot: ScreenHeader and Multi-Select action header overlay
                         Box(
@@ -742,6 +741,7 @@ fun HomeScreen(
                                 Row(
                                     modifier = Modifier
                                         .matchParentSize()
+                                        .windowInsetsPadding(WindowInsets.statusBars)
                                         .padding(horizontal = 16.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {

@@ -35,6 +35,7 @@ data class PageHighlightData(
 object PdfSearchHighlighter {
 
     private const val MAX_BOXES_PER_PAGE = 200
+    private const val MAX_CACHE_ENTRIES = 100
 
     private val recognizer by lazy {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -45,6 +46,13 @@ object PdfSearchHighlighter {
 
     fun clearCache() {
         cache.clear()
+    }
+
+    fun close() {
+        try {
+            recognizer.close()
+        } catch (_: Exception) {}
+        clearCache()
     }
 
     suspend fun getHighlightBoxes(
@@ -64,7 +72,7 @@ object PdfSearchHighlighter {
         cache[cacheKey]?.let { return@withContext it }
 
         try {
-            val inputImage = InputImage.fromFilePath(context, Uri.fromFile(imageFile))
+            val inputImage = InputImage.fromFilePath(context.applicationContext, Uri.fromFile(imageFile))
             val recognizedText = recognizer.process(inputImage).awaitTask()
 
             val boxes = mutableListOf<HighlightBox>()
@@ -96,6 +104,9 @@ object PdfSearchHighlighter {
                 imageHeight = inputImage.height,
                 boxes = boxes
             )
+            if (cache.size >= MAX_CACHE_ENTRIES) {
+                cache.keys().toList().firstOrNull()?.let { cache.remove(it) }
+            }
             cache[cacheKey] = data
             data
         } catch (_: Exception) {

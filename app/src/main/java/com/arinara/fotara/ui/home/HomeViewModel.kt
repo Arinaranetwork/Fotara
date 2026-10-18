@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -196,7 +197,8 @@ class HomeViewModel(
                         canvasNoteRepository?.refresh()
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
             } finally {
                 isRefreshingData = false
                 _uiState.update { it.copy(isRefreshing = false) }
@@ -242,11 +244,13 @@ class HomeViewModel(
     }
 
     fun setDateFilter(filter: SearchDateFilter) {
+        searchDebounceJob?.cancel()
         _uiState.update { it.copy(searchDateFilter = filter) }
         executeSearch(_uiState.value.searchQuery, filter, _uiState.value.searchColorFilter, _uiState.value.selectedSmartTag)
     }
 
     fun setSortOrder(order: SearchSortOrder) {
+        searchDebounceJob?.cancel()
         _uiState.update { it.copy(searchSortOrder = order) }
         executeSearch(
             _uiState.value.searchQuery,
@@ -259,6 +263,7 @@ class HomeViewModel(
     }
 
     fun setCustomDateRange(range: DateRange) {
+        searchDebounceJob?.cancel()
         _uiState.update { it.copy(searchDateFilter = SearchDateFilter.CUSTOM_RANGE, customDateRange = range) }
         executeSearch(
             _uiState.value.searchQuery,
@@ -271,18 +276,21 @@ class HomeViewModel(
     }
 
     fun setColorFilter(colorHex: String?) {
+        searchDebounceJob?.cancel()
         val newColor = if (_uiState.value.searchColorFilter == colorHex) null else colorHex
         _uiState.update { it.copy(searchColorFilter = newColor) }
         executeSearch(_uiState.value.searchQuery, _uiState.value.searchDateFilter, newColor, _uiState.value.selectedSmartTag)
     }
 
     fun selectSmartTag(tag: String?) {
+        searchDebounceJob?.cancel()
         val newTag = if (_uiState.value.selectedSmartTag == tag) null else tag
         _uiState.update { it.copy(selectedSmartTag = newTag) }
         executeSearch(_uiState.value.searchQuery, _uiState.value.searchDateFilter, _uiState.value.searchColorFilter, newTag)
     }
 
     fun clearFilters() {
+        searchDebounceJob?.cancel()
         _uiState.update {
             it.copy(
                 searchDateFilter = SearchDateFilter.ALL,
@@ -705,6 +713,7 @@ class HomeViewModel(
                 folderRepository.renameFolder(folderId, trimmed)
                 _uiState.update { it.copy(userMessage = "Renamed to \"$trimmed\"") }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Failed to rename folder: ${e.message}") }
             }
         }
@@ -715,6 +724,7 @@ class HomeViewModel(
             try {
                 folderRepository.togglePin(folderId)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Failed to toggle pin: ${e.message}") }
             }
         }
@@ -725,6 +735,7 @@ class HomeViewModel(
             try {
                 folderRepository.updateFolderColor(folderId, colorHex)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Failed to update color: ${e.message}") }
             }
         }
@@ -736,6 +747,7 @@ class HomeViewModel(
                 folderRepository.lockFolder(folderId, pin)
                 _uiState.update { it.copy(userMessage = "Folder locked with PIN") }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Failed to lock folder: ${e.message}") }
             }
         }
@@ -747,6 +759,7 @@ class HomeViewModel(
                 folderRepository.unlockFolder(folderId)
                 _uiState.update { it.copy(userMessage = "Folder lock removed") }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Failed to unlock folder: ${e.message}") }
             }
         }
@@ -758,6 +771,7 @@ class HomeViewModel(
                 folderRepository.updateFolderPin(folderId, newPin)
                 _uiState.update { it.copy(userMessage = "Folder PIN updated") }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Failed to update PIN: ${e.message}") }
             }
         }
@@ -844,9 +858,13 @@ class HomeViewModel(
         _uiState.update { it.copy(showBulkDeleteDialog = false, bulkDeleteStats = null) }
     }
 
+    @Volatile private var isBulkDeleting = false
+
     fun confirmBulkDelete() {
+        if (isBulkDeleting) return
         val selectedIds = _uiState.value.selectedFolderIds.toList()
         if (selectedIds.isEmpty()) return
+        isBulkDeleting = true
 
         viewModelScope.launch {
             try {
@@ -871,23 +889,33 @@ class HomeViewModel(
                     )
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update {
                     it.copy(
                         showBulkDeleteDialog = false,
                         userMessage = "Failed to delete folders: ${e.message}"
                     )
                 }
+            } finally {
+                isBulkDeleting = false
             }
         }
     }
 
+    @Volatile private var isDeletingFolder = false
+
     fun deleteFolder(folderId: Long) {
+        if (isDeletingFolder) return
+        isDeletingFolder = true
         viewModelScope.launch {
             try {
                 folderRepository.deleteFolders(listOf(folderId))
                 _uiState.update { it.copy(userMessage = "Folder moved to Trash") }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(userMessage = "Failed to delete folder: ${e.message}") }
+            } finally {
+                isDeletingFolder = false
             }
         }
     }
@@ -900,7 +928,11 @@ class HomeViewModel(
         _uiState.update { it.copy(showNewFolderDialog = false) }
     }
 
+    @Volatile private var isCreatingFolder = false
+
     fun createFolder(name: String, colorHex: String, isPinned: Boolean) {
+        if (isCreatingFolder) return
+        isCreatingFolder = true
         viewModelScope.launch {
             try {
                 val currentWorkspaceId = selectedWorkspaceIdFlow.value
@@ -917,9 +949,12 @@ class HomeViewModel(
                     )
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update {
                     it.copy(userMessage = "Failed to create folder: ${e.message}")
                 }
+            } finally {
+                isCreatingFolder = false
             }
         }
     }

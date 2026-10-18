@@ -32,6 +32,7 @@ import com.arinara.fotara.canvas.persistence.CanvasAssetManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
@@ -77,10 +78,15 @@ object TileGridHelper {
         worldTileSize: Float,
         zoomTier: Int
     ): List<TileKey> {
-        val startCol = floor(dirtyWorldRect.left / worldTileSize).toInt()
-        val endCol = ceil(dirtyWorldRect.right / worldTileSize).toInt()
-        val startRow = floor(dirtyWorldRect.top / worldTileSize).toInt()
-        val endRow = ceil(dirtyWorldRect.bottom / worldTileSize).toInt()
+        if (dirtyWorldRect.isEmpty || worldTileSize <= 0f || worldTileSize.isNaN()) return emptyList()
+
+        val startCol = floor(dirtyWorldRect.left / worldTileSize).toInt().coerceIn(-10000, 10000)
+        val endCol = ceil(dirtyWorldRect.right / worldTileSize).toInt().coerceIn(-10000, 10000)
+        val startRow = floor(dirtyWorldRect.top / worldTileSize).toInt().coerceIn(-10000, 10000)
+        val endRow = ceil(dirtyWorldRect.bottom / worldTileSize).toInt().coerceIn(-10000, 10000)
+
+        if (startCol > endCol || startRow > endRow) return emptyList()
+        if ((endCol - startCol + 1) * (endRow - startRow + 1) > 100) return emptyList()
 
         val keys = mutableListOf<TileKey>()
         for (col in startCol..endCol) {
@@ -158,9 +164,8 @@ class TileCacheManager(
 
                 if (cached != null && !cached.isDirty) {
                     visibleTiles.add(cached)
-                } else if (!renderingKeys.contains(key)) {
+                } else if (renderingKeys.add(key)) {
                     // Queue asynchronous tile rendering
-                    renderingKeys.add(key)
                     cacheScope.launch {
                         renderTileAsync(key, tileBounds, viewport.scale, documentSnapshot, spatialIndex)
                         renderingKeys.remove(key)
@@ -403,6 +408,12 @@ class TileCacheManager(
 
     @Synchronized
     private fun clearAllBitmaps() {
+        for (tile in tileMap.values) {
+            tile.bitmap?.recycle()
+        }
+        for (bmp in reusableBitmaps) {
+            bmp.recycle()
+        }
         tileMap.clear()
         reusableBitmaps.clear()
         currentMemoryUsage = 0L
@@ -422,6 +433,8 @@ class TileCacheManager(
 
     @Synchronized
     fun release() {
+        cacheScope.cancel()
+        renderingKeys.clear()
         clearAllBitmaps()
     }
 }

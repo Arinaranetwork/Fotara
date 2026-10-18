@@ -76,7 +76,7 @@ internal object ProfileBannerMemoryCache {
     @Synchronized
     fun put(key: String, drawable: Drawable?, firstFrame: Bitmap? = null) {
         cachedKey = key
-        cachedDrawable = drawable
+        cachedDrawable = drawable?.apply { callback = null }
         if (firstFrame != null) {
             cachedFirstFrame = firstFrame
         }
@@ -85,6 +85,7 @@ internal object ProfileBannerMemoryCache {
     @Synchronized
     fun clear() {
         cachedKey = null
+        cachedDrawable?.callback = null
         cachedDrawable = null
         cachedFirstFrame = null
     }
@@ -103,6 +104,11 @@ private class AnimatedBannerView(context: Context) : View(context) {
             recomputeCropParams()
             invalidate()
         }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        animatedDrawable?.callback = null
+    }
 
     var cropRect: NormalizedCropRect = NormalizedCropRect.FULL
         set(value) {
@@ -279,6 +285,7 @@ fun ProfileBanner(
                 DisposableEffect(animatedDrawable) {
                     onDispose {
                         val d = animatedDrawable
+                        d?.callback = null
                         if (d is AnimatedImageDrawable) {
                             d.stop()
                             d.clearAnimationCallbacks()

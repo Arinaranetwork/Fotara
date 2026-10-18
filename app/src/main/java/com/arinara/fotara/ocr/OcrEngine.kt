@@ -24,7 +24,8 @@ data class OcrResult(
     val keywords: List<String>,
     val detectedSubjectHint: String? = null,
     val confidence: Float = 0.95f,
-    val processingTimeMs: Long = 0L
+    val processingTimeMs: Long = 0L,
+    val isSuccess: Boolean = true
 )
 
 interface OcrEngine {
@@ -32,10 +33,18 @@ interface OcrEngine {
     fun extractKeywords(text: String): List<String>
 }
 
-class MlKitOcrEngine(private val context: Context? = null) : OcrEngine {
+class MlKitOcrEngine(context: Context? = null) : OcrEngine, AutoCloseable {
+
+    private val appContext = context?.applicationContext
 
     private val recognizer by lazy {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    }
+
+    override fun close() {
+        try {
+            recognizer.close()
+        } catch (_: Exception) {}
     }
 
     private val commonStopwords = setOf(
@@ -53,7 +62,7 @@ class MlKitOcrEngine(private val context: Context? = null) : OcrEngine {
         "Physics" to listOf("velocity", "acceleration", "force", "newton", "gravity", "friction", "kinetic", "potential", "energy", "momentum", "torque", "wave")
     )
 
-    override suspend fun extractText(imageUri: String, rawContentHint: String?): OcrResult = withContext(Dispatchers.Default) {
+    override suspend fun extractText(imageUri: String, rawContentHint: String?): OcrResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
 
         if (!rawContentHint.isNullOrBlank()) {
@@ -97,7 +106,7 @@ class MlKitOcrEngine(private val context: Context? = null) : OcrEngine {
     }
 
     private fun createInputImage(imageUriStr: String): InputImage? {
-        val ctx = context ?: return null
+        val ctx = appContext ?: return null
         return try {
             if (imageUriStr.startsWith("content://") || imageUriStr.startsWith("file://")) {
                 val uri = Uri.parse(imageUriStr)

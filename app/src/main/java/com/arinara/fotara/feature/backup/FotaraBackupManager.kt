@@ -85,6 +85,55 @@ class FotaraBackupManager(private val context: Context) {
         const val DATABASE_ENTRY_LEGACY = "database.json"
         const val PRIVATE_VAULT_ENTRY = "Private/private_vault.enc"
 
+        private const val MAX_JSON_ENTRY_SIZE = 50 * 1024 * 1024L // 50 MB
+        private const val MAX_ATTACHMENT_ENTRY_SIZE = 200 * 1024 * 1024L // 200 MB
+        private const val MAX_TOTAL_RESTORE_BYTES = 2L * 1024 * 1024 * 1024L // 2 GB
+        private val ALLOWED_ATTACHMENT_DIRS = setOf("photos", "thumbnails", "documents", "document_pages")
+
+        @Throws(SecurityException::class)
+        fun validateEntryPath(baseDir: File, relPath: String): File {
+            val sanitizedRelPath = relPath.replace('\\', '/').trimStart('/')
+            if (sanitizedRelPath.contains("..") || sanitizedRelPath.isEmpty()) {
+                throw SecurityException("Invalid zip entry path: traversal detected ($relPath)")
+            }
+            val firstSegment = sanitizedRelPath.substringBefore('/')
+            if (firstSegment !in ALLOWED_ATTACHMENT_DIRS) {
+                throw SecurityException("Invalid attachment directory: '$firstSegment' is not permitted")
+            }
+            val targetFile = File(baseDir, sanitizedRelPath)
+            val canonicalBase = baseDir.canonicalPath
+            val canonicalTarget = targetFile.canonicalPath
+            val isInside = canonicalTarget.startsWith(canonicalBase + File.separator) || canonicalTarget == canonicalBase
+            if (!isInside) {
+                throw SecurityException("Zip Slip detected: $canonicalTarget is outside $canonicalBase")
+            }
+            return targetFile
+        }
+
+        @Throws(java.io.IOException::class)
+        fun copyBounded(input: InputStream, output: OutputStream, maxBytes: Long): Long {
+            val buffer = ByteArray(8192)
+            var totalRead = 0L
+            var read: Int
+            while (input.read(buffer).also { read = it } != -1) {
+                totalRead += read
+                if (totalRead > maxBytes) {
+                    throw SecurityException("Zip Bomb detected: entry exceeds maximum allowed size ($maxBytes bytes)")
+                }
+                output.write(buffer, 0, read)
+            }
+            return totalRead
+        }
+
+        inline fun ZipOutputStream.writeEntrySafely(name: String, block: (ZipOutputStream) -> Unit) {
+            putNextEntry(ZipEntry(name))
+            try {
+                block(this)
+            } finally {
+                closeEntry()
+            }
+        }
+
         fun computeSha256(data: ByteArray): String {
             val md = MessageDigest.getInstance("SHA-256")
             val digest = md.digest(data)
@@ -281,9 +330,7 @@ class FotaraBackupManager(private val context: Context) {
             val zipOut = ZipOutputStream(outputStream)
             zipOut.use { zos ->
                 fun writeJsonEntry(name: String, contentBytes: ByteArray) {
-                    zos.putNextEntry(ZipEntry(name))
-                    zos.write(contentBytes)
-                    zos.closeEntry()
+                    zos.writeEntrySafely(name) { it.write(contentBytes) }
                 }
 
                 // Root manifest
@@ -312,13 +359,14 @@ class FotaraBackupManager(private val context: Context) {
                 val totalAttachments = attachmentFiles.size.coerceAtLeast(1)
                 attachmentFiles.forEachIndexed { index, file ->
                     val relativePath = file.relativeTo(context.filesDir).path.replace('\\', '/')
-                    zos.putNextEntry(ZipEntry("$ATTACHMENTS_DIR_ENTRY$relativePath"))
-                    file.inputStream().use { input ->
-                        input.copyTo(zos)
+                    zos.writeEntrySafely("$ATTACHMENTS_DIR_ENTRY$relativePath") {
+                        file.inputStream().use { input ->
+                            input.copyTo(zos)
+                        }
                     }
-                    zos.closeEntry()
                     onProgress(0.5f + (0.45f * (index + 1) / totalAttachments))
                 }
+                zos.finish()
             }
 
             onProgress(1.0f)
@@ -335,43 +383,44 @@ class FotaraBackupManager(private val context: Context) {
             var databaseBytes: ByteArray? = null
             var hasHierarchicalData = false
 
-            val zipIn = ZipInputStream(inputStream)
-            var entry = zipIn.nextEntry
-            while (entry != null) {
-                val name = entry.name
-                when {
-                    name.equals(MANIFEST_ENTRY, ignoreCase = true) || name.equals(MANIFEST_ENTRY_LEGACY, ignoreCase = true) -> {
-                        val out = ByteArrayOutputStream()
-                        zipIn.copyTo(out)
-                        val json = JSONObject(out.toString(Charsets.UTF_8.name()))
-                        manifest = BackupManifest(
-                            format = json.optString("format", "fotara_archive_v2"),
-                            version = json.optInt("version", 2),
-                            createdAt = json.optLong("createdAt", 0L),
-                            appVersion = json.optString("appVersion", ""),
-                            checksumSha256 = json.optString("checksumSha256", ""),
-                            scopeType = json.optString("scopeType", "ENTIRE_APP"),
-                            spaceCount = json.optInt("spaceCount", 0),
-                            workspaceCount = json.optInt("workspaceCount", 0),
-                            folderCount = json.optInt("folderCount", 0),
-                            photoCount = json.optInt("photoCount", 0),
-                            textNoteCount = json.optInt("textNoteCount", 0),
-                            documentCount = json.optInt("documentCount", 0),
-                            scheduleCount = json.optInt("scheduleCount", 0),
-                            attachmentCount = json.optInt("attachmentCount", 0)
-                        )
+            ZipInputStream(inputStream).use { zipIn ->
+                var entry = zipIn.nextEntry
+                while (entry != null) {
+                    val name = entry.name
+                    when {
+                        name.equals(MANIFEST_ENTRY, ignoreCase = true) || name.equals(MANIFEST_ENTRY_LEGACY, ignoreCase = true) -> {
+                            val out = ByteArrayOutputStream()
+                            zipIn.copyTo(out)
+                            val json = JSONObject(out.toString(Charsets.UTF_8.name()))
+                            manifest = BackupManifest(
+                                format = json.optString("format", "fotara_archive_v2"),
+                                version = json.optInt("version", 2),
+                                createdAt = json.optLong("createdAt", 0L),
+                                appVersion = json.optString("appVersion", ""),
+                                checksumSha256 = json.optString("checksumSha256", ""),
+                                scopeType = json.optString("scopeType", "ENTIRE_APP"),
+                                spaceCount = json.optInt("spaceCount", 0),
+                                workspaceCount = json.optInt("workspaceCount", 0),
+                                folderCount = json.optInt("folderCount", 0),
+                                photoCount = json.optInt("photoCount", 0),
+                                textNoteCount = json.optInt("textNoteCount", 0),
+                                documentCount = json.optInt("documentCount", 0),
+                                scheduleCount = json.optInt("scheduleCount", 0),
+                                attachmentCount = json.optInt("attachmentCount", 0)
+                            )
+                        }
+                        name.equals(DATABASE_ENTRY_LEGACY, ignoreCase = true) -> {
+                            val out = ByteArrayOutputStream()
+                            zipIn.copyTo(out)
+                            databaseBytes = out.toByteArray()
+                        }
+                        name.startsWith("Folders/") || name.startsWith("Notes/") || name.startsWith("Spaces/") -> {
+                            hasHierarchicalData = true
+                        }
                     }
-                    name.equals(DATABASE_ENTRY_LEGACY, ignoreCase = true) -> {
-                        val out = ByteArrayOutputStream()
-                        zipIn.copyTo(out)
-                        databaseBytes = out.toByteArray()
-                    }
-                    name.startsWith("Folders/") || name.startsWith("Notes/") || name.startsWith("Spaces/") -> {
-                        hasHierarchicalData = true
-                    }
+                    zipIn.closeEntry()
+                    entry = zipIn.nextEntry
                 }
-                zipIn.closeEntry()
-                entry = zipIn.nextEntry
             }
 
             if (manifest == null) {
@@ -416,75 +465,82 @@ class FotaraBackupManager(private val context: Context) {
         inputStream: InputStream,
         onProgress: (Float) -> Unit = {}
     ): BackupRestoreResult = withContext(Dispatchers.IO) {
+        val stagingDir = File(context.cacheDir, "backup_restore_stage_${java.util.UUID.randomUUID()}").apply { mkdirs() }
         try {
             onProgress(0.1f)
             var manifest: BackupManifest? = null
             var databaseBytes: ByteArray? = null
-            var restoredAttachmentsCount = 0
+            var stagedAttachmentsCount = 0
+            var totalBytesExtracted = 0L
 
             val hierarchicalJsonMap = mutableMapOf<String, String>()
             var privateVaultBytes: ByteArray? = null
 
-            val zipIn = ZipInputStream(inputStream)
-            var entry = zipIn.nextEntry
-            while (entry != null) {
-                val entryName = entry.name
-                when {
-                    entryName.equals(MANIFEST_ENTRY, ignoreCase = true) || entryName.equals(MANIFEST_ENTRY_LEGACY, ignoreCase = true) -> {
-                        val out = ByteArrayOutputStream()
-                        zipIn.copyTo(out)
-                        val json = JSONObject(out.toString(Charsets.UTF_8.name()))
-                        manifest = BackupManifest(
-                            format = json.optString("format", "fotara_archive_v2"),
-                            version = json.optInt("version", 2),
-                            createdAt = json.optLong("createdAt", 0L),
-                            appVersion = json.optString("appVersion", ""),
-                            checksumSha256 = json.optString("checksumSha256", ""),
-                            scopeType = json.optString("scopeType", "ENTIRE_APP"),
-                            spaceCount = json.optInt("spaceCount", 0),
-                            workspaceCount = json.optInt("workspaceCount", 0),
-                            folderCount = json.optInt("folderCount", 0),
-                            photoCount = json.optInt("photoCount", 0),
-                            textNoteCount = json.optInt("textNoteCount", 0),
-                            documentCount = json.optInt("documentCount", 0),
-                            scheduleCount = json.optInt("scheduleCount", 0),
-                            attachmentCount = json.optInt("attachmentCount", 0)
-                        )
-                    }
-                    entryName.equals(DATABASE_ENTRY_LEGACY, ignoreCase = true) -> {
-                        val out = ByteArrayOutputStream()
-                        zipIn.copyTo(out)
-                        databaseBytes = out.toByteArray()
-                    }
-                    entryName.equals(PRIVATE_VAULT_ENTRY, ignoreCase = true) -> {
-                        val out = ByteArrayOutputStream()
-                        zipIn.copyTo(out)
-                        privateVaultBytes = out.toByteArray()
-                    }
-                    entryName.endsWith(".json") && (entryName.startsWith("Spaces/") || entryName.startsWith("Workspaces/") || entryName.startsWith("Folders/") || entryName.startsWith("Notes/")) -> {
-                        val out = ByteArrayOutputStream()
-                        zipIn.copyTo(out)
-                        hierarchicalJsonMap[entryName] = out.toString(Charsets.UTF_8.name())
-                    }
-                    entryName.startsWith(ATTACHMENTS_DIR_ENTRY, ignoreCase = true) || entryName.startsWith(ATTACHMENTS_DIR_ENTRY_LEGACY, ignoreCase = true) -> {
-                        val prefix = if (entryName.startsWith(ATTACHMENTS_DIR_ENTRY, ignoreCase = true)) {
-                            entryName.substring(0, ATTACHMENTS_DIR_ENTRY.length)
-                        } else {
-                            entryName.substring(0, ATTACHMENTS_DIR_ENTRY_LEGACY.length)
+            ZipInputStream(inputStream).use { zipIn ->
+                var entry = zipIn.nextEntry
+                while (entry != null) {
+                    val entryName = entry.name
+                    when {
+                        entryName.equals(MANIFEST_ENTRY, ignoreCase = true) || entryName.equals(MANIFEST_ENTRY_LEGACY, ignoreCase = true) -> {
+                            val out = ByteArrayOutputStream()
+                            copyBounded(zipIn, out, MAX_JSON_ENTRY_SIZE)
+                            val json = JSONObject(out.toString(Charsets.UTF_8.name()))
+                            manifest = BackupManifest(
+                                format = json.optString("format", "fotara_archive_v2"),
+                                version = json.optInt("version", 2),
+                                createdAt = json.optLong("createdAt", 0L),
+                                appVersion = json.optString("appVersion", ""),
+                                checksumSha256 = json.optString("checksumSha256", ""),
+                                scopeType = json.optString("scopeType", "ENTIRE_APP"),
+                                spaceCount = json.optInt("spaceCount", 0),
+                                workspaceCount = json.optInt("workspaceCount", 0),
+                                folderCount = json.optInt("folderCount", 0),
+                                photoCount = json.optInt("photoCount", 0),
+                                textNoteCount = json.optInt("textNoteCount", 0),
+                                documentCount = json.optInt("documentCount", 0),
+                                scheduleCount = json.optInt("scheduleCount", 0),
+                                attachmentCount = json.optInt("attachmentCount", 0)
+                            )
                         }
-                        val relPath = entryName.removePrefix(prefix)
-                        if (relPath.isNotEmpty()) {
-                            val targetFile = File(context.filesDir, relPath)
-                            targetFile.parentFile?.mkdirs()
-                            FileOutputStream(targetFile).use { fos ->
-                                zipIn.copyTo(fos)
+                        entryName.equals(DATABASE_ENTRY_LEGACY, ignoreCase = true) -> {
+                            val out = ByteArrayOutputStream()
+                            copyBounded(zipIn, out, MAX_JSON_ENTRY_SIZE)
+                            databaseBytes = out.toByteArray()
+                        }
+                        entryName.equals(PRIVATE_VAULT_ENTRY, ignoreCase = true) -> {
+                            val out = ByteArrayOutputStream()
+                            copyBounded(zipIn, out, MAX_JSON_ENTRY_SIZE)
+                            privateVaultBytes = out.toByteArray()
+                        }
+                        entryName.endsWith(".json") && (entryName.startsWith("Spaces/") || entryName.startsWith("Workspaces/") || entryName.startsWith("Folders/") || entryName.startsWith("Notes/")) -> {
+                            val out = ByteArrayOutputStream()
+                            copyBounded(zipIn, out, MAX_JSON_ENTRY_SIZE)
+                            hierarchicalJsonMap[entryName] = out.toString(Charsets.UTF_8.name())
+                        }
+                        entryName.startsWith(ATTACHMENTS_DIR_ENTRY, ignoreCase = true) || entryName.startsWith(ATTACHMENTS_DIR_ENTRY_LEGACY, ignoreCase = true) -> {
+                            val prefix = if (entryName.startsWith(ATTACHMENTS_DIR_ENTRY, ignoreCase = true)) {
+                                entryName.substring(0, ATTACHMENTS_DIR_ENTRY.length)
+                            } else {
+                                entryName.substring(0, ATTACHMENTS_DIR_ENTRY_LEGACY.length)
                             }
-                            restoredAttachmentsCount++
+                            val relPath = entryName.removePrefix(prefix)
+                            if (relPath.isNotEmpty() && !entry.isDirectory) {
+                                val stageTarget = validateEntryPath(stagingDir, relPath)
+                                stageTarget.parentFile?.mkdirs()
+                                FileOutputStream(stageTarget).use { fos ->
+                                    val copied = copyBounded(zipIn, fos, MAX_ATTACHMENT_ENTRY_SIZE)
+                                    totalBytesExtracted += copied
+                                    if (totalBytesExtracted > MAX_TOTAL_RESTORE_BYTES) {
+                                        throw SecurityException("Exceeded maximum archive restore capacity")
+                                    }
+                                }
+                                stagedAttachmentsCount++
+                            }
                         }
                     }
+                    zipIn.closeEntry()
+                    entry = zipIn.nextEntry
                 }
-                zipIn.closeEntry()
-                entry = zipIn.nextEntry
             }
 
             onProgress(0.5f)
@@ -514,6 +570,7 @@ class FotaraBackupManager(private val context: Context) {
 
             var restoredFolders = 0
             var restoredNotes = 0
+            var vaultDecryptionError: String? = null
 
             db.beginTransaction()
             try {
@@ -559,6 +616,7 @@ class FotaraBackupManager(private val context: Context) {
                         restoredNotes += (privPhotos + privTexts + privDocs)
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to restore encrypted private vault", e)
+                        vaultDecryptionError = "Private vault decryption failed: ${e.message}"
                     }
                 }
 
@@ -567,13 +625,28 @@ class FotaraBackupManager(private val context: Context) {
                 db.endTransaction()
             }
 
+            // 3. Atomically Commit Staged Attachments to context.filesDir
+            var committedAttachments = 0
+            stagingDir.walkTopDown().filter { it.isFile }.forEach { stagedFile ->
+                val relPath = stagedFile.relativeTo(stagingDir).path
+                val targetFile = validateEntryPath(context.filesDir, relPath)
+                targetFile.parentFile?.mkdirs()
+                if (stagedFile.renameTo(targetFile)) {
+                    committedAttachments++
+                } else {
+                    stagedFile.copyTo(targetFile, overwrite = true)
+                    committedAttachments++
+                }
+            }
+
             onProgress(1.0f)
 
             BackupRestoreResult(
                 success = true,
                 restoredFolders = restoredFolders,
                 restoredNotes = restoredNotes,
-                restoredAttachments = restoredAttachmentsCount
+                restoredAttachments = committedAttachments,
+                errorMessage = vaultDecryptionError
             )
         } catch (e: Exception) {
             Log.e(TAG, "Restore failed", e)
@@ -581,6 +654,23 @@ class FotaraBackupManager(private val context: Context) {
                 success = false,
                 errorMessage = e.message ?: "Unknown restore error"
             )
+        } finally {
+            try {
+                stagingDir.deleteRecursively()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun cleanupStaleStagingFiles() {
+        try {
+            val cache = context.cacheDir ?: return
+            val oneHourAgo = System.currentTimeMillis() - (60 * 60 * 1000L)
+            cache.listFiles()?.filter { file ->
+                (file.name.startsWith("backup_restore_stage_") || file.name.startsWith("backup_export_stage_")) &&
+                file.lastModified() < oneHourAgo
+            }?.forEach { it.deleteRecursively() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to clean up stale backup staging files", e)
         }
     }
 
@@ -629,7 +719,7 @@ class FotaraBackupManager(private val context: Context) {
         var insertedCount = 0
 
         for (i in 0 until array.length()) {
-            val obj = array.getJSONObject(i)
+            val obj = array.optJSONObject(i) ?: continue
             val cv = ContentValues()
             val keys = obj.keys()
             while (keys.hasNext()) {

@@ -183,6 +183,7 @@ class SqliteScheduleRepository(
             db.setTransactionSuccessful()
         } catch (e: Exception) {
             Log.e("SqliteScheduleRepo", "Failed batch insert", e)
+            insertedCount = 0
         } finally {
             db.endTransaction()
         }

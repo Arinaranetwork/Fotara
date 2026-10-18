@@ -7,6 +7,9 @@
 package com.arinara.fotara.canvas.engine
 
 import com.arinara.fotara.canvas.model.CanvasElement
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 /**
  * High-performance 2D Quadtree spatial index for viewport culling and fast hit testing.
@@ -17,6 +20,7 @@ class QuadTreeSpatialIndex(
     private val maxElementsPerNode: Int = 16,
     private val maxDepth: Int = 8
 ) {
+    private val rwLock = ReentrantReadWriteLock()
 
     private class Node(
         val bounds: CanvasRect,
@@ -43,17 +47,34 @@ class QuadTreeSpatialIndex(
                 Node(se, depth + 1)
             )
         }
+
+        fun getChildQuadrantIndex(elementBounds: CanvasRect): Int {
+            val midX = bounds.centerX
+            val midY = bounds.centerY
+            val fitsTop = elementBounds.bottom <= midY
+            val fitsBottom = elementBounds.top >= midY
+            val fitsLeft = elementBounds.right <= midX
+            val fitsRight = elementBounds.left >= midX
+
+            return when {
+                fitsTop && fitsLeft -> 0     // NW
+                fitsTop && fitsRight -> 1    // NE
+                fitsBottom && fitsLeft -> 2   // SW
+                fitsBottom && fitsRight -> 3  // SE
+                else -> -1                  // Straddles quadrant boundary, stays in this parent node
+            }
+        }
     }
 
     private val root = Node(worldBounds, 0)
     private val elementMap = mutableMapOf<String, CanvasElement>()
 
-    fun size(): Int = elementMap.size
+    fun size(): Int = rwLock.read { elementMap.size }
 
     /**
      * Inserts an element into the spatial index.
      */
-    fun insert(element: CanvasElement) {
+    fun insert(element: CanvasElement) = rwLock.write {
         elementMap[element.id] = element
         insertRecursive(root, element)
     }
@@ -61,8 +82,11 @@ class QuadTreeSpatialIndex(
     /**
      * Inserts a collection of elements in batch.
      */
-    fun insertAll(elements: Collection<CanvasElement>) {
-        elements.forEach { insert(it) }
+    fun insertAll(elements: Collection<CanvasElement>) = rwLock.write {
+        elements.forEach {
+            elementMap[it.id] = it
+            insertRecursive(root, it)
+        }
     }
 
     private fun insertRecursive(node: Node, element: CanvasElement) {
@@ -77,14 +101,20 @@ class QuadTreeSpatialIndex(
                 val existing = ArrayList(node.elements)
                 node.elements.clear()
                 for (item in existing) {
-                    for (child in node.children!!) {
-                        insertRecursive(child, item)
+                    val childIdx = node.getChildQuadrantIndex(item.bounds)
+                    if (childIdx != -1) {
+                        insertRecursive(node.children!![childIdx], item)
+                    } else {
+                        node.elements.add(item)
                     }
                 }
             }
         } else {
-            for (child in node.children!!) {
-                insertRecursive(child, element)
+            val childIdx = node.getChildQuadrantIndex(element.bounds)
+            if (childIdx != -1) {
+                insertRecursive(node.children!![childIdx], element)
+            } else {
+                node.elements.add(element)
             }
         }
     }
@@ -92,9 +122,9 @@ class QuadTreeSpatialIndex(
     /**
      * Removes an element from the index by its stable identifier.
      */
-    fun remove(elementId: String): Boolean {
-        val element = elementMap.remove(elementId) ?: return false
-        return removeRecursive(root, elementId, element.bounds)
+    fun remove(elementId: String): Boolean = rwLock.write {
+        val element = elementMap.remove(elementId) ?: return@write false
+        removeRecursive(root, elementId, element.bounds)
     }
 
     private fun removeRecursive(node: Node, elementId: String, bounds: CanvasRect): Boolean {
@@ -102,35 +132,36 @@ class QuadTreeSpatialIndex(
             return false
         }
 
-        if (node.isLeaf) {
-            return node.elements.removeAll { it.id == elementId }
-        }
+        var removed = node.elements.removeAll { it.id == elementId }
 
-        var anyRemoved = false
         node.children?.forEach { child ->
             if (removeRecursive(child, elementId, bounds)) {
-                anyRemoved = true
+                removed = true
             }
         }
-        return anyRemoved
+        return removed
     }
 
     /**
      * Updates an element's position/bounds in the index.
      */
-    fun update(element: CanvasElement) {
-        remove(element.id)
-        insert(element)
+    fun update(element: CanvasElement) = rwLock.write {
+        val old = elementMap.remove(element.id)
+        if (old != null) {
+            removeRecursive(root, old.id, old.bounds)
+        }
+        elementMap[element.id] = element
+        insertRecursive(root, element)
     }
 
     /**
      * Queries for all elements intersecting the given search boundary (e.g. visible viewport).
      * Returns a deduplicated list of candidates.
      */
-    fun query(searchBounds: CanvasRect): List<CanvasElement> {
+    fun query(searchBounds: CanvasRect): List<CanvasElement> = rwLock.read {
         val resultSet = LinkedHashSet<CanvasElement>()
         queryRecursive(root, searchBounds, resultSet)
-        return resultSet.toList()
+        resultSet.toList()
     }
 
     private fun queryRecursive(
@@ -142,23 +173,21 @@ class QuadTreeSpatialIndex(
             return
         }
 
-        if (node.isLeaf) {
-            for (el in node.elements) {
-                if (el.bounds.intersects(searchBounds)) {
-                    results.add(el)
-                }
+        for (el in node.elements) {
+            if (el.bounds.intersects(searchBounds)) {
+                results.add(el)
             }
-        } else {
-            node.children?.forEach { child ->
-                queryRecursive(child, searchBounds, results)
-            }
+        }
+
+        node.children?.forEach { child ->
+            queryRecursive(child, searchBounds, results)
         }
     }
 
     /**
      * Clears all elements from the spatial index.
      */
-    fun clear() {
+    fun clear() = rwLock.write {
         elementMap.clear()
         root.elements.clear()
         root.children = null
@@ -167,8 +196,13 @@ class QuadTreeSpatialIndex(
     /**
      * Rebuilds the index completely from a list of elements.
      */
-    fun rebuild(elements: List<CanvasElement>) {
-        clear()
-        insertAll(elements)
+    fun rebuild(elements: List<CanvasElement>) = rwLock.write {
+        elementMap.clear()
+        root.elements.clear()
+        root.children = null
+        elements.forEach {
+            elementMap[it.id] = it
+            insertRecursive(root, it)
+        }
     }
 }

@@ -9,9 +9,15 @@ package com.arinara.fotara.diagnostic
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class AppDiagnosticLoggerTest {
+
+    @Before
+    fun setUp() {
+        AppDiagnosticLogger.resetForTesting()
+    }
 
     @Test
     fun testRecordEventAndBufferFlow() {
@@ -28,17 +34,41 @@ class AppDiagnosticLoggerTest {
     }
 
     @Test
-    fun testStartupMilestones() {
+    fun testStartupMilestonesAndColdStartIdempotency() {
         AppDiagnosticLogger.recordAppCreateStart()
         AppDiagnosticLogger.recordAppCreateEnd()
         AppDiagnosticLogger.recordContainerInit(42L)
         AppDiagnosticLogger.recordSetContent()
         AppDiagnosticLogger.recordFirstFrameRendered()
 
-        val metrics = AppDiagnosticLogger.startupMetricsFlow.value
-        assertTrue("AppCreate duration should be non-negative", metrics.appCreateDurationMs >= 0)
-        assertEquals(42L, metrics.containerInitDurationMs)
-        assertTrue("Total cold start should be non-negative", metrics.totalColdStartMs >= 0)
+        val initialMetrics = AppDiagnosticLogger.startupMetricsFlow.value
+        assertTrue("AppCreate duration should be non-negative", initialMetrics.appCreateDurationMs >= 0)
+        assertEquals(42L, initialMetrics.containerInitDurationMs)
+        assertTrue("Total cold start should be non-negative", initialMetrics.totalColdStartMs >= 0)
+        val initialFirstFrameTime = initialMetrics.firstFrameRenderedMs
+        val initialColdStart = initialMetrics.totalColdStartMs
+
+        // Simulate navigation re-entry to Home screen
+        Thread.sleep(10)
+        AppDiagnosticLogger.recordFirstFrameRendered()
+
+        val reenteredMetrics = AppDiagnosticLogger.startupMetricsFlow.value
+        assertEquals("Cold start latency must not be overwritten on re-entry", initialColdStart, reenteredMetrics.totalColdStartMs)
+        assertEquals("First frame timestamp must remain frozen on re-entry", initialFirstFrameTime, reenteredMetrics.firstFrameRenderedMs)
+    }
+
+    @Test
+    fun testRecordErrorAndExceptions() {
+        val ex = IllegalStateException("Sample test failure exception")
+        AppDiagnosticLogger.recordError("TestEngine", "Failed to decode matrix", ex)
+
+        val errors = AppDiagnosticLogger.errorsFlow.value
+        assertEquals(1, errors.size)
+        val err = errors.first()
+        assertEquals("TestEngine", err.tag)
+        assertEquals("Failed to decode matrix", err.message)
+        assertEquals(IllegalStateException::class.java.name, err.exceptionClass)
+        assertTrue("Stack trace should not be empty", err.stackTrace.contains("Sample test failure exception"))
     }
 
     @Test
@@ -53,11 +83,68 @@ class AppDiagnosticLoggerTest {
     @Test
     fun testGenerateFullReportNullContext() {
         AppDiagnosticLogger.recordEvent("ReportTest", "Report verification log")
+        AppDiagnosticLogger.recordError("EngineTest", "Sample caught error", RuntimeException("Boom"))
+
         val report = AppDiagnosticLogger.generateFullReport(null)
         assertNotNull(report)
         assertTrue("Report should contain Fotara Diagnostic Report header", report.contains("## Fotara Diagnostic & Performance Report"))
-        assertTrue("Report should contain Startup Latency Breakdown section", report.contains("### 2. Startup Latency Breakdown"))
-        assertTrue("Report should contain Chronological Event Timeline section", report.contains("### 3. Chronological Event Timeline"))
-        assertTrue("Report should contain ReportTest log entry", report.contains("ReportTest"))
+        assertTrue("Report should contain Startup Latency Breakdown section", report.contains("### 1. Startup Latency Breakdown"))
+        assertTrue("Report should contain Memory & RAM Specifications section", report.contains("### 2. Memory & RAM Specifications"))
+        assertTrue("Report should contain Disk & Storage Footprint section", report.contains("### 3. Disk & Storage Footprint"))
+        assertTrue("Report should contain Hardware, Display & Environment section", report.contains("### 4. Hardware, Display & Environment"))
+        assertTrue("Report should contain Recorded Code Errors & Exceptions section", report.contains("### 5. Recorded Code Errors & Exceptions"))
+        assertTrue("Report should contain Chronological Event Timeline section", report.contains("### 6. Chronological Event Timeline"))
+        assertTrue("Report should contain EngineTest error entry", report.contains("EngineTest"))
+    }
+
+    @Test
+    fun testRamSamplingAndTimelineBuffer() {
+        AppDiagnosticLogger.recordRamSample("HomeScreen")
+        AppDiagnosticLogger.recordRamSample("CanvasScreen")
+
+        val samples = AppDiagnosticLogger.ramHistoryFlow.value
+        assertEquals(2, samples.size)
+        assertEquals("HomeScreen", samples[0].activeScreen)
+        assertEquals("CanvasScreen", samples[1].activeScreen)
+        assertTrue(samples[1].jvmUsedMb >= 0)
+    }
+
+    @Test
+    fun testWorkerMemoryTrackingAndDelta() {
+        AppDiagnosticLogger.recordWorkerMemory(
+            workerName = "CanvasAutosaveWorker",
+            startHeapMb = 30L,
+            endHeapMb = 35L,
+            durationMs = 45L
+        )
+
+        val workers = AppDiagnosticLogger.workerMemoryFlow.value
+        assertEquals(1, workers.size)
+        val record = workers.first()
+        assertEquals("CanvasAutosaveWorker", record.workerName)
+        assertEquals(30L, record.startHeapMb)
+        assertEquals(35L, record.endHeapMb)
+        assertEquals(5L, record.deltaHeapMb)
+        assertEquals(45L, record.durationMs)
+    }
+
+    @Test
+    fun testManualGcAndMeasureDelta() {
+        val res = AppDiagnosticLogger.runManualGcAndMeasureDelta()
+        assertNotNull(res)
+        assertTrue(res.durationMs >= 0)
+        assertTrue(res.beforeUsedMb >= 0)
+        assertTrue(res.afterUsedMb >= 0)
+    }
+
+    @Test
+    fun testSubsystemMemoryTrackerHelper() {
+        val result = SubsystemMemoryTracker.track("TestSubsystem") {
+            42 * 2
+        }
+        assertEquals(84, result)
+        val workers = AppDiagnosticLogger.workerMemoryFlow.value
+        assertTrue(workers.any { it.workerName == "TestSubsystem" })
     }
 }
+

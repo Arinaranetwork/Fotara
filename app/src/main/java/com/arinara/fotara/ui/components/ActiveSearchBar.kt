@@ -103,6 +103,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -1368,7 +1369,7 @@ fun VideoBufferingProgressBar(
 ) {
     Box(
         modifier = modifier
-            .background(HomeCardBorder)
+            .background(ElectricSlateTokens.BorderSubtle)
     ) {
         AnimatedVisibility(
             visible = visible,
@@ -1396,24 +1397,22 @@ fun VideoBufferingProgressBar(
             )
 
             Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .fillMaxWidth(fraction = widthFraction)
-                        .offset(x = (positionFraction * 320).dp)
-                        .background(
-                            brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                colors = listOf(
-                                    HomeMainButtonBlue.copy(alpha = 0.2f),
-                                    Color.White,
-                                    HomeMainButtonBlue
-                                )
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = widthFraction
+                        translationX = positionFraction * size.width
+                    }
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            colors = listOf(
+                                ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.2f),
+                                ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.8f),
+                                ElectricSlateTokens.PrimaryAccent
                             )
                         )
-                )
-            }
+                    )
+            )
         }
     }
 }

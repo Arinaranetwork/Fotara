@@ -237,15 +237,20 @@ class FotaraBundleExporter {
  */
 class FotaraBundleImporter {
 
+    companion object {
+        const val MAX_BUNDLE_BYTES = 500 * 1024 * 1024L // 500MB max bundle size
+        const val MAX_ENTRY_BYTES = 200 * 1024 * 1024L  // 200MB max per entry
+    }
+
     /**
      * Unpacks and verifies a `.fotara` archive from an input stream in-memory.
      */
     fun importBundle(inputStream: InputStream): BundleImportResult {
-        val rawZipBytes = inputStream.readBytes()
-        val zipIn = ZipInputStream(ByteArrayInputStream(rawZipBytes))
+        val zipIn = ZipInputStream(inputStream.buffered())
 
         var manifestJsonContent: String? = null
         val filePayloads = mutableMapOf<String, ByteArray>()
+        var totalExtractedBytes = 0L
 
         try {
             var entry = zipIn.nextEntry
@@ -262,7 +267,26 @@ class FotaraBundleImporter {
                 }
 
                 if (!entry.isDirectory) {
-                    val entryBytes = zipIn.readBytes()
+                    val baos = ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var entryBytesTotal = 0L
+
+                    while (zipIn.read(buffer).also { bytesRead = it } != -1) {
+                        entryBytesTotal += bytesRead
+                        totalExtractedBytes += bytesRead
+                        if (entryBytesTotal > MAX_ENTRY_BYTES || totalExtractedBytes > MAX_BUNDLE_BYTES) {
+                            return BundleImportResult(
+                                manifest = null,
+                                extractedItems = emptyList(),
+                                isSuccess = false,
+                                validationError = "Bundle exceeds maximum permitted size limit"
+                            )
+                        }
+                        baos.write(buffer, 0, bytesRead)
+                    }
+
+                    val entryBytes = baos.toByteArray()
                     if (normalizedName == "manifest.json") {
                         manifestJsonContent = entryBytes.toString(Charsets.UTF_8)
                     } else {

@@ -109,15 +109,7 @@ class ScheduleNotificationScheduler(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-            } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-            }
-        } catch (_: SecurityException) {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-        }
+        armAlarmSafely(cal.timeInMillis, pendingIntent)
     }
 
     private fun scheduleClassAlert(schedule: ClassSchedule, triggerAtMillis: Long) {
@@ -137,15 +129,7 @@ class ScheduleNotificationScheduler(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-            } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-            }
-        } catch (_: SecurityException) {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-        }
+        armAlarmSafely(triggerAtMillis, pendingIntent)
     }
 
     fun showPreClassNotification(subject: String, room: String, startTime: String, folderId: Long) {
@@ -153,9 +137,11 @@ class ScheduleNotificationScheduler(private val context: Context) {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("open_schedule_folder_id", folderId)
         }
+        val safeFolderKey = kotlin.math.abs(folderId % 1000).toInt()
+        val reqCode = (REQ_TAP_CLASS * 1000) + safeFolderKey
         val pendingTap = PendingIntent.getActivity(
             context,
-            REQ_TAP_CLASS,
+            reqCode,
             tapIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -170,7 +156,8 @@ class ScheduleNotificationScheduler(private val context: Context) {
             .setContentIntent(pendingTap)
             .build()
 
-        notificationManager.notify(NOTIFICATION_ID_PRE_CLASS, notification)
+        val notifId = (NOTIFICATION_ID_PRE_CLASS * 1000) + safeFolderKey
+        notificationManager.notify(notifId, notification)
     }
 
     fun showDigestNotification(title: String, message: String) {
@@ -224,14 +211,18 @@ class ScheduleNotificationScheduler(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        armAlarmSafely(cal.timeInMillis, pendingIntent)
+    }
+
+    private fun armAlarmSafely(triggerAtMillis: Long, pendingIntent: PendingIntent) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             }
         } catch (_: SecurityException) {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         }
     }
 

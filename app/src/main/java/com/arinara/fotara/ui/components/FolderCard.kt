@@ -45,6 +45,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import com.arinara.fotara.ui.components.presets.AppCard
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import com.arinara.fotara.ui.theme.jigglePressCombinedClickable
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -163,9 +164,12 @@ fun FolderCard(
                 cornerRadiusDp = cornerRadiusDp.value,
                 strokeWidthDp = 2f
             )
-            .combinedClickable(
+            .jigglePressCombinedClickable(
                 enabled = !isEditing,
-                onClick = onClick,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                },
                 onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onCardLongClick()

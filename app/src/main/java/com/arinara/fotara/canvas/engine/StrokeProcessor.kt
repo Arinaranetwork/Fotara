@@ -297,7 +297,7 @@ object StrokeProcessor {
         fun findBoundaryPoint(p1: StrokePoint, p2: StrokePoint, p1Erased: Boolean): StrokePoint {
             var low = 0.0f
             var high = 1.0f
-            for (step in 0 until 12) {
+            for (step in 0 until 6) {
                 val mid = (low + high) / 2.0f
                 val mx = p1.x + mid * (p2.x - p1.x)
                 val my = p1.y + mid * (p2.y - p1.y)
@@ -390,10 +390,10 @@ object StrokeProcessor {
             }
         }
 
-        return filteredSegments.map { subPoints ->
+        return filteredSegments.mapIndexed { idx, subPoints ->
             val subBounds = computeBounds(subPoints, stroke.width)
             stroke.copy(
-                id = UUID.randomUUID().toString(),
+                id = "${stroke.id}_f${idx}_${System.identityHashCode(subPoints)}",
                 points = subPoints,
                 bounds = subBounds
             )

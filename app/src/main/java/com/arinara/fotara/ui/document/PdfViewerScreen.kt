@@ -244,6 +244,8 @@ fun PdfViewerScreen(
                         Toast.makeText(context, context.getString(R.string.msg_saved), Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
                         Toast.makeText(context, context.getString(R.string.msg_save_failed), Toast.LENGTH_SHORT).show()
+                    } finally {
+                        bitmap.recycle()
                     }
                 } else {
                     Toast.makeText(context, context.getString(R.string.msg_save_failed), Toast.LENGTH_SHORT).show()
@@ -266,9 +268,9 @@ fun PdfViewerScreen(
         onDispose {
             PdfSearchHighlighter.clearCache()
             audioViewModel.stopPlayback()
-            if (audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording) {
-                audioViewModel.cancelRecording()
-            }
+            audioViewModel.cancelRecording()
+            audioPlayerManager.release()
+            audioRecorderManager.release()
         }
     }
 
@@ -365,6 +367,8 @@ fun PdfViewerScreen(
                             ).show()
                         } catch (e: Exception) {
                             Toast.makeText(context, context.getString(R.string.msg_save_failed), Toast.LENGTH_SHORT).show()
+                        } finally {
+                            bitmap.recycle()
                         }
                     } else {
                         Toast.makeText(context, context.getString(R.string.msg_save_failed), Toast.LENGTH_SHORT).show()

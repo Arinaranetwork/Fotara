@@ -28,19 +28,29 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ShowChart
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +67,9 @@ import com.arinara.fotara.ui.components.presets.AppCard
 import com.arinara.fotara.ui.components.presets.AppScreen
 import com.arinara.fotara.ui.components.presets.AppTopBar
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -68,10 +81,35 @@ fun DiagnosticInfoScreen(
 ) {
     val context = LocalContext.current
     val isOverlayEnabled by AppDiagnosticLogger.isOverlayEnabled.collectAsState()
+    val isDeveloperModeEnabled by AppDiagnosticLogger.isDeveloperModeEnabled.collectAsState()
     val startupMetrics by AppDiagnosticLogger.startupMetricsFlow.collectAsState()
     val events by AppDiagnosticLogger.eventsFlow.collectAsState()
-    val hardwareInfo = remember(context) { AppDiagnosticLogger.getHardwareInfo(context) }
+    val errors by AppDiagnosticLogger.errorsFlow.collectAsState()
+    val ramSamples by AppDiagnosticLogger.ramHistoryFlow.collectAsState()
+    val workerRecords by AppDiagnosticLogger.workerMemoryFlow.collectAsState()
+
+    var lastGcResult by remember { mutableStateOf<GcResult?>(null) }
+
+    // Auto-sample RAM when Developer Mode is active
+    LaunchedEffect(isDeveloperModeEnabled) {
+        if (isDeveloperModeEnabled) {
+            while (true) {
+                AppDiagnosticLogger.recordRamSample("DiagnosticScreen")
+                delay(1500L)
+            }
+        }
+    }
+
+    val hardwareInfo by produceState(initialValue = remember { AppDiagnosticLogger.getHardwareInfo(null) }, context) {
+        value = withContext(Dispatchers.IO) {
+            AppDiagnosticLogger.getHardwareInfo(context)
+        }
+    }
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
+
+    val leakHints = remember(ramSamples, workerRecords, events, hardwareInfo.jvmHeapMaxMb) {
+        MemoryLeakDetector.analyze(ramSamples, workerRecords, events, hardwareInfo.jvmHeapMaxMb)
+    }
 
     AppScreen(
         modifier = modifier.fillMaxSize(),
@@ -89,6 +127,290 @@ fun DiagnosticInfoScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Section 0: Developer Mode Master Toggle
+            item {
+                AppCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Extreme Developer Mode",
+                                    color = ElectricSlateTokens.TextPrimary,
+                                    fontSize = 16.sp,
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (isDeveloperModeEnabled) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.2f))
+                                            .border(1.dp, ElectricSlateTokens.PrimaryAccent, RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "ACTIVE",
+                                            color = ElectricSlateTokens.PrimaryAccent,
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                text = "Unlocks live RAM graph, worker memory delta tracking, leak hints & manual GC",
+                                color = ElectricSlateTokens.TextMuted,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
+                        Switch(
+                            checked = isDeveloperModeEnabled,
+                            onCheckedChange = { enabled ->
+                                AppDiagnosticLogger.setDeveloperModeEnabled(context, enabled)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = ElectricSlateTokens.TextPrimary,
+                                checkedTrackColor = ElectricSlateTokens.PrimaryAccent,
+                                uncheckedThumbColor = ElectricSlateTokens.TextMuted,
+                                uncheckedTrackColor = ElectricSlateTokens.TrackInactive
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Developer Mode Section: Real-Time RAM Graph
+            if (isDeveloperModeEnabled) {
+                item {
+                    AppCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            DiagnosticSectionHeader(
+                                title = "Real-Time RAM Usage Timeline",
+                                icon = Icons.AutoMirrored.Filled.ShowChart
+                            )
+                            RamTimelineGraph(samples = ramSamples)
+                        }
+                    }
+                }
+
+                // Developer Mode Section: Worker Memory Allocation Timeline
+                item {
+                    AppCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            DiagnosticSectionHeader(
+                                title = "Worker & Subsystem Memory Timeline (${workerRecords.size})",
+                                icon = Icons.Default.Memory
+                            )
+
+                            if (workerRecords.isEmpty()) {
+                                Text(
+                                    text = "No worker executions recorded yet (Canvas autosave, DB maintenance, TileCache).",
+                                    color = ElectricSlateTokens.TextMuted,
+                                    fontSize = 12.sp,
+                                    fontFamily = ElmsSans
+                                )
+                            } else {
+                                for (rec in workerRecords.takeLast(6).reversed()) {
+                                    val rowShape = RoundedCornerShape(10.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(rowShape)
+                                            .background(ElectricSlateTokens.SurfaceElevated)
+                                            .border(1.dp, ElectricSlateTokens.BorderSubtle, rowShape)
+                                            .padding(10.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = rec.workerName,
+                                                    color = ElectricSlateTokens.TextPrimary,
+                                                    fontSize = 13.sp,
+                                                    fontFamily = ElmsSans,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                Text(
+                                                    text = "${rec.startHeapMb} MB → ${rec.endHeapMb} MB in ${rec.durationMs}ms",
+                                                    color = ElectricSlateTokens.TextMuted,
+                                                    fontSize = 11.sp,
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
+
+                                            val isPositive = rec.deltaHeapMb > 0
+                                            val badgeBg = if (isPositive) ElectricSlateTokens.Destructive.copy(alpha = 0.15f) else ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.15f)
+                                            val badgeColor = if (isPositive) ElectricSlateTokens.Destructive else ElectricSlateTokens.PrimaryAccent
+                                            val deltaStr = if (rec.deltaHeapMb >= 0) "+${rec.deltaHeapMb} MB" else "${rec.deltaHeapMb} MB"
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(badgeBg)
+                                                    .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(6.dp))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = deltaStr,
+                                                    color = badgeColor,
+                                                    fontSize = 11.sp,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Developer Mode Section: Memory Leak Hints & Anomalies
+                item {
+                    AppCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            DiagnosticSectionHeader(
+                                title = "Memory Leak Insights & Anomaly Detection",
+                                icon = Icons.Default.Warning
+                            )
+
+                            if (leakHints.isEmpty()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = ElectricSlateTokens.PrimaryAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "0 Memory Leaks Detected (Heap trajectory healthy)",
+                                        color = ElectricSlateTokens.TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontFamily = ElmsSans
+                                    )
+                                }
+                            } else {
+                                for (hint in leakHints) {
+                                    val hintShape = RoundedCornerShape(10.dp)
+                                    val isCritical = hint.severity == LeakSeverity.CRITICAL
+                                    val borderCol = if (isCritical) ElectricSlateTokens.Destructive else ElectricSlateTokens.BorderSubtle
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(hintShape)
+                                            .background(ElectricSlateTokens.SurfaceElevated)
+                                            .border(1.dp, borderCol, hintShape)
+                                            .padding(10.dp)
+                                    ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                            Text(
+                                                text = hint.title,
+                                                color = if (isCritical) ElectricSlateTokens.Destructive else ElectricSlateTokens.TextPrimary,
+                                                fontSize = 13.sp,
+                                                fontFamily = ElmsSans,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = hint.description,
+                                                color = ElectricSlateTokens.TextMuted,
+                                                fontSize = 11.sp,
+                                                fontFamily = ElmsSans
+                                            )
+                                            Text(
+                                                text = "Fix: ${hint.suggestedFix}",
+                                                color = ElectricSlateTokens.PrimaryAccent,
+                                                fontSize = 11.sp,
+                                                fontFamily = ElmsSans
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Developer Mode Section: Force Garbage Collection Tester
+                item {
+                    AppCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            DiagnosticSectionHeader(
+                                title = "Garbage Collection & Reclamation Test",
+                                icon = Icons.Default.DeleteSweep
+                            )
+
+                            Text(
+                                text = "Forces System.gc() and measures immediate heap reduction before and after finalization.",
+                                color = ElectricSlateTokens.TextMuted,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans
+                            )
+
+                            AppButton(
+                                text = "Run System.gc() & Measure Freed RAM",
+                                onClick = {
+                                    lastGcResult = AppDiagnosticLogger.runManualGcAndMeasureDelta()
+                                    Toast.makeText(context, "GC complete: freed ${lastGcResult?.freedMb}MB in ${lastGcResult?.durationMs}ms", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            lastGcResult?.let { res ->
+                                Text(
+                                    text = "Last GC freed ${res.freedMb} MB in ${res.durationMs}ms (${res.beforeUsedMb} MB → ${res.afterUsedMb} MB)",
+                                    color = ElectricSlateTokens.PrimaryAccent,
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Section 1: Cold Start Performance Metrics
             item {
                 AppCard(
@@ -133,7 +455,59 @@ fun DiagnosticInfoScreen(
                 }
             }
 
-            // Section 2: Device Hardware & System Specifications
+            // Section 2: Memory & RAM Specifications
+            item {
+                AppCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        DiagnosticSectionHeader(
+                            title = "Memory & RAM Specifications",
+                            icon = Icons.Default.Memory
+                        )
+
+                        val heapPercent = if (hardwareInfo.jvmHeapMaxMb > 0) (hardwareInfo.jvmHeapUsedMb * 100 / hardwareInfo.jvmHeapMaxMb) else 0
+                        DiagnosticMetricRow("JVM Heap Used", "${hardwareInfo.jvmHeapUsedMb} MB / ${hardwareInfo.jvmHeapMaxMb} MB ($heapPercent%)")
+                        DiagnosticMetricRow("JVM Allocated Heap", "${hardwareInfo.jvmHeapTotalMb} MB allocated")
+                        DiagnosticMetricRow("Native Heap", "${hardwareInfo.nativeHeapAllocatedMb} MB alloc / ${hardwareInfo.nativeHeapSizeMb} MB total")
+                        DiagnosticMetricRow("System RAM", "${hardwareInfo.systemRamAvailableMb} MB free / ${hardwareInfo.systemRamTotalMb} MB total")
+                        DiagnosticMetricRow("Low Memory State", if (hardwareInfo.isLowMemory) "ACTIVE (Low)" else "False (Normal)")
+                        if (hardwareInfo.memoryClassMb > 0) {
+                            DiagnosticMetricRow("App Memory Class", "Std ${hardwareInfo.memoryClassMb} MB / Large ${hardwareInfo.largeMemoryClassMb} MB")
+                        }
+                        DiagnosticMetricRow("ART GC Runs / Time", "${hardwareInfo.artGcCount} runs / ${hardwareInfo.artGcTimeMs} ms")
+                    }
+                }
+            }
+
+            // Section 3: Disk & Storage Footprint
+            item {
+                AppCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        DiagnosticSectionHeader(
+                            title = "Disk & Storage Footprint",
+                            icon = Icons.Default.Storage
+                        )
+
+                        DiagnosticMetricRow("Internal Storage", "${hardwareInfo.storageFreeMb} MB free / ${hardwareInfo.storageTotalMb} MB total")
+                        DiagnosticMetricRow("App Files (filesDir)", "${hardwareInfo.appFilesKb} KB")
+                        DiagnosticMetricRow("App Cache (cacheDir)", "${hardwareInfo.appCacheKb} KB")
+                        DiagnosticMetricRow("SQLite Database (DB+WAL)", "${hardwareInfo.appDatabaseKb} KB")
+                        val totalAppKb = hardwareInfo.appFilesKb + hardwareInfo.appCacheKb + hardwareInfo.appDatabaseKb
+                        DiagnosticMetricRow("Total App Footprint", "${totalAppKb} KB (~${totalAppKb / 1024} MB)")
+                    }
+                }
+            }
+
+            // Section 4: Device Hardware & System Environment
             item {
                 AppCard(
                     modifier = Modifier.fillMaxWidth()
@@ -148,17 +522,125 @@ fun DiagnosticInfoScreen(
                         )
 
                         DiagnosticMetricRow("Device", "${hardwareInfo.brand} ${hardwareInfo.model} (${hardwareInfo.manufacturer})")
-                        DiagnosticMetricRow("Board", hardwareInfo.board)
+                        DiagnosticMetricRow("Board / Hardware", hardwareInfo.board)
                         DiagnosticMetricRow("Android OS", "Android ${hardwareInfo.androidVersion} (API ${hardwareInfo.apiLevel})")
-                        DiagnosticMetricRow("CPU Cores", "${hardwareInfo.cpuCores} active cores")
-                        DiagnosticMetricRow("System RAM", "${hardwareInfo.systemRamAvailableMb} MB free / ${hardwareInfo.systemRamTotalMb} MB total")
-                        DiagnosticMetricRow("JVM Heap", "${hardwareInfo.jvmHeapUsedMb} MB used / ${hardwareInfo.jvmHeapMaxMb} MB max")
-                        DiagnosticMetricRow("Internal Storage", "${hardwareInfo.storageFreeMb} MB free / ${hardwareInfo.storageTotalMb} MB total")
+                        DiagnosticMetricRow("Security Patch", hardwareInfo.securityPatch)
+                        DiagnosticMetricRow("CPU Cores / ABIs", "${hardwareInfo.cpuCores} cores (${hardwareInfo.supportedAbis.take(24)})")
+                        DiagnosticMetricRow("Display", "${hardwareInfo.displayResolution} @ ${hardwareInfo.displayDensityDpi} dpi (${String.format(Locale.US, "%.0f", hardwareInfo.displayRefreshRate)} Hz)")
+                        DiagnosticMetricRow("Battery / Thermal", "${if (hardwareInfo.batteryLevelPct >= 0) "${hardwareInfo.batteryLevelPct}%" else "N/A"} / ${hardwareInfo.thermalStatus}")
+                        DiagnosticMetricRow("Active Threads", "${hardwareInfo.activeThreadCount} runtime threads")
                     }
                 }
             }
 
-            // Section 3: Live Top Scrolling Overlay Toggle
+            // Section 5: Recorded Code Errors & Exceptions
+            item {
+                AppCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            DiagnosticSectionHeader(
+                                title = "Code Errors & Exceptions",
+                                icon = Icons.Default.BugReport
+                            )
+
+                            val badgeBg = if (errors.isEmpty()) ElectricSlateTokens.SurfaceElevated else ElectricSlateTokens.Destructive.copy(alpha = 0.15f)
+                            val badgeTextColor = if (errors.isEmpty()) ElectricSlateTokens.TextMuted else ElectricSlateTokens.Destructive
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(badgeBg)
+                                    .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (errors.isEmpty()) "0 Errors (Clean)" else "${errors.size} Errors",
+                                    color = badgeTextColor,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        val crashLog = hardwareInfo.previousCrashLog
+                        if (crashLog != null) {
+                            Text(
+                                text = "Previous Crash Detected:",
+                                color = ElectricSlateTokens.Destructive,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            val boxShape = RoundedCornerShape(8.dp)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(boxShape)
+                                    .background(ElectricSlateTokens.SurfaceElevated)
+                                    .border(1.dp, ElectricSlateTokens.BorderSubtle, boxShape)
+                                    .padding(8.dp)
+                            ) {
+                                Text(
+                                    text = crashLog.take(800),
+                                    color = ElectricSlateTokens.TextMuted,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    maxLines = 8,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        if (errors.isEmpty() && crashLog == null) {
+                            Text(
+                                text = "No runtime errors or exceptions recorded during this session.",
+                                color = ElectricSlateTokens.TextMuted,
+                                fontSize = 13.sp,
+                                fontFamily = ElmsSans
+                            )
+                        } else {
+                            for (err in errors.take(5)) {
+                                val errShape = RoundedCornerShape(8.dp)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(errShape)
+                                        .background(ElectricSlateTokens.SurfaceElevated)
+                                        .border(1.dp, ElectricSlateTokens.BorderSubtle, errShape)
+                                        .padding(8.dp)
+                                ) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = "[${err.tag}] ${err.message}",
+                                            color = ElectricSlateTokens.Destructive,
+                                            fontSize = 12.sp,
+                                            fontFamily = ElmsSans,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = "${err.exceptionClass} on ${err.threadName}",
+                                            color = ElectricSlateTokens.TextMuted,
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section 6: Live Top Scrolling Overlay Toggle
             item {
                 AppCard(
                     modifier = Modifier.fillMaxWidth()
@@ -203,7 +685,7 @@ fun DiagnosticInfoScreen(
                 }
             }
 
-            // Section 4: Export Diagnostic Report Button
+            // Section 7: Export Diagnostic Report Button
             item {
                 AppButton(
                     text = "Copy Full Diagnostic Report",
@@ -217,7 +699,7 @@ fun DiagnosticInfoScreen(
                 )
             }
 
-            // Section 5: Recent Activity Event Log
+            // Section 8: Recent Activity Event Log
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -249,7 +731,7 @@ fun DiagnosticInfoScreen(
                         ) {
                             Text(
                                 text = ev.tag,
-                                color = ElectricSlateTokens.PrimaryAccent,
+                                color = if (ev.tag == "Error") ElectricSlateTokens.Destructive else ElectricSlateTokens.PrimaryAccent,
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold

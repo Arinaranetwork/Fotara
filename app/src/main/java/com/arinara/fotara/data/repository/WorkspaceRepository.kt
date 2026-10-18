@@ -601,16 +601,13 @@ class SqliteWorkspaceRepository(
             }
 
             val docFilesCursor = db.rawQuery(
-                "SELECT origin_file_uri, file_size_bytes FROM document_notes WHERE folder_id IN ($fPlaceholders) AND is_trashed = 0",
+                "SELECT origin_file_uri FROM document_notes WHERE folder_id IN ($fPlaceholders) AND is_trashed = 0",
                 fArgs
             )
             docFilesCursor.use { c ->
                 while (c.moveToNext()) {
                     val uri = c.getString(0)
-                    val dbSize = if (c.isNull(1)) 0L else c.getLong(1)
-                    if (dbSize > 0) {
-                        totalBytes += dbSize
-                    } else if (uri != null) {
+                    if (uri != null) {
                         val f = java.io.File(uri)
                         if (f.exists()) totalBytes += f.length()
                     }

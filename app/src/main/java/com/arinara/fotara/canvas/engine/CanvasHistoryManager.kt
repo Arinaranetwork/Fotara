@@ -352,6 +352,9 @@ class CanvasHistoryManager(
         return try {
             val updated = command.undo(currentDoc)
             redoStack.addLast(command)
+            if (redoStack.size > maxHistorySize) {
+                redoStack.removeFirst()
+            }
             updated
         } catch (_: Exception) {
             undoStack.addLast(command)
@@ -368,6 +371,9 @@ class CanvasHistoryManager(
         return try {
             val updated = command.apply(currentDoc)
             undoStack.addLast(command)
+            if (undoStack.size > maxHistorySize) {
+                undoStack.removeFirst()
+            }
             updated
         } catch (_: Exception) {
             redoStack.addLast(command)

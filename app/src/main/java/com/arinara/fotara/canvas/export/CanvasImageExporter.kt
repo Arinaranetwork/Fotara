@@ -240,22 +240,27 @@ object CanvasImageExporter {
                 val page = pdfDoc.startPage(pageInfo)
                 val canvas = page.canvas
 
-                if (bitmap != null) {
-                    canvas.drawBitmap(bitmap, 0f, 0f, null)
-                    bitmap.recycle()
-                } else {
-                    canvas.drawColor(Color.WHITE)
+                try {
+                    if (bitmap != null) {
+                        canvas.drawBitmap(bitmap, 0f, 0f, null)
+                    } else {
+                        canvas.drawColor(Color.WHITE)
+                    }
+                } finally {
+                    bitmap?.recycle()
+                    pdfDoc.finishPage(page)
                 }
-                pdfDoc.finishPage(page)
             }
-            FileOutputStream(outputFile).use { out ->
+            FileOutputStream(outputFile).buffered().use { out ->
                 pdfDoc.writeTo(out)
             }
             true
         } catch (_: Exception) {
             false
         } finally {
-            pdfDoc.close()
+            try {
+                pdfDoc.close()
+            } catch (_: Throwable) {}
         }
     }
 }

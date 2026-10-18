@@ -66,20 +66,6 @@ class MainActivity : FragmentActivity() {
         AppDiagnosticLogger.recordActivityCreateStart()
         super.onCreate(savedInstanceState)
 
-        // Install local crash logger to capture any uncaught exception to disk
-        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            try {
-                val logFile = File(filesDir, "crash.log")
-                logFile.writeText(
-                    "FOTARA FATAL CRASH [${Date()}]\n" +
-                    "Thread: ${thread.name}\n" +
-                    Log.getStackTraceString(throwable)
-                )
-            } catch (_: Exception) {}
-            previousHandler?.uncaughtException(thread, throwable)
-        }
-
         initializeContainer()
 
         enableEdgeToEdge()

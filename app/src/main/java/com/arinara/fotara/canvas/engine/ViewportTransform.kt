@@ -15,11 +15,11 @@ data class CanvasRect(
     val right: Float,
     val bottom: Float
 ) {
-    val width: Float get() = maxOf(0f, right - left)
-    val height: Float get() = maxOf(0f, bottom - top)
-    val centerX: Float get() = (left + right) / 2f
-    val centerY: Float get() = (top + bottom) / 2f
-    val isEmpty: Boolean get() = width <= 0f || height <= 0f
+    val width: Float get() = if (left.isNaN() || right.isNaN()) 0f else maxOf(0f, right - left)
+    val height: Float get() = if (top.isNaN() || bottom.isNaN()) 0f else maxOf(0f, bottom - top)
+    val centerX: Float get() = if (left.isNaN() || right.isNaN()) 0f else (left + right) / 2f
+    val centerY: Float get() = if (top.isNaN() || bottom.isNaN()) 0f else (top + bottom) / 2f
+    val isEmpty: Boolean get() = left.isNaN() || top.isNaN() || right.isNaN() || bottom.isNaN() || width <= 0f || height <= 0f
 
     fun contains(x: Float, y: Float): Boolean {
         return x in left..right && y in top..bottom
@@ -226,9 +226,14 @@ object ViewportTransform {
         val availableW = maxOf(10f, safeW - (2 * safePad))
         val availableH = maxOf(10f, safeH - (2 * safePad))
 
-        val scaleX = availableW / contentBounds.width
-        val scaleY = availableH / contentBounds.height
-        val fitScale = minOf(scaleX, scaleY).coerceIn(MIN_ZOOM, 2.0f)
+        val safeContentW = if (contentBounds.width <= 0f || contentBounds.width.isNaN()) 1f else contentBounds.width
+        val safeContentH = if (contentBounds.height <= 0f || contentBounds.height.isNaN()) 1f else contentBounds.height
+
+        val rawScaleX = availableW / safeContentW
+        val rawScaleY = availableH / safeContentH
+        val safeScaleX = if (rawScaleX.isNaN() || rawScaleX.isInfinite()) 1.0f else rawScaleX
+        val safeScaleY = if (rawScaleY.isNaN() || rawScaleY.isInfinite()) 1.0f else rawScaleY
+        val fitScale = minOf(safeScaleX, safeScaleY).coerceIn(MIN_ZOOM, 2.0f)
 
         val contentCenterX = contentBounds.centerX
         val contentCenterY = contentBounds.centerY

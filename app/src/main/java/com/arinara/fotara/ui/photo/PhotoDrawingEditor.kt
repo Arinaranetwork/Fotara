@@ -351,8 +351,9 @@ fun PhotoDrawingEditor(
                                             val eraserStrokeWidthPx = (currentEraserSizeDp * densityPx) / fitScale
                                             val eraserRadius = eraserStrokeWidthPx / 2f
 
+                                            val currentStrokesList = strokes.toList()
                                             val updated = mutableListOf<StrokeElement>()
-                                            for (s in strokes) {
+                                            for (s in currentStrokesList) {
                                                 val split = StrokeProcessor.eraseStrokeWithCapsule(
                                                     stroke = s,
                                                     ax = prev.x,
@@ -364,8 +365,10 @@ fun PhotoDrawingEditor(
                                                 )
                                                 updated.addAll(split)
                                             }
-                                            strokes.clear()
-                                            strokes.addAll(updated)
+                                            if (updated != currentStrokesList) {
+                                                strokes.clear()
+                                                strokes.addAll(updated)
+                                            }
                                             prevPhotoPt = currentPt
                                         }
                                     }

@@ -192,39 +192,43 @@ object CollabProtocolCodec {
     }
 
     fun decode(raw: String): CollabMessage? {
+        if (raw.length > 256_000) return null
         val trimmed = raw.trim()
         if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null
 
         val type = extractStringField(trimmed, "type") ?: return null
         return when (type) {
             CollabMessage.TYPE_JOIN_ROOM -> {
-                val roomCode = extractStringField(trimmed, "roomCode") ?: return null
-                val userTag = extractStringField(trimmed, "userTag") ?: ""
-                val colorHex = extractStringField(trimmed, "colorHex") ?: "#2563EB"
+                val roomCode = extractStringField(trimmed, "roomCode")?.take(16) ?: return null
+                val userTag = extractStringField(trimmed, "userTag")?.take(50) ?: ""
+                val colorHex = extractStringField(trimmed, "colorHex")?.take(10) ?: "#2563EB"
                 CollabMessage.JoinRoom(roomCode, userTag, colorHex)
             }
             CollabMessage.TYPE_PEER_JOINED -> {
-                val peerId = extractStringField(trimmed, "peerId") ?: return null
-                val userTag = extractStringField(trimmed, "userTag") ?: ""
-                val colorHex = extractStringField(trimmed, "colorHex") ?: "#2563EB"
+                val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: return null
+                val userTag = extractStringField(trimmed, "userTag")?.take(50) ?: ""
+                val colorHex = extractStringField(trimmed, "colorHex")?.take(10) ?: "#2563EB"
                 CollabMessage.PeerJoined(peerId, userTag, colorHex)
             }
             CollabMessage.TYPE_STROKE_BROADCAST -> {
-                val strokeId = extractStringField(trimmed, "strokeId") ?: UUID.randomUUID().toString()
-                val points = extractFloatFieldList(trimmed, "points")
-                val colorHex = extractStringField(trimmed, "colorHex") ?: "#2563EB"
-                val strokeWidth = extractFloatField(trimmed, "strokeWidth") ?: 4.0f
+                val strokeId = extractStringField(trimmed, "strokeId")?.take(100) ?: UUID.randomUUID().toString()
+                val points = extractFloatFieldList(trimmed, "points").take(10_000)
+                val colorHex = extractStringField(trimmed, "colorHex")?.take(10) ?: "#2563EB"
+                val rawStrokeWidth = extractFloatField(trimmed, "strokeWidth") ?: 4.0f
+                val strokeWidth = if (rawStrokeWidth.isNaN()) 4.0f else rawStrokeWidth.coerceIn(0.1f, 200f)
                 CollabMessage.StrokeBroadcast(strokeId, points, colorHex, strokeWidth)
             }
             CollabMessage.TYPE_CURSOR_BROADCAST -> {
-                val peerId = extractStringField(trimmed, "peerId") ?: return null
-                val x = extractFloatField(trimmed, "x") ?: 0.0f
-                val y = extractFloatField(trimmed, "y") ?: 0.0f
+                val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: return null
+                val rawX = extractFloatField(trimmed, "x") ?: 0.0f
+                val rawY = extractFloatField(trimmed, "y") ?: 0.0f
+                val x = if (rawX.isNaN() || rawX.isInfinite()) 0.0f else rawX.coerceIn(-500_000f, 500_000f)
+                val y = if (rawY.isNaN() || rawY.isInfinite()) 0.0f else rawY.coerceIn(-500_000f, 500_000f)
                 val timestamp = extractLongField(trimmed, "timestamp") ?: System.currentTimeMillis()
                 CollabMessage.CursorBroadcast(peerId, x, y, timestamp)
             }
             CollabMessage.TYPE_LEAVE_ROOM -> {
-                val peerId = extractStringField(trimmed, "peerId") ?: return null
+                val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: return null
                 CollabMessage.LeaveRoom(peerId)
             }
             else -> null

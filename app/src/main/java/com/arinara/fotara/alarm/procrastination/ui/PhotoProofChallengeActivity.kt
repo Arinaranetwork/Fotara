@@ -55,6 +55,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -171,6 +172,11 @@ fun PhotoProofChallengeScreen(
 
     val imageCapture = remember { ImageCapture.Builder().build() }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    DisposableEffect(cameraExecutor) {
+        onDispose {
+            cameraExecutor.shutdown()
+        }
+    }
     var isCapturing by remember { mutableStateOf(false) }
     var showPinDialog by remember { mutableStateOf(false) }
 

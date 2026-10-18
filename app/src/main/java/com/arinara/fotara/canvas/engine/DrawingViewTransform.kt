@@ -72,13 +72,17 @@ object DrawingViewTransform {
          * Clamps to content bounds [0, contentWidth] x [0, contentHeight] if [clamp] is true.
          */
         fun localToContent(local: Offset, clamp: Boolean = true): Offset {
-            val fs = if (fitScale > 0f) fitScale else 1.0f
-            val rawX = (local.x - fitLeft) / fs
-            val rawY = (local.y - fitTop) / fs
+            val fs = if (fitScale > 0f && !fitScale.isNaN()) fitScale else 1.0f
+            val safeLocalX = if (local.x.isNaN()) 0f else local.x
+            val safeLocalY = if (local.y.isNaN()) 0f else local.y
+            val rawX = (safeLocalX - fitLeft) / fs
+            val rawY = (safeLocalY - fitTop) / fs
+            val sanitizedX = if (rawX.isNaN()) 0f else rawX
+            val sanitizedY = if (rawY.isNaN()) 0f else rawY
             return if (clamp && contentWidth > 0f && contentHeight > 0f) {
-                Offset(rawX.coerceIn(0f, contentWidth), rawY.coerceIn(0f, contentHeight))
+                Offset(sanitizedX.coerceIn(0f, contentWidth), sanitizedY.coerceIn(0f, contentHeight))
             } else {
-                Offset(rawX, rawY)
+                Offset(sanitizedX, sanitizedY)
             }
         }
 
