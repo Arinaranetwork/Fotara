@@ -733,28 +733,28 @@ fun FolderDetailScreen(
                                     expanded = showOverflowMenu,
                                     onDismissRequest = { showOverflowMenu = false },
                                     modifier = Modifier
-                                        .background(HomeCardSurface)
-                                        .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                                        .background(ElectricSlateTokens.SurfaceElevated)
+                                        .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
                                 ) {
                                 DropdownMenuItem(
-                                    text = { Text("Sort: Newest Uploads", color = TextPrimary) },
-                                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, null, tint = FolderTabCream) },
+                                    text = { Text("Sort: Newest Uploads", color = ElectricSlateTokens.TextPrimary) },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.Sort, null, tint = ElectricSlateTokens.TextMuted) },
                                     onClick = {
                                         viewModel.setSortOption(PhotoSortOption.UPLOAD_DATE_DESC)
                                         showOverflowMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Sort: Nearest Deadline", color = TextPrimary) },
-                                    leadingIcon = { Icon(Icons.Default.Event, null, tint = TagAmber) },
+                                    text = { Text("Sort: Nearest Deadline", color = ElectricSlateTokens.TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Default.Event, null, tint = ElectricSlateTokens.TextMuted) },
                                     onClick = {
                                         viewModel.setSortOption(PhotoSortOption.NEAREST_DEADLINE)
                                         showOverflowMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Export Folder to PDF", color = TextPrimary) },
-                                    leadingIcon = { Icon(Icons.Default.PictureAsPdf, null, tint = FolderTabCream) },
+                                    text = { Text("Export Folder to PDF", color = ElectricSlateTokens.TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Default.PictureAsPdf, null, tint = ElectricSlateTokens.TextMuted) },
                                     onClick = {
                                         showOverflowMenu = false
                                         viewModel.exportToPdf(context) { pdfFile ->
@@ -776,34 +776,34 @@ fun FolderDetailScreen(
                                     text = {
                                         Text(
                                             if (uiState.isBatchSelectMode) "Exit Batch Select" else "Batch Select Mode",
-                                            color = TextPrimary
+                                            color = ElectricSlateTokens.TextPrimary
                                         )
                                     },
-                                    leadingIcon = { Icon(Icons.Default.SelectAll, null, tint = FolderTabCream) },
+                                    leadingIcon = { Icon(Icons.Default.SelectAll, null, tint = ElectricSlateTokens.TextMuted) },
                                     onClick = {
                                         viewModel.toggleBatchSelectMode()
                                         showOverflowMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Folder Color Label", color = TextPrimary) },
-                                    leadingIcon = { Icon(Icons.Default.ColorLens, null, tint = FolderTabCream) },
+                                    text = { Text("Folder Color Label", color = ElectricSlateTokens.TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Default.ColorLens, null, tint = ElectricSlateTokens.TextMuted) },
                                     onClick = {
                                         showColorDialog = true
                                         showOverflowMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Rename Folder", color = TextPrimary) },
-                                    leadingIcon = { Icon(Icons.Default.Edit, null, tint = FolderTabCream) },
+                                    text = { Text("Rename Folder", color = ElectricSlateTokens.TextPrimary) },
+                                    leadingIcon = { Icon(Icons.Default.Edit, null, tint = ElectricSlateTokens.TextMuted) },
                                     onClick = {
                                         showRenameFolderDialog = true
                                         showOverflowMenu = false
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Delete Folder", color = TagCrimson) },
-                                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = TagCrimson) },
+                                    text = { Text("Delete Folder", color = ElectricSlateTokens.Destructive) },
+                                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = ElectricSlateTokens.Destructive) },
                                     onClick = {
                                         showDeleteConfirmDialog = true
                                         showOverflowMenu = false
@@ -951,20 +951,20 @@ fun FolderDetailScreen(
                             expanded = showSubMenu,
                             onDismissRequest = { showSubMenu = false },
                             modifier = Modifier
-                                .background(HomeCardSurface)
-                                .border(1.dp, HomeCardBorder, RoundedCornerShape(12.dp))
+                                .background(ElectricSlateTokens.SurfaceElevated)
+                                .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Rename", color = TextPrimary, fontFamily = ElmsSans) },
-                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = Color.White) },
+                                text = { Text("Rename", color = ElectricSlateTokens.TextPrimary, fontFamily = ElmsSans) },
+                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showSubMenu = false
                                     subfolderToRename = sub
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Delete", color = TagCrimson, fontFamily = ElmsSans) },
-                                leadingIcon = { Icon(Icons.Default.Delete, null, tint = TagCrimson) },
+                                text = { Text("Delete", color = ElectricSlateTokens.Destructive, fontFamily = ElmsSans) },
+                                leadingIcon = { Icon(Icons.Default.Delete, null, tint = ElectricSlateTokens.Destructive) },
                                 onClick = {
                                     showSubMenu = false
                                     viewModel.getSubfolderDeleteStats(listOf(sub.id)) { stats ->
@@ -973,8 +973,8 @@ fun FolderDetailScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Select", color = TextPrimary, fontFamily = ElmsSans) },
-                                leadingIcon = { Icon(Icons.Default.Check, null, tint = Color.White) },
+                                text = { Text("Select", color = ElectricSlateTokens.TextPrimary, fontFamily = ElmsSans) },
+                                leadingIcon = { Icon(Icons.Default.Check, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showSubMenu = false
                                     viewModel.startSubfolderMultiSelect(sub.id)
@@ -1323,11 +1323,19 @@ fun FolderDetailScreen(
             subfolders = uiState.subfolders,
             folderSuggestEngine = folderSuggestEngine,
             availableFolders = uiState.availableFolders,
+            photoStorageManager = photoStorageManager,
             onSaveBatch = { savedList, subfolderId ->
                 viewModel.saveCapturedBatch(savedList, subfolderId)
                 capturedBatchPhotos = null
             },
-            onDismiss = { capturedBatchPhotos = null }
+            onDismiss = {
+                capturedBatchPhotos?.forEach { photo ->
+                    coroutineScope.launch {
+                        photoStorageManager.deletePhotoFiles(photo.fileUri, photo.thumbnailUri)
+                    }
+                }
+                capturedBatchPhotos = null
+            }
         )
     }
 
@@ -3109,12 +3117,12 @@ private fun BatchSelectActionDock(
                         Icon(
                             imageVector = Icons.Default.Link,
                             contentDescription = "Link Items",
-                            tint = ElectricSlateTokens.PrimaryAccent,
+                            tint = ElectricSlateTokens.TextPrimary,
                             modifier = Modifier.size(24.dp)
                         )
                         Text(
                             text = "Link",
-                            color = ElectricSlateTokens.PrimaryAccent,
+                            color = ElectricSlateTokens.TextPrimary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )

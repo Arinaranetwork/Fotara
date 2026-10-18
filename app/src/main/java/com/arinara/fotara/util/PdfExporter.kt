@@ -20,6 +20,8 @@ import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.repository.PhotoDrawingRepository
 import com.arinara.fotara.data.repository.SqlitePhotoDrawingRepository
 import com.arinara.fotara.data.storage.PhotoFlattener
+import com.arinara.fotara.canvas.render.PhotoDrawingRenderer
+import com.arinara.fotara.data.model.PdfPageDrawing
 import com.arinara.fotara.ui.folder.FolderGridItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -283,6 +285,174 @@ object PdfExporter {
             for (f in tempFilesToClean) {
                 if (f.exists()) f.delete()
             }
+        }
+    }
+
+    /**
+     * Composites SQLite drawing ink strokes and typed text layers directly onto native PDF page canvases,
+     * exporting an annotated PDF file that external readers (Acrobat, Chrome, Apple Preview) can view seamlessly.
+     */
+    suspend fun exportAnnotatedPdf(
+        context: Context,
+        documentFile: File,
+        documentTitle: String,
+        drawingsMap: Map<Int, PdfPageDrawing>
+    ): File = withContext(Dispatchers.IO) {
+        val exportsDir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
+        val cleanName = documentTitle.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        val outputFile = File(exportsDir, "${cleanName}_Annotated_${System.currentTimeMillis()}.pdf")
+
+        val pdfRenderer = PdfPageRenderer(documentFile)
+        val pdfDoc = PdfDocument()
+
+        try {
+            val totalPages = pdfRenderer.pageCount
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+            for (pageIndex in 0 until totalPages) {
+                val (pageWFloat, pageHFloat) = pdfRenderer.getPageSizePoints(pageIndex)
+                val w = if (pageWFloat > 0f) pageWFloat.toInt() else 595
+                val h = if (pageHFloat > 0f) pageHFloat.toInt() else 842
+
+                val pageInfo = PdfDocument.PageInfo.Builder(w, h, pageIndex + 1).create()
+                val page = pdfDoc.startPage(pageInfo)
+                val canvas: Canvas = page.canvas
+
+                // Render high-res base PDF page bitmap (2x points for razor sharpness)
+                val renderW = (w * 2f).toInt()
+                val renderH = (h * 2f).toInt()
+                val baseBitmap = pdfRenderer.renderPageForExport(pageIndex, renderW, renderH)
+
+                if (baseBitmap != null) {
+                    val destRect = RectF(0f, 0f, w.toFloat(), h.toFloat())
+                    canvas.drawBitmap(baseBitmap, null, destRect, paint)
+                    baseBitmap.recycle()
+                }
+
+                // If drawings or text layers exist for this page, render them onto the PDF canvas!
+                val drawing = drawingsMap[pageIndex]
+                if (drawing != null && drawing.isVisible) {
+                    val scale = if (drawing.pageWidth > 0f) w.toFloat() / drawing.pageWidth else 1f
+                    if (drawing.hasStrokes) {
+                        PhotoDrawingRenderer.renderStrokes(canvas, drawing.strokes, scale = scale)
+                    }
+                    if (drawing.textLayers.isNotEmpty()) {
+                        PhotoDrawingRenderer.renderTextLayers(canvas, drawing.textLayers, scale = scale)
+                    }
+                }
+
+                pdfDoc.finishPage(page)
+            }
+
+            FileOutputStream(outputFile).use { out ->
+                pdfDoc.writeTo(out)
+            }
+
+            outputFile
+        } finally {
+            try {
+                pdfDoc.close()
+            } catch (_: Throwable) {}
+            try {
+                pdfRenderer.close()
+            } catch (_: Throwable) {}
+        }
+    }
+
+    /**
+     * Reorganizes an existing PDF file by retaining only pages in [pageOrder],
+     * applying rotations in [pageRotations] (0, 90, 180, 270 degrees), and writing
+     * back to [targetFile] safely via atomic replacement.
+     */
+    suspend fun reorganizePdfPages(
+        context: Context,
+        sourceFile: File,
+        pageOrder: List<Int>,
+        pageRotations: Map<Int, Int> = emptyMap(),
+        targetFile: File = sourceFile
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (pageOrder.isEmpty()) return@withContext false
+        val tempOut = File(context.cacheDir, "reorg_${System.currentTimeMillis()}.pdf")
+        val pdfRenderer = PdfPageRenderer(sourceFile)
+        val pdfDoc = PdfDocument()
+
+        try {
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+            for ((newPageIndex, originalPageIndex) in pageOrder.withIndex()) {
+                if (originalPageIndex < 0 || originalPageIndex >= pdfRenderer.pageCount) continue
+                val (origWFloat, origHFloat) = pdfRenderer.getPageSizePoints(originalPageIndex)
+                val origW = if (origWFloat > 0f) origWFloat.toInt() else 595
+                val origH = if (origHFloat > 0f) origHFloat.toInt() else 842
+                val rotation = (pageRotations[originalPageIndex] ?: 0) % 360
+                val isRotated90or270 = rotation == 90 || rotation == 270
+
+                val pageW = if (isRotated90or270) origH else origW
+                val pageH = if (isRotated90or270) origW else origH
+
+                val pageInfo = PdfDocument.PageInfo.Builder(pageW, pageH, newPageIndex + 1).create()
+                val page = pdfDoc.startPage(pageInfo)
+                val canvas: Canvas = page.canvas
+
+                val renderW = (origW * 2f).toInt()
+                val renderH = (origH * 2f).toInt()
+                val baseBitmap = pdfRenderer.renderPageForExport(
+                    originalPageIndex,
+                    renderW,
+                    renderH
+                )
+
+                if (baseBitmap != null) {
+                    if (rotation != 0) {
+                        canvas.save()
+                        when (rotation) {
+                            90 -> {
+                                canvas.translate(pageW.toFloat(), 0f)
+                                canvas.rotate(90f)
+                            }
+                            180 -> {
+                                canvas.translate(pageW.toFloat(), pageH.toFloat())
+                                canvas.rotate(180f)
+                            }
+                            270 -> {
+                                canvas.translate(0f, pageH.toFloat())
+                                canvas.rotate(270f)
+                            }
+                        }
+                        val destRect = RectF(0f, 0f, origW.toFloat(), origH.toFloat())
+                        canvas.drawBitmap(baseBitmap, null, destRect, paint)
+                        canvas.restore()
+                    } else {
+                        val destRect = RectF(0f, 0f, pageW.toFloat(), pageH.toFloat())
+                        canvas.drawBitmap(baseBitmap, null, destRect, paint)
+                    }
+                    baseBitmap.recycle()
+                }
+
+                pdfDoc.finishPage(page)
+            }
+
+            FileOutputStream(tempOut).use { out ->
+                pdfDoc.writeTo(out)
+            }
+
+            // Close pdfRenderer before overwriting the file on disk
+            pdfDoc.close()
+            pdfRenderer.close()
+
+            if (tempOut.exists() && tempOut.length() > 0) {
+                tempOut.copyTo(targetFile, overwrite = true)
+                tempOut.delete()
+                true
+            } else {
+                false
+            }
+        } catch (_: Throwable) {
+            false
+        } finally {
+            try { pdfDoc.close() } catch (_: Throwable) {}
+            try { pdfRenderer.close() } catch (_: Throwable) {}
+            if (tempOut.exists()) tempOut.delete()
         }
     }
 

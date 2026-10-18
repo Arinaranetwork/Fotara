@@ -340,3 +340,177 @@ class WhiteboardContrastFilter {
         return out
     }
 }
+
+/**
+ * Academic post-processing optical filter modes for document notes.
+ */
+enum class DewarpFilterMode {
+    /**
+     * Preserves original camera colors and tone after geometry rectification.
+     */
+    ORIGINAL,
+
+    /**
+     * Academic whiteboard enhancement: removes ambient shadows and sharpens marker/pen strokes.
+     */
+    DOCUMENT_CLEAN,
+
+    /**
+     * High-contrast monochrome: separates black ink and pencil lines against pure white background.
+     */
+    HIGH_CONTRAST_BW
+}
+
+/**
+ * Pure Kotlin projective rectification engine with bilinear pixel interpolation
+ * and academic document contrast filtering.
+ */
+object PerspectiveDewarpEngine {
+
+    /**
+     * Rectifies an arbitrary quadrilateral region defined by [srcCorners]
+     * (top-left, top-right, bottom-right, bottom-left) in [src] into an orthogonal
+     * destination [PixelBuffer] of dimension [targetWidth] x [targetHeight].
+     */
+    fun warpPixelBuffer(
+        src: PixelBuffer,
+        srcCorners: List<QuadPoint>,
+        targetWidth: Int,
+        targetHeight: Int
+    ): PixelBuffer {
+        require(srcCorners.size == 4) { "Dewarping requires exactly 4 source corner points." }
+        require(targetWidth > 0 && targetHeight > 0) { "Target dimensions must be strictly positive." }
+
+        val forwardMatrix = PerspectiveDewarpMatrix.computeRectangularDewarp(
+            srcCorners = srcCorners,
+            targetWidth = targetWidth.toFloat(),
+            targetHeight = targetHeight.toFloat()
+        )
+        val invMatrix = forwardMatrix.invert() ?: return PixelBuffer(
+            targetWidth,
+            targetHeight,
+            IntArray(targetWidth * targetHeight) { -1 }
+        )
+
+        val srcW = src.width
+        val srcH = src.height
+        val srcPixels = src.pixels
+        val totalDst = targetWidth * targetHeight
+        val dstPixels = IntArray(totalDst)
+
+        for (y in 0 until targetHeight) {
+            val rowOffset = y * targetWidth
+            val sampleY = y + 0.5f
+            for (x in 0 until targetWidth) {
+                val sampleX = x + 0.5f
+                val srcPt = invMatrix.mapPoint(sampleX, sampleY)
+
+                val sx = srcPt.x - 0.5f
+                val sy = srcPt.y - 0.5f
+
+                if (sx >= 0f && sx <= srcW - 1f && sy >= 0f && sy <= srcH - 1f) {
+                    val x0 = sx.toInt()
+                    val y0 = sy.toInt()
+                    val x1 = min(x0 + 1, srcW - 1)
+                    val y1 = min(y0 + 1, srcH - 1)
+
+                    val fx = sx - x0
+                    val fy = sy - y0
+
+                    val c00 = srcPixels[y0 * srcW + x0]
+                    val c10 = srcPixels[y0 * srcW + x1]
+                    val c01 = srcPixels[y1 * srcW + x0]
+                    val c11 = srcPixels[y1 * srcW + x1]
+
+                    val a00 = (c00 ushr 24) and 0xFF
+                    val r00 = (c00 ushr 16) and 0xFF
+                    val g00 = (c00 ushr 8) and 0xFF
+                    val b00 = c00 and 0xFF
+
+                    val a10 = (c10 ushr 24) and 0xFF
+                    val r10 = (c10 ushr 16) and 0xFF
+                    val g10 = (c10 ushr 8) and 0xFF
+                    val b10 = c10 and 0xFF
+
+                    val a01 = (c01 ushr 24) and 0xFF
+                    val r01 = (c01 ushr 16) and 0xFF
+                    val g01 = (c01 ushr 8) and 0xFF
+                    val b01 = c01 and 0xFF
+
+                    val a11 = (c11 ushr 24) and 0xFF
+                    val r11 = (c11 ushr 16) and 0xFF
+                    val g11 = (c11 ushr 8) and 0xFF
+                    val b11 = c11 and 0xFF
+
+                    val aTop = a00 + (a10 - a00) * fx
+                    val rTop = r00 + (r10 - r00) * fx
+                    val gTop = g00 + (g10 - g00) * fx
+                    val bTop = b00 + (b10 - b00) * fx
+
+                    val aBot = a01 + (a11 - a01) * fx
+                    val rBot = r01 + (r11 - r01) * fx
+                    val gBot = g01 + (g11 - g01) * fx
+                    val bBot = b01 + (b11 - b01) * fx
+
+                    val a = (aTop + (aBot - aTop) * fy).toInt().coerceIn(0, 255)
+                    val r = (rTop + (rBot - rTop) * fy).toInt().coerceIn(0, 255)
+                    val g = (gTop + (gBot - gTop) * fy).toInt().coerceIn(0, 255)
+                    val b = (bTop + (bBot - bTop) * fy).toInt().coerceIn(0, 255)
+
+                    dstPixels[rowOffset + x] = (a shl 24) or (r shl 16) or (g shl 8) or b
+                } else {
+                    // Out-of-bounds area padded with white
+                    dstPixels[rowOffset + x] = -1
+                }
+            }
+        }
+
+        return PixelBuffer(targetWidth, targetHeight, dstPixels)
+    }
+
+    /**
+     * Applies optical enhancement filters to rectified pixel buffers.
+     */
+    fun applyFilter(
+        buffer: PixelBuffer,
+        filterMode: DewarpFilterMode,
+        whiteboardFilter: WhiteboardContrastFilter = WhiteboardContrastFilter()
+    ): PixelBuffer {
+        return when (filterMode) {
+            DewarpFilterMode.ORIGINAL -> buffer
+            DewarpFilterMode.DOCUMENT_CLEAN -> whiteboardFilter.process(buffer)
+            DewarpFilterMode.HIGH_CONTRAST_BW -> applyHighContrastBw(buffer)
+        }
+    }
+
+    private fun applyHighContrastBw(buffer: PixelBuffer): PixelBuffer {
+        val total = buffer.width * buffer.height
+        val out = IntArray(total)
+        val pixels = buffer.pixels
+
+        var sumLum = 0L
+        for (i in 0 until total) {
+            val c = pixels[i]
+            val r = (c ushr 16) and 0xFF
+            val g = (c ushr 8) and 0xFF
+            val b = c and 0xFF
+            sumLum += (77 * r + 150 * g + 29 * b) shr 8
+        }
+        val avgLum = if (total > 0) (sumLum / total).toInt() else 128
+        val threshold = (avgLum * 0.90f).toInt().coerceIn(80, 210)
+
+        for (i in 0 until total) {
+            val c = pixels[i]
+            val r = (c ushr 16) and 0xFF
+            val g = (c ushr 8) and 0xFF
+            val b = c and 0xFF
+            val lum = (77 * r + 150 * g + 29 * b) shr 8
+            out[i] = if (lum < threshold) {
+                -0x1000000 // 0xFF000000 pure black
+            } else {
+                -1 // 0xFFFFFFFF pure white
+            }
+        }
+        return PixelBuffer(buffer.width, buffer.height, out)
+    }
+}

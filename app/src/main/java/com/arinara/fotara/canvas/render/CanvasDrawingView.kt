@@ -85,53 +85,63 @@ class CanvasDrawingView(
 
         toolController.density = resources.displayMetrics.density
 
-        // Route selection handle hit-testing to tool controller
+        // Route selection handle hit-testing to tool controller (strictly in SELECT tool)
         pointerStateMachine.onHitTestSelection = { sx, sy ->
-            toolController.hitTestHandles(sx, sy, viewport, resources.displayMetrics.density)
+            if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) {
+                toolController.hitTestHandles(sx, sy, viewport, resources.displayMetrics.density)
+            } else null
         }
 
-        // Route direct text layer hit-testing to tool controller
+        // Route direct text layer hit-testing to tool controller (strictly in SELECT tool)
         pointerStateMachine.onHitTestTextLayer = { sx, sy ->
-            val (wx, wy) = ViewportTransform.screenToWorld(sx, sy, viewport)
-            val hitText = documentSnapshot.elements
-                .filterIsInstance<com.arinara.fotara.canvas.model.TextLayerElement>()
-                .lastOrNull { toolController.hitTestText(wx, wy, it) }
+            if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) {
+                val (wx, wy) = ViewportTransform.screenToWorld(sx, sy, viewport)
+                val hitText = documentSnapshot.elements
+                    .filterIsInstance<com.arinara.fotara.canvas.model.TextLayerElement>()
+                    .lastOrNull { toolController.hitTestText(wx, wy, it) }
 
-            if (hitText != null) {
-                cancelShapeHold()
-                val dynBounds = hitText.computeDynamicBounds()
-                val selRef = com.arinara.fotara.canvas.model.SelectedElementReference.Whole(hitText.id)
-                toolController.selection = com.arinara.fotara.canvas.model.CanvasSelection(
-                    references = mapOf(hitText.id to selRef),
-                    bounds = dynBounds,
-                    rotationDegrees = hitText.rotationDegrees
-                )
-                onSelectionChanged?.invoke(toolController.selection)
-                invalidate()
-                true
+                if (hitText != null) {
+                    cancelShapeHold()
+                    val dynBounds = hitText.computeDynamicBounds()
+                    val selRef = com.arinara.fotara.canvas.model.SelectedElementReference.Whole(hitText.id)
+                    toolController.selection = com.arinara.fotara.canvas.model.CanvasSelection(
+                        references = mapOf(hitText.id to selRef),
+                        bounds = dynBounds,
+                        rotationDegrees = hitText.rotationDegrees
+                    )
+                    onSelectionChanged?.invoke(toolController.selection)
+                    invalidate()
+                    true
+                } else {
+                    false
+                }
             } else {
                 false
             }
         }
 
-        // Route direct image element hit-testing to tool controller (prevents drawing over images)
+        // Route direct image element hit-testing to tool controller (strictly in SELECT tool)
         pointerStateMachine.onHitTestImageElement = { sx, sy ->
-            val (wx, wy) = ViewportTransform.screenToWorld(sx, sy, viewport)
-            val hitImg = documentSnapshot.elements
-                .filterIsInstance<com.arinara.fotara.canvas.model.ImageElement>()
-                .lastOrNull { toolController.hitTestImage(wx, wy, it) }
+            if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) {
+                val (wx, wy) = ViewportTransform.screenToWorld(sx, sy, viewport)
+                val hitImg = documentSnapshot.elements
+                    .filterIsInstance<com.arinara.fotara.canvas.model.ImageElement>()
+                    .lastOrNull { toolController.hitTestImage(wx, wy, it) }
 
-            if (hitImg != null) {
-                cancelShapeHold()
-                val selRef = com.arinara.fotara.canvas.model.SelectedElementReference.Whole(hitImg.id)
-                toolController.selection = com.arinara.fotara.canvas.model.CanvasSelection(
-                    references = mapOf(hitImg.id to selRef),
-                    bounds = hitImg.bounds,
-                    rotationDegrees = hitImg.rotationDegrees
-                )
-                onSelectionChanged?.invoke(toolController.selection)
-                invalidate()
-                true
+                if (hitImg != null) {
+                    cancelShapeHold()
+                    val selRef = com.arinara.fotara.canvas.model.SelectedElementReference.Whole(hitImg.id)
+                    toolController.selection = com.arinara.fotara.canvas.model.CanvasSelection(
+                        references = mapOf(hitImg.id to selRef),
+                        bounds = hitImg.bounds,
+                        rotationDegrees = hitImg.rotationDegrees
+                    )
+                    onSelectionChanged?.invoke(toolController.selection)
+                    invalidate()
+                    true
+                } else {
+                    false
+                }
             } else {
                 false
             }
@@ -494,9 +504,9 @@ class CanvasDrawingView(
             inProgressWidth = inProgressWidth,
             inProgressBlendMode = inProgressBlendMode,
             inProgressLayerId = activeLayerId.ifEmpty { documentSnapshot.getPrimaryLayerId() },
-            selection = toolController.selectionToDraw,
-            previewElements = toolController.previewElements,
-            activeLassoPolygon = activeLassoPolygon,
+            selection = if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) toolController.selectionToDraw else com.arinara.fotara.canvas.model.CanvasSelection.Empty,
+            previewElements = if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) toolController.previewElements else null,
+            activeLassoPolygon = if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) activeLassoPolygon else emptyList(),
             density = resources.displayMetrics.density,
             isGestureActive = isGestureActive,
             onTileInvalidated = { postInvalidate() }

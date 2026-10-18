@@ -123,7 +123,7 @@ class FreeEraserTest {
     }
 
     @Test
-    fun testEraserCarvesImagesAlongStrokePathAndSupportsUndo() {
+    fun testEraserDeletesImagesAlongStrokePathAndSupportsUndo() {
         val controller = CanvasToolController(
             toolState = CanvasToolState(activeTool = CanvasToolType.ERASER, eraserRadius = 30f)
         )
@@ -144,20 +144,17 @@ class FreeEraserTest {
         controller.startEraser(50f, 100f)
         val (previewDoc, _) = controller.sweepEraser(listOf(PointerPoint(150f, 100f)), defaultViewport, doc)
 
-        // Live preview must preserve image and add live carve stroke along path
-        assertTrue(previewDoc.elements.any { it.id == "target_img" })
-        assertTrue(previewDoc.elements.any { it.id == "__eraser_live_carve__" })
+        // Live preview must omit the deleted image without adding fake carve stroke
+        assertTrue("Live preview must omit deleted image", previewDoc.elements.none { it.id == "target_img" })
+        assertTrue("No live carve overlay", previewDoc.elements.none { it.id == "__eraser_live_carve__" })
 
         val (committedDoc, _) = controller.finishEraser(previewDoc, historyManager)
 
-        // Image must remain preserved in committed document
-        assertTrue(committedDoc.elements.any { it.id == "target_img" })
+        // Image must be really deleted in committed document
+        assertTrue("Image must be deleted from committed doc", committedDoc.elements.none { it.id == "target_img" })
+        assertTrue("No carve stroke added", committedDoc.elements.none { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
 
-        // Committed DST_OUT carve stroke must be appended
-        val carveStroke = committedDoc.elements.find { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT }
-        assertNotNull(carveStroke)
-
-        // Undo must remove the carve stroke
+        // Undo must restore the deleted image
         val undoneDoc = historyManager.undo(committedDoc)
         assertNotNull(undoneDoc)
         assertEquals(1, undoneDoc!!.elements.size)

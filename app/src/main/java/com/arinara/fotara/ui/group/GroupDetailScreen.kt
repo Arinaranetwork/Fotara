@@ -47,6 +47,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Collections
@@ -102,7 +103,9 @@ import com.arinara.fotara.ui.capture.MultiCaptureScreen
 import com.arinara.fotara.ui.folder.DetailPhotoCard
 import com.arinara.fotara.ui.photo.PhotoViewerDialog
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
-import androidx.compose.material.icons.filled.Alarm
+import com.arinara.fotara.ui.components.presets.AppBottomSheet
+import com.arinara.fotara.ui.components.presets.AppButton
+import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.components.NoteDetailScheduleChip
 import com.arinara.fotara.ui.components.ScheduleNoteDialog
 import com.arinara.fotara.util.NoteScheduleManager
@@ -130,6 +133,7 @@ fun GroupDetailScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var showColorDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showUngroupConfirmDialog by remember { mutableStateOf(false) }
     var showAddPhotosDialog by remember { mutableStateOf(false) }
     var showAddOptionsSheet by remember { mutableStateOf(false) }
     var showMultiCapture by remember { mutableStateOf(false) }
@@ -283,7 +287,7 @@ fun GroupDetailScreen(
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Rename", color = ElectricSlateTokens.TextPrimary) },
-                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = ElectricSlateTokens.PrimaryAccent) },
+                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showRenameDialog = true
@@ -296,7 +300,7 @@ fun GroupDetailScreen(
                                         color = ElectricSlateTokens.TextPrimary
                                     )
                                 },
-                                leadingIcon = { Icon(Icons.Default.Event, null, tint = ElectricSlateTokens.PrimaryAccent) },
+                                leadingIcon = { Icon(Icons.Default.Event, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showDeadlineDialog = true
@@ -304,7 +308,7 @@ fun GroupDetailScreen(
                             )
                             DropdownMenuItem(
                                 text = { Text("Schedule...", color = ElectricSlateTokens.TextPrimary) },
-                                leadingIcon = { Icon(Icons.Default.Alarm, null, tint = ElectricSlateTokens.PrimaryAccent) },
+                                leadingIcon = { Icon(Icons.Default.Alarm, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showScheduleDialog = true
@@ -312,7 +316,7 @@ fun GroupDetailScreen(
                             )
                             DropdownMenuItem(
                                 text = { Text("Move to Subfolder...", color = ElectricSlateTokens.TextPrimary) },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, null, tint = ElectricSlateTokens.PrimaryAccent) },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showMoveGroupDialog = true
@@ -320,7 +324,7 @@ fun GroupDetailScreen(
                             )
                             DropdownMenuItem(
                                 text = { Text("Export Group...", color = ElectricSlateTokens.TextPrimary) },
-                                leadingIcon = { Icon(Icons.Default.Share, null, tint = ElectricSlateTokens.PrimaryAccent) },
+                                leadingIcon = { Icon(Icons.Default.Share, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showExportGroupDialog = true
@@ -328,15 +332,15 @@ fun GroupDetailScreen(
                             )
                             DropdownMenuItem(
                                 text = { Text("Ungroup", color = ElectricSlateTokens.TextPrimary) },
-                                leadingIcon = { Icon(Icons.Default.LayersClear, null, tint = ElectricSlateTokens.PrimaryAccent) },
+                                leadingIcon = { Icon(Icons.Default.LayersClear, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showOverflowMenu = false
-                                    viewModel.ungroup(onComplete = onBackClick)
+                                    showUngroupConfirmDialog = true
                                 }
                             )
                             DropdownMenuItem(
                                 text = { Text("Color label", color = ElectricSlateTokens.TextPrimary) },
-                                leadingIcon = { Icon(Icons.Default.ColorLens, null, tint = ElectricSlateTokens.PrimaryAccent) },
+                                leadingIcon = { Icon(Icons.Default.ColorLens, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showColorDialog = true
@@ -382,6 +386,13 @@ fun GroupDetailScreen(
                             color = ElectricSlateTokens.TextPrimary,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        AppButton(
+                            text = "Add Notes to Group",
+                            onClick = { showAddOptionsSheet = true },
+                            leadingIcon = Icons.Default.Add,
+                            variant = AppButtonVariant.PRIMARY
                         )
                     }
                 }
@@ -454,12 +465,19 @@ fun GroupDetailScreen(
             folderName = uiState.group?.name ?: "Group",
             initialPhotos = capturedBatchPhotos ?: emptyList(),
             subfolders = uiState.subfolders,
-            folderSuggestEngine = folderSuggestEngine,
+            photoStorageManager = photoStorageManager,
             onSaveBatch = { savedList, subfolderId ->
                 viewModel.saveCapturedBatch(savedList, subfolderId)
                 capturedBatchPhotos = null
             },
-            onDismiss = { capturedBatchPhotos = null }
+            onDismiss = {
+                capturedBatchPhotos?.forEach { photo ->
+                    coroutineScope.launch {
+                        photoStorageManager?.deletePhotoFiles(photo.fileUri, photo.thumbnailUri)
+                    }
+                }
+                capturedBatchPhotos = null
+            }
         )
     }
 
@@ -481,9 +499,7 @@ fun GroupDetailScreen(
             },
             onRemoveFromGroup = { target ->
                 contextMenuPhoto = null
-                viewModel.removePhotoFromGroup(target.id, onAutoDissolved = {
-                    onBackClick()
-                })
+                viewModel.removePhotoFromGroup(target.id)
             },
             onDismiss = { contextMenuPhoto = null }
         )
@@ -511,10 +527,8 @@ fun GroupDetailScreen(
                 viewModel.setCoverPhoto(p.id)
             },
             onRemoveFromGroup = { p ->
-                viewModel.removePhotoFromGroup(p.id, onAutoDissolved = {
-                    inspectingPhoto = null
-                    onBackClick()
-                })
+                inspectingPhoto = null
+                viewModel.removePhotoFromGroup(p.id)
             },
             onDismiss = { inspectingPhoto = null }
         )
@@ -668,6 +682,56 @@ fun GroupDetailScreen(
             },
             onDismiss = { showAddPhotosDialog = false }
         )
+    }
+
+    // Sheet: Ungroup Confirmation (Phase 88)
+    if (showUngroupConfirmDialog) {
+        AppBottomSheet(
+            visible = true,
+            onDismiss = { showUngroupConfirmDialog = false },
+            title = "Ungroup Notes"
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Ungroup \"${uiState.group?.name ?: "Group"}\"?",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ElectricSlateTokens.TextPrimary
+                )
+                Text(
+                    text = "All notes in this group will be converted to standalone loose notes in this folder. The group container, tags, and deadline will be removed.",
+                    fontSize = 14.sp,
+                    color = ElectricSlateTokens.TextMuted,
+                    lineHeight = 20.sp
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AppButton(
+                        text = "Cancel",
+                        onClick = { showUngroupConfirmDialog = false },
+                        variant = AppButtonVariant.OUTLINED,
+                        modifier = Modifier.weight(1f)
+                    )
+                    AppButton(
+                        text = "Ungroup",
+                        onClick = {
+                            showUngroupConfirmDialog = false
+                            viewModel.ungroup(onComplete = onBackClick)
+                        },
+                        variant = AppButtonVariant.PRIMARY,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
     }
 }
 

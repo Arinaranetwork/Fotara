@@ -87,6 +87,7 @@ import com.arinara.fotara.data.model.Subfolder
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
+import com.arinara.fotara.feature.academic.dewarp.ui.PerspectiveDewarpStudioDialog
 import kotlinx.coroutines.launch
 
 @Composable
@@ -99,6 +100,7 @@ fun CaptureReviewSliderModal(
     folderSuggestEngine: FolderSuggestEngine? = null,
     availableFolders: List<Folder> = emptyList(),
     subfoldersByFolder: Map<Long, List<Subfolder>> = emptyMap(),
+    photoStorageManager: com.arinara.fotara.data.storage.PhotoStorageManager? = null,
     modifier: Modifier = Modifier
 ) {
     val reviewPhotos = remember(initialPhotos) {
@@ -107,6 +109,8 @@ fun CaptureReviewSliderModal(
     var selectedSubfolderId by remember { mutableStateOf<Long?>(null) }
     var showDiscardAllConfirm by remember { mutableStateOf(false) }
     var cropFeedbackMessage by remember { mutableStateOf<String?>(null) }
+    var showDewarpStudio by remember { mutableStateOf(false) }
+    var dewarpTargetPhoto by remember { mutableStateOf<Photo?>(null) }
 
     val pagerState = rememberPagerState(pageCount = { reviewPhotos.size })
     val coroutineScope = rememberCoroutineScope()
@@ -156,6 +160,13 @@ fun CaptureReviewSliderModal(
                     text = "Discard",
                     onClick = {
                         showDiscardAllConfirm = false
+                        if (photoStorageManager != null) {
+                            coroutineScope.launch {
+                                reviewPhotos.forEach { photo ->
+                                    photoStorageManager.deletePhotoFiles(photo.fileUri, photo.thumbnailUri)
+                                }
+                            }
+                        }
                         onDismiss()
                     },
                     variant = AppButtonVariant.DESTRUCTIVE
@@ -237,41 +248,20 @@ fun CaptureReviewSliderModal(
 
                         Spacer(modifier = Modifier.weight(1f))
 
-                        // Perspective Crop / 90° Rotate Adjustment Button
+                        // Perspective Dewarp & Rectification Studio Button
                         IconButton(
                             onClick = {
                                 if (reviewPhotos.isNotEmpty()) {
                                     val currentIndex = pagerState.currentPage.coerceIn(0, reviewPhotos.size - 1)
-                                    val photoToRotate = reviewPhotos[currentIndex]
-                                    val photoFile = File(photoToRotate.fileUri)
-                                    if (photoFile.exists()) {
-                                        try {
-                                            val bmp = BitmapFactory.decodeFile(photoFile.absolutePath)
-                                            if (bmp != null) {
-                                                val matrix = Matrix().apply { postRotate(90f) }
-                                                val rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
-                                                FileOutputStream(photoFile).use { out ->
-                                                    rotated.compress(Bitmap.CompressFormat.JPEG, 92, out)
-                                                }
-                                                if (rotated != bmp) bmp.recycle()
-                                                rotated.recycle()
-
-                                                reviewPhotos[currentIndex] = photoToRotate.copy(
-                                                    addedAt = System.currentTimeMillis()
-                                                )
-                                                cropFeedbackMessage = "Adjusted & rotated 90°"
-                                            }
-                                        } catch (e: Exception) {
-                                            cropFeedbackMessage = "Adjustment failed: ${e.message}"
-                                        }
-                                    }
+                                    dewarpTargetPhoto = reviewPhotos[currentIndex]
+                                    showDewarpStudio = true
                                 }
                             },
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Crop,
-                                contentDescription = "Adjust Perspective Crop",
+                                contentDescription = "Adjust Perspective Dewarp",
                                 tint = ElectricSlateTokens.TextPrimary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -282,7 +272,12 @@ fun CaptureReviewSliderModal(
                             onClick = {
                                 if (reviewPhotos.isNotEmpty()) {
                                     val currentIndex = pagerState.currentPage.coerceIn(0, reviewPhotos.size - 1)
-                                    reviewPhotos.removeAt(currentIndex)
+                                    val removed = reviewPhotos.removeAt(currentIndex)
+                                    if (photoStorageManager != null) {
+                                        coroutineScope.launch {
+                                            photoStorageManager.deletePhotoFiles(removed.fileUri, removed.thumbnailUri)
+                                        }
+                                    }
                                     if (reviewPhotos.isEmpty()) {
                                         onDismiss()
                                     }
@@ -472,6 +467,25 @@ fun CaptureReviewSliderModal(
                 }
             }
         }
+    }
+
+    // Interactive Perspective Dewarp Studio Dialog
+    if (showDewarpStudio && dewarpTargetPhoto != null) {
+        val targetFile = File(dewarpTargetPhoto!!.fileUri)
+        PerspectiveDewarpStudioDialog(
+            imageFile = targetFile,
+            onApplyDewarp = {
+                val currentIndex = pagerState.currentPage.coerceIn(0, reviewPhotos.size - 1)
+                reviewPhotos[currentIndex] = reviewPhotos[currentIndex].copy(
+                    addedAt = System.currentTimeMillis()
+                )
+                cropFeedbackMessage = "Perspective rectified & enhanced"
+                showDewarpStudio = false
+            },
+            onDismiss = {
+                showDewarpStudio = false
+            }
+        )
     }
 }
 

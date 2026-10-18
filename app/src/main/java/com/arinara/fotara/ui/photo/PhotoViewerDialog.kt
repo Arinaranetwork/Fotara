@@ -46,9 +46,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Crop
+import com.arinara.fotara.feature.academic.dewarp.ui.PerspectiveDewarpStudioDialog
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
@@ -171,6 +173,7 @@ fun PhotoViewerDialog(
     var imageVersion by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     var isCropping by remember { mutableStateOf(false) }
+    var showDewarpStudio by remember { mutableStateOf(false) }
     var isOperating by remember { mutableStateOf(false) }
     var isDrawingMode by remember { mutableStateOf(false) }
     var currentDrawing by remember { mutableStateOf<com.arinara.fotara.data.model.PhotoDrawing?>(null) }
@@ -196,6 +199,8 @@ fun PhotoViewerDialog(
                 isDrawingMode = false
             } else if (isCropping) {
                 isCropping = false
+            } else if (showDewarpStudio) {
+                showDewarpStudio = false
             } else {
                 onDismiss()
             }
@@ -211,6 +216,8 @@ fun PhotoViewerDialog(
                 isDrawingMode = false
             } else if (isCropping) {
                 isCropping = false
+            } else if (showDewarpStudio) {
+                showDewarpStudio = false
             } else {
                 onDismiss()
             }
@@ -247,6 +254,16 @@ fun PhotoViewerDialog(
                         isCropping = false
                     },
                     onCancel = { isCropping = false }
+                )
+            } else if (showDewarpStudio) {
+                val file = File(currentPhoto.fileUri)
+                PerspectiveDewarpStudioDialog(
+                    imageFile = file,
+                    onApplyDewarp = {
+                        imageVersion = System.currentTimeMillis()
+                        showDewarpStudio = false
+                    },
+                    onDismiss = { showDewarpStudio = false }
                 )
             } else {
                 // Main Horizontal Pager with Zoom-Gated Swipe
@@ -351,6 +368,18 @@ fun PhotoViewerDialog(
                             Icon(
                                 imageVector = Icons.Default.Crop,
                                 contentDescription = "Adjust Crop",
+                                tint = FolderTabCream
+                            )
+                        }
+
+                        // Perspective Dewarp Studio Button
+                        IconButton(
+                            onClick = { showDewarpStudio = true },
+                            enabled = !isOperating
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoFixHigh,
+                                contentDescription = "Perspective Dewarp",
                                 tint = FolderTabCream
                             )
                         }

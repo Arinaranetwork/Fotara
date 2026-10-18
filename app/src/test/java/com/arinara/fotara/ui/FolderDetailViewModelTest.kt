@@ -444,22 +444,23 @@ class FolderDetailViewModelTest {
     }
 
     @Test
-    fun removePhotoFromGroup_autoDissolvesWhenOneMemberRemains() = runTest(testDispatcher) {
+    fun removePhotoFromGroup_doesNotAutoDissolve_preservesGroupWithOneMember() = runTest(testDispatcher) {
         advanceUntilIdle()
         viewModel.startBatchSelection(1L)
         viewModel.togglePhotoSelection(2L)
         viewModel.createGroupFromSelected("Latihan 1.5")
         advanceUntilIdle()
 
-        // Remove photo 1 from group -> only photo 2 remains -> group should auto-dissolve
+        // Phase 88: Remove photo 1 from group -> photo 2 remains -> group remains persistent
         viewModel.removePhotoFromGroup(1L)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertTrue("Group must auto-dissolve when dropping to 1 member", state.groups.isEmpty())
+        assertEquals("Group must NOT auto-dissolve when dropping to 1 member", 1, state.groups.size)
         val standaloneIds = state.gridItems.filterIsInstance<FolderGridItem.StandalonePhoto>().map { it.photo.id }
         assertTrue("Photo 1 must be standalone", standaloneIds.contains(1L))
-        assertTrue("Photo 2 must be standalone", standaloneIds.contains(2L))
+        val group = state.groups.first()
+        assertEquals("Latihan 1.5", group.name)
     }
 
     @Test

@@ -127,7 +127,7 @@ class GroupDetailViewModelTest {
     }
 
     @Test
-    fun removePhotoFromGroup_triggersAutoDissolve_whenRemainingIsOne() = runTest(testDispatcher) {
+    fun removePhotoFromGroup_doesNotAutoDissolve_preservesGroupWhenRemainingIsOne() = runTest(testDispatcher) {
         advanceUntilIdle()
         // Group has 2 members: 101 and 102
         var dissolved = false
@@ -136,7 +136,11 @@ class GroupDetailViewModelTest {
         }
         advanceUntilIdle()
 
-        assertTrue("Should invoke onAutoDissolved when remaining members <= 1", dissolved)
+        assertEquals("Should NOT invoke onAutoDissolved when remaining members is 1", false, dissolved)
+        val state = viewModel.uiState.value
+        assertEquals(1, state.photos.size)
+        assertEquals(101L, state.photos.first().id)
+        assertNotNull(state.group)
     }
 
     @Test

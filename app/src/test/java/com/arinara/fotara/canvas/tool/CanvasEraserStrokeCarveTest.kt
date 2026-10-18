@@ -25,7 +25,7 @@ import org.junit.Test
 class CanvasEraserStrokeCarveTest {
 
     @Test
-    fun testEraserCarvesImageAlongStrokePath_PreservesImageEntity() {
+    fun testEraserDeletesImageAlongStrokeArea_RemovesImageEntity() {
         val layer = CanvasLayer(id = "layer_1", name = "Layer 1")
         val image = ImageElement(
             id = "img_1",
@@ -60,28 +60,19 @@ class CanvasEraserStrokeCarveTest {
             document = initialDoc
         )
 
-        // Live preview must keep the image and show the live DST_OUT carve stroke
+        // Live preview must remove the touched image without creating fake DST_OUT carve strokes
         assertNotNull(dirtyBounds)
-        assertTrue(previewDoc.elements.any { it.id == "img_1" })
-        val liveCarve = previewDoc.elements.find { it.id == "__eraser_live_carve__" } as? StrokeElement
-        assertNotNull(liveCarve)
-        assertEquals(StrokeBlendMode.DST_OUT, liveCarve?.blendMode)
-        assertEquals(StrokeToolType.ERASER, liveCarve?.toolType)
+        assertTrue("Live preview must omit deleted image", previewDoc.elements.none { it.id == "img_1" })
+        assertTrue("No live carve overlay", previewDoc.elements.none { it.id == "__eraser_live_carve__" })
 
         // Finish the eraser sweep
         val (finalDoc, _) = controller.finishEraser(previewDoc, historyManager)
 
-        // The image entity must NOT be deleted
-        assertTrue("ImageElement must be preserved in document", finalDoc.elements.any { it.id == "img_1" })
+        // The image entity must be really deleted
+        assertTrue("ImageElement must be deleted from document", finalDoc.elements.none { it.id == "img_1" })
+        assertTrue("No carve stroke added", finalDoc.elements.none { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
 
-        // A committed DST_OUT carve stroke following the stroke path must be added
-        val carveStroke = finalDoc.elements.find { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT } as? StrokeElement
-        assertNotNull("Committed carve stroke must exist", carveStroke)
-        assertEquals(StrokeToolType.ERASER, carveStroke?.toolType)
-        assertEquals(StrokeBlendMode.DST_OUT, carveStroke?.blendMode)
-        assertEquals(2, carveStroke?.points?.size)
-
-        // Undo must remove the carve stroke and restore original document
+        // Undo must restore original image in document
         val undoneDoc = historyManager.undo(finalDoc)
         assertNotNull(undoneDoc)
         assertEquals(1, undoneDoc?.elements?.size)
@@ -89,7 +80,7 @@ class CanvasEraserStrokeCarveTest {
     }
 
     @Test
-    fun testEraserCarvesTextAlongStrokePath_PreservesTextEntity() {
+    fun testEraserDeletesTextAlongStrokeArea_RemovesTextEntity() {
         val layer = CanvasLayer(id = "layer_1", name = "Layer 1")
         val text = TextLayerElement(
             id = "txt_1",
@@ -123,12 +114,14 @@ class CanvasEraserStrokeCarveTest {
         )
         val (finalDoc, _) = controller.finishEraser(previewDoc, historyManager)
 
-        // Text element must remain intact
-        assertTrue("TextLayerElement must be preserved in document", finalDoc.elements.any { it.id == "txt_1" })
+        // Text element must be really deleted from document
+        assertTrue("TextLayerElement must be deleted from document", finalDoc.elements.none { it.id == "txt_1" })
+        assertTrue("No carve stroke added", finalDoc.elements.none { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
 
-        // Carve stroke must be present
-        val carveStroke = finalDoc.elements.find { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT } as? StrokeElement
-        assertNotNull("Carve stroke must be appended", carveStroke)
-        assertEquals(StrokeBlendMode.DST_OUT, carveStroke?.blendMode)
+        // Undo must restore text element
+        val undoneDoc = historyManager.undo(finalDoc)
+        assertNotNull(undoneDoc)
+        assertEquals(1, undoneDoc?.elements?.size)
+        assertEquals("txt_1", undoneDoc?.elements?.first()?.id)
     }
 }

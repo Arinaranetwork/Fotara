@@ -52,9 +52,18 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.filled.ZoomOutMap
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.arinara.fotara.ui.components.presets.AppBottomSheet
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -160,6 +169,7 @@ private val AccentGold = ElectricSlateTokens.PrimaryAccent
 private val CardBg = ElectricSlateTokens.SurfacePanel
 private val DangerRed = ElectricSlateTokens.Destructive
 private val BorderColor = ElectricSlateTokens.BorderSubtle
+private val TextMuted = ElectricSlateTokens.TextMuted
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -180,6 +190,9 @@ fun PdfViewerScreen(
     audioAnnotationRepository: com.arinara.fotara.audio.repository.AudioAnnotationRepository? = null
 ) {
     var showSplitConfirmDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showPageOrganizerSheet by remember { mutableStateOf(false) }
+    var isApplyingOrganizerChanges by remember { mutableStateOf(false) }
     var pageToClearDrawing by remember { mutableStateOf<Int?>(null) }
     var isReadingMode by rememberSaveable { mutableStateOf(false) }
     var pdfRenderer by remember { mutableStateOf<PdfPageRenderer?>(null) }
@@ -489,16 +502,19 @@ fun PdfViewerScreen(
                     )
                 }
 
-                // Delete
-                IconButton(onClick = onDelete) {
+                // Page Organizer
+                IconButton(
+                    onClick = { showPageOrganizerSheet = true },
+                    enabled = pdfRenderer != null
+                ) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete Document",
-                        tint = DangerRed
+                        imageVector = Icons.Default.GridView,
+                        contentDescription = "Organize Pages",
+                        tint = TabCream
                     )
                 }
 
-                // Overflow menu for Info & Schedule...
+                // Overflow menu for Info & Schedule & Export...
                 Box {
                     var showOverflowMenu by remember { mutableStateOf(false) }
                     IconButton(onClick = { showOverflowMenu = true }) {
@@ -568,10 +584,58 @@ fun PdfViewerScreen(
 
                         DropdownMenuItem(
                             text = { Text("Schedule...", color = TabCream) },
-                            leadingIcon = { Icon(Icons.Default.Alarm, null, tint = AccentGold) },
+                            leadingIcon = { Icon(Icons.Default.Alarm, null, tint = TextMuted) },
                             onClick = {
                                 showOverflowMenu = false
                                 showScheduleDialog = true
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("Export Annotated PDF...", color = TabCream) },
+                            leadingIcon = { Icon(Icons.Default.PictureAsPdf, null, tint = AccentGold) },
+                            onClick = {
+                                showOverflowMenu = false
+                                coroutineScope.launch {
+                                    try {
+                                        Toast.makeText(context, "Exporting annotated PDF...", Toast.LENGTH_SHORT).show()
+                                        val exported = com.arinara.fotara.util.PdfExporter.exportAnnotatedPdf(
+                                            context = context,
+                                            documentFile = file,
+                                            documentTitle = documentNote.title,
+                                            drawingsMap = drawingsMap
+                                        )
+                                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            exported
+                                        )
+                                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                            type = "application/pdf"
+                                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                            putExtra(android.content.Intent.EXTRA_SUBJECT, "${documentNote.title} (Annotated)")
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Annotated PDF"))
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        )
+
+                        HorizontalDivider(
+                            color = BorderColor,
+                            thickness = 1.dp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text("Delete Document...", color = DangerRed) },
+                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = DangerRed) },
+                            onClick = {
+                                showOverflowMenu = false
+                                showDeleteConfirmDialog = true
                             }
                         )
                     }
@@ -722,61 +786,58 @@ fun PdfViewerScreen(
                 val density = LocalDensity.current
                 val screenWidthPx = with(density) { (configuration.screenWidthDp.dp - 32.dp).roundToPx() }
 
-                val zoomModifier = if (isReadingMode) {
-                    Modifier
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onDoubleTap = { tapOffset ->
-                                    coroutineScope.launch {
-                                        val viewW = size.width.toFloat()
-                                        val viewH = size.height.toFloat()
-                                        zoomState.updateViewport(viewW, viewH)
-                                        zoomState.animateDoubleTap(tapOffset.x, tapOffset.y)
+                val zoomModifier = Modifier
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = { tapOffset ->
+                                coroutineScope.launch {
+                                    val viewW = size.width.toFloat()
+                                    val viewH = size.height.toFloat()
+                                    zoomState.updateViewport(viewW, viewH)
+                                    zoomState.animateDoubleTap(tapOffset.x, tapOffset.y)
+                                }
+                            }
+                        )
+                    }
+                    .pointerInput(Unit) {
+                        val viewW = size.width.toFloat()
+                        val viewH = size.height.toFloat()
+                        zoomState.updateViewport(viewW, viewH)
+
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            do {
+                                val event = awaitPointerEvent()
+                                val canceled = event.changes.any { it.isConsumed }
+                                if (canceled) break
+
+                                val pressedCount = event.changes.count { it.pressed }
+                                if (pressedCount >= 2) {
+                                    val zoom = event.calculateZoom()
+                                    val pan = event.calculatePan()
+                                    val centroid = event.calculateCentroid(useCurrent = true)
+
+                                    if (kotlin.math.abs(zoom - 1f) > 0.001f || pan != Offset.Zero) {
+                                        zoomState.onPinch(
+                                            zoomChange = zoom,
+                                            panChangeX = pan.x,
+                                            panChangeY = pan.y,
+                                            centroidX = centroid.x,
+                                            centroidY = centroid.y
+                                        )
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                } else if (pressedCount == 1 && zoomState.isZoomed) {
+                                    val pan = event.calculatePan()
+                                    // Panning horizontally when zoomed, while allowing vertical scroll to pass through
+                                    if (kotlin.math.abs(pan.x) > kotlin.math.abs(pan.y) * 1.5f && pan.x != 0f) {
+                                        zoomState.onPan(pan.x, 0f)
+                                        event.changes.forEach { it.consume() }
                                     }
                                 }
-                            )
+                            } while (event.changes.any { it.pressed })
                         }
-                        .pointerInput(Unit) {
-                            val viewW = size.width.toFloat()
-                            val viewH = size.height.toFloat()
-                            zoomState.updateViewport(viewW, viewH)
-
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                do {
-                                    val event = awaitPointerEvent()
-                                    val canceled = event.changes.any { it.isConsumed }
-                                    if (canceled) break
-
-                                    val pressedCount = event.changes.count { it.pressed }
-                                    if (pressedCount >= 2) {
-                                        val zoom = event.calculateZoom()
-                                        val pan = event.calculatePan()
-                                        val centroid = event.calculateCentroid(useCurrent = true)
-
-                                        if (kotlin.math.abs(zoom - 1f) > 0.001f || pan != Offset.Zero) {
-                                            zoomState.onPinch(
-                                                zoomChange = zoom,
-                                                panChangeX = pan.x,
-                                                panChangeY = pan.y,
-                                                centroidX = centroid.x,
-                                                centroidY = centroid.y
-                                            )
-                                            event.changes.forEach { it.consume() }
-                                        }
-                                    } else if (pressedCount == 1 && zoomState.isZoomed) {
-                                        val pan = event.calculatePan()
-                                        if (pan != Offset.Zero) {
-                                            zoomState.onPan(pan.x, pan.y)
-                                            event.changes.forEach { it.consume() }
-                                        }
-                                    }
-                                } while (event.changes.any { it.pressed })
-                            }
-                        }
-                } else {
-                    Modifier
-                }
+                    }
 
                 BoxWithConstraints(
                     modifier = Modifier
@@ -794,7 +855,7 @@ fun PdfViewerScreen(
 
                     LazyColumn(
                         state = listState,
-                        userScrollEnabled = !zoomState.isZoomed,
+                        userScrollEnabled = true,
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
@@ -843,6 +904,39 @@ fun PdfViewerScreen(
                                 onClearDrawing = { pageToClearDrawing = pageIndex }
                             )
                             Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+
+                    if (zoomState.isZoomed) {
+                        Surface(
+                            onClick = {
+                                coroutineScope.launch { zoomState.animateReset() }
+                            },
+                            shape = RoundedCornerShape(999.dp),
+                            color = CardBg.copy(alpha = 0.92f),
+                            border = BorderStroke(1.dp, AccentGold),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 24.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ZoomOutMap,
+                                    contentDescription = "Reset Zoom",
+                                    tint = AccentGold,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Reset Zoom (${(zoomState.scale * 100).toInt()}%)",
+                                    color = TabCream,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
                 }
@@ -992,6 +1086,62 @@ fun PdfViewerScreen(
                 currentAlertType = null
                 currentScheduleTitle = null
                 showScheduleDialog = false
+            }
+        )
+    }
+
+    if (showDeleteConfirmDialog) {
+        val totalCount = pdfRenderer?.pageCount ?: pages.size
+        PdfDeleteDocumentConfirmDialog(
+            documentTitle = documentNote.title,
+            pageCount = totalCount,
+            onConfirm = {
+                showDeleteConfirmDialog = false
+                onDelete()
+            },
+            onDismiss = { showDeleteConfirmDialog = false }
+        )
+    }
+
+    if (showPageOrganizerSheet) {
+        val totalCount = pdfRenderer?.pageCount ?: pages.size
+        PdfPageOrganizerSheet(
+            visible = showPageOrganizerSheet,
+            onDismiss = { showPageOrganizerSheet = false },
+            renderer = pdfRenderer,
+            totalPages = totalCount,
+            isApplying = isApplyingOrganizerChanges,
+            onApplyChanges = { newOrder, newRotations ->
+                isApplyingOrganizerChanges = true
+                coroutineScope.launch {
+                    try {
+                        pdfRenderer?.close()
+                        pdfRenderer = null
+                        val success = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.arinara.fotara.util.PdfExporter.reorganizePdfPages(
+                                context = context,
+                                sourceFile = file,
+                                pageOrder = newOrder,
+                                pageRotations = newRotations
+                            )
+                        }
+                        if (success) {
+                            pdfRenderer = PdfPageRenderer(file)
+                            Toast.makeText(context, "Pages updated successfully", Toast.LENGTH_SHORT).show()
+                            showPageOrganizerSheet = false
+                        } else {
+                            pdfRenderer = PdfPageRenderer(file)
+                            Toast.makeText(context, "Failed to apply page updates", Toast.LENGTH_SHORT).show()
+                        }
+                    } catch (e: Exception) {
+                        try {
+                            pdfRenderer = PdfPageRenderer(file)
+                        } catch (_: Exception) {}
+                        Toast.makeText(context, "Error updating pages: ${e.message}", Toast.LENGTH_SHORT).show()
+                    } finally {
+                        isApplyingOrganizerChanges = false
+                    }
+                }
             }
         )
     }
@@ -1180,13 +1330,13 @@ private fun VirtualizedPdfPageView(
                             expanded = showCardMenu,
                             onDismissRequest = { showCardMenu = false },
                             modifier = Modifier
-                                .background(CardBg)
-                                .border(1.dp, BorderColor, RoundedCornerShape(12.dp))
+                                .background(ElectricSlateTokens.SurfaceElevated)
+                                .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
                         ) {
                             // 1. Save to gallery
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.pdf_page_menu_save_to_gallery), color = TabCream) },
-                                leadingIcon = { Icon(Icons.Default.Download, null, tint = TabCream) },
+                                text = { Text(stringResource(R.string.pdf_page_menu_save_to_gallery), color = ElectricSlateTokens.TextPrimary) },
+                                leadingIcon = { Icon(Icons.Default.Download, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showCardMenu = false
                                     onSaveToGallery()
@@ -1198,10 +1348,10 @@ private fun VirtualizedPdfPageView(
                                 text = {
                                     Text(
                                         stringResource(if (isPinned) R.string.pdf_page_menu_unpin_page else R.string.pdf_page_menu_pin_page),
-                                        color = TabCream
+                                        color = ElectricSlateTokens.TextPrimary
                                     )
                                 },
-                                leadingIcon = { Icon(Icons.Default.PushPin, null, tint = AccentGold) },
+                                leadingIcon = { Icon(Icons.Default.PushPin, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showCardMenu = false
                                     onPinToggle()
@@ -1210,15 +1360,15 @@ private fun VirtualizedPdfPageView(
 
                             // 2b. Voice Note
                             DropdownMenuItem(
-                                text = { Text("Record Voice Note", color = TabCream) },
-                                leadingIcon = { Icon(Icons.Default.Mic, null, tint = AccentGold) },
+                                text = { Text("Record Voice Note", color = ElectricSlateTokens.TextPrimary) },
+                                leadingIcon = { Icon(Icons.Default.Mic, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showCardMenu = false
                                     onAudioBadgeClick()
                                 }
                             )
 
-                            HorizontalDivider(color = BorderColor, modifier = Modifier.padding(vertical = 4.dp))
+                            HorizontalDivider(color = ElectricSlateTokens.BorderSubtle, modifier = Modifier.padding(vertical = 4.dp))
 
                             // 3. Draw on page / Edit drawing
                             val hasStrokes = drawing?.hasStrokes == true
@@ -1226,10 +1376,10 @@ private fun VirtualizedPdfPageView(
                                 text = {
                                     Text(
                                         stringResource(if (hasStrokes) R.string.pdf_page_menu_edit_drawing else R.string.pdf_page_menu_draw_on_page),
-                                        color = TabCream
+                                        color = ElectricSlateTokens.TextPrimary
                                     )
                                 },
-                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = TabCream) },
+                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showCardMenu = false
                                     onDraw()
@@ -1243,14 +1393,14 @@ private fun VirtualizedPdfPageView(
                                     text = {
                                         Text(
                                             stringResource(if (isDrawingVisible) R.string.pdf_page_menu_hide_drawing else R.string.pdf_page_menu_show_drawing),
-                                            color = TabCream
+                                            color = ElectricSlateTokens.TextPrimary
                                         )
                                     },
                                     leadingIcon = {
                                         Icon(
                                             if (isDrawingVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                             null,
-                                            tint = TabCream
+                                            tint = ElectricSlateTokens.TextMuted
                                         )
                                     },
                                     onClick = {
@@ -1261,8 +1411,8 @@ private fun VirtualizedPdfPageView(
 
                                 // 5. Clear drawing
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.pdf_page_menu_clear_drawing), color = DangerRed) },
-                                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = DangerRed) },
+                                    text = { Text(stringResource(R.string.pdf_page_menu_clear_drawing), color = ElectricSlateTokens.Destructive) },
+                                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = ElectricSlateTokens.Destructive) },
                                     onClick = {
                                         showCardMenu = false
                                         onClearDrawing()
@@ -1323,7 +1473,7 @@ private fun VirtualizedPdfPageView(
                     currentBitmap != null && !currentBitmap.isRecycled -> {
                         // If drawing is present and visible, render bitmap + strokes together onto the same canvas
                         // to guarantee Multiply blending directly onto the page surface.
-                        val hasVisibleDrawing = drawing != null && drawing.isVisible && drawing.hasStrokes
+                        val hasVisibleDrawing = drawing != null && drawing.isVisible && (drawing.hasStrokes || drawing.textLayers.isNotEmpty())
                         if (hasVisibleDrawing) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 drawIntoCanvas { composeCanvas ->
@@ -1333,11 +1483,20 @@ private fun VirtualizedPdfPageView(
                                     nativeCanvas.drawBitmap(currentBitmap, srcRect, dstRect, null)
 
                                     val scale = if (drawing.pageWidth > 0f) size.width / drawing.pageWidth else 1f
-                                    PhotoDrawingRenderer.renderStrokes(
-                                        canvas = nativeCanvas,
-                                        strokes = drawing.strokes,
-                                        scale = scale
-                                    )
+                                    if (drawing.hasStrokes) {
+                                        PhotoDrawingRenderer.renderStrokes(
+                                            canvas = nativeCanvas,
+                                            strokes = drawing.strokes,
+                                            scale = scale
+                                        )
+                                    }
+                                    if (drawing.textLayers.isNotEmpty()) {
+                                        PhotoDrawingRenderer.renderTextLayers(
+                                            canvas = nativeCanvas,
+                                            textLayers = drawing.textLayers,
+                                            scale = scale
+                                        )
+                                    }
                                 }
                             }
                         } else {

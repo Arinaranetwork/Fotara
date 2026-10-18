@@ -6,6 +6,8 @@
 
 package com.arinara.fotara.feature.academic
 
+import com.arinara.fotara.feature.academic.dewarp.DewarpFilterMode
+import com.arinara.fotara.feature.academic.dewarp.PerspectiveDewarpEngine
 import com.arinara.fotara.feature.academic.dewarp.PerspectiveDewarpMatrix
 import com.arinara.fotara.feature.academic.dewarp.PixelBuffer
 import com.arinara.fotara.feature.academic.dewarp.QuadPoint
@@ -170,5 +172,69 @@ class DocumentPerspectiveDewarperTest {
         assertTrue("Red channel $r should be high", r > 180)
         assertTrue("Green channel $g should stay low", g < 80)
         assertTrue("Blue channel $b should stay low", b < 80)
+    }
+
+    @Test
+    fun perspectiveDewarpEngine_warpPixelBuffer_rectifiesKeystonedQuad() {
+        // Create 10x10 pattern image with a distinct center pixel
+        val width = 10
+        val height = 10
+        val pixels = IntArray(width * height) { -1 } // all white
+        // Fill a dark 4x4 square in the middle (3..6, 3..6)
+        for (y in 3..6) {
+            for (x in 3..6) {
+                pixels[y * width + x] = -0x1000000 // black
+            }
+        }
+        val srcBuffer = PixelBuffer(width, height, pixels)
+
+        // Exact corners
+        val srcCorners = listOf(
+            QuadPoint(0f, 0f),
+            QuadPoint(10f, 0f),
+            QuadPoint(10f, 10f),
+            QuadPoint(0f, 10f)
+        )
+
+        val warped = PerspectiveDewarpEngine.warpPixelBuffer(
+            src = srcBuffer,
+            srcCorners = srcCorners,
+            targetWidth = 10,
+            targetHeight = 10
+        )
+
+        assertEquals(10, warped.width)
+        assertEquals(10, warped.height)
+        // Center pixel should be black
+        val centerPixel = warped.pixels[5 * 10 + 5]
+        val centerR = (centerPixel shr 16) and 0xFF
+        assertTrue("Center pixel in warped result should be dark", centerR < 50)
+
+        // Corner pixel (0, 0) should be white
+        val cornerPixel = warped.pixels[0]
+        val cornerR = (cornerPixel shr 16) and 0xFF
+        assertTrue("Corner pixel in warped result should be white", cornerR > 200)
+    }
+
+    @Test
+    fun perspectiveDewarpEngine_applyFilter_highContrastBw_createsBilevelOutput() {
+        // Pixel buffer with varying grays and ink
+        val pixels = intArrayOf(
+            -0x1000000,                                         // black ink (0)
+            (0xFF shl 24) or (50 shl 16) or (50 shl 8) or 50,   // dark gray (50)
+            (0xFF shl 24) or (210 shl 16) or (210 shl 8) or 210,// light paper gray (210)
+            -1                                                  // pure white (255)
+        )
+        val buffer = PixelBuffer(2, 2, pixels)
+
+        val filtered = PerspectiveDewarpEngine.applyFilter(buffer, DewarpFilterMode.HIGH_CONTRAST_BW)
+
+        // All output pixels must be strictly either pure black (-0x1000000) or pure white (-1)
+        for (p in filtered.pixels) {
+            assertTrue("Pixel must be pure black or pure white", p == -0x1000000 || p == -1)
+        }
+        // First pixel must be black, last pixel must be white
+        assertEquals(-0x1000000, filtered.pixels[0])
+        assertEquals(-1, filtered.pixels[3])
     }
 }

@@ -45,10 +45,64 @@ import com.arinara.fotara.R
 import com.arinara.fotara.canvas.engine.DrawingConstants
 import com.arinara.fotara.canvas.model.TextBackgroundStyle
 import com.arinara.fotara.canvas.model.TextLayerAlignment
+import androidx.compose.foundation.layout.height
+import com.arinara.fotara.ui.components.presets.AppBottomSheet
 import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.components.presets.AppSlider
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
+
+@Composable
+fun PdfDeleteDocumentConfirmDialog(
+    documentTitle: String,
+    pageCount: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AppBottomSheet(
+        visible = true,
+        onDismiss = onDismiss,
+        title = "Delete Document"
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Delete \"$documentTitle\"?",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = ElectricSlateTokens.TextPrimary
+            )
+            Text(
+                text = "Are you sure you want to permanently delete this document ($pageCount pages)? All page annotations, drawings, and voice notes associated with this document will be permanently deleted. This action cannot be undone.",
+                fontSize = 14.sp,
+                color = ElectricSlateTokens.TextMuted,
+                lineHeight = 20.sp
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AppButton(
+                    text = "Cancel",
+                    onClick = onDismiss,
+                    variant = AppButtonVariant.OUTLINED,
+                    modifier = Modifier.weight(1f)
+                )
+                AppButton(
+                    text = "Delete Permanently",
+                    onClick = onConfirm,
+                    variant = AppButtonVariant.DESTRUCTIVE,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
 
 @Composable
 fun PdfSplitConfirmDialog(

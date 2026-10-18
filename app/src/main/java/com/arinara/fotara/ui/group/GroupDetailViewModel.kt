@@ -183,14 +183,8 @@ class GroupDetailViewModel(
 
     fun removePhotoFromGroup(photoId: Long, onAutoDissolved: (() -> Unit)? = null) {
         viewModelScope.launch {
-            val remainingCount = _uiState.value.photos.count { it.id != photoId }
             photoRepository.removePhotoFromGroup(photoId)
-            if (remainingCount <= 1) {
-                // Group dissolved per Addendum 5 single-member auto-dissolve rule
-                onAutoDissolved?.invoke()
-            } else {
-                _uiState.update { it.copy(userMessage = "Photo removed from group") }
-            }
+            _uiState.update { it.copy(userMessage = "Photo removed from group") }
         }
     }
 

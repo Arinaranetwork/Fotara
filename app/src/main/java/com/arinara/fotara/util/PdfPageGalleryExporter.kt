@@ -87,14 +87,19 @@ object PdfPageGalleryExporter {
 
         val baseBitmap = renderer.renderPageForExport(pageIndex, targetW, targetH) ?: return@withContext null
 
-        if (drawing != null && drawing.isVisible && drawing.hasStrokes) {
+        if (drawing != null && drawing.isVisible) {
             val canvas = Canvas(baseBitmap)
             val scale = if (drawing.pageWidth > 0f) {
                 targetW.toFloat() / drawing.pageWidth
             } else {
                 1f
             }
-            PhotoDrawingRenderer.renderStrokes(canvas, drawing.strokes, scale = scale)
+            if (drawing.hasStrokes) {
+                PhotoDrawingRenderer.renderStrokes(canvas, drawing.strokes, scale = scale)
+            }
+            if (drawing.textLayers.isNotEmpty()) {
+                PhotoDrawingRenderer.renderTextLayers(canvas, drawing.textLayers, scale = scale)
+            }
         }
 
         baseBitmap

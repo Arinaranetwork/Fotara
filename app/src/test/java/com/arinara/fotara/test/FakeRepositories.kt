@@ -581,18 +581,11 @@ class FakePhotoRepository(
         }
 
         val remaining = photosFlow.value.filter { it.groupId == gId && !it.isTrashed }
-        if (remaining.size <= 1) {
-            photosFlow.value = photosFlow.value.map {
-                if (it.groupId == gId) it.copy(groupId = null) else it
-            }
-            groupsFlow.value = groupsFlow.value.filterNot { it.id == gId }
-        } else {
-            val group = getGroupById(gId)
-            if (group?.coverPhotoId == photoId) {
-                val newCover = remaining.minByOrNull { it.addedAt } ?: remaining.first()
-                groupsFlow.value = groupsFlow.value.map {
-                    if (it.id == gId) it.copy(coverPhotoId = newCover.id) else it
-                }
+        val group = getGroupById(gId)
+        if (group?.coverPhotoId == photoId) {
+            val newCover = remaining.minByOrNull { it.addedAt } ?: remaining.firstOrNull()
+            groupsFlow.value = groupsFlow.value.map {
+                if (it.id == gId) it.copy(coverPhotoId = newCover?.id) else it
             }
         }
     }

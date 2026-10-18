@@ -587,7 +587,7 @@ fun CanvasScreen(
                                     renameInput = uiState.title
                                     viewModel.setRenameDialogVisible(true)
                                 },
-                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = ElectricSlateTokens.TextPrimary) }
+                                leadingIcon = { Icon(Icons.Default.Edit, null, tint = ElectricSlateTokens.TextMuted) }
                             )
                             DropdownMenuItem(
                                 text = { Text("Move to Folder", color = ElectricSlateTokens.TextPrimary) },
@@ -595,7 +595,7 @@ fun CanvasScreen(
                                     showOverflowMenu = false
                                     viewModel.setMoveDialogVisible(true)
                                 },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, null, tint = ElectricSlateTokens.TextPrimary) }
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, null, tint = ElectricSlateTokens.TextMuted) }
                             )
                             DropdownMenuItem(
                                 text = { Text("Collaborative Study Room", color = ElectricSlateTokens.TextPrimary) },
@@ -603,7 +603,7 @@ fun CanvasScreen(
                                     showOverflowMenu = false
                                     showCollabJoinDialog = true
                                 },
-                                leadingIcon = { Icon(Icons.Default.Group, null, tint = ElectricSlateTokens.PrimaryAccent) }
+                                leadingIcon = { Icon(Icons.Default.Group, null, tint = ElectricSlateTokens.TextMuted) }
                             )
                             HorizontalDivider(color = ElectricSlateTokens.BorderSubtle)
                             DropdownMenuItem(
@@ -622,71 +622,9 @@ fun CanvasScreen(
     }
 
         // ==========================================
-        // Z7: Bottom-Left Zoom & Fit-to-Content
-        // ==========================================
-        val dockHeightDp = with(density) { dockHeightPx.toDp() }
-        val targetZ7Padding = CanvasDockLayoutHelper.computeZ7BottomPadding(
-            dockHeightDp = dockHeightDp.value,
-            isCollapsed = uiState.isBottomDockCollapsed
-        ).dp
-
-        val zoomBottomPadding by animateDpAsState(
-            targetValue = targetZ7Padding,
-            label = "zoom_bottom_padding"
-        )
-
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .navigationBarsPadding()
-                .padding(start = 16.dp, bottom = zoomBottomPadding)
-                .zIndex(10f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = ElectricSlateTokens.SurfaceElevated,
-                shape = CircleShape,
-                border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Zoom percentage chip: tap resets to 100%
-                    Text(
-                        text = "${uiState.zoomPercentage}%",
-                        color = ElectricSlateTokens.TextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .jigglePressClickable { drawingViewRef?.resetZoom() }
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Fit to content action
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .jigglePressClickable { drawingViewRef?.fitToContent() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FitScreen,
-                            contentDescription = "Fit to Content",
-                            tint = ElectricSlateTokens.TextSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // ==========================================
         // Z4: Connected Tool Inspector (Anchored Directly Above Z3 Dock)
         // ==========================================
+        val dockHeightDp = with(density) { dockHeightPx.toDp() }
         val baseDockHeight = if (dockHeightDp.value > 0f) dockHeightDp.value else 54f
         val targetZ4Padding = (16f + baseDockHeight - 1f).dp
 
@@ -1130,61 +1068,124 @@ fun CanvasScreen(
                 .zIndex(10f),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Sheet Switcher Dock
-            val resolvedSheets = uiState.document.getResolvedSheets()
-            if (resolvedSheets.size > 1) {
-                Surface(
-                    color = ElectricSlateTokens.SurfacePanel.copy(alpha = 0.94f),
-                    shape = CircleShape,
-                    border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
-                    shadowElevation = 8.dp,
+            if (!uiState.isBottomDockCollapsed) {
+                // Unified Row directly above Floating Toolbar: Zoom Chip (Left) + Multi-Sheet Switcher Dock (Right)
+                Row(
                     modifier = Modifier
-                        .padding(bottom = 8.dp)
-                        .height(36.dp)
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    LazyRow(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Left: Zoom percentage chip + Fit-to-content (aligned with left margin start = 16.dp)
+                    Surface(
+                        color = ElectricSlateTokens.SurfaceElevated,
+                        shape = CircleShape,
+                        border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle)
                     ) {
-                        itemsIndexed(resolvedSheets) { idx, sheet ->
-                            val isSheetActive = idx == uiState.document.activeSheetIndex
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${uiState.zoomPercentage}%",
+                                color = ElectricSlateTokens.TextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .jigglePressClickable { drawingViewRef?.resetZoom() }
+                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(4.dp))
+
                             Box(
                                 modifier = Modifier
-                                    .height(28.dp)
+                                    .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(if (isSheetActive) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.SurfaceElevated)
-                                    .border(1.dp, if (isSheetActive) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle, CircleShape)
-                                    .jigglePressClickable { viewModel.selectSheet(idx) }
-                                    .padding(horizontal = 12.dp),
+                                    .jigglePressClickable { drawingViewRef?.fitToContent() },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = sheet.title,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSheetActive) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSheetActive) Color.White else ElectricSlateTokens.TextSecondary
+                                Icon(
+                                    imageVector = Icons.Default.FitScreen,
+                                    contentDescription = "Fit to Content",
+                                    tint = ElectricSlateTokens.TextSecondary,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
+                    }
 
-                        if (resolvedSheets.size < com.arinara.fotara.canvas.model.CanvasDocument.MAX_SHEETS) {
-                            item {
-                                Box(
+                    // Right: Sheet Switcher Dock (Permanently visible for sheets >= 1)
+                    val resolvedSheets = uiState.document.getResolvedSheets()
+                    Surface(
+                        color = ElectricSlateTokens.SurfacePanel.copy(alpha = 0.94f),
+                        shape = CircleShape,
+                        border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
+                        shadowElevation = 8.dp,
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        LazyRow(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            itemsIndexed(resolvedSheets) { idx, sheet ->
+                                val isSheetActive = idx == uiState.document.activeSheetIndex
+                                Row(
                                     modifier = Modifier
-                                        .size(28.dp)
+                                        .height(28.dp)
                                         .clip(CircleShape)
-                                        .background(ElectricSlateTokens.SurfaceElevated)
-                                        .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
-                                        .jigglePressClickable { viewModel.addSheet() },
-                                    contentAlignment = Alignment.Center
+                                        .background(if (isSheetActive) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.SurfaceElevated)
+                                        .border(1.dp, if (isSheetActive) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle, CircleShape)
+                                        .jigglePressClickable { viewModel.selectSheet(idx) }
+                                        .padding(horizontal = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Add Sheet",
-                                        tint = ElectricSlateTokens.TextSecondary,
-                                        modifier = Modifier.size(16.dp)
+                                    Text(
+                                        text = sheet.title,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSheetActive) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSheetActive) Color.White else ElectricSlateTokens.TextSecondary
                                     )
+                                    if (isSheetActive && resolvedSheets.size > 1) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .clickable { viewModel.deleteSheet(idx) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Clear,
+                                                contentDescription = "Delete Sheet",
+                                                tint = Color.White.copy(alpha = 0.85f),
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (resolvedSheets.size < com.arinara.fotara.canvas.model.CanvasDocument.MAX_SHEETS) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(ElectricSlateTokens.SurfaceElevated)
+                                            .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
+                                            .jigglePressClickable { viewModel.addSheet() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = "Add Sheet",
+                                            tint = ElectricSlateTokens.TextSecondary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1193,38 +1194,85 @@ fun CanvasScreen(
             }
 
             if (uiState.isBottomDockCollapsed) {
-                // Slim bottom edge pill
-                Surface(
-                    color = ElectricSlateTokens.SurfacePanel,
-                    shape = CircleShape,
-                    shadowElevation = 8.dp,
-                    border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
+                // Collapsed state: Zoom chip on left, slim handle in center
+                Row(
                     modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .width(72.dp)
-                        .height(24.dp)
-                        .clip(CircleShape)
-                        .jigglePressClickable { viewModel.toggleBottomDock() }
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures { _, dragAmount ->
-                                if (dragAmount < -6f) {
-                                    viewModel.toggleBottomDock()
-                                }
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Surface(
+                        color = ElectricSlateTokens.SurfaceElevated,
+                        shape = CircleShape,
+                        border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${uiState.zoomPercentage}%",
+                                color = ElectricSlateTokens.TextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .jigglePressClickable { drawingViewRef?.resetZoom() }
+                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .jigglePressClickable { drawingViewRef?.fitToContent() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FitScreen,
+                                    contentDescription = "Fit to Content",
+                                    tint = ElectricSlateTokens.TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
                         }
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
+                    }
+
+                    // Slim bottom edge pill
+                    Surface(
+                        color = ElectricSlateTokens.SurfacePanel,
+                        shape = CircleShape,
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, ElectricSlateTokens.BorderSubtle),
+                        modifier = Modifier
+                            .width(72.dp)
+                            .height(24.dp)
+                            .clip(CircleShape)
+                            .jigglePressClickable { viewModel.toggleBottomDock() }
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures { _, dragAmount ->
+                                    if (dragAmount < -6f) {
+                                        viewModel.toggleBottomDock()
+                                    }
+                                }
+                            }
                     ) {
                         Box(
-                            modifier = Modifier
-                                .width(28.dp)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(ElectricSlateTokens.BorderSubtle)
-                        )
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(28.dp)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(ElectricSlateTokens.BorderSubtle)
+                            )
+                        }
                     }
+
+                    // Spacer on right to balance the zoom pill
+                    Spacer(modifier = Modifier.width(96.dp))
                 }
             } else {
                 AppFloatingBar(
@@ -1364,7 +1412,7 @@ fun CanvasScreen(
         // ==========================================
         val isSelectActive = uiState.toolState.activeTool == CanvasToolType.SELECT
         val hasSelection = uiState.toolState.selection.isNotEmpty
-        if (isSelectActive || hasSelection) {
+        if (isSelectActive && hasSelection) {
             val topOffsetDp = CanvasDockLayoutHelper.computeZ8TopOffset(
                 with(density) { topCapsulesHeightPx.toDp() }.value
             ).dp
@@ -1451,7 +1499,7 @@ fun CanvasScreen(
                             Icon(
                                 Icons.Default.Layers,
                                 contentDescription = stringResource(R.string.canvas_action_move_to_layer),
-                                tint = if (hasSelection) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
+                                tint = if (hasSelection) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }

@@ -84,7 +84,7 @@ import com.arinara.fotara.theme.HomeCardSurface
 
 object FolderCardDefaults {
     val CardCornerRadius = 24.dp
-    val ThreeDotButtonSize = 44.dp
+    val ThreeDotButtonSize = 48.dp
     val ThreeDotIconSize = 20.dp
     val VisualCenterOffset = 22.dp
 }
@@ -230,19 +230,29 @@ fun FolderCard(
                         }
                     }
 
-                // Middle Badges (Locked)
-                if (folder.isLocked) {
+                // Middle Badges (Pinned & Locked)
+                if (folder.isPinned || folder.isLocked) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.padding(top = 4.dp, end = 44.dp)
+                        modifier = Modifier.padding(top = 4.dp, end = 48.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Locked folder",
-                            tint = FolderTabCream.copy(alpha = 0.85f),
-                            modifier = Modifier.size(14.dp)
-                        )
+                        if (folder.isPinned) {
+                            Icon(
+                                imageVector = Icons.Default.PushPin,
+                                contentDescription = "Pinned folder",
+                                tint = ElectricSlateTokens.PrimaryAccent,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        if (folder.isLocked) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Locked folder",
+                                tint = FolderTabCream.copy(alpha = 0.85f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
                 }
 

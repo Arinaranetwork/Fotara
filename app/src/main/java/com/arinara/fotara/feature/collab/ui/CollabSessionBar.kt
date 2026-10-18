@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.arinara.fotara.feature.collab.model.CollabPeer
 import com.arinara.fotara.feature.collab.render.PeerCursorRenderer
 import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
 
 /**
  * Top dock bar displaying the active collaborative room code, participant halos, and exit action.
@@ -60,8 +59,8 @@ fun CollabSessionBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .background(Color(0xFF111726), barShape)
-            .border(1.dp, Color(0xFF161E30), barShape)
+            .background(ElectricSlateTokens.SurfacePanel, barShape)
+            .border(1.dp, ElectricSlateTokens.BorderSubtle, barShape)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Row(
@@ -74,19 +73,19 @@ fun CollabSessionBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Online presence pulse indicator
+                // Online presence indicator
                 Box(
                     modifier = Modifier
                         .size(8.dp)
-                        .background(Color(0xFF2A9D8F), CircleShape)
+                        .background(ElectricSlateTokens.TextMuted, CircleShape)
                 )
 
                 // Room Code pill
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF141B2A))
-                        .border(1.dp, Color(0xFF1C2538), RoundedCornerShape(8.dp))
+                        .background(ElectricSlateTokens.SurfaceElevated)
+                        .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(8.dp))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -103,14 +102,14 @@ fun CollabSessionBar(
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = Color(0xFFFFFFFF),
+                        color = ElectricSlateTokens.TextPrimary,
                         letterSpacing = 0.5.sp
                     )
 
                     Icon(
                         imageVector = Icons.Outlined.ContentCopy,
                         contentDescription = "Copy Room Code",
-                        tint = Color(0xFFA0A5C2),
+                        tint = ElectricSlateTokens.TextMuted,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -136,7 +135,7 @@ fun CollabSessionBar(
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
-                                .background(Color(0xFF0A0D14), CircleShape)
+                                .background(ElectricSlateTokens.BgCanvas, CircleShape)
                                 .border(2.dp, peerHaloColor, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
@@ -145,7 +144,7 @@ fun CollabSessionBar(
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
-                                color = Color(0xFFFFFFFF)
+                                color = ElectricSlateTokens.TextPrimary
                             )
                         }
                     }
@@ -154,8 +153,8 @@ fun CollabSessionBar(
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
-                                .background(Color(0xFF182236), CircleShape)
-                                .border(1.5.dp, Color(0xFF2563EB), CircleShape),
+                                .background(ElectricSlateTokens.TrackInactive, CircleShape)
+                                .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -163,7 +162,7 @@ fun CollabSessionBar(
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 10.sp,
-                                color = Color(0xFFFFFFFF)
+                                color = ElectricSlateTokens.TextMuted
                             )
                         }
                     }
@@ -171,13 +170,13 @@ fun CollabSessionBar(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                // Leave Room Button
+                // Leave Room Button (Muted style)
                 Box(
                     modifier = Modifier
                         .height(36.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF182236))
-                        .border(1.dp, Color(0xFF2563EB).copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .background(ElectricSlateTokens.TrackInactive)
+                        .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(8.dp))
                         .clickable(onClick = onLeaveClick)
                         .padding(horizontal = 14.dp),
                     contentAlignment = Alignment.Center
@@ -187,7 +186,7 @@ fun CollabSessionBar(
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Medium,
                         fontSize = 13.sp,
-                        color = Color(0xFFEFE8DA),
+                        color = ElectricSlateTokens.TextMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

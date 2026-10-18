@@ -205,7 +205,7 @@ fun DocxViewerScreen(
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Schedule...", color = ElectricSlateTokens.TextPrimary) },
-                                leadingIcon = { Icon(Icons.Default.Alarm, null, tint = ElectricSlateTokens.PrimaryAccent) },
+                                leadingIcon = { Icon(Icons.Default.Alarm, null, tint = ElectricSlateTokens.TextMuted) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showScheduleDialog = true

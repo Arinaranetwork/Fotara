@@ -484,7 +484,16 @@ class CanvasViewModel(
     // Z3 & Z4: Tools, Colors, and Dock Controls
     // ==========================================
     fun setTool(tool: CanvasToolType, keepOptionsState: Boolean = true) {
-        toolController.toolState = toolController.toolState.copy(activeTool = tool)
+        val updatedToolState = if (tool != CanvasToolType.SELECT) {
+            toolController.selection = com.arinara.fotara.canvas.model.CanvasSelection.Empty
+            toolController.toolState.copy(
+                activeTool = tool,
+                selection = com.arinara.fotara.canvas.model.CanvasSelection.Empty
+            )
+        } else {
+            toolController.toolState.copy(activeTool = tool)
+        }
+        toolController.toolState = updatedToolState
         pointerStateMachine.activeMode = when (tool) {
             CanvasToolType.SELECT -> com.arinara.fotara.canvas.gesture.ActiveMode.SELECT
             CanvasToolType.ERASER -> com.arinara.fotara.canvas.gesture.ActiveMode.ERASE

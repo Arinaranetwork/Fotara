@@ -422,22 +422,16 @@ class SqlitePhotoRepository(
             db.execSQL("UPDATE photos SET group_id = NULL WHERE id = ?", arrayOf(photoId.toString()))
 
             val remainingMembers = currentMembers.filter { it.id != photoId }
-            if (remainingMembers.size <= 1) {
-                // Auto-dissolve group if drops to 1 or 0 members
-                if (remainingMembers.isNotEmpty()) {
-                    val remId = remainingMembers.first().id
-                    db.execSQL("UPDATE photos SET group_id = NULL WHERE id = ?", arrayOf(remId.toString()))
-                }
-                db.delete("photo_groups", "id = ?", arrayOf(gId.toString()))
-                removeGridItemFromLinkGroupsInternal(db, gId)
-            } else {
-                // Update cover_photo_id if needed
-                val earliestRemaining = remainingMembers.minByOrNull { it.addedAt }?.id
-                val values = ContentValues().apply {
+            // Phase 88: Persistent Photo Group Containers - abolish single-member auto-dissolve
+            val earliestRemaining = remainingMembers.minByOrNull { it.addedAt }?.id
+            val values = ContentValues().apply {
+                if (earliestRemaining != null) {
                     put("cover_photo_id", earliestRemaining)
+                } else {
+                    putNull("cover_photo_id")
                 }
-                db.update("photo_groups", values, "id = ?", arrayOf(gId.toString()))
             }
+            db.update("photo_groups", values, "id = ?", arrayOf(gId.toString()))
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -764,36 +758,24 @@ class SqlitePhotoRepository(
                 } catch (_: Exception) {}
             }
 
-            // Check affected groups for auto-dissolve if <= 1 member remains
+            // Phase 88: Update cover_photo_id for affected groups without auto-dissolving them
             for (gId in affectedGroupIds) {
-                val memberCursor = db.rawQuery(
-                    "SELECT id FROM photos WHERE group_id = ? AND is_trashed = 0",
+                val earliestCursor = db.rawQuery(
+                    "SELECT id FROM photos WHERE group_id = ? AND is_trashed = 0 ORDER BY added_at ASC LIMIT 1",
                     arrayOf(gId.toString())
                 )
-                val remainingIds = mutableListOf<Long>()
-                memberCursor.use { mc ->
-                    while (mc.moveToNext()) {
-                        remainingIds.add(mc.getLong(0))
+                var earliestId: Long? = null
+                earliestCursor.use { ec ->
+                    if (ec.moveToFirst()) earliestId = ec.getLong(0)
+                }
+                val values = ContentValues().apply {
+                    if (earliestId != null) {
+                        put("cover_photo_id", earliestId)
+                    } else {
+                        putNull("cover_photo_id")
                     }
                 }
-                if (remainingIds.size <= 1) {
-                    if (remainingIds.isNotEmpty()) {
-                        db.execSQL("UPDATE photos SET group_id = NULL WHERE id = ?", arrayOf(remainingIds.first().toString()))
-                    }
-                    db.delete("photo_groups", "id = ?", arrayOf(gId.toString()))
-                    removeGridItemFromLinkGroupsInternal(db, gId)
-                } else {
-                    val earliestCursor = db.rawQuery(
-                        "SELECT id FROM photos WHERE group_id = ? AND is_trashed = 0 ORDER BY added_at ASC LIMIT 1",
-                        arrayOf(gId.toString())
-                    )
-                    var earliestId: Long? = null
-                    earliestCursor.use { ec ->
-                        if (ec.moveToFirst()) earliestId = ec.getLong(0)
-                    }
-                    val values = ContentValues().apply { put("cover_photo_id", earliestId) }
-                    db.update("photo_groups", values, "id = ?", arrayOf(gId.toString()))
-                }
+                db.update("photo_groups", values, "id = ?", arrayOf(gId.toString()))
             }
 
             for (pId in ids) {

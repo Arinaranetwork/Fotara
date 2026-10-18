@@ -249,7 +249,7 @@ fun WorkspaceTabBar(
                                 this.clip = false
                             }
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) HomeTabBarSelectedPill else Color.Transparent)
+                            .background(if (isSelected) ElectricSlateTokens.PrimaryAccent else Color.Transparent)
                             .semantics {
                                 contentDescription = "$wsDisplayName workspace tab"
                             }

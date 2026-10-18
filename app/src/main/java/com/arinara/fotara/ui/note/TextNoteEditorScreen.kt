@@ -288,7 +288,12 @@ fun TextNoteEditorScreen(
         modifier = Modifier.fillMaxSize(),
         containerColor = ScreenNavy
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .navigationBarsPadding()
+        ) {
             // Top App Bar
         AppTopBar(
             title = if (state.noteId == null) stringResource(R.string.editor_title_new) else stringResource(R.string.editor_title_edit),
@@ -415,8 +420,8 @@ fun TextNoteEditorScreen(
                         )
 
                         DropdownMenuItem(
-                            text = { Text("Schedule...", color = TabCream) },
-                            leadingIcon = { Icon(Icons.Default.Alarm, null, tint = AccentGold) },
+                            text = { Text("Schedule...", color = ElectricSlateTokens.TextPrimary) },
+                            leadingIcon = { Icon(Icons.Default.Alarm, null, tint = ElectricSlateTokens.TextMuted) },
                             onClick = {
                                 showOverflowMenu = false
                                 state.openScheduleDialog()
@@ -955,8 +960,9 @@ fun TextNoteEditorScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
+        }
 
-            // Voice / Audio Annotations Dock
+        // Voice / Audio Annotations Dock
             AnimatedVisibility(
                 visible = showAudioDock || audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording,
                 enter = fadeIn(),
@@ -1033,7 +1039,8 @@ fun TextNoteEditorScreen(
                 }
             }
 
-            // Keyboard-Docked Formatting Toolbar
+        // Keyboard-Docked Formatting Toolbar (only in Edit mode)
+        if (!isPreviewMode) {
             EditorToolbar(
                 state = state,
                 isLatexInstalled = isLatexInstalled,

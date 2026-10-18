@@ -262,19 +262,6 @@ class PointerStateMachine(
                         actions.add(PointerAction.StartEraser(event.x, event.y))
                         return actions
                     } else if (activeMode == ActiveMode.DRAW) {
-                        // Direct Gesture Switching: touch on text layer or image automatically switches to translation gesture (move mode)
-                        if (onHitTestTextLayer?.invoke(event.x, event.y) == true || onHitTestImageElement?.invoke(event.x, event.y) == true) {
-                            state = PointerState.Transforming(
-                                pointerId = event.pointerId,
-                                handleId = -1, // body drag / move mode
-                                startScreenX = event.x,
-                                startScreenY = event.y,
-                                lastScreenX = event.x,
-                                lastScreenY = event.y
-                            )
-                            actions.add(PointerAction.StartTransform(handleId = -1, screenX = event.x, screenY = event.y))
-                            return actions
-                        }
 
                         if (stylusOnlyDrawing && event.toolType == PointerToolType.FINGER) {
                             // Finger pans 1:1 when stylus-only drawing is active
