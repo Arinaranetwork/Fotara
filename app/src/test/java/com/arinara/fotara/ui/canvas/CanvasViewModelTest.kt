@@ -11,6 +11,7 @@ import com.arinara.fotara.canvas.model.CanvasBackgroundStyle
 import com.arinara.fotara.canvas.model.CanvasDocument
 import com.arinara.fotara.canvas.model.CanvasElement
 import com.arinara.fotara.canvas.model.CanvasLayer
+import com.arinara.fotara.canvas.model.ImageElement
 import com.arinara.fotara.canvas.model.StrokePoint
 import com.arinara.fotara.canvas.model.StrokeElement
 import com.arinara.fotara.canvas.model.StrokeToolType
@@ -302,6 +303,47 @@ class CanvasViewModelTest {
 
         assertEquals(1, viewModel.uiState.value.document.elements.size)
         assertEquals("elem-A", viewModel.uiState.value.document.elements.first().id)
+        assertTrue(viewModel.uiState.value.toolState.selection.isEmpty)
+    }
+
+    @Test
+    fun contextualZ8_deleteImageSelection_andUndo_restoresImageElement() = runTest(testDispatcher) {
+        val viewModel = createViewModel(canvasId = 1L)
+        advanceUntilIdle()
+
+        val activeLayerId = viewModel.uiState.value.activeLayerId
+        val imageA = ImageElement(
+            id = "img-A",
+            layerId = activeLayerId,
+            assetId = "asset-test-A",
+            x = 20f,
+            y = 20f,
+            width = 100f,
+            height = 100f,
+            bounds = CanvasRect(20f, 20f, 120f, 120f)
+        )
+
+        val updatedDoc = viewModel.uiState.value.document.copy(elements = listOf(imageA))
+        viewModel.onElementsChanged(updatedDoc)
+        viewModel.setSelectedElementIds(setOf("img-A"))
+        assertTrue(viewModel.uiState.value.toolState.selection.isNotEmpty)
+
+        // Delete selection
+        viewModel.deleteSelectedElements()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.document.elements.isEmpty())
+        assertTrue(viewModel.uiState.value.toolState.selection.isEmpty)
+
+        // Undo restores image element
+        viewModel.undo()
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.document.elements.size)
+        val restored = viewModel.uiState.value.document.elements.first()
+        assertTrue(restored is ImageElement)
+        assertEquals("img-A", restored.id)
+        assertEquals("asset-test-A", (restored as ImageElement).assetId)
         assertTrue(viewModel.uiState.value.toolState.selection.isEmpty)
     }
 

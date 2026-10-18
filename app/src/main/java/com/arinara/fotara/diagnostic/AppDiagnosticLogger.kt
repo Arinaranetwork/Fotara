@@ -136,6 +136,7 @@ object AppDiagnosticLogger {
     private const val MAX_ERROR_BUFFER = 50
     private const val MAX_RAM_HISTORY = 60
     private const val MAX_WORKER_HISTORY = 50
+    private const val MAX_STUCK_HISTORY = 30
 
     private var appStartUptimeMs: Long = SystemClock.elapsedRealtime()
     private var lastEventUptimeMs: Long = appStartUptimeMs
@@ -174,12 +175,33 @@ object AppDiagnosticLogger {
     private val _currentScreen = MutableStateFlow("Startup")
     val currentScreen: StateFlow<String> = _currentScreen.asStateFlow()
 
+    val framePacingMonitor = FramePacingMonitor()
+    val framePacingFlow: StateFlow<FramePacingSnapshot> = framePacingMonitor.snapshotFlow
+
+    private val stuckHistory = ConcurrentLinkedDeque<StuckErrorRecord>()
+    private val _stuckErrorsFlow = MutableStateFlow<List<StuckErrorRecord>>(emptyList())
+    val stuckErrorsFlow: StateFlow<List<StuckErrorRecord>> = _stuckErrorsFlow.asStateFlow()
+
+    private var watchdog: MainThreadWatchdog? = null
+    private val _latestStuckAlertFlow = MutableStateFlow<StuckErrorRecord?>(null)
+    val latestStuckAlertFlow: StateFlow<StuckErrorRecord?> = _latestStuckAlertFlow.asStateFlow()
+
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
     fun initialize(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         _isOverlayEnabled.value = prefs.getBoolean(KEY_OVERLAY_ENABLED, true)
         _isDeveloperModeEnabled.value = prefs.getBoolean(KEY_DEVELOPER_MODE_ENABLED, false)
+
+        watchdog = MainThreadWatchdog(
+            hitchThresholdMs = 200L,
+            freezeThresholdMs = 500L,
+            checkIntervalMs = 100L
+        ) { record ->
+            recordStuckError(record)
+        }
+
+        updateMonitorsLifecycle()
         recordEvent("Logger", "Diagnostic system initialized")
 
         // Check for previous crash log from a fatal crash
@@ -194,10 +216,21 @@ object AppDiagnosticLogger {
         } catch (_: Exception) {}
     }
 
+    private fun updateMonitorsLifecycle() {
+        if (_isOverlayEnabled.value || _isDeveloperModeEnabled.value) {
+            framePacingMonitor.start()
+            watchdog?.start()
+        } else {
+            framePacingMonitor.stop()
+            watchdog?.stop()
+        }
+    }
+
     fun setOverlayEnabled(context: Context, enabled: Boolean) {
         _isOverlayEnabled.value = enabled
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_OVERLAY_ENABLED, enabled).apply()
+        updateMonitorsLifecycle()
         recordEvent("Overlay", if (enabled) "Overlay enabled" else "Overlay disabled")
     }
 
@@ -205,7 +238,37 @@ object AppDiagnosticLogger {
         _isDeveloperModeEnabled.value = enabled
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_DEVELOPER_MODE_ENABLED, enabled).apply()
+        updateMonitorsLifecycle()
         recordEvent("DeveloperMode", if (enabled) "Developer mode enabled" else "Developer mode disabled")
+    }
+
+    fun recordStuckError(record: StuckErrorRecord) {
+        _latestStuckAlertFlow.value = record
+        synchronized(stuckHistory) {
+            val existing = stuckHistory.find { it.id == record.id }
+            if (existing != null) {
+                stuckHistory.remove(existing)
+            }
+            stuckHistory.addFirst(record)
+            while (stuckHistory.size > MAX_STUCK_HISTORY) {
+                stuckHistory.removeLast()
+            }
+            _stuckErrorsFlow.value = stuckHistory.toList()
+        }
+        val prefix = if (record.isSevereFreeze) "SEVERE FREEZE" else "HITCH"
+        recordEvent("StuckError", "[$prefix ${record.durationMs}ms] ${record.topMethod}")
+    }
+
+    fun clearStuckAlert() {
+        _latestStuckAlertFlow.value = null
+        watchdog?.clearAlert()
+    }
+
+    fun clearEvents() {
+        eventHistory.clear()
+        _eventsFlow.value = emptyList()
+        historySize.set(0)
+        recordEvent("Logger", "Activity log cleared by developer")
     }
 
     fun recordRamSample(screenName: String = _currentScreen.value) {
@@ -605,7 +668,31 @@ object AppDiagnosticLogger {
             }
         }
         sb.appendLine()
-        sb.appendLine("### 6. Chronological Event Timeline (${recentEvents.size} events captured)")
+        sb.appendLine("### 6. Frame Pacing & Display Smoothness")
+        val pacing = framePacingFlow.value
+        sb.appendLine("- **Current FPS**: ${pacing.currentFps} FPS (Target: ${String.format(Locale.US, "%.1f", hw.displayRefreshRate)} Hz)")
+        sb.appendLine("- **1% Low FPS**: ${pacing.onePercentLowFps} FPS (Rolling 99th percentile worst-case stutter)")
+        sb.appendLine("- **Pacing Stability Score**: ${String.format(Locale.US, "%.1f", pacing.pacingScorePct)}% of frames delivered within vsync tolerance")
+        sb.appendLine("- **Jank / Missed Vsync Frames in Window**: ${pacing.jankFramesInWindow}")
+        sb.appendLine()
+        val stuckErrors = stuckHistory.toList()
+        sb.appendLine("### 7. Main-Thread Freeze & Stuck Errors (${stuckErrors.size} recorded)")
+        if (stuckErrors.isEmpty()) {
+            sb.appendLine("*No UI thread freezes or hitches exceeding 200ms recorded during this session.*")
+        } else {
+            for (stuck in stuckErrors) {
+                val formattedTime = timeFormat.format(Date(stuck.timestampMs))
+                val severityStr = if (stuck.isSevereFreeze) "SEVERE FREEZE" else "HITCH"
+                sb.appendLine("- **[$formattedTime] [$severityStr] ${stuck.durationMs}ms** on screen `[${stuck.activeScreen}]` at `${stuck.topMethod}`")
+                if (stuck.fullStackTrace.isNotBlank()) {
+                    sb.appendLine("  ```")
+                    sb.appendLine("  " + stuck.fullStackTrace.lines().take(8).joinToString("\n  "))
+                    sb.appendLine("  ```")
+                }
+            }
+        }
+        sb.appendLine()
+        sb.appendLine("### 8. Chronological Event Timeline (${recentEvents.size} events captured)")
         sb.appendLine("| Time | T+ (ms) | Delta | Tag | Event Description |")
         sb.appendLine("| :--- | :--- | :--- | :--- | :--- |")
         for (ev in recentEvents) {
@@ -633,6 +720,10 @@ object AppDiagnosticLogger {
         workerCounter.set(0L)
         workerMemoryHistory.clear()
         _workerMemoryFlow.value = emptyList()
+        stuckHistory.clear()
+        _stuckErrorsFlow.value = emptyList()
+        _latestStuckAlertFlow.value = null
+        framePacingMonitor.reset()
         _startupMetricsFlow.value = StartupMetrics(appStartTimeMs = appStartUptimeMs)
     }
 }

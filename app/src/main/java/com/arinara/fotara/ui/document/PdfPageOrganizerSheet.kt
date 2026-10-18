@@ -124,12 +124,14 @@ fun PdfPageOrganizerSheet(
                     },
                     variant = AppButtonVariant.OUTLINED,
                     height = 36.dp,
+                    horizontalPadding = 8.dp,
+                    fontSize = 12.sp,
                     modifier = Modifier.weight(1f)
                 )
 
-                // Rotate 90°
+                // Rotate 90° (compact "Rotate" label with 90° rotation icon)
                 AppButton(
-                    text = "Rotate 90°",
+                    text = "Rotate",
                     onClick = {
                         val targets = if (selectedIndices.isNotEmpty()) {
                             selectedIndices.toList()
@@ -145,6 +147,8 @@ fun PdfPageOrganizerSheet(
                     leadingIcon = Icons.Default.RotateRight,
                     variant = AppButtonVariant.SECONDARY,
                     height = 36.dp,
+                    horizontalPadding = 8.dp,
+                    fontSize = 12.sp,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -167,6 +171,8 @@ fun PdfPageOrganizerSheet(
                     leadingIcon = Icons.Default.Delete,
                     variant = AppButtonVariant.DESTRUCTIVE,
                     height = 36.dp,
+                    horizontalPadding = 8.dp,
+                    fontSize = 12.sp,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -273,8 +279,9 @@ fun PdfPageOrganizerSheet(
                     modifier = Modifier.weight(1f)
                 )
 
+                val pageCountLabel = if (pageOrder.size == 1) "1 Page" else "${pageOrder.size} Pages"
                 AppButton(
-                    text = if (isApplying) "Applying..." else "Save Changes (${pageOrder.size} Pages)",
+                    text = if (isApplying) "Applying..." else "Save Changes ($pageCountLabel)",
                     onClick = {
                         onApplyChanges(pageOrder.toList(), pageRotations.toMap())
                     },

@@ -29,7 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.theme.ElmsSans
@@ -61,7 +63,9 @@ fun AppButton(
     trailingIcon: ImageVector? = null,
     icon: ImageVector? = null,
     height: Dp = 48.dp,
-    cornerRadius: Dp = 12.dp
+    cornerRadius: Dp = 12.dp,
+    horizontalPadding: Dp = 16.dp,
+    fontSize: TextUnit = 14.sp
 ) {
     val effectiveLeadingIcon = icon ?: leadingIcon
     val containerColor = when (variant) {
@@ -101,7 +105,7 @@ fun AppButton(
                 enabled = enabled,
                 onClick = onClick
             )
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = horizontalPadding),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -109,30 +113,37 @@ fun AppButton(
             horizontalArrangement = Arrangement.Center
         ) {
             if (effectiveLeadingIcon != null) {
+                val iconSize = if (height <= 36.dp) 15.dp else 18.dp
+                val iconSpace = if (horizontalPadding <= 8.dp) 4.dp else 8.dp
                 Icon(
                     imageVector = effectiveLeadingIcon,
                     contentDescription = null,
                     tint = contentColor,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(iconSize)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(iconSpace))
             }
 
             Text(
                 text = text,
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                color = contentColor
+                fontSize = fontSize,
+                color = contentColor,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
 
             if (trailingIcon != null) {
-                Spacer(modifier = Modifier.width(8.dp))
+                val iconSize = if (height <= 36.dp) 15.dp else 18.dp
+                val iconSpace = if (horizontalPadding <= 8.dp) 4.dp else 8.dp
+                Spacer(modifier = Modifier.width(iconSpace))
                 Icon(
                     imageVector = trailingIcon,
                     contentDescription = null,
                     tint = contentColor,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(iconSize)
                 )
             }
         }

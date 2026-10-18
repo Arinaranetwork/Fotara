@@ -60,23 +60,24 @@ class CanvasEraserStrokeCarveTest {
             document = initialDoc
         )
 
-        // Live preview must remove the touched image without creating fake DST_OUT carve strokes
+        // Live preview must preserve the image and provide live carve stroke
         assertNotNull(dirtyBounds)
-        assertTrue("Live preview must omit deleted image", previewDoc.elements.none { it.id == "img_1" })
-        assertTrue("No live carve overlay", previewDoc.elements.none { it.id == "__eraser_live_carve__" })
+        assertTrue("Live preview must preserve image", previewDoc.elements.any { it.id == "img_1" })
+        assertTrue("Live carve overlay present", previewDoc.elements.any { it.id == "__eraser_live_carve__" })
 
         // Finish the eraser sweep
         val (finalDoc, _) = controller.finishEraser(previewDoc, historyManager)
 
-        // The image entity must be really deleted
-        assertTrue("ImageElement must be deleted from document", finalDoc.elements.none { it.id == "img_1" })
-        assertTrue("No carve stroke added", finalDoc.elements.none { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
+        // The image entity must be preserved and a DST_OUT carve stroke added along the path
+        assertTrue("ImageElement must be preserved in document", finalDoc.elements.any { it.id == "img_1" })
+        assertTrue("Carve stroke added along path", finalDoc.elements.any { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
 
-        // Undo must restore original image in document
+        // Undo must remove carve stroke and restore original uncarved document
         val undoneDoc = historyManager.undo(finalDoc)
         assertNotNull(undoneDoc)
         assertEquals(1, undoneDoc?.elements?.size)
         assertEquals("img_1", undoneDoc?.elements?.first()?.id)
+        assertTrue("No carve stroke after undo", undoneDoc?.elements?.none { it is StrokeElement } == true)
     }
 
     @Test
@@ -114,14 +115,15 @@ class CanvasEraserStrokeCarveTest {
         )
         val (finalDoc, _) = controller.finishEraser(previewDoc, historyManager)
 
-        // Text element must be really deleted from document
-        assertTrue("TextLayerElement must be deleted from document", finalDoc.elements.none { it.id == "txt_1" })
-        assertTrue("No carve stroke added", finalDoc.elements.none { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
+        // Text element must be preserved in document with carve stroke
+        assertTrue("TextLayerElement must be preserved in document", finalDoc.elements.any { it.id == "txt_1" })
+        assertTrue("Carve stroke added along path", finalDoc.elements.any { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
 
         // Undo must restore text element
         val undoneDoc = historyManager.undo(finalDoc)
         assertNotNull(undoneDoc)
         assertEquals(1, undoneDoc?.elements?.size)
         assertEquals("txt_1", undoneDoc?.elements?.first()?.id)
+        assertTrue("No carve stroke after undo", undoneDoc?.elements?.none { it is StrokeElement } == true)
     }
 }

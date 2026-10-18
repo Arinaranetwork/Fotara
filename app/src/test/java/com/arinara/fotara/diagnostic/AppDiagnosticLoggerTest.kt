@@ -88,12 +88,12 @@ class AppDiagnosticLoggerTest {
         val report = AppDiagnosticLogger.generateFullReport(null)
         assertNotNull(report)
         assertTrue("Report should contain Fotara Diagnostic Report header", report.contains("## Fotara Diagnostic & Performance Report"))
-        assertTrue("Report should contain Startup Latency Breakdown section", report.contains("### 1. Startup Latency Breakdown"))
-        assertTrue("Report should contain Memory & RAM Specifications section", report.contains("### 2. Memory & RAM Specifications"))
-        assertTrue("Report should contain Disk & Storage Footprint section", report.contains("### 3. Disk & Storage Footprint"))
-        assertTrue("Report should contain Hardware, Display & Environment section", report.contains("### 4. Hardware, Display & Environment"))
-        assertTrue("Report should contain Recorded Code Errors & Exceptions section", report.contains("### 5. Recorded Code Errors & Exceptions"))
-        assertTrue("Report should contain Chronological Event Timeline section", report.contains("### 6. Chronological Event Timeline"))
+        assertTrue("Report should contain Startup Latency Breakdown section", report.contains("Startup Latency Breakdown"))
+        assertTrue("Report should contain Memory & RAM Specifications section", report.contains("Memory & RAM Specifications"))
+        assertTrue("Report should contain Disk & Storage Footprint section", report.contains("Disk & Storage Footprint"))
+        assertTrue("Report should contain Hardware, Display & Environment section", report.contains("Hardware, Display & Environment"))
+        assertTrue("Report should contain Recorded Code Errors & Exceptions section", report.contains("Recorded Code Errors & Exceptions"))
+        assertTrue("Report should contain Chronological Event Timeline section", report.contains("Chronological Event Timeline"))
         assertTrue("Report should contain EngineTest error entry", report.contains("EngineTest"))
     }
 

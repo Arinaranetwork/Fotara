@@ -259,7 +259,9 @@ fun CanvasLayersSheet(
                             }
 
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(end = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
@@ -271,14 +273,19 @@ fun CanvasLayersSheet(
                                 AppSlider(
                                     value = layer.opacity,
                                     onValueChange = { onSetOpacity(layer.id, it) },
-                                    valueRange = 0.1f..1.0f,
+                                    valueRange = 0.05f..1.0f,
+                                    steps = 0,
                                     modifier = Modifier.weight(1f)
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "${(layer.opacity * 100).toInt()}%",
                                     color = ElectricSlateTokens.TextPrimary,
                                     fontSize = 12.sp,
-                                    modifier = Modifier.width(36.dp)
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.width(44.dp)
                                 )
                             }
                         }

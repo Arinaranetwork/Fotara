@@ -413,12 +413,35 @@ class CanvasToolController(
 
         lastEraserPoint = prev
 
-        if (dirtyBounds != null || eraserTouchedNonStrokes.isNotEmpty()) {
-            // Live preview: real deletion by omitting touched strokes and touched non-strokes
+        if (dirtyBounds != null || hasErasedOverNonStrokes) {
+            // Live preview: preserve non-strokes and render live carve DST_OUT stroke along eraser path
+            val liveCarveStroke = if (hasErasedOverNonStrokes && activeEraserPoints.isNotEmpty()) {
+                val carveLayerId = eraserTouchedNonStrokes.values.firstOrNull()?.layerId
+                    ?: targetLayerId
+                val pts = if (activeEraserPoints.size == 1) {
+                    val p = activeEraserPoints[0]
+                    listOf(p, StrokePoint(p.x + 0.1f, p.y + 0.1f, p.pressure))
+                } else activeEraserPoints.toList()
+                val strokeWidth = (worldRadius * 2f).coerceAtLeast(8f)
+                val strokeBounds = StrokeProcessor.computeBounds(pts, strokeWidth)
+                listOf(
+                    StrokeElement(
+                        id = "__eraser_live_carve__",
+                        layerId = carveLayerId,
+                        points = pts,
+                        color = 0xFF000000,
+                        width = strokeWidth,
+                        toolType = StrokeToolType.ERASER,
+                        blendMode = StrokeBlendMode.DST_OUT,
+                        bounds = strokeBounds
+                    )
+                )
+            } else emptyList()
+
             val untouched = document.elements.filter {
-                it.id !in eraserTouchedOriginals.keys && it.id !in eraserTouchedNonStrokes.keys
+                it.id !in eraserTouchedOriginals.keys && it.id != "__eraser_live_carve__"
             }
-            val liveDoc = document.copy(elements = untouched + eraserActiveSurvivingMap.values)
+            val liveDoc = document.copy(elements = untouched + eraserActiveSurvivingMap.values + liveCarveStroke)
             return Pair(liveDoc, dirtyBounds)
         }
 
@@ -432,12 +455,39 @@ class CanvasToolController(
         lastEraserPoint = null
 
         val strokeOriginals = eraserTouchedOriginals.values.toList()
-        val nonStrokeOriginals = eraserTouchedNonStrokes.values.toList()
-        val allOriginals = strokeOriginals + nonStrokeOriginals
-        val originalIds = allOriginals.map { it.id }.toSet()
+        val originalIds = strokeOriginals.map { it.id }.toSet()
         val survivingStrokes = eraserActiveSurvivingMap.values.filter { it.id !in originalIds }
 
-        if (allOriginals.isEmpty()) {
+        // If non-strokes were touched by the eraser path, add a DST_OUT stroke carving out along the path
+        val eraserCarveStroke: StrokeElement? = if (hasErasedOverNonStrokes && activeEraserPoints.isNotEmpty()) {
+            val carveLayerId = eraserTouchedNonStrokes.values.firstOrNull()?.layerId
+                ?: activeLayerId
+                ?: document.getPrimaryLayerId()
+            val pts = if (activeEraserPoints.size == 1) {
+                val p = activeEraserPoints[0]
+                listOf(p, StrokePoint(p.x + 0.1f, p.y + 0.1f, p.pressure))
+            } else activeEraserPoints.toList()
+            val strokeWidth = (lastEraserWorldRadius * 2f).coerceAtLeast(8f)
+            val strokeBounds = StrokeProcessor.computeBounds(pts, strokeWidth)
+            StrokeElement(
+                id = UUID.randomUUID().toString(),
+                layerId = carveLayerId,
+                points = pts,
+                color = 0xFF000000,
+                width = strokeWidth,
+                toolType = StrokeToolType.ERASER,
+                blendMode = StrokeBlendMode.DST_OUT,
+                bounds = strokeBounds
+            )
+        } else null
+
+        val replacements = if (eraserCarveStroke != null) {
+            survivingStrokes + eraserCarveStroke
+        } else {
+            survivingStrokes
+        }
+
+        if (strokeOriginals.isEmpty() && eraserCarveStroke == null) {
             eraserActiveSurvivingMap.clear()
             eraserTouchedNonStrokes.clear()
             activeEraserPoints.clear()
@@ -447,9 +497,12 @@ class CanvasToolController(
 
         val allAffectedBounds = mutableListOf<CanvasRect>()
         strokeOriginals.forEach { allAffectedBounds.add(it.bounds) }
-        nonStrokeOriginals.forEach { ns ->
-            val b = if (ns is ImageElement) ns.bounds else (ns as TextLayerElement).computeDynamicBounds()
-            allAffectedBounds.add(b)
+        if (eraserCarveStroke != null) {
+            allAffectedBounds.add(eraserCarveStroke.bounds)
+            eraserTouchedNonStrokes.values.forEach { ns ->
+                val b = if (ns is ImageElement) ns.bounds else (ns as TextLayerElement).computeDynamicBounds()
+                allAffectedBounds.add(b)
+            }
         }
 
         val unionBounds = allAffectedBounds.fold(CanvasRect.Empty) { acc, cur -> acc.union(cur) }
@@ -461,11 +514,11 @@ class CanvasToolController(
         } else {
             val survivingIds = survivingStrokes.map { it.id }.toSet()
             val untouched = cleanElements.filter { it.id !in survivingIds }
-            document.copy(elements = untouched + allOriginals)
+            document.copy(elements = untouched + strokeOriginals)
         }
 
         val committedDoc = historyManager.execute(
-            ReplaceElementsCommand(allOriginals, survivingStrokes, description = "Free Eraser"),
+            ReplaceElementsCommand(strokeOriginals, replacements, description = "Free Eraser"),
             baseDoc
         )
 

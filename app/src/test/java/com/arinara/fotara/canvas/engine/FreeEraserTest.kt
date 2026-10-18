@@ -144,20 +144,21 @@ class FreeEraserTest {
         controller.startEraser(50f, 100f)
         val (previewDoc, _) = controller.sweepEraser(listOf(PointerPoint(150f, 100f)), defaultViewport, doc)
 
-        // Live preview must omit the deleted image without adding fake carve stroke
-        assertTrue("Live preview must omit deleted image", previewDoc.elements.none { it.id == "target_img" })
-        assertTrue("No live carve overlay", previewDoc.elements.none { it.id == "__eraser_live_carve__" })
+        // Live preview must preserve the image and provide live carve stroke
+        assertTrue("Live preview must preserve image", previewDoc.elements.any { it.id == "target_img" })
+        assertTrue("Live carve overlay present", previewDoc.elements.any { it.id == "__eraser_live_carve__" })
 
         val (committedDoc, _) = controller.finishEraser(previewDoc, historyManager)
 
-        // Image must be really deleted in committed document
-        assertTrue("Image must be deleted from committed doc", committedDoc.elements.none { it.id == "target_img" })
-        assertTrue("No carve stroke added", committedDoc.elements.none { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
+        // Image must be preserved in committed document and carve stroke added along path
+        assertTrue("Image must be preserved in committed doc", committedDoc.elements.any { it.id == "target_img" })
+        assertTrue("Carve stroke added along path", committedDoc.elements.any { it is StrokeElement && it.blendMode == StrokeBlendMode.DST_OUT })
 
-        // Undo must restore the deleted image
+        // Undo must restore the uncarved image document
         val undoneDoc = historyManager.undo(committedDoc)
         assertNotNull(undoneDoc)
         assertEquals(1, undoneDoc!!.elements.size)
         assertEquals("target_img", undoneDoc.elements[0].id)
+        assertTrue("No carve stroke after undo", undoneDoc.elements.none { it is StrokeElement })
     }
 }

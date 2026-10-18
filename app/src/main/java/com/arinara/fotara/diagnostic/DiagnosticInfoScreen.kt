@@ -61,6 +61,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import com.arinara.fotara.ui.components.presets.AppPillChip
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppCard
@@ -87,8 +96,13 @@ fun DiagnosticInfoScreen(
     val errors by AppDiagnosticLogger.errorsFlow.collectAsState()
     val ramSamples by AppDiagnosticLogger.ramHistoryFlow.collectAsState()
     val workerRecords by AppDiagnosticLogger.workerMemoryFlow.collectAsState()
+    val framePacing by AppDiagnosticLogger.framePacingFlow.collectAsState()
+    val stuckErrors by AppDiagnosticLogger.stuckErrorsFlow.collectAsState()
 
     var lastGcResult by remember { mutableStateOf<GcResult?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedTagFilter by remember { mutableStateOf("All") }
+    var expandedStuckId by remember { mutableStateOf<Long?>(null) }
 
     // Auto-sample RAM when Developer Mode is active
     LaunchedEffect(isDeveloperModeEnabled) {
@@ -124,7 +138,7 @@ fun DiagnosticInfoScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(screenPadding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Section 0: Developer Mode Master Toggle
@@ -194,8 +208,132 @@ fun DiagnosticInfoScreen(
                 }
             }
 
-            // Developer Mode Section: Real-Time RAM Graph
+            // Developer Mode Section: Real-Time Frame Pacing & RAM Graphs
             if (isDeveloperModeEnabled) {
+                // Section: Frame Pacing & Vsync Consistency Studio
+                item {
+                    AppCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            DiagnosticSectionHeader(
+                                title = "Frame Pacing & Vsync Consistency",
+                                icon = Icons.Default.Speed
+                            )
+                            FramePacingGraph(snapshot = framePacing)
+                        }
+                    }
+                }
+
+                // Section: Main-Thread Hang & Stuck Errors Inspector
+                item {
+                    AppCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            DiagnosticSectionHeader(
+                                title = "Main-Thread Hang & Stuck Errors (${stuckErrors.size})",
+                                icon = Icons.Default.Warning
+                            )
+
+                            if (stuckErrors.isEmpty()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = ElectricSlateTokens.PrimaryAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "0 Main-Thread Freezes (No hitches > 200ms)",
+                                        color = ElectricSlateTokens.TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontFamily = ElmsSans
+                                    )
+                                }
+                            } else {
+                                for (stuck in stuckErrors.take(5)) {
+                                    val rowShape = RoundedCornerShape(10.dp)
+                                    val isSevere = stuck.isSevereFreeze
+                                    val borderCol = if (isSevere) ElectricSlateTokens.Destructive else ElectricSlateTokens.BorderSubtle
+                                    val isExpanded = expandedStuckId == stuck.id
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(rowShape)
+                                            .background(ElectricSlateTokens.SurfaceElevated)
+                                            .border(1.dp, borderCol, rowShape)
+                                            .clickable {
+                                                expandedStuckId = if (isExpanded) null else stuck.id
+                                            }
+                                            .padding(10.dp)
+                                    ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = if (isSevere) "SEVERE FREEZE: ${stuck.durationMs}ms" else "HITCH: ${stuck.durationMs}ms",
+                                                    color = if (isSevere) ElectricSlateTokens.Destructive else ElectricSlateTokens.PrimaryAccent,
+                                                    fontSize = 12.sp,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "[${stuck.activeScreen}]",
+                                                    color = ElectricSlateTokens.TextMuted,
+                                                    fontSize = 11.sp,
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
+
+                                            Text(
+                                                text = stuck.topMethod,
+                                                color = ElectricSlateTokens.TextPrimary,
+                                                fontSize = 12.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                maxLines = if (isExpanded) 4 else 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+
+                                            if (isExpanded && stuck.fullStackTrace.isNotBlank()) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(ElectricSlateTokens.BgCanvas)
+                                                        .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(6.dp))
+                                                        .padding(8.dp)
+                                                ) {
+                                                    Text(
+                                                        text = stuck.fullStackTrace.take(1500),
+                                                        color = ElectricSlateTokens.TextMuted,
+                                                        fontSize = 10.sp,
+                                                        fontFamily = FontFamily.Monospace
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Developer Mode Section: Real-Time RAM Graph
                 item {
                     AppCard(
                         modifier = Modifier.fillMaxWidth()
@@ -710,45 +848,179 @@ fun DiagnosticInfoScreen(
                         title = "Activity Event Log (${events.size})",
                         icon = Icons.Default.Timeline
                     )
+                    if (events.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(ElectricSlateTokens.SurfaceElevated)
+                                .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(8.dp))
+                                .clickable { AppDiagnosticLogger.clearEvents() }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "Clear Log",
+                                color = ElectricSlateTokens.TextMuted,
+                                fontSize = 11.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                 }
             }
 
-            items(events.reversed(), key = { it.id }) { ev ->
-                val timeStr = remember(ev.timestampMs) { timeFormat.format(Date(ev.timestampMs)) }
-                val rowShape = RoundedCornerShape(12.dp)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(rowShape)
-                        .background(ElectricSlateTokens.SurfacePanel)
-                        .border(1.dp, ElectricSlateTokens.BorderSubtle, rowShape)
-                        .padding(12.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Search Bar & Tag Filter Chips
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val searchShape = RoundedCornerShape(12.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(searchShape)
+                            .background(ElectricSlateTokens.SurfacePanel)
+                            .border(1.dp, ElectricSlateTokens.BorderSubtle, searchShape)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = ev.tag,
-                                color = if (ev.tag == "Error") ElectricSlateTokens.Destructive else ElectricSlateTokens.PrimaryAccent,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = ElectricSlateTokens.TextMuted,
+                                modifier = Modifier.size(16.dp)
                             )
-                            Text(
-                                text = "+${ev.elapsedSinceAppStartMs}ms ($timeStr)",
-                                color = ElectricSlateTokens.TextMuted,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                textStyle = TextStyle(
+                                    color = ElectricSlateTokens.TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontFamily = ElmsSans
+                                ),
+                                cursorBrush = SolidColor(ElectricSlateTokens.PrimaryAccent),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                decorationBox = { innerTextField ->
+                                    if (searchQuery.isEmpty()) {
+                                        Text(
+                                            text = "Search event logs...",
+                                            color = ElectricSlateTokens.TextMuted,
+                                            fontSize = 13.sp,
+                                            fontFamily = ElmsSans
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            )
+                            if (searchQuery.isNotEmpty()) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear search",
+                                    tint = ElectricSlateTokens.TextMuted,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { searchQuery = "" }
+                                )
+                            }
+                        }
+                    }
+
+                    // Filter chips
+                    val tagCategories = listOf("All", "Error", "Lifecycle", "Navigation", "Memory", "Pacing", "Worker")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        for (tag in tagCategories) {
+                            AppPillChip(
+                                label = tag,
+                                isSelected = selectedTagFilter == tag,
+                                onClick = { selectedTagFilter = tag }
                             )
                         }
+                    }
+                }
+            }
+
+            val filteredEvents = events.reversed().filter { ev ->
+                val matchesTag = when (selectedTagFilter) {
+                    "All" -> true
+                    "Error" -> ev.tag.contains("Error", ignoreCase = true) || ev.tag.contains("Crash", ignoreCase = true)
+                    "Lifecycle" -> ev.tag.contains("Lifecycle", ignoreCase = true) || ev.tag.contains("Startup", ignoreCase = true)
+                    "Navigation" -> ev.tag.contains("Navigation", ignoreCase = true)
+                    "Memory" -> ev.tag.contains("Memory", ignoreCase = true) || ev.tag.contains("RAM", ignoreCase = true) || ev.tag.contains("GC", ignoreCase = true)
+                    "Pacing" -> ev.tag.contains("Pacing", ignoreCase = true) || ev.tag.contains("Stuck", ignoreCase = true) || ev.tag.contains("Frame", ignoreCase = true)
+                    "Worker" -> ev.tag.contains("Worker", ignoreCase = true) || ev.tag.contains("Tile", ignoreCase = true) || ev.tag.contains("Autosave", ignoreCase = true)
+                    else -> ev.tag.equals(selectedTagFilter, ignoreCase = true)
+                }
+                val matchesSearch = if (searchQuery.isBlank()) true else {
+                    ev.message.contains(searchQuery, ignoreCase = true) || ev.tag.contains(searchQuery, ignoreCase = true)
+                }
+                matchesTag && matchesSearch
+            }
+
+            if (filteredEvents.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = ev.message,
-                            color = ElectricSlateTokens.TextPrimary,
-                            fontSize = 13.sp,
+                            text = if (searchQuery.isNotBlank() || selectedTagFilter != "All") {
+                                "No events matching \"$searchQuery\" in [$selectedTagFilter]"
+                            } else {
+                                "No activity events recorded yet."
+                            },
+                            color = ElectricSlateTokens.TextMuted,
+                            fontSize = 12.sp,
                             fontFamily = ElmsSans
                         )
+                    }
+                }
+            } else {
+                items(filteredEvents, key = { it.id }) { ev ->
+                    val timeStr = remember(ev.timestampMs) { timeFormat.format(Date(ev.timestampMs)) }
+                    val rowShape = RoundedCornerShape(12.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(rowShape)
+                            .background(ElectricSlateTokens.SurfacePanel)
+                            .border(1.dp, ElectricSlateTokens.BorderSubtle, rowShape)
+                            .padding(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = ev.tag,
+                                    color = if (ev.tag == "Error" || ev.tag == "StuckError") ElectricSlateTokens.Destructive else ElectricSlateTokens.PrimaryAccent,
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "+${ev.elapsedSinceAppStartMs}ms ($timeStr)",
+                                    color = ElectricSlateTokens.TextMuted,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            Text(
+                                text = ev.message,
+                                color = ElectricSlateTokens.TextPrimary,
+                                fontSize = 13.sp,
+                                fontFamily = ElmsSans
+                            )
+                        }
                     }
                 }
             }

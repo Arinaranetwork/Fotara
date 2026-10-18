@@ -8,7 +8,7 @@ package com.arinara.fotara.ui.components.presets
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,7 +40,7 @@ fun AppSlider(
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
-    steps: Int = 4, // Number of discrete intermediate steps (total dots = steps + 2)
+    steps: Int = 4, // Number of discrete intermediate steps (total dots = steps + 2; 0 for smooth continuous)
     enabled: Boolean = true,
     activeTrackColor: Color = ElectricSlateTokens.PrimaryAccent,
     inactiveTrackColor: Color = ElectricSlateTokens.TrackInactive,
@@ -53,8 +53,8 @@ fun AppSlider(
     val thumbScaleAnim = remember { Animatable(1.0f) }
     val thumbSnapBounceAnim = remember { Animatable(0f) } // horizontal magnetic snap overshoot
 
-    val totalPoints = (steps + 2).coerceAtLeast(2)
-    val stepSize = (valueRange.endInclusive - valueRange.start) / (totalPoints - 1)
+    val totalPoints = if (steps > 0) (steps + 2).coerceAtLeast(2) else 0
+    val stepSize = if (steps > 0) (valueRange.endInclusive - valueRange.start) / (totalPoints - 1) else 0f
 
     LaunchedEffect(isDragging) {
         if (isDragging) {
@@ -71,34 +71,46 @@ fun AppSlider(
     val currentOnValueChange by rememberUpdatedState(onValueChange)
     val currentValue by rememberUpdatedState(value)
 
+    fun calculateValueFromFraction(fraction: Float): Float {
+        val rawVal = currentRange.start + fraction * (currentRange.endInclusive - currentRange.start)
+        return if (steps > 0 && currentStepSize > 0f) {
+            val stepIndex = ((rawVal - currentRange.start) / currentStepSize).roundToInt().coerceIn(0, currentTotalPoints - 1)
+            currentRange.start + stepIndex * currentStepSize
+        } else {
+            rawVal.coerceIn(currentRange.start, currentRange.endInclusive)
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onPress = { offset ->
+                    onTap = { offset ->
                         if (!currentEnabled) return@detectTapGestures
-                        isDragging = true
                         val fraction = (offset.x / size.width).coerceIn(0f, 1f)
-                        val rawVal = currentRange.start + fraction * (currentRange.endInclusive - currentRange.start)
-                        val stepIndex = ((rawVal - currentRange.start) / currentStepSize).roundToInt().coerceIn(0, currentTotalPoints - 1)
-                        val snappedVal = currentRange.start + stepIndex * currentStepSize
+                        val targetVal = calculateValueFromFraction(fraction)
 
                         coroutineScope.launch {
                             thumbSnapBounceAnim.snapTo(-4f)
                             thumbSnapBounceAnim.animateTo(0f, SpringPhysics.JigglePressSpec)
                         }
-                        currentOnValueChange(snappedVal)
-                        tryAwaitRelease()
-                        isDragging = false
+                        currentOnValueChange(targetVal)
                     }
                 )
             }
             .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = {
-                        if (currentEnabled) isDragging = true
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        if (currentEnabled) {
+                            isDragging = true
+                            val fraction = (offset.x / size.width).coerceIn(0f, 1f)
+                            val targetVal = calculateValueFromFraction(fraction)
+                            if (targetVal != currentValue) {
+                                currentOnValueChange(targetVal)
+                            }
+                        }
                     },
                     onDragEnd = {
                         isDragging = false
@@ -106,21 +118,21 @@ fun AppSlider(
                     onDragCancel = {
                         isDragging = false
                     },
-                    onDrag = { change, _ ->
-                        if (!currentEnabled) return@detectDragGestures
+                    onHorizontalDrag = { change, _ ->
+                        if (!currentEnabled) return@detectHorizontalDragGestures
                         change.consume()
                         val fraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                        val rawVal = currentRange.start + fraction * (currentRange.endInclusive - currentRange.start)
-                        val stepIndex = ((rawVal - currentRange.start) / currentStepSize).roundToInt().coerceIn(0, currentTotalPoints - 1)
-                        val snappedVal = currentRange.start + stepIndex * currentStepSize
+                        val targetVal = calculateValueFromFraction(fraction)
 
-                        if (snappedVal != currentValue) {
-                            coroutineScope.launch {
-                                val dir = if (snappedVal > currentValue) 6f else -6f
-                                thumbSnapBounceAnim.snapTo(dir)
-                                thumbSnapBounceAnim.animateTo(0f, SpringPhysics.JigglePressSpec)
+                        if (targetVal != currentValue) {
+                            if (steps > 0) {
+                                coroutineScope.launch {
+                                    val dir = if (targetVal > currentValue) 6f else -6f
+                                    thumbSnapBounceAnim.snapTo(dir)
+                                    thumbSnapBounceAnim.animateTo(0f, SpringPhysics.JigglePressSpec)
+                                }
                             }
-                            currentOnValueChange(snappedVal)
+                            currentOnValueChange(targetVal)
                         }
                     }
                 )
@@ -155,15 +167,17 @@ fun AppSlider(
             }
 
             // 3. Draw Discrete Step Dots (4.dp)
-            val dotRadius = 2.dp.toPx()
-            for (i in 0 until totalPoints) {
-                val dotX = (i.toFloat() / (totalPoints - 1)) * canvasWidth
-                val isPassed = dotX <= thumbX + 1f
-                drawCircle(
-                    color = if (isPassed) dotActiveColor else dotInactiveColor,
-                    radius = dotRadius,
-                    center = Offset(dotX, centerY)
-                )
+            if (steps > 0 && totalPoints > 1) {
+                val dotRadius = 2.dp.toPx()
+                for (i in 0 until totalPoints) {
+                    val dotX = (i.toFloat() / (totalPoints - 1)) * canvasWidth
+                    val isPassed = dotX <= thumbX + 1f
+                    drawCircle(
+                        color = if (isPassed) dotActiveColor else dotInactiveColor,
+                        radius = dotRadius,
+                        center = Offset(dotX, centerY)
+                    )
+                }
             }
 
             // 4. Draw Scaled Tactile Thumb with Ambient Glow

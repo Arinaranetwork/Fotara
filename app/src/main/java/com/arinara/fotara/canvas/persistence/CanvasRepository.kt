@@ -445,9 +445,6 @@ class DefaultCanvasRepository(
 
         // Transactional commit
         canvasDao.saveDocumentTransaction(canvasId, layerEntities, elementEntities)
-
-        // Clean up unreferenced assets
-        assetManager.purgeOrphanedAssets(canvasId, activeAssetIds)
     }
 
     override suspend fun purgeCanvas(canvasId: Long): Unit = withContext(Dispatchers.IO) {
