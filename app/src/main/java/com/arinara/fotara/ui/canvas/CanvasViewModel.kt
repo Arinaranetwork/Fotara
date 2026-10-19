@@ -1307,6 +1307,126 @@ class CanvasViewModel(
         }
     }
 
+    fun bringSelectionToFront() {
+        val state = _uiState.value
+        if (toolController.selection.isEmpty) return
+
+        val (updatedDoc, dirtyBounds) = toolController.reorderSelectionZIndex(
+            action = CanvasToolController.ZOrderAction.BRING_TO_FRONT,
+            document = state.document,
+            historyManager = historyManager
+        )
+        if (dirtyBounds != null) {
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(dirtyBounds)
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    toolState = toolController.toolState,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
+        }
+    }
+
+    fun bringSelectionForward() {
+        val state = _uiState.value
+        if (toolController.selection.isEmpty) return
+
+        val (updatedDoc, dirtyBounds) = toolController.reorderSelectionZIndex(
+            action = CanvasToolController.ZOrderAction.BRING_FORWARD,
+            document = state.document,
+            historyManager = historyManager
+        )
+        if (dirtyBounds != null) {
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(dirtyBounds)
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    toolState = toolController.toolState,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
+        }
+    }
+
+    fun sendSelectionBackward() {
+        val state = _uiState.value
+        if (toolController.selection.isEmpty) return
+
+        val (updatedDoc, dirtyBounds) = toolController.reorderSelectionZIndex(
+            action = CanvasToolController.ZOrderAction.SEND_BACKWARD,
+            document = state.document,
+            historyManager = historyManager
+        )
+        if (dirtyBounds != null) {
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(dirtyBounds)
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    toolState = toolController.toolState,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
+        }
+    }
+
+    fun sendSelectionToBack() {
+        val state = _uiState.value
+        if (toolController.selection.isEmpty) return
+
+        val (updatedDoc, dirtyBounds) = toolController.reorderSelectionZIndex(
+            action = CanvasToolController.ZOrderAction.SEND_TO_BACK,
+            document = state.document,
+            historyManager = historyManager
+        )
+        if (dirtyBounds != null) {
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(dirtyBounds)
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    toolState = toolController.toolState,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
+        }
+    }
+
+    fun moveSelectionToLayerAbove() {
+        val state = _uiState.value
+        if (toolController.selection.isEmpty) return
+
+        val (updatedDoc, dirtyBounds) = toolController.moveSelectionToLayerAbove(
+            document = state.document,
+            historyManager = historyManager,
+            viewportScale = state.zoomPercentage / 100f
+        )
+        if (dirtyBounds != null) {
+            spatialIndex.rebuild(updatedDoc.elements)
+            tileCacheManager.invalidateRegion(dirtyBounds)
+            _uiState.update {
+                it.copy(
+                    document = updatedDoc,
+                    toolState = toolController.toolState,
+                    canUndo = historyManager.canUndo,
+                    canRedo = historyManager.canRedo
+                )
+            }
+            triggerDebouncedAutosave()
+        }
+    }
+
     fun onElementsChanged(newDoc: CanvasDocument) {
         spatialIndex.rebuild(newDoc.elements)
         tileCacheManager.invalidateAll()

@@ -43,7 +43,10 @@ import com.arinara.fotara.ui.theme.jigglePressClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.unit.Dp
 
 @Composable
@@ -53,9 +56,19 @@ fun AppFloatingBar(
     containerColor: Color = ElectricSlateTokens.SurfaceElevated,
     borderColor: Color = ElectricSlateTokens.BorderSubtle,
     applyWindowInsets: Boolean = true,
+    longPressTimeoutMillis: Long = 750L,
     content: @Composable RowScope.() -> Unit
 ) {
-    val offsetYAnim = remember { Animatable(100f) }
+    val currentViewConfig = LocalViewConfiguration.current
+    val customViewConfig = remember(currentViewConfig, longPressTimeoutMillis) {
+        object : ViewConfiguration by currentViewConfig {
+            override val longPressTimeoutMillis: Long
+                get() = longPressTimeoutMillis
+        }
+    }
+
+    CompositionLocalProvider(LocalViewConfiguration provides customViewConfig) {
+        val offsetYAnim = remember { Animatable(100f) }
 
     LaunchedEffect(visible) {
         if (visible) {
@@ -105,6 +118,7 @@ fun AppFloatingBar(
             }
         }
     }
+}
 }
 
 @OptIn(ExperimentalFoundationApi::class)

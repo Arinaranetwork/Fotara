@@ -258,6 +258,7 @@ fun CanvasScreen(
     var showVfxBottomSheet by remember { mutableStateOf(false) }
     var activeVfxImageElement by remember { mutableStateOf<com.arinara.fotara.canvas.model.ImageElement?>(null) }
     var showMoveElementsLayerPicker by remember { mutableStateOf(false) }
+    var showArrangeMenu by remember { mutableStateOf(false) }
     var showSecondaryTools by remember { mutableStateOf(false) }
     var topCapsulesHeightPx by remember { mutableIntStateOf(0) }
     var dockHeightPx by remember { mutableIntStateOf(0) }
@@ -896,27 +897,6 @@ fun CanvasScreen(
                                 )
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Shape Snapping", color = ElectricSlateTokens.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                Text("Hold at end of stroke to snap shapes", color = ElectricSlateTokens.TextMuted, fontSize = 10.sp)
-                            }
-                            Switch(
-                                checked = uiState.toolState.shapeSnapping,
-                                onCheckedChange = { viewModel.setShapeSnapping(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = ElectricSlateTokens.PrimaryAccent,
-                                    uncheckedThumbColor = ElectricSlateTokens.TextMuted,
-                                    uncheckedTrackColor = ElectricSlateTokens.SurfacePanel
-                                )
-                            )
-                        }
                     }
 
                     // Blending Mode Row for Highlighter
@@ -1490,18 +1470,171 @@ fun CanvasScreen(
                             )
                         }
 
-                        // Move to Layer
-                        IconButton(
-                            onClick = { showMoveElementsLayerPicker = true },
-                            enabled = hasSelection,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Layers,
-                                contentDescription = stringResource(R.string.canvas_action_move_to_layer),
-                                tint = if (hasSelection) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
-                                modifier = Modifier.size(20.dp)
-                            )
+                        // Arrange & Layer Order
+                        Box {
+                            IconButton(
+                                onClick = { showArrangeMenu = true },
+                                enabled = hasSelection,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Layers,
+                                    contentDescription = "Arrange & Layer Order",
+                                    tint = if (hasSelection) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showArrangeMenu && hasSelection,
+                                onDismissRequest = { showArrangeMenu = false },
+                                modifier = Modifier
+                                    .background(ElectricSlateTokens.SurfaceElevated)
+                                    .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Bring to Front",
+                                            color = ElectricSlateTokens.TextPrimary,
+                                            fontSize = 14.sp,
+                                            fontFamily = ElmsSans,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.KeyboardArrowUp,
+                                            contentDescription = null,
+                                            tint = ElectricSlateTokens.TextMuted,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showArrangeMenu = false
+                                        viewModel.bringSelectionToFront()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Bring Forward",
+                                            color = ElectricSlateTokens.TextPrimary,
+                                            fontSize = 14.sp,
+                                            fontFamily = ElmsSans,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.KeyboardArrowUp,
+                                            contentDescription = null,
+                                            tint = ElectricSlateTokens.TextMuted,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showArrangeMenu = false
+                                        viewModel.bringSelectionForward()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Send Backward",
+                                            color = ElectricSlateTokens.TextPrimary,
+                                            fontSize = 14.sp,
+                                            fontFamily = ElmsSans,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            tint = ElectricSlateTokens.TextMuted,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showArrangeMenu = false
+                                        viewModel.sendSelectionBackward()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Send to Back",
+                                            color = ElectricSlateTokens.TextPrimary,
+                                            fontSize = 14.sp,
+                                            fontFamily = ElmsSans,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            tint = ElectricSlateTokens.TextMuted,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showArrangeMenu = false
+                                        viewModel.sendSelectionToBack()
+                                    }
+                                )
+                                HorizontalDivider(
+                                    color = ElectricSlateTokens.BorderSubtle,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Move to Layer Above",
+                                            color = ElectricSlateTokens.PrimaryAccent,
+                                            fontSize = 14.sp,
+                                            fontFamily = ElmsSans,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.DriveFileMove,
+                                            contentDescription = null,
+                                            tint = ElectricSlateTokens.PrimaryAccent,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showArrangeMenu = false
+                                        viewModel.moveSelectionToLayerAbove()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Move to Layer...",
+                                            color = ElectricSlateTokens.TextPrimary,
+                                            fontSize = 14.sp,
+                                            fontFamily = ElmsSans,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Layers,
+                                            contentDescription = null,
+                                            tint = ElectricSlateTokens.TextMuted,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showArrangeMenu = false
+                                        showMoveElementsLayerPicker = true
+                                    }
+                                )
+                            }
                         }
 
                         // Delete
@@ -1617,18 +1750,18 @@ fun CanvasScreen(
             )
         }
 
-        // Visual Effects (VFX) Left-Side Docked Panel & JIT Feature Interception Dialog
+        // Visual Effects (VFX) Minimalist Bottom Docked Panel
         if (showVfxBottomSheet && activeVfxImageElement != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(25f),
-                contentAlignment = Alignment.CenterStart
+                contentAlignment = Alignment.BottomCenter
             ) {
-                com.arinara.fotara.canvas.vfx.VfxSidebarPanel(
+                com.arinara.fotara.canvas.vfx.VfxBottomPanel(
                     parameters = activeVfxImageElement!!.vfxParams,
                     onParametersChanged = { newParams ->
-                        val el = activeVfxImageElement ?: return@VfxSidebarPanel
+                        val el = activeVfxImageElement ?: return@VfxBottomPanel
                         val updated = el.copy(vfxParams = newParams)
                         activeVfxImageElement = updated
                         viewModel.updateImageVfx(el.id, newParams)
@@ -1636,7 +1769,10 @@ fun CanvasScreen(
                     onDismiss = {
                         showVfxBottomSheet = false
                         activeVfxImageElement = null
-                    }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
                 )
             }
         }

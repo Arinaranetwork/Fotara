@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -555,3 +556,259 @@ private fun VfxSlider(
         )
     }
 }
+
+@Composable
+fun VfxBottomPanel(
+    parameters: VfxParameters,
+    onParametersChanged: (VfxParameters) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = com.arinara.fotara.ui.theme.ElectricSlateTokens.SurfacePanel.copy(alpha = 0.98f),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        border = BorderStroke(1.dp, com.arinara.fotara.ui.theme.ElectricSlateTokens.BorderSubtle),
+        shadowElevation = 16.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(max = 280.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AutoFixHigh,
+                        contentDescription = null,
+                        tint = com.arinara.fotara.ui.theme.ElectricSlateTokens.PrimaryAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Visual Effects",
+                        fontFamily = ElmsSans,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = com.arinara.fotara.ui.theme.ElectricSlateTokens.TextPrimary
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { onParametersChanged(VfxParameters()) },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reset",
+                            tint = com.arinara.fotara.ui.theme.ElectricSlateTokens.TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = com.arinara.fotara.ui.theme.ElectricSlateTokens.TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(
+                color = com.arinara.fotara.ui.theme.ElectricSlateTokens.BorderSubtle,
+                modifier = Modifier.padding(vertical = 6.dp)
+            )
+
+            // Scrollable Content
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Section 1: Chroma Key
+                Text(
+                    text = "CHROMA KEY (KNOCKOUT)",
+                    color = com.arinara.fotara.ui.theme.ElectricSlateTokens.PrimaryAccent,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = ElmsSans,
+                    letterSpacing = 0.8.sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Enable Chroma Key",
+                        color = com.arinara.fotara.ui.theme.ElectricSlateTokens.TextPrimary,
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans
+                    )
+                    Switch(
+                        checked = parameters.chromaKeyEnabled,
+                        onCheckedChange = { onParametersChanged(parameters.copy(chromaKeyEnabled = it)) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = com.arinara.fotara.ui.theme.ElectricSlateTokens.PrimaryAccent,
+                            uncheckedThumbColor = com.arinara.fotara.ui.theme.ElectricSlateTokens.TextMuted,
+                            uncheckedTrackColor = com.arinara.fotara.ui.theme.ElectricSlateTokens.TrackInactive
+                        )
+                    )
+                }
+
+                if (parameters.chromaKeyEnabled) {
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Key Color:", color = com.arinara.fotara.ui.theme.ElectricSlateTokens.TextMuted, fontSize = 11.sp, fontFamily = ElmsSans)
+                        KEY_COLORS.forEach { (colorLong, _) ->
+                            val isSelected = parameters.keyColor == colorLong
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(colorLong))
+                                    .border(
+                                        width = if (isSelected) 2.dp else 1.dp,
+                                        color = if (isSelected) com.arinara.fotara.ui.theme.ElectricSlateTokens.PrimaryAccent else com.arinara.fotara.ui.theme.ElectricSlateTokens.BorderSubtle,
+                                        shape = CircleShape
+                                    )
+                                    .clickable { onParametersChanged(parameters.copy(keyColor = colorLong)) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    VfxSlider(
+                        label = "Tolerance",
+                        value = parameters.tolerance,
+                        valueRange = 0.05f..0.85f,
+                        displayFormat = "${(parameters.tolerance * 100).toInt()}%",
+                        onValueChange = { onParametersChanged(parameters.copy(tolerance = it)) }
+                    )
+
+                    VfxSlider(
+                        label = "Edge Softening",
+                        value = parameters.edgeSoftening,
+                        valueRange = 0.01f..0.50f,
+                        displayFormat = "${(parameters.edgeSoftening * 100).toInt()}%",
+                        onValueChange = { onParametersChanged(parameters.copy(edgeSoftening = it)) }
+                    )
+                }
+
+                HorizontalDivider(
+                    color = com.arinara.fotara.ui.theme.ElectricSlateTokens.BorderSubtle,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+
+                // Section 2: Color & Channel Grading
+                Text(
+                    text = "COLOR & CHANNEL GRADING",
+                    color = com.arinara.fotara.ui.theme.ElectricSlateTokens.PrimaryAccent,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = ElmsSans,
+                    letterSpacing = 0.8.sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                VfxSlider(
+                    label = "Brightness",
+                    value = parameters.brightness,
+                    valueRange = -0.5f..0.5f,
+                    displayFormat = "${(parameters.brightness * 100).toInt()}%",
+                    onValueChange = { onParametersChanged(parameters.copy(brightness = it)) }
+                )
+
+                VfxSlider(
+                    label = "Contrast",
+                    value = parameters.contrast,
+                    valueRange = 0.5f..1.8f,
+                    displayFormat = "${(parameters.contrast * 100).toInt()}%",
+                    onValueChange = { onParametersChanged(parameters.copy(contrast = it)) }
+                )
+
+                VfxSlider(
+                    label = "Saturation",
+                    value = parameters.saturation,
+                    valueRange = 0.0f..2.0f,
+                    displayFormat = "${(parameters.saturation * 100).toInt()}%",
+                    onValueChange = { onParametersChanged(parameters.copy(saturation = it)) }
+                )
+
+                VfxSlider(
+                    label = "Temperature",
+                    value = parameters.temperature,
+                    valueRange = -0.5f..0.5f,
+                    displayFormat = "${(parameters.temperature * 100).toInt()}%",
+                    onValueChange = { onParametersChanged(parameters.copy(temperature = it)) }
+                )
+
+                HorizontalDivider(
+                    color = com.arinara.fotara.ui.theme.ElectricSlateTokens.BorderSubtle,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+
+                // Section 3: Independent RGB Balance
+                Text(
+                    text = "RGB CHANNEL BALANCE",
+                    color = com.arinara.fotara.ui.theme.ElectricSlateTokens.PrimaryAccent,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = ElmsSans,
+                    letterSpacing = 0.8.sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                VfxSlider(
+                    label = "Red Balance",
+                    value = parameters.redBalance,
+                    valueRange = 0.5f..1.5f,
+                    displayFormat = "${(parameters.redBalance * 100).toInt()}%",
+                    onValueChange = { onParametersChanged(parameters.copy(redBalance = it)) }
+                )
+
+                VfxSlider(
+                    label = "Green Balance",
+                    value = parameters.greenBalance,
+                    valueRange = 0.5f..1.5f,
+                    displayFormat = "${(parameters.greenBalance * 100).toInt()}%",
+                    onValueChange = { onParametersChanged(parameters.copy(greenBalance = it)) }
+                )
+
+                VfxSlider(
+                    label = "Blue Balance",
+                    value = parameters.blueBalance,
+                    valueRange = 0.5f..1.5f,
+                    displayFormat = "${(parameters.blueBalance * 100).toInt()}%",
+                    onValueChange = { onParametersChanged(parameters.copy(blueBalance = it)) }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+

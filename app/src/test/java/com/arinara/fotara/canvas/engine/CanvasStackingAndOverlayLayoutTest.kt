@@ -499,4 +499,129 @@ class CanvasStackingAndOverlayLayoutTest {
         assertEquals(112f, fabBottomPadding, 1e-2f)
         assertTrue(fabBottomPadding > bottomOverlayHeightDp)
     }
+
+    // -------------------------------------------------------------
+    // Task 5: Z-Order Elevation & Cross-Layer Reordering (Phase 94)
+    // -------------------------------------------------------------
+
+    @Test
+    fun testReorderSelectionZIndex_BringToFrontAndSendToBack() {
+        val layer = CanvasLayer(id = "layer1", name = "Default", order = 0)
+        val el1 = ImageElement(id = "el1", layerId = "layer1", assetId = "a1", x = 0f, y = 0f, width = 50f, height = 50f, zIndex = 1, bounds = CanvasRect(0f, 0f, 50f, 50f))
+        val el2 = ImageElement(id = "el2", layerId = "layer1", assetId = "a2", x = 10f, y = 10f, width = 50f, height = 50f, zIndex = 2, bounds = CanvasRect(10f, 10f, 60f, 60f))
+        val el3 = ImageElement(id = "el3", layerId = "layer1", assetId = "a3", x = 20f, y = 20f, width = 50f, height = 50f, zIndex = 3, bounds = CanvasRect(20f, 20f, 70f, 70f))
+
+        val doc = CanvasDocument(id = 1L, layers = listOf(layer), elements = listOf(el1, el2, el3))
+        val controller = CanvasToolController()
+        val historyManager = CanvasHistoryManager()
+
+        // Select el1 (bottom element) and bring to front
+        controller.selection = CanvasSelection(references = mapOf(el1.id to SelectedElementReference.Whole(el1.id)), bounds = el1.bounds)
+        val (docFront, dirtyFront) = controller.reorderSelectionZIndex(
+            action = CanvasToolController.ZOrderAction.BRING_TO_FRONT,
+            document = doc,
+            historyManager = historyManager
+        )
+        assertNotNull(dirtyFront)
+        val frontEl1 = docFront.elements.first { it.id == "el1" }
+        val frontEl2 = docFront.elements.first { it.id == "el2" }
+        val frontEl3 = docFront.elements.first { it.id == "el3" }
+        assertTrue("el1 should have highest zIndex", frontEl1.zIndex > frontEl3.zIndex && frontEl1.zIndex > frontEl2.zIndex)
+
+        // Select el3 and send to back
+        controller.selection = CanvasSelection(references = mapOf(el3.id to SelectedElementReference.Whole(el3.id)), bounds = el3.bounds)
+        val (docBack, dirtyBack) = controller.reorderSelectionZIndex(
+            action = CanvasToolController.ZOrderAction.SEND_TO_BACK,
+            document = docFront,
+            historyManager = historyManager
+        )
+        assertNotNull(dirtyBack)
+        val backEl3 = docBack.elements.first { it.id == "el3" }
+        val backEl2 = docBack.elements.first { it.id == "el2" }
+        val backEl1 = docBack.elements.first { it.id == "el1" }
+        assertTrue("el3 should have lowest zIndex", backEl3.zIndex < backEl2.zIndex && backEl3.zIndex < backEl1.zIndex)
+    }
+
+    @Test
+    fun testReorderSelectionZIndex_BringForwardAndSendBackward() {
+        val layer = CanvasLayer(id = "layer1", name = "Default", order = 0)
+        val el1 = ImageElement(id = "el1", layerId = "layer1", assetId = "a1", x = 0f, y = 0f, width = 50f, height = 50f, zIndex = 1, bounds = CanvasRect(0f, 0f, 50f, 50f))
+        val el2 = ImageElement(id = "el2", layerId = "layer1", assetId = "a2", x = 10f, y = 10f, width = 50f, height = 50f, zIndex = 2, bounds = CanvasRect(10f, 10f, 60f, 60f))
+        val el3 = ImageElement(id = "el3", layerId = "layer1", assetId = "a3", x = 20f, y = 20f, width = 50f, height = 50f, zIndex = 3, bounds = CanvasRect(20f, 20f, 70f, 70f))
+
+        val doc = CanvasDocument(id = 1L, layers = listOf(layer), elements = listOf(el1, el2, el3))
+        val controller = CanvasToolController()
+        val historyManager = CanvasHistoryManager()
+
+        // Bring el1 forward by 1 step (should swap with el2)
+        controller.selection = CanvasSelection(references = mapOf(el1.id to SelectedElementReference.Whole(el1.id)), bounds = el1.bounds)
+        val (docForward, _) = controller.reorderSelectionZIndex(
+            action = CanvasToolController.ZOrderAction.BRING_FORWARD,
+            document = doc,
+            historyManager = historyManager
+        )
+        val fwdEl1 = docForward.elements.first { it.id == "el1" }
+        val fwdEl2 = docForward.elements.first { it.id == "el2" }
+        val fwdEl3 = docForward.elements.first { it.id == "el3" }
+        assertTrue("el1 should now be ahead of el2", fwdEl1.zIndex > fwdEl2.zIndex)
+        assertTrue("el3 should still be ahead of el1", fwdEl3.zIndex > fwdEl1.zIndex)
+
+        // Send el1 backward (should swap back with el2)
+        val (docBackward, _) = controller.reorderSelectionZIndex(
+            action = CanvasToolController.ZOrderAction.SEND_BACKWARD,
+            document = docForward,
+            historyManager = historyManager
+        )
+        val backEl1 = docBackward.elements.first { it.id == "el1" }
+        val backEl2 = docBackward.elements.first { it.id == "el2" }
+        assertTrue("el1 should now be behind el2", backEl1.zIndex < backEl2.zIndex)
+    }
+
+    @Test
+    fun testMoveSelectionToLayerAbove_CreatesNewLayerWhenAtTop() {
+        val layer1 = CanvasLayer(id = "layer1", name = "Base", order = 0)
+        val el1 = ImageElement(id = "el1", layerId = "layer1", assetId = "a1", x = 0f, y = 0f, width = 50f, height = 50f, zIndex = 1, bounds = CanvasRect(0f, 0f, 50f, 50f))
+
+        val doc = CanvasDocument(id = 1L, layers = listOf(layer1), elements = listOf(el1))
+        val controller = CanvasToolController()
+        val historyManager = CanvasHistoryManager()
+
+        controller.selection = CanvasSelection(references = mapOf(el1.id to SelectedElementReference.Whole(el1.id)), bounds = el1.bounds)
+        val (docAbove, dirty) = controller.moveSelectionToLayerAbove(
+            document = doc,
+            historyManager = historyManager,
+            viewportScale = 1.0f
+        )
+        assertNotNull(dirty)
+        // A new layer should be created with order > 0
+        assertEquals(2, docAbove.layers.size)
+        val newLayer = docAbove.layers.first { it.id != "layer1" }
+        assertTrue("New layer order should be higher", newLayer.order > layer1.order)
+        val movedEl1 = docAbove.elements.first { it.id == "el1" }
+        assertEquals(newLayer.id, movedEl1.layerId)
+    }
+
+    @Test
+    fun testMoveSelectionToLayerAbove_MovesToExistingHigherLayer() {
+        val layer1 = CanvasLayer(id = "layer1", name = "Base", order = 0)
+        val layer2 = CanvasLayer(id = "layer2", name = "Foreground", order = 1)
+        val el1 = ImageElement(id = "el1", layerId = "layer1", assetId = "a1", x = 0f, y = 0f, width = 50f, height = 50f, zIndex = 1, bounds = CanvasRect(0f, 0f, 50f, 50f))
+        val el2 = ImageElement(id = "el2", layerId = "layer2", assetId = "a2", x = 0f, y = 0f, width = 50f, height = 50f, zIndex = 1, bounds = CanvasRect(0f, 0f, 50f, 50f))
+
+        val doc = CanvasDocument(id = 1L, layers = listOf(layer1, layer2), elements = listOf(el1, el2))
+        val controller = CanvasToolController()
+        val historyManager = CanvasHistoryManager()
+
+        controller.selection = CanvasSelection(references = mapOf(el1.id to SelectedElementReference.Whole(el1.id)), bounds = el1.bounds)
+        val (docAbove, dirty) = controller.moveSelectionToLayerAbove(
+            document = doc,
+            historyManager = historyManager,
+            viewportScale = 1.0f
+        )
+        assertNotNull(dirty)
+        assertEquals(2, docAbove.layers.size)
+        val movedEl1 = docAbove.elements.first { it.id == "el1" }
+        assertEquals("layer2", movedEl1.layerId)
+        assertTrue("el1 should have higher zIndex on layer2", movedEl1.zIndex > el2.zIndex)
+    }
 }

@@ -101,6 +101,13 @@ class CanvasToolController(
             toolState = toolState.copy(selection = value)
         }
 
+    fun selectSingle(elementId: String, bounds: CanvasRect = CanvasRect.Empty) {
+        selection = CanvasSelection(
+            references = mapOf(elementId to com.arinara.fotara.canvas.model.SelectedElementReference.Whole(elementId)),
+            bounds = bounds
+        )
+    }
+
     fun setHighlighterBlendMode(mode: StrokeBlendMode) {
         toolState = toolState.copy(highlighterBlendMode = mode)
     }
@@ -1374,6 +1381,136 @@ class CanvasToolController(
         )
 
         return Pair(updatedDoc, newBounds)
+    }
+
+    enum class ZOrderAction {
+        BRING_TO_FRONT,
+        BRING_FORWARD,
+        SEND_BACKWARD,
+        SEND_TO_BACK
+    }
+
+    fun reorderSelectionZIndex(
+        action: ZOrderAction,
+        document: CanvasDocument,
+        historyManager: CanvasHistoryManager
+    ): Pair<CanvasDocument, CanvasRect?> {
+        if (selection.isEmpty) return Pair(document, null)
+
+        val selectedIds = selection.references.keys
+        val selectedElements = document.elements.filter { it.id in selectedIds }
+        if (selectedElements.isEmpty()) return Pair(document, null)
+
+        val layersWithSelection = selectedElements.map { it.layerId }.distinct()
+        val beforeElements = mutableListOf<CanvasElement>()
+        val afterElements = mutableListOf<CanvasElement>()
+
+        for (layerId in layersWithSelection) {
+            val layerElements = document.elements
+                .filter { it.layerId == layerId }
+                .sortedWith(compareBy<CanvasElement> { it.zIndex }.thenBy { it.id })
+                .toMutableList()
+
+            if (layerElements.size <= 1) continue
+
+            val selectedInLayer = layerElements.filter { it.id in selectedIds }
+            if (selectedInLayer.isEmpty()) continue
+
+            when (action) {
+                ZOrderAction.BRING_TO_FRONT -> {
+                    layerElements.removeAll { it.id in selectedIds }
+                    layerElements.addAll(selectedInLayer)
+                }
+                ZOrderAction.SEND_TO_BACK -> {
+                    layerElements.removeAll { it.id in selectedIds }
+                    layerElements.addAll(0, selectedInLayer)
+                }
+                ZOrderAction.BRING_FORWARD -> {
+                    for (i in (layerElements.size - 2) downTo 0) {
+                        if (layerElements[i].id in selectedIds && layerElements[i + 1].id !in selectedIds) {
+                            val temp = layerElements[i]
+                            layerElements[i] = layerElements[i + 1]
+                            layerElements[i + 1] = temp
+                        }
+                    }
+                }
+                ZOrderAction.SEND_BACKWARD -> {
+                    for (i in 1 until layerElements.size) {
+                        if (layerElements[i].id in selectedIds && layerElements[i - 1].id !in selectedIds) {
+                            val temp = layerElements[i]
+                            layerElements[i] = layerElements[i - 1]
+                            layerElements[i - 1] = temp
+                        }
+                    }
+                }
+            }
+
+            for ((index, el) in layerElements.withIndex()) {
+                val original = document.elements.firstOrNull { it.id == el.id }
+                if (original != null && original.zIndex != index) {
+                    beforeElements.add(original)
+                    afterElements.add(el.withZIndex(index))
+                }
+            }
+        }
+
+        if (beforeElements.isEmpty()) return Pair(document, selection.bounds)
+
+        val desc = when (action) {
+            ZOrderAction.BRING_TO_FRONT -> "Bring to Front"
+            ZOrderAction.BRING_FORWARD -> "Bring Forward"
+            ZOrderAction.SEND_BACKWARD -> "Send Backward"
+            ZOrderAction.SEND_TO_BACK -> "Send to Back"
+        }
+
+        val updatedDoc = historyManager.execute(
+            ReplaceElementsCommand(
+                before = beforeElements,
+                after = afterElements,
+                description = desc
+            ),
+            document
+        )
+
+        val newBounds = CanvasSelectionEngine.computeSelectionBounds(selection.references, updatedDoc.elements)
+        selection = selection.copy(bounds = newBounds)
+        return Pair(updatedDoc, newBounds)
+    }
+
+    fun moveSelectionToLayerAbove(
+        document: CanvasDocument,
+        historyManager: CanvasHistoryManager,
+        viewportScale: Float = 1.0f
+    ): Pair<CanvasDocument, CanvasRect?> {
+        if (selection.isEmpty) return Pair(document, null)
+
+        val selectedIds = selection.references.keys
+        val selectedElements = document.elements.filter { it.id in selectedIds }
+        if (selectedElements.isEmpty()) return Pair(document, null)
+
+        val currentLayerId = selectedElements.first().layerId
+        val sortedLayers = document.layers.sortedBy { it.order }
+        val currentIdx = sortedLayers.indexOfFirst { it.id == currentLayerId }
+
+        val (targetDoc, targetLayerId) = if (currentIdx >= 0 && currentIdx < sortedLayers.size - 1) {
+            Pair(document, sortedLayers[currentIdx + 1].id)
+        } else {
+            val newLayerId = "layer_${System.currentTimeMillis()}"
+            val newOrder = (sortedLayers.maxOfOrNull { it.order } ?: 0) + 1
+            val newLayer = com.arinara.fotara.canvas.model.CanvasLayer(
+                id = newLayerId,
+                name = "Layer ${document.layers.size + 1}",
+                order = newOrder
+            )
+            Pair(document.copy(layers = document.layers + newLayer), newLayerId)
+        }
+
+        return moveSelectionToLayer(
+            targetLayerId = targetLayerId,
+            document = targetDoc,
+            historyManager = historyManager,
+            viewportScale = viewportScale
+        )
     }
 
     companion object {
