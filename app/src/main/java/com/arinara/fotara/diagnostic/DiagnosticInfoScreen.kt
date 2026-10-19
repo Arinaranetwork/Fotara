@@ -71,17 +71,34 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import com.arinara.fotara.ui.components.presets.AppPillChip
 import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.ui.components.presets.AppBottomSheet
 import com.arinara.fotara.ui.components.presets.AppButton
+import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.components.presets.AppCard
 import com.arinara.fotara.ui.components.presets.AppScreen
 import com.arinara.fotara.ui.components.presets.AppTopBar
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private fun formatElapsed(ms: Long): String {
+    return when {
+        ms < 1000L -> "+${ms}ms"
+        ms < 60_000L -> "+${String.format(Locale.US, "%.1f", ms / 1000f)}s"
+        else -> {
+            val minutes = ms / 60_000L
+            val seconds = (ms % 60_000L) / 1000L
+            "+${minutes}m ${seconds}s"
+        }
+    }
+}
 
 @Composable
 fun DiagnosticInfoScreen(
@@ -89,6 +106,8 @@ fun DiagnosticInfoScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val isMasterEnabled by AppDiagnosticLogger.isDiagnosticSystemEnabled.collectAsState()
     val isOverlayEnabled by AppDiagnosticLogger.isOverlayEnabled.collectAsState()
     val isDeveloperModeEnabled by AppDiagnosticLogger.isDeveloperModeEnabled.collectAsState()
     val startupMetrics by AppDiagnosticLogger.startupMetricsFlow.collectAsState()
@@ -103,10 +122,53 @@ fun DiagnosticInfoScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedTagFilter by remember { mutableStateOf("All") }
     var expandedStuckId by remember { mutableStateOf<Long?>(null) }
+    var showConsentSheet by remember { mutableStateOf(false) }
+    var isExporting by remember { mutableStateOf(false) }
 
-    // Auto-sample RAM when Developer Mode is active
-    LaunchedEffect(isDeveloperModeEnabled) {
-        if (isDeveloperModeEnabled) {
+    // Dynamic tag event count aggregation for filter chip badges
+    val eventCountsByTag = remember(events) {
+        val map = mutableMapOf<String, Int>()
+        map["All"] = events.size
+        map["Error"] = events.count { it.tag.contains("Error", ignoreCase = true) || it.tag.contains("Crash", ignoreCase = true) }
+        map["Lifecycle"] = events.count { it.tag.contains("Lifecycle", ignoreCase = true) || it.tag.contains("Startup", ignoreCase = true) }
+        map["Navigation"] = events.count { it.tag.contains("Navigation", ignoreCase = true) }
+        map["Memory"] = events.count { it.tag.contains("Memory", ignoreCase = true) || it.tag.contains("RAM", ignoreCase = true) || it.tag.contains("GC", ignoreCase = true) }
+        map["Pacing"] = events.count { it.tag.contains("Pacing", ignoreCase = true) || it.tag.contains("Stuck", ignoreCase = true) || it.tag.contains("Frame", ignoreCase = true) }
+        map["Worker"] = events.count { it.tag.contains("Worker", ignoreCase = true) || it.tag.contains("Tile", ignoreCase = true) || it.tag.contains("Autosave", ignoreCase = true) }
+        map
+    }
+
+    // Filtered activity events
+    val filteredEvents = remember(events, selectedTagFilter, searchQuery) {
+        events.reversed().filter { ev ->
+            val matchesTag = when (selectedTagFilter) {
+                "All" -> true
+                "Error" -> ev.tag.contains("Error", ignoreCase = true) || ev.tag.contains("Crash", ignoreCase = true)
+                "Lifecycle" -> ev.tag.contains("Lifecycle", ignoreCase = true) || ev.tag.contains("Startup", ignoreCase = true)
+                "Navigation" -> ev.tag.contains("Navigation", ignoreCase = true)
+                "Memory" -> ev.tag.contains("Memory", ignoreCase = true) || ev.tag.contains("RAM", ignoreCase = true) || ev.tag.contains("GC", ignoreCase = true)
+                "Pacing" -> ev.tag.contains("Pacing", ignoreCase = true) || ev.tag.contains("Stuck", ignoreCase = true) || ev.tag.contains("Frame", ignoreCase = true)
+                "Worker" -> ev.tag.contains("Worker", ignoreCase = true) || ev.tag.contains("Tile", ignoreCase = true) || ev.tag.contains("Autosave", ignoreCase = true)
+                else -> ev.tag.equals(selectedTagFilter, ignoreCase = true)
+            }
+            val matchesSearch = if (searchQuery.isBlank()) true else {
+                ev.message.contains(searchQuery, ignoreCase = true) || ev.tag.contains(searchQuery, ignoreCase = true)
+            }
+            matchesTag && matchesSearch
+        }
+    }
+
+    val logHeaderTitle = remember(filteredEvents.size, events.size, searchQuery, selectedTagFilter) {
+        if (searchQuery.isNotBlank() || selectedTagFilter != "All") {
+            "Activity Event Log (${filteredEvents.size} of ${events.size})"
+        } else {
+            "Activity Event Log (${events.size})"
+        }
+    }
+
+    // Auto-sample RAM when Developer Mode and Master Switch are active
+    LaunchedEffect(isDeveloperModeEnabled, isMasterEnabled) {
+        if (isDeveloperModeEnabled && isMasterEnabled) {
             while (true) {
                 AppDiagnosticLogger.recordRamSample("DiagnosticScreen")
                 delay(1500L)
@@ -141,7 +203,91 @@ fun DiagnosticInfoScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Section 0: Developer Mode Master Toggle
+            // Section 0A: Master Telemetry Switch
+            item {
+                AppCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Performance Diagnostics",
+                                    color = ElectricSlateTokens.TextPrimary,
+                                    fontSize = 16.sp,
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                val badgeBg = if (isMasterEnabled) {
+                                    ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.2f)
+                                } else {
+                                    ElectricSlateTokens.SurfaceElevated
+                                }
+                                val badgeColor = if (isMasterEnabled) {
+                                    ElectricSlateTokens.PrimaryAccent
+                                } else {
+                                    ElectricSlateTokens.TextMuted
+                                }
+                                val badgeBorder = if (isMasterEnabled) {
+                                    ElectricSlateTokens.PrimaryAccent
+                                } else {
+                                    ElectricSlateTokens.BorderSubtle
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(badgeBg)
+                                        .border(1.dp, badgeBorder, RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (isMasterEnabled) "ACTIVE" else "DISABLED (0% Overhead)",
+                                        color = badgeColor,
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            Text(
+                                text = if (isMasterEnabled) {
+                                    "Master switch: telemetry active. Turn off to halt all logging & background threads for maximum execution speed."
+                                } else {
+                                    "Completely disabled: 0% CPU/RAM overhead, 0 frame callbacks, 0 watchdog threads."
+                                },
+                                color = ElectricSlateTokens.TextMuted,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
+                        Switch(
+                            checked = isMasterEnabled,
+                            onCheckedChange = { enabled ->
+                                AppDiagnosticLogger.setDiagnosticSystemEnabled(context, enabled)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = ElectricSlateTokens.TextPrimary,
+                                checkedTrackColor = ElectricSlateTokens.PrimaryAccent,
+                                uncheckedThumbColor = ElectricSlateTokens.TextMuted,
+                                uncheckedTrackColor = ElectricSlateTokens.TrackInactive
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Section 0B: Extreme Developer Mode Toggle
             item {
                 AppCard(
                     modifier = Modifier.fillMaxWidth()
@@ -160,12 +306,12 @@ fun DiagnosticInfoScreen(
                             ) {
                                 Text(
                                     text = "Extreme Developer Mode",
-                                    color = ElectricSlateTokens.TextPrimary,
+                                    color = if (isMasterEnabled) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted,
                                     fontSize = 16.sp,
                                     fontFamily = ElmsSans,
                                     fontWeight = FontWeight.Bold
                                 )
-                                if (isDeveloperModeEnabled) {
+                                if (isDeveloperModeEnabled && isMasterEnabled) {
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(8.dp))
@@ -184,7 +330,11 @@ fun DiagnosticInfoScreen(
                                 }
                             }
                             Text(
-                                text = "Unlocks live RAM graph, worker memory delta tracking, leak hints & manual GC",
+                                text = if (isMasterEnabled) {
+                                    "Unlocks live RAM graph, worker memory delta tracking, leak hints & manual GC"
+                                } else {
+                                    "Disabled (requires Master Diagnostics enabled above)"
+                                },
                                 color = ElectricSlateTokens.TextMuted,
                                 fontSize = 12.sp,
                                 fontFamily = ElmsSans,
@@ -193,7 +343,8 @@ fun DiagnosticInfoScreen(
                         }
 
                         Switch(
-                            checked = isDeveloperModeEnabled,
+                            checked = isDeveloperModeEnabled && isMasterEnabled,
+                            enabled = isMasterEnabled,
                             onCheckedChange = { enabled ->
                                 AppDiagnosticLogger.setDeveloperModeEnabled(context, enabled)
                             },
@@ -209,7 +360,7 @@ fun DiagnosticInfoScreen(
             }
 
             // Developer Mode Section: Real-Time Frame Pacing & RAM Graphs
-            if (isDeveloperModeEnabled) {
+            if (isDeveloperModeEnabled && isMasterEnabled) {
                 // Section: Frame Pacing & Vsync Consistency Studio
                 item {
                     AppCard(
@@ -823,18 +974,29 @@ fun DiagnosticInfoScreen(
                 }
             }
 
-            // Section 7: Export Diagnostic Report Button
+            // Section 7: Export Diagnostic Report & ZIP Bundle Buttons
             item {
-                AppButton(
-                    text = "Copy Full Diagnostic Report",
-                    onClick = {
-                        val report = AppDiagnosticLogger.generateFullReport(context)
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        clipboard?.setPrimaryClip(ClipData.newPlainText("Fotara Diagnostic Report", report))
-                        Toast.makeText(context, "Full diagnostic report copied to clipboard!", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AppButton(
+                        text = "Copy Full Diagnostic Report",
+                        onClick = {
+                            val report = AppDiagnosticLogger.generateFullReport(context)
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            clipboard?.setPrimaryClip(ClipData.newPlainText("Fotara Diagnostic Report", report))
+                            Toast.makeText(context, "Full diagnostic report copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    AppButton(
+                        text = if (isExporting) "Packaging Diagnostic ZIP..." else "Export Diagnostic Bundle (.zip)",
+                        enabled = !isExporting,
+                        onClick = {
+                            showConsentSheet = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             // Section 8: Recent Activity Event Log
@@ -845,7 +1007,7 @@ fun DiagnosticInfoScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     DiagnosticSectionHeader(
-                        title = "Activity Event Log (${events.size})",
+                        title = logHeaderTitle,
                         icon = Icons.Default.Timeline
                     )
                     if (events.isNotEmpty()) {
@@ -927,7 +1089,7 @@ fun DiagnosticInfoScreen(
                         }
                     }
 
-                    // Filter chips
+                    // Filter chips with trailingCount
                     val tagCategories = listOf("All", "Error", "Lifecycle", "Navigation", "Memory", "Pacing", "Worker")
                     Row(
                         modifier = Modifier
@@ -939,28 +1101,12 @@ fun DiagnosticInfoScreen(
                             AppPillChip(
                                 label = tag,
                                 isSelected = selectedTagFilter == tag,
+                                trailingCount = eventCountsByTag[tag] ?: 0,
                                 onClick = { selectedTagFilter = tag }
                             )
                         }
                     }
                 }
-            }
-
-            val filteredEvents = events.reversed().filter { ev ->
-                val matchesTag = when (selectedTagFilter) {
-                    "All" -> true
-                    "Error" -> ev.tag.contains("Error", ignoreCase = true) || ev.tag.contains("Crash", ignoreCase = true)
-                    "Lifecycle" -> ev.tag.contains("Lifecycle", ignoreCase = true) || ev.tag.contains("Startup", ignoreCase = true)
-                    "Navigation" -> ev.tag.contains("Navigation", ignoreCase = true)
-                    "Memory" -> ev.tag.contains("Memory", ignoreCase = true) || ev.tag.contains("RAM", ignoreCase = true) || ev.tag.contains("GC", ignoreCase = true)
-                    "Pacing" -> ev.tag.contains("Pacing", ignoreCase = true) || ev.tag.contains("Stuck", ignoreCase = true) || ev.tag.contains("Frame", ignoreCase = true)
-                    "Worker" -> ev.tag.contains("Worker", ignoreCase = true) || ev.tag.contains("Tile", ignoreCase = true) || ev.tag.contains("Autosave", ignoreCase = true)
-                    else -> ev.tag.equals(selectedTagFilter, ignoreCase = true)
-                }
-                val matchesSearch = if (searchQuery.isBlank()) true else {
-                    ev.message.contains(searchQuery, ignoreCase = true) || ev.tag.contains(searchQuery, ignoreCase = true)
-                }
-                matchesTag && matchesSearch
             }
 
             if (filteredEvents.isEmpty()) {
@@ -1008,7 +1154,7 @@ fun DiagnosticInfoScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "+${ev.elapsedSinceAppStartMs}ms ($timeStr)",
+                                    text = "${formatElapsed(ev.elapsedSinceAppStartMs)} ($timeStr)",
                                     color = ElectricSlateTokens.TextMuted,
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace
@@ -1023,6 +1169,140 @@ fun DiagnosticInfoScreen(
                         }
                     }
                 }
+            }
+        }
+
+        // Privacy Consent Bottom Sheet for ZIP Export (AR-009 compliant)
+        AppBottomSheet(
+            visible = showConsentSheet,
+            onDismiss = {
+                if (!isExporting) {
+                    showConsentSheet = false
+                }
+            },
+            title = "Export Diagnostic Bundle"
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = null,
+                        tint = ElectricSlateTokens.PrimaryAccent,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "Privacy & Telemetry Consent",
+                        color = ElectricSlateTokens.TextPrimary,
+                        fontSize = 16.sp,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Text(
+                    text = "Fotara packages purely technical telemetry into a ZIP archive for debugging and performance profiling. You can share or save it using the native Android share panel.",
+                    color = ElectricSlateTokens.TextPrimary,
+                    fontSize = 13.sp,
+                    fontFamily = ElmsSans,
+                    lineHeight = 18.sp
+                )
+
+                val calloutShape = RoundedCornerShape(12.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(calloutShape)
+                        .background(ElectricSlateTokens.SurfaceElevated)
+                        .border(1.dp, ElectricSlateTokens.BorderSubtle, calloutShape)
+                        .padding(12.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Strict Privacy Guarantees:",
+                            color = ElectricSlateTokens.TextPrimary,
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "• NO user note titles, text, or markdown contents\n• NO photos, canvas drawings, or image attachments\n• NO passwords, account tokens, or network keys\n• NO private database contents",
+                            color = ElectricSlateTokens.TextMuted,
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans,
+                            lineHeight = 17.sp
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(calloutShape)
+                        .background(ElectricSlateTokens.SurfaceElevated)
+                        .border(1.dp, ElectricSlateTokens.BorderSubtle, calloutShape)
+                        .padding(12.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Included Files (7 Telemetry Reports):",
+                            color = ElectricSlateTokens.TextPrimary,
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "1. summary.md - Full Markdown performance report\n2. activity_events.csv - Event timestamps & lifecycle tags\n3. ram_timeline.csv - JVM, native & system RAM samples\n4. worker_memory.csv - Background worker heap deltas\n5. stuck_errors.txt - UI hitch & thread freeze stack traces\n6. errors.txt - Recorded exceptions & fatal crash logs\n7. device_info.txt - Device specs & Android environment",
+                            color = ElectricSlateTokens.TextMuted,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AppButton(
+                        text = "Cancel",
+                        enabled = !isExporting,
+                        onClick = { showConsentSheet = false },
+                        variant = AppButtonVariant.OUTLINED,
+                        modifier = Modifier.weight(1f)
+                    )
+                    AppButton(
+                        text = if (isExporting) "Exporting..." else "Confirm & Export (.zip)",
+                        enabled = !isExporting,
+                        onClick = {
+                            coroutineScope.launch {
+                                isExporting = true
+                                try {
+                                    val zipFile = DiagnosticZipExporter.createDiagnosticZip(context)
+                                    showConsentSheet = false
+                                    DiagnosticZipExporter.shareDiagnosticZip(context, zipFile)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Export failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isExporting = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1.5f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

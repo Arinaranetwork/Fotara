@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Fotara 1.9.11 Alpha</string>
+    <string name="app_name">Fotara</string>
     <string name="widget_due_tomorrow_name">Due Tomorrow</string>
     <string name="widget_due_tomorrow_description">Displays notes and coursework due tomorrow.</string>
     <string name="widget_schedule_name">Schedule</string>

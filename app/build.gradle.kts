@@ -4,8 +4,8 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
 }
 
-val appVersionCode = 67
-val appVersionName = "1.9.22-alpha"
+val appVersionCode = 68
+val appVersionName = "1.9.0-beta"
 val appChannel = when {
     appVersionName.contains("alpha", ignoreCase = true) -> "alpha"
     appVersionName.contains("beta", ignoreCase = true) -> "beta"
@@ -16,7 +16,7 @@ android {
     namespace = "com.arinara.fotara"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.arinara.fotara.alpha"
+        applicationId = "com.arinara.fotara"
         minSdk = 24
         targetSdk = 36
         versionCode = appVersionCode

@@ -138,13 +138,50 @@ class AppDiagnosticLoggerTest {
     }
 
     @Test
-    fun testSubsystemMemoryTrackerHelper() {
-        val result = SubsystemMemoryTracker.track("TestSubsystem") {
-            42 * 2
-        }
-        assertEquals(84, result)
-        val workers = AppDiagnosticLogger.workerMemoryFlow.value
-        assertTrue(workers.any { it.workerName == "TestSubsystem" })
+    fun testZeroOverheadMasterDisable() {
+        AppDiagnosticLogger.setDiagnosticSystemEnabledForTesting(false)
+
+        AppDiagnosticLogger.recordEvent("BlockedTag", "Should not be recorded")
+        AppDiagnosticLogger.recordError("BlockedError", "Should not be recorded")
+        AppDiagnosticLogger.recordRamSample("BlockedScreen")
+        AppDiagnosticLogger.recordWorkerMemory("BlockedWorker", 10L, 20L, 5L)
+        AppDiagnosticLogger.recordScreen("NewScreen")
+
+        assertTrue("Events must be empty when master disabled", AppDiagnosticLogger.eventsFlow.value.isEmpty())
+        assertTrue("Errors must be empty when master disabled", AppDiagnosticLogger.errorsFlow.value.isEmpty())
+        assertTrue("RAM history must be empty when master disabled", AppDiagnosticLogger.ramHistoryFlow.value.isEmpty())
+        assertTrue("Worker memory must be empty when master disabled", AppDiagnosticLogger.workerMemoryFlow.value.isEmpty())
+        assertEquals("Startup", AppDiagnosticLogger.currentScreen.value)
+
+        // Re-enable and verify logging resumes
+        AppDiagnosticLogger.setDiagnosticSystemEnabledForTesting(true)
+        AppDiagnosticLogger.recordEvent("AllowedTag", "Should be recorded now")
+        assertEquals(1, AppDiagnosticLogger.eventsFlow.value.size)
+        assertEquals("AllowedTag", AppDiagnosticLogger.eventsFlow.value.first().tag)
+    }
+
+    @Test
+    fun testEventDeduplicationWithin150ms() {
+        AppDiagnosticLogger.recordEvent("NavTag", "DuplicateNavigation")
+        AppDiagnosticLogger.recordEvent("NavTag", "DuplicateNavigation")
+
+        val events = AppDiagnosticLogger.eventsFlow.value
+        assertEquals("Identical events logged immediately must be de-duplicated", 1, events.size)
+    }
+
+    @Test
+    fun testExportGetters() {
+        AppDiagnosticLogger.recordEvent("Tag1", "Message1")
+        assertEquals(1, AppDiagnosticLogger.getAllEvents().size)
+
+        AppDiagnosticLogger.recordError("Err1", "ErrorMsg1")
+        assertEquals(1, AppDiagnosticLogger.getAllErrors().size)
+
+        AppDiagnosticLogger.recordRamSample("SampleScreen")
+        assertEquals(1, AppDiagnosticLogger.getAllRamSamples().size)
+
+        AppDiagnosticLogger.recordWorkerMemory("Worker1", 10L, 15L, 25L)
+        assertEquals(1, AppDiagnosticLogger.getAllWorkerRecords().size)
     }
 }
 

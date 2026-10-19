@@ -84,27 +84,35 @@ class FramePacingMonitor(
     fun start() {
         if (isRunning.compareAndSet(false, true)) {
             lastFrameTimeNanos = 0L
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                Choreographer.getInstance().postFrameCallback(frameCallback)
-            } else {
-                mainHandler.post {
-                    if (isRunning.get()) {
-                        Choreographer.getInstance().postFrameCallback(frameCallback)
+            try {
+                if (Looper.myLooper() == Looper.getMainLooper()) {
+                    Choreographer.getInstance().postFrameCallback(frameCallback)
+                } else {
+                    mainHandler.post {
+                        if (isRunning.get()) {
+                            try {
+                                Choreographer.getInstance().postFrameCallback(frameCallback)
+                            } catch (_: Throwable) {}
+                        }
                     }
                 }
-            }
+            } catch (_: Throwable) {}
         }
     }
 
     fun stop() {
         if (isRunning.compareAndSet(true, false)) {
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                Choreographer.getInstance().removeFrameCallback(frameCallback)
-            } else {
-                mainHandler.post {
+            try {
+                if (Looper.myLooper() == Looper.getMainLooper()) {
                     Choreographer.getInstance().removeFrameCallback(frameCallback)
+                } else {
+                    mainHandler.post {
+                        try {
+                            Choreographer.getInstance().removeFrameCallback(frameCallback)
+                        } catch (_: Throwable) {}
+                    }
                 }
-            }
+            } catch (_: Throwable) {}
         }
     }
 

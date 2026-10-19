@@ -130,6 +130,7 @@ data class HardwareInfo(
 object AppDiagnosticLogger {
 
     private const val PREFS_NAME = "fotara_diagnostic_prefs"
+    private const val KEY_DIAGNOSTIC_SYSTEM_ENABLED = "diagnostic_system_master_enabled"
     private const val KEY_OVERLAY_ENABLED = "diagnostic_overlay_enabled"
     private const val KEY_DEVELOPER_MODE_ENABLED = "developer_mode_enabled"
     private const val MAX_EVENT_BUFFER = 400
@@ -144,6 +145,13 @@ object AppDiagnosticLogger {
     private val historySize = AtomicInteger(0)
 
     private val isFirstFrameCaptured = AtomicBoolean(false)
+
+    private val _isDiagnosticSystemEnabled = MutableStateFlow(true)
+    val isDiagnosticSystemEnabled: StateFlow<Boolean> = _isDiagnosticSystemEnabled.asStateFlow()
+
+    private var lastEventTag: String? = null
+    private var lastEventMessage: String? = null
+    private var lastEventTimestamp: Long = 0L
 
     private val eventHistory = ConcurrentLinkedDeque<DiagnosticEvent>()
     private val _eventsFlow = MutableStateFlow<List<DiagnosticEvent>>(emptyList())
@@ -190,6 +198,7 @@ object AppDiagnosticLogger {
 
     fun initialize(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        _isDiagnosticSystemEnabled.value = prefs.getBoolean(KEY_DIAGNOSTIC_SYSTEM_ENABLED, true)
         _isOverlayEnabled.value = prefs.getBoolean(KEY_OVERLAY_ENABLED, true)
         _isDeveloperModeEnabled.value = prefs.getBoolean(KEY_DEVELOPER_MODE_ENABLED, false)
 
@@ -202,22 +211,24 @@ object AppDiagnosticLogger {
         }
 
         updateMonitorsLifecycle()
-        recordEvent("Logger", "Diagnostic system initialized")
+        if (_isDiagnosticSystemEnabled.value) {
+            recordEvent("Logger", "Diagnostic system initialized")
 
-        // Check for previous crash log from a fatal crash
-        try {
-            val crashFile = File(context.filesDir, "crash.log")
-            if (crashFile.exists()) {
-                val crashText = crashFile.readText()
-                if (crashText.isNotBlank()) {
-                    recordEvent("CrashRecovery", "Detected previous fatal crash log (${crashFile.length()} bytes)")
+            // Check for previous crash log from a fatal crash
+            try {
+                val crashFile = File(context.filesDir, "crash.log")
+                if (crashFile.exists()) {
+                    val crashText = crashFile.readText()
+                    if (crashText.isNotBlank()) {
+                        recordEvent("CrashRecovery", "Detected previous fatal crash log (${crashFile.length()} bytes)")
+                    }
                 }
-            }
-        } catch (_: Exception) {}
+            } catch (_: Exception) {}
+        }
     }
 
     private fun updateMonitorsLifecycle() {
-        if (_isOverlayEnabled.value || _isDeveloperModeEnabled.value) {
+        if (_isDiagnosticSystemEnabled.value && (_isOverlayEnabled.value || _isDeveloperModeEnabled.value)) {
             framePacingMonitor.start()
             watchdog?.start()
         } else {
@@ -226,12 +237,29 @@ object AppDiagnosticLogger {
         }
     }
 
+    fun setDiagnosticSystemEnabled(context: Context, enabled: Boolean) {
+        _isDiagnosticSystemEnabled.value = enabled
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_DIAGNOSTIC_SYSTEM_ENABLED, enabled).apply()
+        updateMonitorsLifecycle()
+        if (enabled) {
+            recordEvent("System", "Diagnostic & telemetry system re-enabled")
+        }
+    }
+
+    fun setDiagnosticSystemEnabledForTesting(enabled: Boolean) {
+        _isDiagnosticSystemEnabled.value = enabled
+        updateMonitorsLifecycle()
+    }
+
     fun setOverlayEnabled(context: Context, enabled: Boolean) {
         _isOverlayEnabled.value = enabled
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_OVERLAY_ENABLED, enabled).apply()
         updateMonitorsLifecycle()
-        recordEvent("Overlay", if (enabled) "Overlay enabled" else "Overlay disabled")
+        if (_isDiagnosticSystemEnabled.value) {
+            recordEvent("Overlay", if (enabled) "Overlay enabled" else "Overlay disabled")
+        }
     }
 
     fun setDeveloperModeEnabled(context: Context, enabled: Boolean) {
@@ -239,10 +267,13 @@ object AppDiagnosticLogger {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_DEVELOPER_MODE_ENABLED, enabled).apply()
         updateMonitorsLifecycle()
-        recordEvent("DeveloperMode", if (enabled) "Developer mode enabled" else "Developer mode disabled")
+        if (_isDiagnosticSystemEnabled.value) {
+            recordEvent("DeveloperMode", if (enabled) "Developer mode enabled" else "Developer mode disabled")
+        }
     }
 
     fun recordStuckError(record: StuckErrorRecord) {
+        if (!_isDiagnosticSystemEnabled.value) return
         _latestStuckAlertFlow.value = record
         synchronized(stuckHistory) {
             val existing = stuckHistory.find { it.id == record.id }
@@ -268,10 +299,15 @@ object AppDiagnosticLogger {
         eventHistory.clear()
         _eventsFlow.value = emptyList()
         historySize.set(0)
-        recordEvent("Logger", "Activity log cleared by developer")
+        lastEventTag = null
+        lastEventMessage = null
+        if (_isDiagnosticSystemEnabled.value) {
+            recordEvent("Logger", "Activity log cleared by developer")
+        }
     }
 
     fun recordRamSample(screenName: String = _currentScreen.value) {
+        if (!_isDiagnosticSystemEnabled.value) return
         val runtime = Runtime.getRuntime()
         val jvmUsed = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
         val jvmAlloc = runtime.totalMemory() / (1024 * 1024)
@@ -291,6 +327,7 @@ object AppDiagnosticLogger {
     }
 
     fun recordWorkerMemory(workerName: String, startHeapMb: Long, endHeapMb: Long, durationMs: Long) {
+        if (!_isDiagnosticSystemEnabled.value) return
         val id = workerCounter.incrementAndGet()
         val delta = endHeapMb - startHeapMb
         val record = WorkerMemoryRecord(
@@ -321,8 +358,10 @@ object AppDiagnosticLogger {
         val afterUsed = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
         val freed = if (beforeUsed > afterUsed) beforeUsed - afterUsed else 0L
 
-        recordRamSample(_currentScreen.value)
-        recordEvent("ManualGC", "Forced System.gc() freed ${freed}MB in ${duration}ms (${beforeUsed}MB -> ${afterUsed}MB)")
+        if (_isDiagnosticSystemEnabled.value) {
+            recordRamSample(_currentScreen.value)
+            recordEvent("ManualGC", "Forced System.gc() freed ${freed}MB in ${duration}ms (${beforeUsed}MB -> ${afterUsed}MB)")
+        }
         return GcResult(
             beforeUsedMb = beforeUsed,
             afterUsedMb = afterUsed,
@@ -331,8 +370,8 @@ object AppDiagnosticLogger {
         )
     }
 
-
     fun recordAppCreateStart() {
+        if (!_isDiagnosticSystemEnabled.value) return
         val now = SystemClock.elapsedRealtime()
         appStartUptimeMs = now
         lastEventUptimeMs = now
@@ -341,6 +380,7 @@ object AppDiagnosticLogger {
     }
 
     fun recordAppCreateEnd() {
+        if (!_isDiagnosticSystemEnabled.value) return
         val now = SystemClock.elapsedRealtime()
         val duration = now - _startupMetricsFlow.value.appCreateStartMs
         _startupMetricsFlow.update { it.copy(appCreateEndMs = now, appCreateDurationMs = duration) }
@@ -348,17 +388,20 @@ object AppDiagnosticLogger {
     }
 
     fun recordActivityCreateStart() {
+        if (!_isDiagnosticSystemEnabled.value) return
         val now = SystemClock.elapsedRealtime()
         _startupMetricsFlow.update { it.copy(activityCreateStartMs = now) }
         recordEvent("Lifecycle", "MainActivity.onCreate started")
     }
 
     fun recordContainerInit(durationMs: Long) {
+        if (!_isDiagnosticSystemEnabled.value) return
         _startupMetricsFlow.update { it.copy(containerInitDurationMs = durationMs) }
         recordEvent("Container", "DefaultAppContainer initialized (${durationMs}ms)")
     }
 
     fun recordSetContent() {
+        if (!_isDiagnosticSystemEnabled.value) return
         val now = SystemClock.elapsedRealtime()
         _startupMetricsFlow.update { it.copy(setContentStartMs = now) }
         recordEvent("UI", "MainActivity setContent invoked")
@@ -370,8 +413,9 @@ object AppDiagnosticLogger {
      * do NOT corrupt the genuine initial cold start latency.
      */
     fun recordFirstFrameRendered() {
+        if (!_isDiagnosticSystemEnabled.value) return
         if (!isFirstFrameCaptured.compareAndSet(false, true)) {
-            recordEvent("Navigation", "Home UI screen re-entered")
+            // Already captured initial cold start frame; do not overwrite or duplicate events
             return
         }
         val now = SystemClock.elapsedRealtime()
@@ -386,12 +430,27 @@ object AppDiagnosticLogger {
     }
 
     fun recordScreen(screenName: String) {
+        if (!_isDiagnosticSystemEnabled.value) return
+        if (_currentScreen.value == screenName) {
+            // Same screen, avoid duplicate navigation events
+            return
+        }
         _currentScreen.value = screenName
         recordEvent("Navigation", "Navigated to $screenName")
     }
 
     fun recordEvent(tag: String, message: String) {
+        if (!_isDiagnosticSystemEnabled.value) return
         val now = SystemClock.elapsedRealtime()
+
+        // De-duplicate exact same event logged within 150ms
+        if (tag == lastEventTag && message == lastEventMessage && (now - lastEventTimestamp) < 150L) {
+            return
+        }
+        lastEventTag = tag
+        lastEventMessage = message
+        lastEventTimestamp = now
+
         val deltaSinceStart = now - appStartUptimeMs
         val deltaSinceLast = now - lastEventUptimeMs
         lastEventUptimeMs = now
@@ -417,6 +476,7 @@ object AppDiagnosticLogger {
     }
 
     fun recordError(tag: String, message: String, throwable: Throwable? = null) {
+        if (!_isDiagnosticSystemEnabled.value) return
         val id = errorCounter.incrementAndGet()
         val exClass = throwable?.javaClass?.name ?: "None"
         val stackTrace = throwable?.stackTraceToString() ?: ""
@@ -703,7 +763,17 @@ object AppDiagnosticLogger {
         return sb.toString()
     }
 
+    fun getAllEvents(): List<DiagnosticEvent> = eventHistory.toList()
+    fun getAllErrors(): List<DiagnosticErrorEntry> = errorHistory.toList()
+    fun getAllRamSamples(): List<RamSample> = ramHistory.toList()
+    fun getAllWorkerRecords(): List<WorkerMemoryRecord> = workerMemoryHistory.toList()
+    fun getAllStuckErrors(): List<StuckErrorRecord> = stuckHistory.toList()
+
     fun resetForTesting() {
+        _isDiagnosticSystemEnabled.value = true
+        lastEventTag = null
+        lastEventMessage = null
+        lastEventTimestamp = 0L
         isFirstFrameCaptured.set(false)
         appStartUptimeMs = SystemClock.elapsedRealtime()
         lastEventUptimeMs = appStartUptimeMs

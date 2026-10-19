@@ -60,6 +60,7 @@ fun ScrollingDebugOverlay(
     onOpenFullInfo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isMasterEnabled by AppDiagnosticLogger.isDiagnosticSystemEnabled.collectAsState()
     val isEnabled by AppDiagnosticLogger.isOverlayEnabled.collectAsState()
     val startupMetrics by AppDiagnosticLogger.startupMetricsFlow.collectAsState()
     val events by AppDiagnosticLogger.eventsFlow.collectAsState()
@@ -77,7 +78,7 @@ fun ScrollingDebugOverlay(
     }
 
     AnimatedVisibility(
-        visible = isEnabled,
+        visible = isMasterEnabled && isEnabled,
         enter = slideInVertically { -it } + fadeIn(),
         exit = slideOutVertically { -it } + fadeOut(),
         modifier = modifier
