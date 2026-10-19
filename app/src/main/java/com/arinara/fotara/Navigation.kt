@@ -17,6 +17,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
@@ -118,6 +126,26 @@ fun MainNavigation(
     NavDisplay(
         backStack = backStack,
         onBack = { safePopBack() },
+        transitionSpec = {
+            ContentTransform(
+                targetContentEnter = slideInHorizontally(
+                    initialOffsetX = { fullWidth -> fullWidth / 8 },
+                    animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(durationMillis = 120)),
+                initialContentExit = fadeOut(animationSpec = tween(durationMillis = 80)),
+                targetContentZIndex = 1f
+            )
+        },
+        popTransitionSpec = {
+            ContentTransform(
+                targetContentEnter = fadeIn(animationSpec = tween(durationMillis = 120)),
+                initialContentExit = slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> fullWidth / 8 },
+                    animationSpec = tween(durationMillis = 130, easing = FastOutLinearInEasing)
+                ) + fadeOut(animationSpec = tween(durationMillis = 90)),
+                targetContentZIndex = 0f
+            )
+        },
         entryProvider = entryProvider {
             entry<OnboardingNavKey> {
                 val onboardingViewModel: OnboardingViewModel = viewModel(
@@ -148,31 +176,33 @@ fun MainNavigation(
                         workspaceRepository = appContainer.workspaceRepository
                     )
                 )
-                val settingsViewModel: SettingsViewModel = viewModel(
-                    factory = SettingsViewModel.provideFactory(
-                        settingsRepository = appContainer.settingsRepository,
-                        deviceRegistry = appContainer.deviceRegistry,
-                        friendsRepository = appContainer.friendsRepository
-                    )
-                )
-                val notesViewModel: com.arinara.fotara.ui.notes.NotesViewModel = viewModel(
-                    factory = com.arinara.fotara.ui.notes.NotesViewModel.provideFactory(
-                        photoRepository = appContainer.photoRepository,
-                        documentRepository = appContainer.documentRepository,
-                        textNoteRepository = appContainer.textNoteRepository,
-                        canvasNoteRepository = appContainer.canvasNoteRepository,
-                        folderRepository = appContainer.folderRepository,
-                        workspaceRepository = appContainer.workspaceRepository,
-                        scheduleRepository = appContainer.scheduleRepository,
-                        scheduleCutoffEngine = appContainer.scheduleCutoffEngine,
-                        scheduleNotificationScheduler = appContainer.scheduleNotificationScheduler,
-                        settingsRepository = appContainer.settingsRepository
-                    )
-                )
                 HomeScreen(
                     viewModel = homeViewModel,
-                    settingsViewModel = settingsViewModel,
-                    notesViewModel = notesViewModel,
+                    settingsViewModelProvider = {
+                        viewModel(
+                            factory = SettingsViewModel.provideFactory(
+                                settingsRepository = appContainer.settingsRepository,
+                                deviceRegistry = appContainer.deviceRegistry,
+                                friendsRepository = appContainer.friendsRepository
+                            )
+                        )
+                    },
+                    notesViewModelProvider = {
+                        viewModel(
+                            factory = com.arinara.fotara.ui.notes.NotesViewModel.provideFactory(
+                                photoRepository = appContainer.photoRepository,
+                                documentRepository = appContainer.documentRepository,
+                                textNoteRepository = appContainer.textNoteRepository,
+                                canvasNoteRepository = appContainer.canvasNoteRepository,
+                                folderRepository = appContainer.folderRepository,
+                                workspaceRepository = appContainer.workspaceRepository,
+                                scheduleRepository = appContainer.scheduleRepository,
+                                scheduleCutoffEngine = appContainer.scheduleCutoffEngine,
+                                scheduleNotificationScheduler = appContainer.scheduleNotificationScheduler,
+                                settingsRepository = appContainer.settingsRepository
+                            )
+                        )
+                    },
                     updateManager = appContainer.updateManager,
                     dialogCoordinator = appContainer.dialogCoordinator,
                     spaceRepository = appContainer.spaceRepository,

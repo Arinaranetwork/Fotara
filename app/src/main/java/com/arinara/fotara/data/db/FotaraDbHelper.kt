@@ -976,12 +976,15 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
         super.onConfigure(db)
         try {
             db.setForeignKeyConstraintsEnabled(true)
+            db.rawQuery("PRAGMA synchronous = NORMAL;", null)?.close()
+            db.rawQuery("PRAGMA temp_store = MEMORY;", null)?.close()
         } catch (_: Exception) {}
     }
 
     override fun onOpen(db: SQLiteDatabase) {
         super.onOpen(db)
-        // Ensure critical performance indexes and audio annotations exist without locking
+        if (!isAuxiliarySchemaVerified.compareAndSet(false, true)) return
+        // Ensure critical performance indexes and audio annotations exist without locking on first process open
         try {
             db.execSQL(
                 """
@@ -1045,6 +1048,7 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
     }
 
     companion object {
+        private val isAuxiliarySchemaVerified = java.util.concurrent.atomic.AtomicBoolean(false)
         const val DATABASE_NAME = "fotara.db"
         const val DATABASE_VERSION = 22
         const val HOME_WORKSPACE_ID = 1L

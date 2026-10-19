@@ -130,7 +130,7 @@ fun SharePlacementScreen(
 
     AppScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MidnightNavy,
+        containerColor = ElectricSlateTokens.BgCanvas,
         topBar = {
             TopAppBar(
                 title = {
@@ -174,7 +174,7 @@ fun SharePlacementScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
             )
         },
         bottomBar = {

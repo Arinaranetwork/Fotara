@@ -187,7 +187,6 @@ import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.HomeSegmentSelectedPill
 import com.arinara.fotara.theme.HomeSubtitleGray
 import com.arinara.fotara.theme.MidnightCardOutline
-import com.arinara.fotara.theme.MidnightNavy
 import com.arinara.fotara.theme.MidnightSurface
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TagCrimson
@@ -539,7 +538,7 @@ fun FolderDetailScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = HomeNearBlack,
+        containerColor = ElectricSlateTokens.BgCanvas,
         topBar = {
             if (uiState.isSubfolderMultiSelectMode) {
                 // Contextual Action Bar for Subfolder Multi-Select
@@ -595,7 +594,7 @@ fun FolderDetailScreen(
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
                 )
             } else if (uiState.isBatchSelectMode) {
                 // Contextual Action Bar for Multi-Select (Rename, Group [2+ photos], Move, Color, Delete)
@@ -634,7 +633,7 @@ fun FolderDetailScreen(
                             )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
                 )
             } else {
                 TopAppBar(
@@ -813,7 +812,7 @@ fun FolderDetailScreen(
                         }
                     }
                 },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightNavy)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
                 )
             }
         },
@@ -2132,7 +2131,7 @@ fun FolderDetailScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MidnightNavy)
+                .background(ElectricSlateTokens.BgCanvas)
         ) {
             DocxViewerScreen(
                 documentNote = doc,

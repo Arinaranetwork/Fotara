@@ -52,6 +52,7 @@ import com.arinara.fotara.theme.FotaraTheme
 import com.arinara.fotara.theme.MidnightNavy
 import com.arinara.fotara.theme.TagAmber
 import com.arinara.fotara.theme.TextSecondary
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import java.io.File
 import java.util.Date
 
@@ -83,7 +84,7 @@ class MainActivity : FragmentActivity() {
             FotaraTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MidnightNavy
+                    color = ElectricSlateTokens.BgCanvas
                 ) {
                     val container = appContainer
                     val error = startupError

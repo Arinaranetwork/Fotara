@@ -102,7 +102,7 @@ fun TrashScreen(
 
     AppScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MidnightNavy,
+        containerColor = ElectricSlateTokens.BgCanvas,
         topBar = {
             TopAppBar(
                 title = {
@@ -135,7 +135,7 @@ fun TrashScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightSurface)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
             )
         },
         modifier = modifier.fillMaxSize()

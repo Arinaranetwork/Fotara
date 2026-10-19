@@ -223,6 +223,8 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     settingsViewModel: SettingsViewModel? = null,
     notesViewModel: com.arinara.fotara.ui.notes.NotesViewModel? = null,
+    settingsViewModelProvider: (@Composable () -> SettingsViewModel)? = null,
+    notesViewModelProvider: (@Composable () -> com.arinara.fotara.ui.notes.NotesViewModel)? = null,
     updateManager: com.arinara.fotara.online.UpdateManager? = null,
     onFolderClick: (Folder) -> Unit,
     onNavigateToPhoto: (folderId: Long, subfolderId: Long?, photoId: Long) -> Unit = { _, _, _ -> },
@@ -487,16 +489,17 @@ fun HomeScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(HomeNearBlack)
+                .background(ElectricSlateTokens.BgCanvas)
                 .padding(top = 0.dp)
         ) {
             // Tab Contents (Wrapped with SaveableStateHolder to preserve sub-screen states across tabs)
             saveableStateHolder.SaveableStateProvider(selectedNavTab) {
                 when (selectedNavTab) {
                     HomeNavTab.SETTINGS -> {
-                        if (settingsViewModel != null) {
+                        val effectiveSettingsVm = settingsViewModel ?: settingsViewModelProvider?.invoke()
+                        if (effectiveSettingsVm != null) {
                             SettingsScreen(
-                                viewModel = settingsViewModel,
+                                viewModel = effectiveSettingsVm,
                                 spaceRepository = spaceRepository,
                                 workspaceRepository = workspaceRepository,
                                 friendsRepository = friendsRepository,
@@ -514,7 +517,7 @@ fun HomeScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(HomeNearBlack)
+                                    .background(ElectricSlateTokens.BgCanvas)
                                     .padding(16.dp)
                             ) {
                                 Text(
@@ -530,9 +533,10 @@ fun HomeScreen(
                     }
 
                     HomeNavTab.NOTES -> {
-                        if (notesViewModel != null) {
+                        val effectiveNotesVm = notesViewModel ?: notesViewModelProvider?.invoke()
+                        if (effectiveNotesVm != null) {
                             com.arinara.fotara.ui.notes.NotesScreen(
-                                viewModel = notesViewModel,
+                                viewModel = effectiveNotesVm,
                                 onNavigateToPhoto = onNavigateToPhoto,
                                 onNavigateToDocument = { fId, sId, dId, pIdx -> onNavigateToDocument(fId, sId, dId, pIdx, null) },
                                 onNavigateToTextNote = { fId, sId, nId -> onNavigateToTextNote(fId, sId, nId, null) },
@@ -555,7 +559,7 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(HomeNearBlack)
+                                .background(ElectricSlateTokens.BgCanvas)
                         )
                     }
                 }

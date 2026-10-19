@@ -67,18 +67,19 @@ fun AppScreen(
         containerColor = containerColor,
         contentColor = contentColor
     ) { innerPadding ->
-        val safeBottom = if (innerPadding.calculateBottomPadding() >= minBottomClearance) {
-            innerPadding.calculateBottomPadding()
-        } else {
-            minBottomClearance
+        val safeContentPadding = androidx.compose.runtime.remember(innerPadding, minBottomClearance) {
+            val safeBottom = if (innerPadding.calculateBottomPadding() >= minBottomClearance) {
+                innerPadding.calculateBottomPadding()
+            } else {
+                minBottomClearance
+            }
+            PaddingValues(
+                start = innerPadding.calculateStartPadding(LayoutDirection.Ltr),
+                top = innerPadding.calculateTopPadding(),
+                end = innerPadding.calculateEndPadding(LayoutDirection.Ltr),
+                bottom = safeBottom
+            )
         }
-
-        val safeContentPadding = PaddingValues(
-            start = innerPadding.calculateStartPadding(LayoutDirection.Ltr),
-            top = innerPadding.calculateTopPadding(),
-            end = innerPadding.calculateEndPadding(LayoutDirection.Ltr),
-            bottom = safeBottom
-        )
 
         content(safeContentPadding)
     }
