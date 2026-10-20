@@ -54,15 +54,18 @@ object UpdateVersionUtils {
         val partsA = infoA.numericVersion.split(".").mapNotNull { it.toIntOrNull() }
         val partsB = infoB.numericVersion.split(".").mapNotNull { it.toIntOrNull() }
 
-        val maxLen = maxOf(partsA.size, partsB.size)
-        for (i in 0 until maxLen) {
-            val a = partsA.getOrElse(i) { 0 }
-            val b = partsB.getOrElse(i) { 0 }
-            if (a > b) return 1
-            if (a < b) return -1
-        }
+        // Compare Major segment
+        val majorA = partsA.getOrElse(0) { 0 }
+        val majorB = partsB.getOrElse(0) { 0 }
+        if (majorA != majorB) return majorA.compareTo(majorB)
 
-        // Channels precedence for identical numeric version: STABLE (3) > BETA (2) > ALPHA (1)
+        // Compare Moderate segment
+        val modA = partsA.getOrElse(1) { 0 }
+        val modB = partsB.getOrElse(1) { 0 }
+        if (modA != modB) return modA.compareTo(modB)
+
+        // For identical major and moderate segments, evaluate channel lifecycle progression:
+        // STABLE (3) > BETA (2) > ALPHA (1). E.g. 1.9.0 Beta outranks 1.9.21 Alpha.
         fun channelRank(channel: UpdateChannel): Int = when (channel) {
             UpdateChannel.STABLE -> 3
             UpdateChannel.BETA -> 2
@@ -71,7 +74,18 @@ object UpdateVersionUtils {
 
         val rankA = channelRank(infoA.channel)
         val rankB = channelRank(infoB.channel)
-        return rankA.compareTo(rankB)
+        if (rankA != rankB) return rankA.compareTo(rankB)
+
+        // Same major, moderate, and channel: compare patch and subsequent segments
+        val maxLen = maxOf(partsA.size, partsB.size)
+        for (i in 2 until maxLen) {
+            val a = partsA.getOrElse(i) { 0 }
+            val b = partsB.getOrElse(i) { 0 }
+            if (a > b) return 1
+            if (a < b) return -1
+        }
+
+        return 0
     }
 
     fun isNewerVersion(

@@ -18,6 +18,7 @@ import com.arinara.fotara.data.model.DestinationType
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoSource
 import com.arinara.fotara.data.model.RecentDestination
+import com.arinara.fotara.data.repository.CanvasNoteRepository
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
@@ -44,6 +45,7 @@ class GroupDetailViewModel(
     val targetPhotoId: Long? = null,
     private val photoRepository: PhotoRepository,
     private val folderRepository: FolderRepository,
+    private val canvasNoteRepository: CanvasNoteRepository? = null,
     private val workspaceRepository: WorkspaceRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
     private val ocrEngine: OcrEngine? = null,
@@ -113,6 +115,14 @@ class GroupDetailViewModel(
             }
         }
 
+        if (canvasNoteRepository != null) {
+            viewModelScope.launch {
+                canvasNoteRepository.getCanvasNotesByGroup(groupId).collect { notes ->
+                    _uiState.update { it.copy(canvasNotes = notes) }
+                }
+            }
+        }
+
         settingsRepository?.let { repo ->
             viewModelScope.launch {
                 repo.settingsFlow.collect { settings ->
@@ -120,6 +130,31 @@ class GroupDetailViewModel(
                 }
             }
             refreshRecentDestinations()
+        }
+    }
+
+    fun renamePhoto(photoId: Long, newCaption: String) {
+        val trimmed = newCaption.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            photoRepository.renamePhoto(photoId, trimmed)
+            _uiState.update { it.copy(userMessage = "Note renamed") }
+        }
+    }
+
+    fun renameCanvasNote(canvasId: Long, newTitle: String) {
+        val trimmed = newTitle.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            canvasNoteRepository?.renameCanvasNote(canvasId, trimmed)
+            _uiState.update { it.copy(userMessage = "Canvas note renamed") }
+        }
+    }
+
+    fun removeCanvasNoteFromGroup(canvasId: Long) {
+        viewModelScope.launch {
+            canvasNoteRepository?.moveCanvasNoteToGroup(canvasId, null)
+            _uiState.update { it.copy(userMessage = "Canvas note removed from group") }
         }
     }
 
@@ -380,6 +415,7 @@ class GroupDetailViewModel(
             targetPhotoId: Long? = null,
             photoRepository: PhotoRepository,
             folderRepository: FolderRepository,
+            canvasNoteRepository: CanvasNoteRepository? = null,
             workspaceRepository: WorkspaceRepository? = null,
             settingsRepository: SettingsRepository? = null,
             ocrEngine: OcrEngine? = null,
@@ -394,6 +430,7 @@ class GroupDetailViewModel(
                     targetPhotoId = targetPhotoId,
                     photoRepository = photoRepository,
                     folderRepository = folderRepository,
+                    canvasNoteRepository = canvasNoteRepository,
                     workspaceRepository = workspaceRepository,
                     settingsRepository = settingsRepository,
                     ocrEngine = ocrEngine,

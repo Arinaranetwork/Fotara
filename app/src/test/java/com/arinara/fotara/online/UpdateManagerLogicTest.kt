@@ -181,12 +181,14 @@ class UpdateManagerLogicTest {
 
     @Test
     fun compareVersions_handlesAlphaBetaStableHierarchyAndNumericOrdering() {
-        // Numeric difference wins over channel
-        assertTrue(UpdateVersionUtils.compareVersions("2.0.1 Alpha", "2.0.0") > 0)
-        assertTrue(UpdateVersionUtils.compareVersions("2.0.0", "2.0.1 Alpha") < 0)
+        // Moderate version difference wins over channel
+        assertTrue(UpdateVersionUtils.compareVersions("2.1.0 Alpha", "2.0.0") > 0)
+        assertTrue(UpdateVersionUtils.compareVersions("2.0.0", "2.1.0 Alpha") < 0)
         assertTrue(UpdateVersionUtils.compareVersions("2.1.0", "2.0.1") > 0)
 
-        // Equal numeric version: Stable (3) > Beta (2) > Alpha (1)
+        // For matching major/moderate versions, channel rank outranks patch: Stable (3) > Beta (2) > Alpha (1)
+        assertTrue(UpdateVersionUtils.compareVersions("2.0.0", "2.0.1 Alpha") > 0)
+        assertTrue(UpdateVersionUtils.compareVersions("2.0.1 Alpha", "2.0.0") < 0)
         assertTrue(UpdateVersionUtils.compareVersions("2.0.0", "2.0.0 Beta") > 0)
         assertTrue(UpdateVersionUtils.compareVersions("2.0.0 Beta", "2.0.0 Alpha") > 0)
         assertTrue(UpdateVersionUtils.compareVersions("2.0.0 Alpha", "2.0.0") < 0)
@@ -240,6 +242,25 @@ class UpdateManagerLogicTest {
         val forceRefresh = false
         val shouldSkipRecheck = !forceRefresh && downloadedState == UpdateState.DOWNLOADED && hasApk
         assertTrue(shouldSkipRecheck)
+    }
+
+    @Test
+    fun compareVersions_channelPrecedenceOutranksPatchNumbers() {
+        // 1.9.0 Beta must outrank 1.9.21 Alpha
+        assertTrue(UpdateVersionUtils.compareVersions("Fotara_1.9.0_Beta", "Fotara_1.9.21_Alpha") > 0)
+        assertTrue(UpdateVersionUtils.compareVersions("1.9.0 Beta", "1.9.21 Alpha") > 0)
+        assertTrue(UpdateVersionUtils.isNewerVersion("Fotara_1.9.0_Beta", "1.9.21 Alpha"))
+
+        // 1.9.0 Stable must outrank 1.9.0 Beta and 1.9.21 Alpha
+        assertTrue(UpdateVersionUtils.compareVersions("1.9.0", "1.9.0 Beta") > 0)
+        assertTrue(UpdateVersionUtils.compareVersions("1.9.0", "1.9.21 Alpha") > 0)
+        assertTrue(UpdateVersionUtils.isNewerVersion("1.9.0", "1.9.0 Beta"))
+
+        // Alpha higher patch still outranks Alpha lower patch
+        assertTrue(UpdateVersionUtils.compareVersions("1.9.21 Alpha", "1.9.20 Alpha") > 0)
+
+        // Moderate version change outranks channel difference (e.g. 2.0.0 Alpha outranks 1.9.0 Stable)
+        assertTrue(UpdateVersionUtils.compareVersions("2.0.0 Alpha", "1.9.0") > 0)
     }
 }
 

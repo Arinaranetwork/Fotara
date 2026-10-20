@@ -83,6 +83,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
@@ -207,6 +208,7 @@ fun SettingsScreen(
     onBackClick: (() -> Unit)? = null,
     onNavigateToTrash: () -> Unit,
     onOpenUpdateScreen: (() -> Unit)? = null,
+    onOpenWhatsNew: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     resetToRootTrigger: Int = 0,
@@ -963,6 +965,15 @@ fun SettingsScreen(
                                 subtitle = "Hardware specs, startup breakdown, activity logs & ticker",
                                 icon = Icons.Default.Speed,
                                 onClick = { showDiagnosticScreen = true }
+                            )
+                        }
+                        item { SettingsListDivider() }
+                        item {
+                            SettingsRowItem(
+                                title = "What's New in Fotara",
+                                subtitle = "Release notes, changelogs, and recent features",
+                                icon = Icons.Default.NewReleases,
+                                onClick = { onOpenWhatsNew?.invoke() }
                             )
                         }
                         item { SettingsListDivider() }

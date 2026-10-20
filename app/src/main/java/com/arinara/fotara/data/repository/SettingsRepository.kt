@@ -66,6 +66,7 @@ interface SettingsRepository {
     suspend fun updateDeviceCountEnabled(enabled: Boolean)
     suspend fun updateProfileName(name: String)
     suspend fun updateProfileEmail(email: String)
+    suspend fun updateProfilePronouns(pronouns: String)
     suspend fun updateProfileBorder(borderId: String)
     suspend fun saveProfileAvatar(bitmap: Bitmap): String?
     suspend fun removeProfileAvatar()
@@ -170,6 +171,7 @@ class DefaultSettingsRepository(
         return UserProfile(
             name = prefs.getString(KEY_PROFILE_NAME, "") ?: "",
             email = prefs.getString(KEY_PROFILE_EMAIL, "") ?: "",
+            pronouns = prefs.getString(KEY_PROFILE_PRONOUNS, "") ?: "",
             avatarPath = rawAvatar,
             bannerPath = rawBanner,
             borderId = ProfileBorders.NONE_ID,
@@ -729,6 +731,12 @@ class DefaultSettingsRepository(
         _profileFlow.value = _profileFlow.value.copy(email = trimmed)
     }
 
+    override suspend fun updateProfilePronouns(pronouns: String) = withContext(Dispatchers.IO) {
+        val trimmed = pronouns.trim().take(30)
+        prefs.edit().putString(KEY_PROFILE_PRONOUNS, trimmed).apply()
+        _profileFlow.value = _profileFlow.value.copy(pronouns = trimmed)
+    }
+
     override suspend fun updateProfileBorder(borderId: String) = withContext(Dispatchers.IO) {
         // Border feature is temporarily disabled: always persist and emit NONE_ID
         prefs.edit().putString(KEY_PROFILE_BORDER_ID, ProfileBorders.NONE_ID).apply()
@@ -922,6 +930,7 @@ class DefaultSettingsRepository(
         private const val KEY_COMBINE_NAME_PRESET = "key_combine_name_preset"
         private const val KEY_PROFILE_NAME = "key_profile_name"
         private const val KEY_PROFILE_EMAIL = "key_profile_email"
+        private const val KEY_PROFILE_PRONOUNS = "key_profile_pronouns"
         private const val KEY_PROFILE_AVATAR_PATH = "key_profile_avatar_path"
         private const val KEY_PROFILE_AVATAR_UPDATED_AT = "key_profile_avatar_updated_at"
         private const val KEY_PROFILE_BANNER_PATH = "key_profile_banner_path"

@@ -89,7 +89,7 @@ fun CanvasRenameDialog(
     onDismissRequest: () -> Unit,
     onSave: (String) -> Unit
 ) {
-    var renameInput by remember { mutableStateOf(initialTitle) }
+    var renameInput by remember(initialTitle) { mutableStateOf(initialTitle) }
 
     AlertDialog(
         onDismissRequest = onDismissRequest,

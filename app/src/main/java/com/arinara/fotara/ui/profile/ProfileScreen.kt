@@ -111,6 +111,7 @@ fun ProfileScreen(
     val defaultUserName = stringResource(R.string.profile_default_name)
     var nameInput by remember(profile.name) { mutableStateOf(profile.name) }
     var emailInput by remember(profile.email) { mutableStateOf(profile.email) }
+    var pronounsInput by remember(profile.pronouns) { mutableStateOf(profile.pronouns) }
 
     val avatarPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -482,6 +483,52 @@ fun ProfileScreen(
                         height = 36.dp
                     )
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Pronouns Field (max 30 chars, single line, optional)
+                Text(
+                    text = "Pronouns",
+                    color = ElectricSlateTokens.TextPrimary,
+                    fontSize = 14.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = pronounsInput,
+                    onValueChange = { if (it.length <= 30) pronounsInput = it },
+                    singleLine = true,
+                    placeholder = { Text("they/them, she/her, he/him", color = ElectricSlateTokens.TextMuted.copy(alpha = 0.5f)) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = ElectricSlateTokens.TextPrimary,
+                        unfocusedTextColor = ElectricSlateTokens.TextPrimary,
+                        focusedContainerColor = ElectricSlateTokens.SurfaceElevated,
+                        unfocusedContainerColor = ElectricSlateTokens.SurfaceElevated,
+                        focusedBorderColor = ElectricSlateTokens.PrimaryAccent,
+                        unfocusedBorderColor = ElectricSlateTokens.BorderSubtle,
+                        cursorColor = ElectricSlateTokens.PrimaryAccent,
+                        focusedLabelColor = ElectricSlateTokens.PrimaryAccent
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            viewModel.updateProfilePronouns(pronounsInput.trim())
+                            focusManager.clearFocus()
+                        }
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { focusState ->
+                            if (!focusState.isFocused) {
+                                viewModel.updateProfilePronouns(pronounsInput.trim())
+                            }
+                        }
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 

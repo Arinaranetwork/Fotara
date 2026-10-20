@@ -1682,7 +1682,7 @@ fun CanvasScreen(
         // Rename Canvas Dialog
         if (uiState.showRenameDialog) {
             CanvasRenameDialog(
-                initialTitle = renameInput,
+                initialTitle = uiState.title.ifBlank { renameInput },
                 onDismissRequest = { viewModel.setRenameDialogVisible(false) },
                 onSave = {
                     renameInput = it

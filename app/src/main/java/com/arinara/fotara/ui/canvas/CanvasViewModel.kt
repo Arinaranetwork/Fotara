@@ -452,6 +452,9 @@ class CanvasViewModel(
             canvasNoteRepository.renameCanvasNote(id, clean)
             val updated = _uiState.value.document.copy(title = clean)
             _uiState.update { it.copy(title = clean, document = updated, showRenameDialog = false) }
+            try {
+                canvasRepository.saveDocumentImmediate(id, updated)
+            } catch (_: Exception) {}
             triggerDebouncedAutosave()
         }
     }
@@ -1057,6 +1060,7 @@ class CanvasViewModel(
             )
             toolController.selection = sel
             toolController.toolState = toolController.toolState.copy(activeTool = CanvasToolType.SELECT)
+            pointerStateMachine.activeMode = com.arinara.fotara.canvas.gesture.ActiveMode.SELECT
 
             _uiState.update {
                 it.copy(
@@ -1599,6 +1603,7 @@ class CanvasViewModel(
         toolController.toolState = toolController.toolState.copy(
             activeTool = CanvasToolType.SELECT
         )
+        pointerStateMachine.activeMode = com.arinara.fotara.canvas.gesture.ActiveMode.SELECT
 
         _uiState.update {
             it.copy(

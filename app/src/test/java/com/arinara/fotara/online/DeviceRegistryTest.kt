@@ -103,6 +103,7 @@ class DeviceRegistryTest {
 
         override suspend fun updateProfileName(name: String) {}
         override suspend fun updateProfileEmail(email: String) {}
+        override suspend fun updateProfilePronouns(pronouns: String) {}
         override suspend fun updateProfileBorder(borderId: String) {}
         override suspend fun saveProfileAvatar(bitmap: android.graphics.Bitmap): String? = null
         override suspend fun removeProfileAvatar() {}

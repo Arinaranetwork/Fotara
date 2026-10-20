@@ -157,13 +157,15 @@ fun FriendsScreen(
         uiState.totalFriendsCount,
         userProfile.name,
         userProfile.avatarPath,
-        userProfile.bannerPath
+        userProfile.bannerPath,
+        userProfile.pronouns
     ) {
         FriendProfile(
             id = "self_user",
             handle = uiState.claimedUsername,
             displayName = userProfile.resolvedName("My Profile"),
             avatarUrl = userProfile.avatarPath,
+            pronouns = userProfile.pronouns,
             studyStatus = uiState.myPresenceStatus,
             currentSubject = uiState.mySubject,
             followersCount = uiState.followersCount,
@@ -2019,15 +2021,16 @@ private fun UserProfileDialog(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(2.dp))
-
-                // Academic Institution
-                Text(
-                    text = profile.institution,
-                    fontFamily = ElmsSans,
-                    fontSize = 12.sp,
-                    color = Color(0xFF94A3B8)
-                )
+                // Pronouns
+                if (profile.pronouns.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = profile.pronouns,
+                        fontFamily = ElmsSans,
+                        fontSize = 12.sp,
+                        color = Color(0xFF94A3B8)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 

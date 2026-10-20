@@ -34,7 +34,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -84,6 +86,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -348,38 +351,22 @@ fun TextNoteEditorScreen(
                     )
                 }
 
-                // Share note
-                IconButton(
-                    onClick = {
-                        val currentId = state.noteId ?: 0L
-                        val note = TextNote(
-                            id = currentId,
-                            folderId = folderId,
-                            subfolderId = subfolderId,
-                            title = state.title.ifBlank { "Untitled Note" },
-                            bodyMarkdown = state.bodyValue.text,
-                            createdAt = System.currentTimeMillis(),
-                            updatedAt = System.currentTimeMillis()
-                        )
-                        onShare(note)
-                    },
-                    enabled = state.title.isNotBlank() || state.bodyValue.text.isNotBlank()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share Note",
-                        tint = if (state.title.isNotBlank() || state.bodyValue.text.isNotBlank()) TabCream else TextMuted
-                    )
-                }
-
-                // Overflow menu for note actions (Info section + Schedule)
+                // Overflow menu for note actions (Info section + Share + Schedule)
                 Box {
                     var showOverflowMenu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { showOverflowMenu = true }) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(ElectricSlateTokens.TrackInactive)
+                            .jigglePressClickable { showOverflowMenu = true },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "More Options",
-                            tint = TabCream
+                            tint = TabCream,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     DropdownMenu(
@@ -417,6 +404,27 @@ fun TextNoteEditorScreen(
                             color = ToolbarBorder,
                             thickness = 1.dp,
                             modifier = Modifier.padding(vertical = 4.dp)
+                        )
+
+                        val canShare = state.title.isNotBlank() || state.bodyValue.text.isNotBlank()
+                        DropdownMenuItem(
+                            text = { Text("Share Note", color = if (canShare) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted) },
+                            leadingIcon = { Icon(Icons.Default.Share, null, tint = if (canShare) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextMuted) },
+                            enabled = canShare,
+                            onClick = {
+                                showOverflowMenu = false
+                                val currentId = state.noteId ?: 0L
+                                val note = TextNote(
+                                    id = currentId,
+                                    folderId = folderId,
+                                    subfolderId = subfolderId,
+                                    title = state.title.ifBlank { "Untitled Note" },
+                                    bodyMarkdown = state.bodyValue.text,
+                                    createdAt = System.currentTimeMillis(),
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                                onShare(note)
+                            }
                         )
 
                         DropdownMenuItem(

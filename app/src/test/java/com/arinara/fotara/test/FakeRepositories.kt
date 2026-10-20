@@ -809,6 +809,11 @@ class FakeSettingsRepository : SettingsRepository {
         _profileFlow.value = _profileFlow.value.copy(email = trimmed)
     }
 
+    override suspend fun updateProfilePronouns(pronouns: String) {
+        val trimmed = pronouns.trim().take(40)
+        _profileFlow.value = _profileFlow.value.copy(pronouns = trimmed)
+    }
+
     override suspend fun updateProfileBorder(borderId: String) {
         _profileFlow.value = _profileFlow.value.copy(borderId = com.arinara.fotara.data.model.ProfileBorders.NONE_ID)
     }
@@ -1287,7 +1292,12 @@ class FakeCanvasNoteRepository(
 
     override fun getCanvasNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<CanvasNote>> =
         notesFlow.map { list ->
-            list.filter { !it.isTrashed && it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) }
+            list.filter { !it.isTrashed && it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) && it.groupId == null }
+        }
+
+    override fun getCanvasNotesByGroup(groupId: Long): Flow<List<CanvasNote>> =
+        notesFlow.map { list ->
+            list.filter { !it.isTrashed && it.groupId == groupId }
         }
 
     override fun getCanvasNoteById(id: Long): Flow<CanvasNote?> =
@@ -1378,6 +1388,17 @@ class FakeCanvasNoteRepository(
     override suspend fun moveCanvasNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?) {
         notesFlow.value = notesFlow.value.map {
             if (ids.contains(it.id)) it.copy(folderId = targetFolderId, subfolderId = targetSubfolderId) else it
+        }
+    }
+
+    override suspend fun moveCanvasNoteToGroup(id: Long, groupId: Long?) {
+        moveCanvasNotesToGroup(listOf(id), groupId)
+    }
+
+    override suspend fun moveCanvasNotesToGroup(ids: List<Long>, groupId: Long?) {
+        val now = System.currentTimeMillis()
+        notesFlow.value = notesFlow.value.map {
+            if (ids.contains(it.id)) it.copy(groupId = groupId, updatedAt = now) else it
         }
     }
 

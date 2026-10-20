@@ -248,6 +248,12 @@ class SettingsViewModel(
         }
     }
 
+    fun updateProfilePronouns(pronouns: String) {
+        viewModelScope.launch {
+            settingsRepository.updateProfilePronouns(pronouns)
+        }
+    }
+
     fun updateProfileBorder(borderId: String) {
         viewModelScope.launch {
             settingsRepository.updateProfileBorder(borderId)

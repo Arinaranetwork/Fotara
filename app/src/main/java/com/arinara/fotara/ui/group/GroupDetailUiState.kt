@@ -6,6 +6,7 @@
 
 package com.arinara.fotara.ui.group
 
+import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
@@ -18,6 +19,7 @@ data class GroupDetailUiState(
     val group: PhotoGroup? = null,
     val folder: Folder? = null,
     val photos: List<Photo> = emptyList(),
+    val canvasNotes: List<CanvasNote> = emptyList(),
     val availableFolderPhotos: List<Photo> = emptyList(),
     val subfolders: List<Subfolder> = emptyList(),
     val availableFolders: List<Folder> = emptyList(),

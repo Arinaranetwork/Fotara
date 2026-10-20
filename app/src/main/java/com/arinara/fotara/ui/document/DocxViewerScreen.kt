@@ -28,7 +28,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -189,11 +191,19 @@ fun DocxViewerScreen(
                     // Overflow menu for Schedule...
                     Box {
                         var showOverflowMenu by remember { mutableStateOf(false) }
-                        IconButton(onClick = { showOverflowMenu = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(ElectricSlateTokens.TrackInactive)
+                                .jigglePressClickable { showOverflowMenu = true },
+                            contentAlignment = Alignment.Center
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More Options",
-                                tint = ElectricSlateTokens.TextPrimary
+                                tint = ElectricSlateTokens.TextPrimary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         DropdownMenu(

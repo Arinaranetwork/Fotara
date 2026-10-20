@@ -339,6 +339,7 @@ fun MainNavigation(
                         targetPhotoId = key.targetPhotoId,
                         photoRepository = appContainer.photoRepository,
                         folderRepository = appContainer.folderRepository,
+                        canvasNoteRepository = appContainer.canvasNoteRepository,
                         workspaceRepository = appContainer.workspaceRepository,
                         settingsRepository = appContainer.settingsRepository,
                         ocrEngine = appContainer.ocrEngine,
@@ -352,6 +353,9 @@ fun MainNavigation(
                     ocrEngine = appContainer.ocrEngine,
                     folderSuggestEngine = appContainer.folderSuggestEngine,
                     onBackClick = { safePopBack() },
+                    onOpenCanvasNote = { cId, fId, sId ->
+                        backStack.add(CanvasNoteNavKey(canvasId = cId, folderId = fId, subfolderId = sId))
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -387,6 +391,7 @@ fun MainNavigation(
                     onBackClick = { safePopBack() },
                     onNavigateToTrash = { backStack.add(TrashNavKey) },
                     onOpenUpdateScreen = { backStack.add(UpdateNavKey) },
+                    onOpenWhatsNew = { backStack.add(WhatsNewNavKey) },
                     modifier = Modifier.fillMaxSize()
                 )
             }

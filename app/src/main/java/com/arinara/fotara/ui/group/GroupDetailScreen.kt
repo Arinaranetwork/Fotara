@@ -94,15 +94,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.DestinationType
 import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.storage.PhotoStorageManager
 import com.arinara.fotara.ocr.FolderSuggestEngine
 import com.arinara.fotara.ocr.OcrEngine
 import com.arinara.fotara.ui.capture.MultiCaptureScreen
+import com.arinara.fotara.ui.folder.DetailCanvasCard
 import com.arinara.fotara.ui.folder.DetailPhotoCard
+import com.arinara.fotara.ui.folder.FolderGridItem
 import com.arinara.fotara.ui.photo.PhotoViewerDialog
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import com.arinara.fotara.ui.components.presets.AppBottomSheet
 import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
@@ -122,6 +126,7 @@ fun GroupDetailScreen(
     ocrEngine: OcrEngine? = null,
     folderSuggestEngine: FolderSuggestEngine? = null,
     onBackClick: () -> Unit,
+    onOpenCanvasNote: ((canvasId: Long?, folderId: Long, subfolderId: Long?) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -145,6 +150,9 @@ fun GroupDetailScreen(
     var capturedBatchPhotos by remember { mutableStateOf<List<Photo>?>(null) }
     var inspectingPhoto by remember { mutableStateOf<Photo?>(null) }
     var contextMenuPhoto by remember { mutableStateOf<Photo?>(null) }
+    var renamingPhoto by remember { mutableStateOf<Photo?>(null) }
+    var contextMenuCanvasNote by remember { mutableStateOf<CanvasNote?>(null) }
+    var renamingCanvasNote by remember { mutableStateOf<CanvasNote?>(null) }
 
     val gridState = rememberLazyGridState()
     val highlightAlpha = remember { Animatable(0f) }
@@ -263,12 +271,13 @@ fun GroupDetailScreen(
 
                     // Right Action 2: Highlighted Overflow Menu [(⋮)]
                     Box(modifier = Modifier.padding(end = 12.dp)) {
-                        IconButton(
-                            onClick = { showOverflowMenu = true },
+                        Box(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
                                 .background(ElectricSlateTokens.TrackInactive)
+                                .jigglePressClickable { showOverflowMenu = true },
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
@@ -368,7 +377,7 @@ fun GroupDetailScreen(
                 .background(ElectricSlateTokens.BgCanvas)
                 .padding(innerPadding)
         ) {
-            if (uiState.photos.isEmpty()) {
+            if (uiState.photos.isEmpty() && uiState.canvasNotes.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -405,7 +414,7 @@ fun GroupDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(uiState.photos, key = { it.id }) { photo ->
+                    items(uiState.photos, key = { "photo_${it.id}" }) { photo ->
                         val isTarget = uiState.highlightedPhotoId == photo.id
                         DetailPhotoCard(
                             photo = photo,
@@ -415,6 +424,19 @@ fun GroupDetailScreen(
                             highlightAlpha = if (isTarget) highlightAlpha.value else 0f,
                             onCardClick = { inspectingPhoto = photo },
                             onCardLongClick = { contextMenuPhoto = photo }
+                        )
+                    }
+                    items(uiState.canvasNotes, key = { "canvas_${it.id}" }) { canvasNote ->
+                        DetailCanvasCard(
+                            canvasItem = FolderGridItem.CanvasNoteItem(canvasNote),
+                            isBatchMode = false,
+                            isSelected = false,
+                            onCardClick = {
+                                onOpenCanvasNote?.invoke(canvasNote.id, canvasNote.folderId, canvasNote.subfolderId)
+                            },
+                            onCardLongClick = {
+                                contextMenuCanvasNote = canvasNote
+                            }
                         )
                     }
                 }
@@ -489,6 +511,10 @@ fun GroupDetailScreen(
                 contextMenuPhoto = null
                 viewModel.togglePhotoPin(target)
             },
+            onRename = { target ->
+                contextMenuPhoto = null
+                renamingPhoto = target
+            },
             onSetCover = { target ->
                 contextMenuPhoto = null
                 viewModel.setCoverPhoto(target.id)
@@ -502,6 +528,46 @@ fun GroupDetailScreen(
                 viewModel.removePhotoFromGroup(target.id)
             },
             onDismiss = { contextMenuPhoto = null }
+        )
+    }
+
+    // Contextual Action Sheet on Member Canvas Note (Long-Press)
+    contextMenuCanvasNote?.let { note ->
+        GroupCanvasNoteContextMenuSheet(
+            canvasNote = note,
+            onRename = { target ->
+                contextMenuCanvasNote = null
+                renamingCanvasNote = target
+            },
+            onRemoveFromGroup = { target ->
+                contextMenuCanvasNote = null
+                viewModel.removeCanvasNoteFromGroup(target.id)
+            },
+            onDismiss = { contextMenuCanvasNote = null }
+        )
+    }
+
+    // Dialog: Rename Photo Note
+    renamingPhoto?.let { photo ->
+        GroupNoteRenameDialog(
+            initialName = photo.caption ?: "",
+            onSave = { newName ->
+                viewModel.renamePhoto(photo.id, newName)
+                renamingPhoto = null
+            },
+            onDismiss = { renamingPhoto = null }
+        )
+    }
+
+    // Dialog: Rename Canvas Note
+    renamingCanvasNote?.let { note ->
+        GroupNoteRenameDialog(
+            initialName = note.title,
+            onSave = { newTitle ->
+                viewModel.renameCanvasNote(note.id, newTitle)
+                renamingCanvasNote = null
+            },
+            onDismiss = { renamingCanvasNote = null }
         )
     }
 

@@ -23,6 +23,7 @@ interface CanvasNoteRepository {
     fun getAllActiveCanvasNotes(): Flow<List<CanvasNote>>
     fun searchCanvasNotes(query: String): Flow<List<CanvasNote>>
     fun getCanvasNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<CanvasNote>>
+    fun getCanvasNotesByGroup(groupId: Long): Flow<List<CanvasNote>>
     fun getCanvasNoteById(id: Long): Flow<CanvasNote?>
     suspend fun getCanvasNoteByIdOnce(id: Long): CanvasNote?
     suspend fun createCanvasNote(
@@ -44,6 +45,8 @@ interface CanvasNoteRepository {
     suspend fun purgeCanvasNotePermanently(id: Long)
     suspend fun moveCanvasNote(id: Long, targetFolderId: Long, targetSubfolderId: Long?)
     suspend fun moveCanvasNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?)
+    suspend fun moveCanvasNoteToGroup(id: Long, groupId: Long?)
+    suspend fun moveCanvasNotesToGroup(ids: List<Long>, groupId: Long?)
     suspend fun setCanvasPinned(id: Long, isPinned: Boolean)
     suspend fun refresh()
 }
@@ -74,7 +77,7 @@ class SqliteCanvasNoteRepository(
                 """
                 SELECT id, folder_id, subfolder_id, title, NULL, thumbnail_path,
                        created_at, updated_at, added_at, tag_color, linked_deadline,
-                       scheduled_at, alert_type, is_trashed, deleted_at, is_pinned
+                       scheduled_at, alert_type, is_trashed, deleted_at, is_pinned, group_id
                 FROM canvas_notes
                 ORDER BY updated_at DESC
                 """.trimIndent(),
@@ -97,9 +100,10 @@ class SqliteCanvasNoteRepository(
                         linkedDeadline = if (c.isNull(10)) null else c.getLong(10),
                         scheduledAt = if (!c.isNull(11)) c.getLong(11) else null,
                         alertType = if (!c.isNull(12)) c.getString(12) else null,
+                        isPinned = if (c.columnCount > 15 && !c.isNull(15)) c.getInt(15) == 1 else false,
+                        groupId = if (c.columnCount > 16 && !c.isNull(16)) c.getLong(16) else null,
                         isTrashed = c.getInt(13) == 1,
-                        deletedAt = if (c.isNull(14)) null else c.getLong(14),
-                        isPinned = if (c.columnCount > 15 && !c.isNull(15)) c.getInt(15) == 1 else false
+                        deletedAt = if (c.isNull(14)) null else c.getLong(14)
                     )
                     if (note.isTrashed) {
                         trashed.add(note)
@@ -137,6 +141,12 @@ class SqliteCanvasNoteRepository(
         }
     }
 
+    override fun getCanvasNotesByGroup(groupId: Long): Flow<List<CanvasNote>> {
+        return canvasNotesFlow.map { list ->
+            list.filter { note -> note.groupId == groupId }
+        }
+    }
+
     override fun getCanvasNoteById(id: Long): Flow<CanvasNote?> {
         return canvasNotesFlow.map { list -> list.find { it.id == id } }
     }
@@ -150,7 +160,7 @@ class SqliteCanvasNoteRepository(
             """
             SELECT id, folder_id, subfolder_id, title, data_blob, thumbnail_path,
                    created_at, updated_at, added_at, tag_color, linked_deadline,
-                   scheduled_at, alert_type, is_trashed, deleted_at, is_pinned
+                   scheduled_at, alert_type, is_trashed, deleted_at, is_pinned, group_id
             FROM canvas_notes
             WHERE id = ?
             LIMIT 1
@@ -172,9 +182,10 @@ class SqliteCanvasNoteRepository(
                     linkedDeadline = if (c.isNull(10)) null else c.getLong(10),
                     scheduledAt = if (!c.isNull(11)) c.getLong(11) else null,
                     alertType = if (!c.isNull(12)) c.getString(12) else null,
+                    isPinned = if (c.columnCount > 15 && !c.isNull(15)) c.getInt(15) == 1 else false,
+                    groupId = if (c.columnCount > 16 && !c.isNull(16)) c.getLong(16) else null,
                     isTrashed = c.getInt(13) == 1,
-                    deletedAt = if (c.isNull(14)) null else c.getLong(14),
-                    isPinned = if (c.columnCount > 15 && !c.isNull(15)) c.getInt(15) == 1 else false
+                    deletedAt = if (c.isNull(14)) null else c.getLong(14)
                 )
             } else {
                 cached
@@ -362,6 +373,40 @@ class SqliteCanvasNoteRepository(
                 val values = ContentValues().apply {
                     put("folder_id", targetFolderId)
                     put("subfolder_id", targetSubfolderId)
+                    put("updated_at", now)
+                }
+                db.update("canvas_notes", values, "id = ?", arrayOf(id.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        refreshSync()
+        folderRepository?.refresh()
+        Unit
+    }
+
+    override suspend fun moveCanvasNoteToGroup(id: Long, groupId: Long?) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        val values = ContentValues().apply {
+            if (groupId == null) putNull("group_id") else put("group_id", groupId)
+            put("updated_at", System.currentTimeMillis())
+        }
+        db.update("canvas_notes", values, "id = ?", arrayOf(id.toString()))
+        refreshSync()
+        folderRepository?.refresh()
+        Unit
+    }
+
+    override suspend fun moveCanvasNotesToGroup(ids: List<Long>, groupId: Long?) = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext
+        val db = dbHelper.getSafeWritableDatabase()
+        val now = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            for (id in ids) {
+                val values = ContentValues().apply {
+                    if (groupId == null) putNull("group_id") else put("group_id", groupId)
                     put("updated_at", now)
                 }
                 db.update("canvas_notes", values, "id = ?", arrayOf(id.toString()))

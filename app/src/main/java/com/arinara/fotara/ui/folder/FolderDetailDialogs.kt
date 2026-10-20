@@ -1693,7 +1693,7 @@ fun RenameCanvasNoteDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
-    var newTitle by remember { mutableStateOf(initialTitle) }
+    var newTitle by remember(initialTitle) { mutableStateOf(initialTitle) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ElectricSlateTokens.SurfacePanel,

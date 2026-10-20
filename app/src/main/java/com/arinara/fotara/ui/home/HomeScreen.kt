@@ -664,20 +664,6 @@ fun HomeScreen(
                                                     .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
                                             ) {
                                                 DropdownMenuItem(
-                                                    text = { Text("What's New", color = ElectricSlateTokens.TextPrimary, fontSize = 14.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Default.NewReleases,
-                                                            contentDescription = null,
-                                                            tint = ElectricSlateTokens.TextMuted
-                                                        )
-                                                    },
-                                                     onClick = {
-                                                        showHomeOverflowMenu = false
-                                                        onOpenWhatsNew()
-                                                    }
-                                                )
-                                                DropdownMenuItem(
                                                     text = { Text("Check for Updates", color = ElectricSlateTokens.TextPrimary, fontSize = 14.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                                     leadingIcon = {
                                                         Icon(

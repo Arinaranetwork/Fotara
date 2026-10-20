@@ -36,7 +36,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.arinara.fotara.ui.components.presets.AppFloatingBar
+import com.arinara.fotara.ui.components.presets.AppFloatingBarItem
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -351,7 +355,7 @@ fun PdfViewerScreen(
                 showAudioDock = true
             }
         } else {
-            if (audioUiState.recorderState !is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording) {
+            if (audioUiState.recorderState !is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording && activeAudioPageIndex != currentVisiblePageIndex) {
                 showAudioDock = false
                 userDismissedAudioDock = false
                 activeAudioPageIndex = null
@@ -463,41 +467,11 @@ fun PdfViewerScreen(
                 }
             },
             actions = {
-                // Book icon: Reading mode toggle
-                IconButton(
-                    onClick = {
-                        isReadingMode = !isReadingMode
-                        if (!isReadingMode && zoomState.isZoomed) {
-                            coroutineScope.launch { zoomState.animateReset() }
-                        } else if (isReadingMode) {
-                            zoomState.reset()
-                        }
-                    },
-                    enabled = pdfRenderer != null
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoStories,
-                        contentDescription = stringResource(
-                            if (isReadingMode) R.string.viewer_action_reading_mode_exit else R.string.viewer_action_reading_mode_enter
-                        ),
-                        tint = if (isReadingMode) AccentGold else TabCream
-                    )
-                }
-
                 // Split to Images
                 IconButton(onClick = { showSplitConfirmDialog = true }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.CallSplit,
                         contentDescription = "Split to Images",
-                        tint = TabCream
-                    )
-                }
-
-                // Share
-                IconButton(onClick = onShare) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share As",
                         tint = TabCream
                     )
                 }
@@ -514,14 +488,22 @@ fun PdfViewerScreen(
                     )
                 }
 
-                // Overflow menu for Info & Schedule & Export...
+                // Overflow menu with JigglePress
                 Box {
                     var showOverflowMenu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { showOverflowMenu = true }) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(ElectricSlateTokens.TrackInactive)
+                            .jigglePressClickable { showOverflowMenu = true },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "More Options",
-                            tint = TabCream
+                            tint = TabCream,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     DropdownMenu(
@@ -531,6 +513,54 @@ fun PdfViewerScreen(
                             .background(CardBg)
                             .border(1.dp, BorderColor, RoundedCornerShape(12.dp))
                     ) {
+                        // Reading Mode Toggle
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = if (isReadingMode) "Exit Reading Mode" else "Reading Mode",
+                                    color = if (isReadingMode) AccentGold else TabCream
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.AutoStories,
+                                    contentDescription = null,
+                                    tint = if (isReadingMode) AccentGold else TextMuted
+                                )
+                            },
+                            onClick = {
+                                showOverflowMenu = false
+                                isReadingMode = !isReadingMode
+                                if (!isReadingMode && zoomState.isZoomed) {
+                                    coroutineScope.launch { zoomState.animateReset() }
+                                } else if (isReadingMode) {
+                                    zoomState.reset()
+                                }
+                            },
+                            enabled = pdfRenderer != null
+                        )
+
+                        // Share Document
+                        DropdownMenuItem(
+                            text = { Text("Share PDF...", color = TabCream) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = null,
+                                    tint = TextMuted
+                                )
+                            },
+                            onClick = {
+                                showOverflowMenu = false
+                                onShare()
+                            }
+                        )
+
+                        HorizontalDivider(
+                            color = BorderColor,
+                            thickness = 1.dp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
                         // Info Section
                         Column(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -939,13 +969,34 @@ fun PdfViewerScreen(
                             }
                         }
                     }
+
+                    // Bottom Floating Bar for Audio & Quick Tools
+                    AppFloatingBar(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = if (zoomState.isZoomed) 64.dp else 16.dp),
+                        visible = !isReadingMode && !showAudioDock,
+                        applyWindowInsets = true
+                    ) {
+                        AppFloatingBarItem(
+                            icon = Icons.Default.Mic,
+                            contentDescription = "Audio Notes",
+                            isSelected = showAudioDock,
+                            onClick = {
+                                userDismissedAudioDock = false
+                                activeAudioPageIndex = currentVisiblePageIndex
+                                audioViewModel.setPdfPageFilter(currentVisiblePageIndex)
+                                showAudioDock = true
+                            }
+                        )
+                    }
                 }
             }
         }
 
         // Voice / Audio Annotations Dock
         AnimatedVisibility(
-            visible = showAudioDock && (audioUiState.annotations.isNotEmpty() || audioUiState.recorderState is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording),
+            visible = showAudioDock,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.navigationBarsPadding()

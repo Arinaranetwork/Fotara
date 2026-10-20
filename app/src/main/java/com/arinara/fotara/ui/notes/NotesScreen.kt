@@ -206,14 +206,6 @@ fun NotesScreen(
                                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, FotaraShapes.InputField)
                         ) {
                             DropdownMenuItem(
-                                text = { Text("What's New", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
-                                leadingIcon = { Icon(Icons.Default.NewReleases, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary) },
-                                onClick = {
-                                    showHeaderOverflowMenu = false
-                                    onOpenWhatsNew()
-                                }
-                            )
-                            DropdownMenuItem(
                                 text = { Text("Check for Updates", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
                                 leadingIcon = { Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = TextPrimary) },
                                 onClick = {

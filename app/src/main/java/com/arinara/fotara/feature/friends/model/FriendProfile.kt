@@ -33,7 +33,7 @@ data class FriendProfile(
     val displayName: String,
     val avatarUrl: String? = null,
     val bannerUrl: String? = null,
-    val institution: String = "University Scholar",
+    val pronouns: String = "",
     val sharedCourseworkCount: Int = 0,
     val studyStatus: StudyPresenceStatus = StudyPresenceStatus.OFFLINE,
     val currentSubject: String? = null,
@@ -44,6 +44,9 @@ data class FriendProfile(
 ) {
     val formattedHandle: String
         get() = if (handle.startsWith("@")) handle else "@$handle"
+
+    val institution: String
+        get() = pronouns
 
     val isActive: Boolean
         get() = studyStatus != StudyPresenceStatus.OFFLINE
@@ -67,7 +70,7 @@ data class FriendProfile(
         } else {
             sb.append("\"bannerUrl\":null,")
         }
-        sb.append("\"institution\":\"").append(escapeJson(institution)).append("\",")
+        sb.append("\"pronouns\":\"").append(escapeJson(pronouns)).append("\",")
         sb.append("\"sharedCourseworkCount\":").append(sharedCourseworkCount).append(",")
         sb.append("\"studyStatus\":\"").append(studyStatus.name).append("\",")
         if (currentSubject != null) {
@@ -125,7 +128,9 @@ data class FriendProfile(
                 val displayName = extractField("displayName") ?: return null
                 val avatarUrl = extractField("avatarUrl")
                 val bannerUrl = extractField("bannerUrl")
-                val institution = extractField("institution") ?: "University Scholar"
+                val pronouns = extractField("pronouns")
+                    ?: extractField("institution")?.takeIf { it != "University Scholar" }
+                    ?: ""
                 val sharedCourseworkCount = extractField("sharedCourseworkCount")?.toIntOrNull() ?: 0
                 val statusStr = extractField("studyStatus") ?: StudyPresenceStatus.OFFLINE.name
                 val studyStatus = try {
@@ -145,7 +150,7 @@ data class FriendProfile(
                     displayName = displayName,
                     avatarUrl = avatarUrl,
                     bannerUrl = bannerUrl,
-                    institution = institution,
+                    pronouns = pronouns,
                     sharedCourseworkCount = sharedCourseworkCount,
                     studyStatus = studyStatus,
                     currentSubject = currentSubject,

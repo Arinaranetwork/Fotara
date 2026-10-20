@@ -24,6 +24,7 @@ data class CanvasNote(
     override val alertType: String? = null,
     override val scheduleTitle: String? = null,
     override val isPinned: Boolean = false,
+    val groupId: Long? = null,
     val isTrashed: Boolean = false,
     val deletedAt: Long? = null
 ) : SchedulableNote {

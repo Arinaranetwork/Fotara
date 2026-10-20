@@ -448,7 +448,8 @@ private class FakeCanvasNoteRepository : CanvasNoteRepository {
 
     override fun getAllActiveCanvasNotes(): Flow<List<CanvasNote>> = flowOf(notes.filter { !it.isTrashed })
     override fun searchCanvasNotes(query: String): Flow<List<CanvasNote>> = flowOf(notes.filter { it.title.contains(query, ignoreCase = true) })
-    override fun getCanvasNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<CanvasNote>> = flowOf(notes.filter { it.folderId == folderId && it.subfolderId == subfolderId })
+    override fun getCanvasNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<CanvasNote>> = flowOf(notes.filter { it.folderId == folderId && it.subfolderId == subfolderId && it.groupId == null })
+    override fun getCanvasNotesByGroup(groupId: Long): Flow<List<CanvasNote>> = flowOf(notes.filter { it.groupId == groupId })
     override fun getCanvasNoteById(id: Long): Flow<CanvasNote?> = flowOf(notes.firstOrNull { it.id == id })
     override suspend fun getCanvasNoteByIdOnce(id: Long): CanvasNote? = notes.firstOrNull { it.id == id }
 
@@ -510,6 +511,15 @@ private class FakeCanvasNoteRepository : CanvasNoteRepository {
     }
     override suspend fun moveCanvasNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?) {
         ids.forEach { moveCanvasNote(it, targetFolderId, targetSubfolderId) }
+    }
+    override suspend fun moveCanvasNoteToGroup(id: Long, groupId: Long?) {
+        val index = notes.indexOfFirst { it.id == id }
+        if (index != -1) {
+            notes[index] = notes[index].copy(groupId = groupId)
+        }
+    }
+    override suspend fun moveCanvasNotesToGroup(ids: List<Long>, groupId: Long?) {
+        ids.forEach { moveCanvasNoteToGroup(it, groupId) }
     }
     override suspend fun setCanvasPinned(id: Long, isPinned: Boolean) {
         val index = notes.indexOfFirst { it.id == id }

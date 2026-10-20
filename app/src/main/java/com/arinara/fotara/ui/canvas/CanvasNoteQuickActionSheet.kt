@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,6 +67,7 @@ fun CanvasNoteQuickActionSheet(
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onMove: () -> Unit,
+    onMoveToGroup: (() -> Unit)? = null,
     onColorSelect: (String?) -> Unit,
     onSetDeadline: () -> Unit,
     onSchedule: () -> Unit = {},
@@ -163,6 +165,9 @@ fun CanvasNoteQuickActionSheet(
             }
             ActionItem(icon = Icons.Default.Edit, label = "Rename") { onDismiss(); onRename() }
             ActionItem(icon = Icons.AutoMirrored.Filled.DriveFileMove, label = "Move to Folder") { onDismiss(); onMove() }
+            onMoveToGroup?.let { moveToGrp ->
+                ActionItem(icon = Icons.Default.GroupAdd, label = "Move to Group") { onDismiss(); moveToGrp() }
+            }
             ActionItem(icon = Icons.Default.Event, label = "Set Deadline") { onDismiss(); onSetDeadline() }
             ActionItem(
                 icon = Icons.Default.Alarm,

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -211,7 +212,7 @@ fun ScreenHeaderActionButton(
     Box(
         modifier = modifier
             .size(ScreenHeaderDefaults.ActionButtonSize)
-            .clickable(onClick = onClick),
+            .jigglePressClickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Box(

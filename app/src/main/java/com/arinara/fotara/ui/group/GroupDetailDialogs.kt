@@ -558,10 +558,11 @@ fun GroupRenameDialog(
     onSave: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var newName by remember { mutableStateOf(initialName) }
+    var newName by remember(initialName) { mutableStateOf(initialName) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ElectricSlateTokens.SurfacePanel,
+        shape = RoundedCornerShape(20.dp),
         title = {
             Text(
                 text = "Rename Group",
@@ -582,6 +583,66 @@ fun GroupRenameDialog(
                     unfocusedBorderColor = ElectricSlateTokens.BorderSubtle,
                     cursorColor = ElectricSlateTokens.PrimaryAccent
                 ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            AppButton(
+                text = "Save",
+                onClick = {
+                    if (newName.isNotBlank()) {
+                        onSave(newName.trim())
+                    }
+                },
+                enabled = newName.isNotBlank(),
+                variant = AppButtonVariant.PRIMARY,
+                height = 36.dp
+            )
+        },
+        dismissButton = {
+            AppButton(
+                text = "Cancel",
+                onClick = onDismiss,
+                variant = AppButtonVariant.SECONDARY,
+                height = 36.dp
+            )
+        }
+    )
+}
+
+@Composable
+fun GroupNoteRenameDialog(
+    initialName: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var newName by remember(initialName) { mutableStateOf(initialName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = ElectricSlateTokens.SurfacePanel,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = "Rename Note",
+                color = ElectricSlateTokens.TextPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = newName,
+                onValueChange = { newName = it },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = ElectricSlateTokens.TextPrimary,
+                    unfocusedTextColor = ElectricSlateTokens.TextPrimary,
+                    focusedBorderColor = ElectricSlateTokens.PrimaryAccent,
+                    unfocusedBorderColor = ElectricSlateTokens.BorderSubtle,
+                    cursorColor = ElectricSlateTokens.PrimaryAccent
+                ),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             )
         },

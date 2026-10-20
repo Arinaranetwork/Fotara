@@ -9,6 +9,7 @@ package com.arinara.fotara.data.model
 data class UserProfile(
     val name: String = "",
     val email: String = "",
+    val pronouns: String = "",
     val avatarPath: String? = null,
     val bannerPath: String? = null,
     val borderId: String = "none",

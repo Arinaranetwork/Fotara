@@ -209,6 +209,7 @@ import com.arinara.fotara.ui.canvas.CanvasNoteQuickActionSheet
 import com.arinara.fotara.ui.note.TextNoteQuickActionSheet
 import com.arinara.fotara.ui.components.TextNoteShareDialog
 import com.arinara.fotara.ui.document.DocxViewerScreen
+import com.arinara.fotara.ui.theme.jigglePressClickable
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -717,7 +718,7 @@ fun FolderDetailScreen(
                                     .size(40.dp)
                                     .clip(CircleShape)
                                     .background(HomeHeaderButtonSurface)
-                                    .clickable { showOverflowMenu = true },
+                                    .jigglePressClickable { showOverflowMenu = true },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -2271,6 +2272,11 @@ fun FolderDetailScreen(
                 canvasNoteActionTarget = null
                 canvasNoteToMove = canvasNote
             },
+            onMoveToGroup = {
+                canvasNoteActionTarget = null
+                viewModel.startBatchSelectionWithCanvasNote(canvasNote.id)
+                showAddToGroupDialog = true
+            },
             onColorSelect = { color ->
                 viewModel.updateCanvasNoteTagColor(canvasNote.id, color)
                 canvasNoteActionTarget = null
@@ -3169,8 +3175,8 @@ private fun BatchSelectActionDock(
                 }
             }
 
-            // 4. Add to group (1+ photos, no groups)
-            if (uiState.selectedPhotoIds.isNotEmpty() && uiState.selectedGroupIds.isEmpty()) {
+            // 4. Add to group (1+ photos or canvas notes, no groups)
+            if ((uiState.selectedPhotoIds.isNotEmpty() || uiState.selectedCanvasNoteIds.isNotEmpty()) && uiState.selectedGroupIds.isEmpty()) {
                 item {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
