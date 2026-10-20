@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.Photo
+import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -414,6 +415,81 @@ fun GroupCanvasNoteContextMenuSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .clickable { onRemoveFromGroup(canvasNote) }
+                    .padding(vertical = 12.dp, horizontal = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LayersClear,
+                    contentDescription = null,
+                    tint = ElectricSlateTokens.Destructive
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = "Remove from group",
+                    color = ElectricSlateTokens.Destructive,
+                    fontSize = 14.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GroupTextNoteContextMenuSheet(
+    textNote: TextNote,
+    onRename: (TextNote) -> Unit,
+    onRemoveFromGroup: (TextNote) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = ElectricSlateTokens.SurfacePanel,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = textNote.title.ifBlank { "Text Note Actions" },
+                color = ElectricSlateTokens.TextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Action 1: Rename Note
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onRename(textNote) }
+                    .padding(vertical = 12.dp, horizontal = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                    tint = ElectricSlateTokens.PrimaryAccent
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = "Rename text note",
+                    color = ElectricSlateTokens.TextPrimary,
+                    fontSize = 14.sp
+                )
+            }
+
+            // Action 2: Remove from Group
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onRemoveFromGroup(textNote) }
                     .padding(vertical = 12.dp, horizontal = 8.dp)
             ) {
                 Icon(

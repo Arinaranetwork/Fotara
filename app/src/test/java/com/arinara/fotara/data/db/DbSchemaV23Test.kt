@@ -13,8 +13,8 @@ import org.junit.Test
 class DbSchemaV23Test {
 
     @Test
-    fun databaseVersion_isTwentyThree() {
-        assertEquals(23, FotaraDbHelper.DATABASE_VERSION)
+    fun databaseVersion_isTwentyFour() {
+        assertEquals(24, FotaraDbHelper.DATABASE_VERSION)
     }
 
     @Test

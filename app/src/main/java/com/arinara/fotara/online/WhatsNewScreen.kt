@@ -88,6 +88,23 @@ private data class ReleaseChangelogEntry(
 
 private val BundledReleases = listOf(
     ReleaseChangelogEntry(
+        version = "1.9.2",
+        channel = "Beta",
+        releaseDate = "2026-10-20",
+        releaseUrl = "https://github.com/Arinaranetwork/Fotara/releases/tag/Fotara_1.9.2_Beta",
+        breakingChanges = emptyList(),
+        whatsNew = listOf(
+            "Universal Note Type Grouping: Text notes, canvas notes, and photos can now be multi-selected and grouped together from folder views or added directly into groups via the [+] picker.",
+            "Move to Group Quick Action: Added 'Move to Group' option directly within the text note quick action bottom sheet.",
+            "Group Detail Notes Inspection: View, open, rename, and remove text notes seamlessly inside group detail containers."
+        ),
+        patchesAndFixes = listOf(
+            "Fixed 'What's New in Fotara' click navigation bug when accessed from the Settings bottom navigation tab.",
+            "Database migration (v24) adding indexed group_id column to text_notes with safe SET NULL foreign key constraint.",
+            "Preserved zero data loss on group deletion, automatically detaching all grouped note types."
+        )
+    ),
+    ReleaseChangelogEntry(
         version = "1.9.1",
         channel = "Alpha",
         releaseDate = "2026-10-10",

@@ -234,10 +234,12 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
                 alert_type TEXT,
                 schedule_title TEXT,
                 is_pinned INTEGER NOT NULL DEFAULT 0,
+                group_id INTEGER,
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE,
-                FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL
+                FOREIGN KEY(subfolder_id) REFERENCES subfolders(id) ON DELETE SET NULL,
+                FOREIGN KEY(group_id) REFERENCES photo_groups(id) ON DELETE SET NULL
             )
             """.trimIndent()
         )
@@ -294,6 +296,7 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_is_pinned ON text_notes(is_pinned)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_is_pinned ON canvas_notes(is_pinned)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_group_id ON canvas_notes(group_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_group_id ON text_notes(group_id)")
 
         // High-performance composite B-tree indexes for folder queries and item counting
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_folder_trashed ON photos(folder_id, is_trashed)")
@@ -956,6 +959,7 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_is_pinned ON text_notes(is_pinned)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_is_pinned ON canvas_notes(is_pinned)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_group_id ON canvas_notes(group_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_group_id ON text_notes(group_id)")
             } catch (e: Exception) {
                 android.util.Log.e("FotaraDbHelper", "Migration v21 (is_pinned) failed: ${e.message}")
             }
@@ -980,6 +984,14 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_group_id ON canvas_notes(group_id)")
             } catch (e: Exception) {
                 android.util.Log.e("FotaraDbHelper", "Migration v23 (canvas_notes group_id) failed: ${e.message}")
+            }
+        }
+        if (oldVersion < 24) {
+            try {
+                db.execSQL("ALTER TABLE text_notes ADD COLUMN group_id INTEGER DEFAULT NULL")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_group_id ON text_notes(group_id)")
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v24 (text_notes group_id) failed: ${e.message}")
             }
         }
     }
@@ -1019,7 +1031,7 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_subfolders_trashed ON subfolders(is_trashed, created_at ASC)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_updated_at ON text_notes(updated_at DESC)")
 
-            // Phase 95: Ensure group_id column exists in canvas_notes
+            // Phase 95: Ensure group_id column exists in canvas_notes and text_notes
             try {
                 val c = db.rawQuery("PRAGMA table_info(canvas_notes)", null)
                 var hasGroupId = false
@@ -1035,6 +1047,23 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
                     db.execSQL("ALTER TABLE canvas_notes ADD COLUMN group_id INTEGER DEFAULT NULL")
                 }
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_group_id ON canvas_notes(group_id)")
+            } catch (_: Exception) {}
+
+            try {
+                val cText = db.rawQuery("PRAGMA table_info(text_notes)", null)
+                var hasTextGroupId = false
+                while (cText.moveToNext()) {
+                    val nameIdx = cText.getColumnIndex("name")
+                    if (nameIdx != -1 && cText.getString(nameIdx) == "group_id") {
+                        hasTextGroupId = true
+                        break
+                    }
+                }
+                cText.close()
+                if (!hasTextGroupId) {
+                    db.execSQL("ALTER TABLE text_notes ADD COLUMN group_id INTEGER DEFAULT NULL")
+                }
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_group_id ON text_notes(group_id)")
             } catch (_: Exception) {}
         } catch (_: Exception) {}
     }
@@ -1080,7 +1109,7 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
     companion object {
         private val isAuxiliarySchemaVerified = java.util.concurrent.atomic.AtomicBoolean(false)
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 23
+        const val DATABASE_VERSION = 24
         const val HOME_WORKSPACE_ID = 1L
         const val ARCHIVE_WORKSPACE_ID = 2L
         const val HOME_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000001"

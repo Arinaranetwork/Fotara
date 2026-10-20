@@ -22,6 +22,7 @@ import com.arinara.fotara.data.repository.CanvasNoteRepository
 import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
+import com.arinara.fotara.data.repository.TextNoteRepository
 import com.arinara.fotara.data.repository.WorkspaceRepository
 import com.arinara.fotara.data.storage.PhotoStorageManager
 import com.arinara.fotara.ocr.OcrEngine
@@ -46,6 +47,7 @@ class GroupDetailViewModel(
     private val photoRepository: PhotoRepository,
     private val folderRepository: FolderRepository,
     private val canvasNoteRepository: CanvasNoteRepository? = null,
+    private val textNoteRepository: TextNoteRepository? = null,
     private val workspaceRepository: WorkspaceRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
     private val ocrEngine: OcrEngine? = null,
@@ -121,6 +123,26 @@ class GroupDetailViewModel(
                     _uiState.update { it.copy(canvasNotes = notes) }
                 }
             }
+            viewModelScope.launch {
+                canvasNoteRepository.getCanvasNotesByFolder(folderId, null).collect { notes ->
+                    val standalone = notes.filter { it.groupId == null }
+                    _uiState.update { it.copy(availableFolderCanvasNotes = standalone) }
+                }
+            }
+        }
+
+        if (textNoteRepository != null) {
+            viewModelScope.launch {
+                textNoteRepository.getTextNotesByGroup(groupId).collect { notes ->
+                    _uiState.update { it.copy(textNotes = notes) }
+                }
+            }
+            viewModelScope.launch {
+                textNoteRepository.getTextNotesByFolder(folderId, null).collect { notes ->
+                    val standalone = notes.filter { it.groupId == null }
+                    _uiState.update { it.copy(availableFolderTextNotes = standalone) }
+                }
+            }
         }
 
         settingsRepository?.let { repo ->
@@ -155,6 +177,22 @@ class GroupDetailViewModel(
         viewModelScope.launch {
             canvasNoteRepository?.moveCanvasNoteToGroup(canvasId, null)
             _uiState.update { it.copy(userMessage = "Canvas note removed from group") }
+        }
+    }
+
+    fun renameTextNote(textNoteId: Long, newTitle: String) {
+        val trimmed = newTitle.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            textNoteRepository?.renameTextNote(textNoteId, trimmed)
+            _uiState.update { it.copy(userMessage = "Text note renamed") }
+        }
+    }
+
+    fun removeTextNoteFromGroup(textNoteId: Long) {
+        viewModelScope.launch {
+            textNoteRepository?.moveTextNoteToGroup(textNoteId, null)
+            _uiState.update { it.copy(userMessage = "Text note removed from group") }
         }
     }
 
@@ -223,14 +261,31 @@ class GroupDetailViewModel(
         }
     }
 
-    fun addPhotosToGroup(photoIds: List<Long>) {
-        if (photoIds.isEmpty()) return
+    fun addNotesToGroup(
+        photoIds: List<Long> = emptyList(),
+        canvasIds: List<Long> = emptyList(),
+        textNoteIds: List<Long> = emptyList()
+    ) {
+        val totalCount = photoIds.size + canvasIds.size + textNoteIds.size
+        if (totalCount == 0) return
         viewModelScope.launch {
-            photoRepository.addPhotosToGroup(groupId, photoIds)
+            if (photoIds.isNotEmpty()) {
+                photoRepository.addPhotosToGroup(groupId, photoIds)
+            }
+            if (canvasIds.isNotEmpty()) {
+                canvasNoteRepository?.moveCanvasNotesToGroup(canvasIds, groupId)
+            }
+            if (textNoteIds.isNotEmpty()) {
+                textNoteRepository?.moveTextNotesToGroup(textNoteIds, groupId)
+            }
             _uiState.update {
-                it.copy(userMessage = "Added ${photoIds.size} note${if (photoIds.size > 1) "s" else ""} to group")
+                it.copy(userMessage = "Added $totalCount note${if (totalCount > 1) "s" else ""} to group")
             }
         }
+    }
+
+    fun addPhotosToGroup(photoIds: List<Long>) {
+        addNotesToGroup(photoIds = photoIds)
     }
 
     fun updatePhotoNote(photoId: Long, note: String?) {
@@ -416,6 +471,7 @@ class GroupDetailViewModel(
             photoRepository: PhotoRepository,
             folderRepository: FolderRepository,
             canvasNoteRepository: CanvasNoteRepository? = null,
+            textNoteRepository: TextNoteRepository? = null,
             workspaceRepository: WorkspaceRepository? = null,
             settingsRepository: SettingsRepository? = null,
             ocrEngine: OcrEngine? = null,
@@ -431,6 +487,7 @@ class GroupDetailViewModel(
                     photoRepository = photoRepository,
                     folderRepository = folderRepository,
                     canvasNoteRepository = canvasNoteRepository,
+                    textNoteRepository = textNoteRepository,
                     workspaceRepository = workspaceRepository,
                     settingsRepository = settingsRepository,
                     ocrEngine = ocrEngine,

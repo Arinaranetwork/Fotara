@@ -12,7 +12,7 @@ import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.model.Subfolder
-
+import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.data.model.Workspace
 
 data class GroupDetailUiState(
@@ -20,7 +20,10 @@ data class GroupDetailUiState(
     val folder: Folder? = null,
     val photos: List<Photo> = emptyList(),
     val canvasNotes: List<CanvasNote> = emptyList(),
+    val textNotes: List<TextNote> = emptyList(),
     val availableFolderPhotos: List<Photo> = emptyList(),
+    val availableFolderCanvasNotes: List<CanvasNote> = emptyList(),
+    val availableFolderTextNotes: List<TextNote> = emptyList(),
     val subfolders: List<Subfolder> = emptyList(),
     val availableFolders: List<Folder> = emptyList(),
     val workspaces: List<Workspace> = emptyList(),

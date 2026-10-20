@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 interface TextNoteRepository {
     fun getAllActiveTextNotes(): Flow<List<TextNote>>
     fun getTextNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<TextNote>>
+    fun getTextNotesByGroup(groupId: Long): Flow<List<TextNote>>
     fun getTextNoteById(id: Long): Flow<TextNote?>
     suspend fun getTextNoteByIdOnce(id: Long): TextNote?
     suspend fun createTextNote(
@@ -40,6 +41,8 @@ interface TextNoteRepository {
     suspend fun updateDeadline(id: Long, deadlineMs: Long?)
     suspend fun moveTextNote(id: Long, targetFolderId: Long, targetSubfolderId: Long?)
     suspend fun moveTextNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?)
+    suspend fun moveTextNoteToGroup(id: Long, groupId: Long?)
+    suspend fun moveTextNotesToGroup(ids: List<Long>, groupId: Long?)
     suspend fun deleteTextNote(id: Long)
     suspend fun deleteTextNotes(ids: List<Long>)
     suspend fun restoreTextNote(id: Long)
@@ -76,7 +79,7 @@ class SqliteTextNoteRepository(
                 """
                 SELECT id, folder_id, subfolder_id, title, body_markdown,
                        created_at, updated_at, added_at, tag_color, linked_deadline,
-                       is_trashed, deleted_at, scheduled_at, alert_type, is_pinned
+                       is_trashed, deleted_at, scheduled_at, alert_type, is_pinned, group_id
                 FROM text_notes
                 ORDER BY updated_at DESC
                 """.trimIndent(),
@@ -100,7 +103,8 @@ class SqliteTextNoteRepository(
                         deletedAt = if (c.isNull(11)) null else c.getLong(11),
                         scheduledAt = if (c.columnCount > 12 && !c.isNull(12)) c.getLong(12) else null,
                         alertType = if (c.columnCount > 13 && !c.isNull(13)) c.getString(13) else null,
-                        isPinned = if (c.columnCount > 14 && !c.isNull(14)) c.getInt(14) == 1 else false
+                        isPinned = if (c.columnCount > 14 && !c.isNull(14)) c.getInt(14) == 1 else false,
+                        groupId = if (c.columnCount > 15 && !c.isNull(15)) c.getLong(15) else null
                     )
                     if (note.isTrashed) {
                         trashed.add(note)
@@ -121,7 +125,12 @@ class SqliteTextNoteRepository(
 
     override fun getTextNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<TextNote>> =
         textNotesFlow.map { list ->
-            list.filter { it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) }
+            list.filter { it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) && it.groupId == null }
+        }
+
+    override fun getTextNotesByGroup(groupId: Long): Flow<List<TextNote>> =
+        textNotesFlow.map { list ->
+            list.filter { it.groupId == groupId }
         }
 
     override fun getTextNoteById(id: Long): Flow<TextNote?> =
@@ -217,6 +226,40 @@ class SqliteTextNoteRepository(
         }
         val placeholders = ids.joinToString(",") { "?" }
         db.update("text_notes", values, "id IN ($placeholders)", ids.map { it.toString() }.toTypedArray())
+        refreshSync()
+        folderRepository?.refresh()
+        Unit
+    }
+
+    override suspend fun moveTextNoteToGroup(id: Long, groupId: Long?) = withContext(Dispatchers.IO) {
+        val db = dbHelper.getSafeWritableDatabase()
+        val values = ContentValues().apply {
+            if (groupId == null) putNull("group_id") else put("group_id", groupId)
+            put("updated_at", System.currentTimeMillis())
+        }
+        db.update("text_notes", values, "id = ?", arrayOf(id.toString()))
+        refreshSync()
+        folderRepository?.refresh()
+        Unit
+    }
+
+    override suspend fun moveTextNotesToGroup(ids: List<Long>, groupId: Long?) = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext
+        val db = dbHelper.getSafeWritableDatabase()
+        val now = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            for (id in ids) {
+                val values = ContentValues().apply {
+                    if (groupId == null) putNull("group_id") else put("group_id", groupId)
+                    put("updated_at", now)
+                }
+                db.update("text_notes", values, "id = ?", arrayOf(id.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
         refreshSync()
         folderRepository?.refresh()
         Unit

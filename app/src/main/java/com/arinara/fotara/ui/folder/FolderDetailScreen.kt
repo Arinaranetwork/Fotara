@@ -2160,6 +2160,11 @@ fun FolderDetailScreen(
                 textNoteActionTarget = null
                 textNoteToMove = textNote
             },
+            onMoveToGroup = {
+                textNoteActionTarget = null
+                viewModel.startBatchSelectionWithTextNote(textNote.id)
+                showAddToGroupDialog = true
+            },
             onColorSelect = { color ->
                 viewModel.updateTextNoteTagColor(textNote.id, color)
                 textNoteActionTarget = null
@@ -3135,8 +3140,9 @@ private fun BatchSelectActionDock(
                 }
             }
 
-            // 2. Group notes (2+ photos, no groups)
-            if (uiState.selectedPhotoIds.size >= 2 && uiState.selectedGroupIds.isEmpty()) {
+            // 2. Group notes (2+ photos, canvas notes, or text notes, no groups)
+            val groupableNoteCount = uiState.selectedPhotoIds.size + uiState.selectedCanvasNoteIds.size + uiState.selectedTextNoteIds.size
+            if (groupableNoteCount >= 2 && uiState.selectedGroupIds.isEmpty()) {
                 item {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -3155,8 +3161,8 @@ private fun BatchSelectActionDock(
                 }
             }
 
-            // 3. Merge groups (2+ groups, no standalone photos)
-            if (uiState.selectedGroupIds.size >= 2 && uiState.selectedPhotoIds.isEmpty()) {
+            // 3. Merge groups (2+ groups, no standalone notes)
+            if (uiState.selectedGroupIds.size >= 2 && groupableNoteCount == 0) {
                 item {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -3175,8 +3181,8 @@ private fun BatchSelectActionDock(
                 }
             }
 
-            // 4. Add to group (1+ photos or canvas notes, no groups)
-            if ((uiState.selectedPhotoIds.isNotEmpty() || uiState.selectedCanvasNoteIds.isNotEmpty()) && uiState.selectedGroupIds.isEmpty()) {
+            // 4. Add to group (1+ photos, canvas notes, or text notes, no groups)
+            if (groupableNoteCount >= 1 && uiState.selectedGroupIds.isEmpty()) {
                 item {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,

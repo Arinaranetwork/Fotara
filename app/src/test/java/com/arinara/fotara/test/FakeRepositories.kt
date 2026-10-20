@@ -1163,7 +1163,12 @@ class FakeTextNoteRepository(
 
     override fun getTextNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<TextNote>> =
         notesFlow.map { list ->
-            list.filter { !it.isTrashed && it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) }
+            list.filter { !it.isTrashed && it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) && it.groupId == null }
+        }
+
+    override fun getTextNotesByGroup(groupId: Long): Flow<List<TextNote>> =
+        notesFlow.map { list ->
+            list.filter { !it.isTrashed && it.groupId == groupId }
         }
 
     override fun getTextNoteById(id: Long): Flow<TextNote?> =
@@ -1231,6 +1236,17 @@ class FakeTextNoteRepository(
     override suspend fun moveTextNotes(ids: List<Long>, targetFolderId: Long, targetSubfolderId: Long?) {
         notesFlow.value = notesFlow.value.map {
             if (ids.contains(it.id)) it.copy(folderId = targetFolderId, subfolderId = targetSubfolderId) else it
+        }
+    }
+
+    override suspend fun moveTextNoteToGroup(id: Long, groupId: Long?) {
+        moveTextNotesToGroup(listOf(id), groupId)
+    }
+
+    override suspend fun moveTextNotesToGroup(ids: List<Long>, groupId: Long?) {
+        val now = System.currentTimeMillis()
+        notesFlow.value = notesFlow.value.map {
+            if (ids.contains(it.id)) it.copy(groupId = groupId, updatedAt = now) else it
         }
     }
 

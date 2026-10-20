@@ -64,6 +64,11 @@ import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
 import com.arinara.fotara.ui.folder.DetailPhotoCard
+import com.arinara.fotara.ui.folder.DetailCanvasCard
+import com.arinara.fotara.ui.folder.DetailTextNoteCard
+import com.arinara.fotara.ui.folder.FolderGridItem
+import com.arinara.fotara.data.model.CanvasNote
+import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
 
 @Composable
@@ -284,11 +289,19 @@ fun GroupDeleteConfirmDialog(
 fun GroupAddPhotosDialog(
     groupName: String,
     availablePhotos: List<Photo>,
+    availableCanvasNotes: List<CanvasNote> = emptyList(),
+    availableTextNotes: List<TextNote> = emptyList(),
     gridDensity: Int,
-    onAdd: (List<Long>) -> Unit,
+    onAdd: (List<Long>) -> Unit = {},
+    onAddItems: ((photoIds: List<Long>, canvasIds: List<Long>, textNoteIds: List<Long>) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    val selectedIds = remember { mutableStateListOf<Long>() }
+    val selectedPhotoIds = remember { mutableStateListOf<Long>() }
+    val selectedCanvasIds = remember { mutableStateListOf<Long>() }
+    val selectedTextIds = remember { mutableStateListOf<Long>() }
+    val totalSelected = selectedPhotoIds.size + selectedCanvasIds.size + selectedTextIds.size
+    val totalAvailable = availablePhotos.size + availableCanvasNotes.size + availableTextNotes.size
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ElectricSlateTokens.SurfacePanel,
@@ -301,7 +314,7 @@ fun GroupAddPhotosDialog(
             )
         },
         text = {
-            if (availablePhotos.isEmpty()) {
+            if (totalAvailable == 0) {
                 Text(
                     text = "No standalone notes available in this folder to add.",
                     color = ElectricSlateTokens.TextMuted,
@@ -311,7 +324,7 @@ fun GroupAddPhotosDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(260.dp)
+                        .height(280.dp)
                 ) {
                     Text(
                         text = "Select notes to fold into this group:",
@@ -325,8 +338,8 @@ fun GroupAddPhotosDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(availablePhotos, key = { it.id }) { photo ->
-                            val isChecked = selectedIds.contains(photo.id)
+                        items(availablePhotos, key = { "photo_${it.id}" }) { photo ->
+                            val isChecked = selectedPhotoIds.contains(photo.id)
                             Box(
                                 modifier = Modifier
                                     .aspectRatio(1f)
@@ -337,8 +350,8 @@ fun GroupAddPhotosDialog(
                                         shape = RoundedCornerShape(12.dp)
                                     )
                                     .clickable {
-                                        if (isChecked) selectedIds.remove(photo.id)
-                                        else selectedIds.add(photo.id)
+                                        if (isChecked) selectedPhotoIds.remove(photo.id)
+                                        else selectedPhotoIds.add(photo.id)
                                     }
                             ) {
                                 DetailPhotoCard(
@@ -346,9 +359,67 @@ fun GroupAddPhotosDialog(
                                     isBatchMode = true,
                                     isSelected = isChecked,
                                     onCardClick = {
-                                        if (isChecked) selectedIds.remove(photo.id)
-                                        else selectedIds.add(photo.id)
+                                        if (isChecked) selectedPhotoIds.remove(photo.id)
+                                        else selectedPhotoIds.add(photo.id)
                                     }
+                                )
+                            }
+                        }
+
+                        items(availableCanvasNotes, key = { "canvas_${it.id}" }) { canvasNote ->
+                            val isChecked = selectedCanvasIds.contains(canvasNote.id)
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .border(
+                                        width = if (isChecked) 2.dp else 1.dp,
+                                        color = if (isChecked) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable {
+                                        if (isChecked) selectedCanvasIds.remove(canvasNote.id)
+                                        else selectedCanvasIds.add(canvasNote.id)
+                                    }
+                            ) {
+                                DetailCanvasCard(
+                                    canvasItem = FolderGridItem.CanvasNoteItem(canvasNote),
+                                    isBatchMode = true,
+                                    isSelected = isChecked,
+                                    onCardClick = {
+                                        if (isChecked) selectedCanvasIds.remove(canvasNote.id)
+                                        else selectedCanvasIds.add(canvasNote.id)
+                                    },
+                                    onCardLongClick = {}
+                                )
+                            }
+                        }
+
+                        items(availableTextNotes, key = { "text_${it.id}" }) { textNote ->
+                            val isChecked = selectedTextIds.contains(textNote.id)
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .border(
+                                        width = if (isChecked) 2.dp else 1.dp,
+                                        color = if (isChecked) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable {
+                                        if (isChecked) selectedTextIds.remove(textNote.id)
+                                        else selectedTextIds.add(textNote.id)
+                                    }
+                            ) {
+                                DetailTextNoteCard(
+                                    noteItem = FolderGridItem.TextNoteItem(textNote),
+                                    isBatchMode = true,
+                                    isSelected = isChecked,
+                                    onCardClick = {
+                                        if (isChecked) selectedTextIds.remove(textNote.id)
+                                        else selectedTextIds.add(textNote.id)
+                                    },
+                                    onCardLongClick = {}
                                 )
                             }
                         }
@@ -357,11 +428,17 @@ fun GroupAddPhotosDialog(
             }
         },
         confirmButton = {
-            if (availablePhotos.isNotEmpty()) {
+            if (totalAvailable > 0) {
                 AppButton(
-                    text = "Add (${selectedIds.size})",
-                    onClick = { onAdd(selectedIds.toList()) },
-                    enabled = selectedIds.isNotEmpty(),
+                    text = "Add ($totalSelected)",
+                    onClick = {
+                        if (onAddItems != null) {
+                            onAddItems(selectedPhotoIds.toList(), selectedCanvasIds.toList(), selectedTextIds.toList())
+                        } else {
+                            onAdd(selectedPhotoIds.toList())
+                        }
+                    },
+                    enabled = totalSelected > 0,
                     variant = AppButtonVariant.PRIMARY,
                     height = 36.dp
                 )
@@ -377,7 +454,6 @@ fun GroupAddPhotosDialog(
         }
     )
 }
-
 @Composable
 fun GroupDestinationPickerDialog(
     title: String,

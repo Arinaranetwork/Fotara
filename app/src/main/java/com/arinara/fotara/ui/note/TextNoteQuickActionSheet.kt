@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Share
@@ -58,6 +59,7 @@ fun TextNoteQuickActionSheet(
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onMove: () -> Unit,
+    onMoveToGroup: (() -> Unit)? = null,
     onColorSelect: (String?) -> Unit,
     onSetDeadline: () -> Unit,
     onSchedule: () -> Unit = {},
@@ -155,6 +157,9 @@ fun TextNoteQuickActionSheet(
             }
             ActionItem(icon = Icons.Default.Edit, label = "Rename") { onDismiss(); onRename() }
             ActionItem(icon = Icons.AutoMirrored.Filled.DriveFileMove, label = "Move to Folder") { onDismiss(); onMove() }
+            onMoveToGroup?.let { moveToGrp ->
+                ActionItem(icon = Icons.Default.GroupAdd, label = "Move to Group") { onDismiss(); moveToGrp() }
+            }
             ActionItem(icon = Icons.Default.Alarm, label = "Set Deadline") { onDismiss(); onSetDeadline() }
             ActionItem(icon = Icons.Default.Alarm, label = if (note.scheduledAt != null) "Edit Schedule Reminder" else "Schedule Reminder") { onDismiss(); onSchedule() }
             ActionItem(icon = Icons.Default.CheckCircle, label = "Select Note") { onDismiss(); onSelect() }

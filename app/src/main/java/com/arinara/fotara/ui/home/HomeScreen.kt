@@ -506,6 +506,7 @@ fun HomeScreen(
                                 onBackClick = { selectedNavTab = HomeNavTab.HOME },
                                 onNavigateToTrash = onOpenTrash,
                                 onOpenUpdateScreen = onOpenUpdates,
+                                onOpenWhatsNew = onOpenWhatsNew,
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(0.dp),
                                 resetToRootTrigger = settingsResetToRootTrigger,

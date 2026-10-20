@@ -97,12 +97,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arinara.fotara.data.model.CanvasNote
 import com.arinara.fotara.data.model.DestinationType
 import com.arinara.fotara.data.model.Photo
+import com.arinara.fotara.data.model.TextNote
 import com.arinara.fotara.data.storage.PhotoStorageManager
 import com.arinara.fotara.ocr.FolderSuggestEngine
 import com.arinara.fotara.ocr.OcrEngine
 import com.arinara.fotara.ui.capture.MultiCaptureScreen
 import com.arinara.fotara.ui.folder.DetailCanvasCard
 import com.arinara.fotara.ui.folder.DetailPhotoCard
+import com.arinara.fotara.ui.folder.DetailTextNoteCard
 import com.arinara.fotara.ui.folder.FolderGridItem
 import com.arinara.fotara.ui.photo.PhotoViewerDialog
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
@@ -127,6 +129,7 @@ fun GroupDetailScreen(
     folderSuggestEngine: FolderSuggestEngine? = null,
     onBackClick: () -> Unit,
     onOpenCanvasNote: ((canvasId: Long?, folderId: Long, subfolderId: Long?) -> Unit)? = null,
+    onOpenTextNote: ((noteId: Long?, folderId: Long, subfolderId: Long?) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -153,6 +156,8 @@ fun GroupDetailScreen(
     var renamingPhoto by remember { mutableStateOf<Photo?>(null) }
     var contextMenuCanvasNote by remember { mutableStateOf<CanvasNote?>(null) }
     var renamingCanvasNote by remember { mutableStateOf<CanvasNote?>(null) }
+    var contextMenuTextNote by remember { mutableStateOf<TextNote?>(null) }
+    var renamingTextNote by remember { mutableStateOf<TextNote?>(null) }
 
     val gridState = rememberLazyGridState()
     val highlightAlpha = remember { Animatable(0f) }
@@ -377,7 +382,7 @@ fun GroupDetailScreen(
                 .background(ElectricSlateTokens.BgCanvas)
                 .padding(innerPadding)
         ) {
-            if (uiState.photos.isEmpty() && uiState.canvasNotes.isEmpty()) {
+            if (uiState.photos.isEmpty() && uiState.canvasNotes.isEmpty() && uiState.textNotes.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -436,6 +441,19 @@ fun GroupDetailScreen(
                             },
                             onCardLongClick = {
                                 contextMenuCanvasNote = canvasNote
+                            }
+                        )
+                    }
+                    items(uiState.textNotes, key = { "text_${it.id}" }) { textNote ->
+                        DetailTextNoteCard(
+                            noteItem = FolderGridItem.TextNoteItem(textNote),
+                            isBatchMode = false,
+                            isSelected = false,
+                            onCardClick = {
+                                onOpenTextNote?.invoke(textNote.id, textNote.folderId, textNote.subfolderId)
+                            },
+                            onCardLongClick = {
+                                contextMenuTextNote = textNote
                             }
                         )
                     }
@@ -547,6 +565,22 @@ fun GroupDetailScreen(
         )
     }
 
+    // Contextual Action Sheet on Member Text Note (Long-Press)
+    contextMenuTextNote?.let { note ->
+        GroupTextNoteContextMenuSheet(
+            textNote = note,
+            onRename = { target ->
+                contextMenuTextNote = null
+                renamingTextNote = target
+            },
+            onRemoveFromGroup = { target ->
+                contextMenuTextNote = null
+                viewModel.removeTextNoteFromGroup(target.id)
+            },
+            onDismiss = { contextMenuTextNote = null }
+        )
+    }
+
     // Dialog: Rename Photo Note
     renamingPhoto?.let { photo ->
         GroupNoteRenameDialog(
@@ -568,6 +602,18 @@ fun GroupDetailScreen(
                 renamingCanvasNote = null
             },
             onDismiss = { renamingCanvasNote = null }
+        )
+    }
+
+    // Dialog: Rename Text Note
+    renamingTextNote?.let { note ->
+        GroupNoteRenameDialog(
+            initialName = note.title,
+            onSave = { newTitle ->
+                viewModel.renameTextNote(note.id, newTitle)
+                renamingTextNote = null
+            },
+            onDismiss = { renamingTextNote = null }
         )
     }
 
@@ -736,14 +782,16 @@ fun GroupDetailScreen(
         )
     }
 
-    // Dialog: Add Photos to Group
+    // Dialog: Add Notes to Group
     if (showAddPhotosDialog) {
         GroupAddPhotosDialog(
             groupName = uiState.group?.name ?: "",
             availablePhotos = uiState.availableFolderPhotos,
+            availableCanvasNotes = uiState.availableFolderCanvasNotes,
+            availableTextNotes = uiState.availableFolderTextNotes,
             gridDensity = uiState.gridDensity,
-            onAdd = { ids ->
-                viewModel.addPhotosToGroup(ids)
+            onAddItems = { pIds, cIds, tIds ->
+                viewModel.addNotesToGroup(pIds, cIds, tIds)
                 showAddPhotosDialog = false
             },
             onDismiss = { showAddPhotosDialog = false }

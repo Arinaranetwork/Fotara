@@ -340,6 +340,7 @@ fun MainNavigation(
                         photoRepository = appContainer.photoRepository,
                         folderRepository = appContainer.folderRepository,
                         canvasNoteRepository = appContainer.canvasNoteRepository,
+                        textNoteRepository = appContainer.textNoteRepository,
                         workspaceRepository = appContainer.workspaceRepository,
                         settingsRepository = appContainer.settingsRepository,
                         ocrEngine = appContainer.ocrEngine,
@@ -355,6 +356,9 @@ fun MainNavigation(
                     onBackClick = { safePopBack() },
                     onOpenCanvasNote = { cId, fId, sId ->
                         backStack.add(CanvasNoteNavKey(canvasId = cId, folderId = fId, subfolderId = sId))
+                    },
+                    onOpenTextNote = { nId, fId, sId ->
+                        backStack.add(TextNoteEditorNavKey(noteId = nId, folderId = fId, subfolderId = sId))
                     },
                     modifier = Modifier.fillMaxSize()
                 )

@@ -207,7 +207,7 @@ class FolderDetailViewModel(
                 val filteredPhotos = if (currentSubfolder == null) bundle.allPhotos else bundle.allPhotos.filter { it.subfolderId == currentSubfolder }
                 val filteredGroups = if (currentSubfolder == null) bundle.allGroups else bundle.allGroups.filter { it.subfolderId == currentSubfolder }
                 val filteredDocs = if (currentSubfolder == null) bundle.allDocs else bundle.allDocs.filter { it.subfolderId == currentSubfolder }
-                val filteredTextNotes = if (currentSubfolder == null) bundle.allTextNotes else bundle.allTextNotes.filter { it.subfolderId == currentSubfolder }
+                val filteredTextNotes = (if (currentSubfolder == null) bundle.allTextNotes else bundle.allTextNotes.filter { it.subfolderId == currentSubfolder }).filter { it.groupId == null }
                 val filteredCanvasNotes = (if (currentSubfolder == null) bundle.allCanvasNotes else bundle.allCanvasNotes.filter { it.subfolderId == currentSubfolder }).filter { it.groupId == null }
 
                 val linkGroupMap = bundle.gridLinkGroups.associateBy { it.id }
@@ -773,14 +773,25 @@ class FolderDetailViewModel(
 
     fun createGroupFromSelected(name: String) {
         val photoIds = _uiState.value.selectedPhotoIds.toList()
-        if (photoIds.size < 2 || name.trim().isBlank()) return
+        val canvasIds = _uiState.value.selectedCanvasNoteIds.toList()
+        val textNoteIds = _uiState.value.selectedTextNoteIds.toList()
+        val totalCount = photoIds.size + canvasIds.size + textNoteIds.size
+        if (totalCount < 2 || name.trim().isBlank()) return
         viewModelScope.launch {
-            photoRepository.createGroup(
+            val createdGroupId = photoRepository.createGroup(
                 folderId = folderId,
                 subfolderId = _uiState.value.selectedSubfolderId,
                 name = name.trim(),
                 photoIds = photoIds
             )
+            if (createdGroupId > 0) {
+                if (canvasIds.isNotEmpty()) {
+                    canvasNoteRepository?.moveCanvasNotesToGroup(canvasIds, createdGroupId)
+                }
+                if (textNoteIds.isNotEmpty()) {
+                    textNoteRepository?.moveTextNotesToGroup(textNoteIds, createdGroupId)
+                }
+            }
             exitBatchSelectMode()
             _uiState.update { it.copy(userMessage = "Group created: $name") }
         }
@@ -841,13 +852,17 @@ class FolderDetailViewModel(
     fun addSelectedPhotosToGroup(targetGroupId: Long, groupName: String? = null) {
         val photoIds = _uiState.value.selectedPhotoIds.toList()
         val canvasIds = _uiState.value.selectedCanvasNoteIds.toList()
-        if (photoIds.isEmpty() && canvasIds.isEmpty()) return
+        val textNoteIds = _uiState.value.selectedTextNoteIds.toList()
+        if (photoIds.isEmpty() && canvasIds.isEmpty() && textNoteIds.isEmpty()) return
         viewModelScope.launch {
             if (photoIds.isNotEmpty()) {
                 photoRepository.addPhotosToExistingGroup(targetGroupId, photoIds)
             }
             if (canvasIds.isNotEmpty()) {
                 canvasNoteRepository?.moveCanvasNotesToGroup(canvasIds, targetGroupId)
+            }
+            if (textNoteIds.isNotEmpty()) {
+                textNoteRepository?.moveTextNotesToGroup(textNoteIds, targetGroupId)
             }
             if (groupName != null) {
                 recordRecentDestination(
@@ -860,7 +875,7 @@ class FolderDetailViewModel(
                 )
             }
             exitBatchSelectMode()
-            val total = photoIds.size + canvasIds.size
+            val total = photoIds.size + canvasIds.size + textNoteIds.size
             _uiState.update { it.copy(userMessage = "Added $total note${if (total > 1) "s" else ""} to group") }
         }
     }
@@ -1619,6 +1634,14 @@ class FolderDetailViewModel(
         viewModelScope.launch {
             canvasNoteRepository?.moveCanvasNoteToGroup(canvasId, groupId)
             val msg = if (groupId != null) "Canvas note moved to group" else "Canvas note removed from group"
+            _uiState.update { it.copy(userMessage = msg) }
+        }
+    }
+
+    fun moveTextNoteToGroup(textNoteId: Long, groupId: Long?) {
+        viewModelScope.launch {
+            textNoteRepository?.moveTextNoteToGroup(textNoteId, groupId)
+            val msg = if (groupId != null) "Text note moved to group" else "Text note removed from group"
             _uiState.update { it.copy(userMessage = msg) }
         }
     }

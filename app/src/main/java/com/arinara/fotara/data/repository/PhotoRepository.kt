@@ -377,6 +377,7 @@ class SqlitePhotoRepository(
         try {
             db.execSQL("UPDATE photos SET group_id = NULL WHERE group_id = ?", arrayOf(groupId.toString()))
             try { db.execSQL("UPDATE canvas_notes SET group_id = NULL WHERE group_id = ?", arrayOf(groupId.toString())) } catch (_: Exception) {}
+            try { db.execSQL("UPDATE text_notes SET group_id = NULL WHERE group_id = ?", arrayOf(groupId.toString())) } catch (_: Exception) {}
             db.delete("photo_groups", "id = ?", arrayOf(groupId.toString()))
             removeGridItemFromLinkGroupsInternal(db, groupId)
             db.setTransactionSuccessful()
@@ -397,6 +398,7 @@ class SqlitePhotoRepository(
             db.execSQL("UPDATE photo_groups SET is_trashed = 1, deleted_at = $now WHERE id IN ($inClause)")
             db.execSQL("UPDATE photos SET is_trashed = 1, deleted_at = $now, group_id = NULL WHERE group_id IN ($inClause)")
             try { db.execSQL("UPDATE canvas_notes SET group_id = NULL WHERE group_id IN ($inClause)") } catch (_: Exception) {}
+            try { db.execSQL("UPDATE text_notes SET group_id = NULL WHERE group_id IN ($inClause)") } catch (_: Exception) {}
             for (gId in groupIds) {
                 removeGridItemFromLinkGroupsInternal(db, gId)
             }
