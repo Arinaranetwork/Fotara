@@ -40,6 +40,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.ui.components.presets.AppTopBar
 import com.arinara.fotara.ui.components.CaptureReviewSliderModal
 import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
 import com.arinara.fotara.data.model.Workspace
@@ -210,8 +211,9 @@ fun GroupDetailScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
+            AppTopBar(
+                onBackClick = onBackClick,
+                titleContent = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
@@ -220,8 +222,9 @@ fun GroupDetailScreen(
                             text = uiState.group?.name ?: "Group",
                             color = ElectricSlateTokens.TextPrimary,
                             fontSize = 22.sp,
+                            lineHeight = 28.sp,
                             fontFamily = ElmsSans,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
@@ -245,15 +248,6 @@ fun GroupDetailScreen(
                                 )
                             }
                         }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to Folder",
-                            tint = ElectricSlateTokens.TextPrimary
-                        )
                     }
                 },
                 actions = {
@@ -370,8 +364,7 @@ fun GroupDetailScreen(
                             )
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
+                }
             )
         },
         modifier = modifier.fillMaxSize()

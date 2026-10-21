@@ -139,6 +139,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -579,6 +580,9 @@ fun SettingsScreen(
             val density = LocalDensity.current
             val bannerHeightPx = with(density) { 230.dp.roundToPx() }
             val thresholdPx = with(density) { 160.dp.toPx() }
+            val isBannerOnScreen by remember {
+                derivedStateOf { rootScrollState.value < bannerHeightPx }
+            }
 
             Box(modifier = Modifier.fillMaxSize()) {
                 Column(
@@ -595,7 +599,7 @@ fun SettingsScreen(
                         avatarPath = uiState.userProfile.avatarPath,
                         borderId = uiState.userProfile.borderId,
                         avatarUpdatedAt = uiState.userProfile.avatarUpdatedAt,
-                        isOnScreen = rootScrollState.value < bannerHeightPx,
+                        isOnScreen = isBannerOnScreen,
                         showEditButton = true,
                         onEditClick = { showProfileEditSheet = true }
                     )
@@ -1266,122 +1270,6 @@ private fun SettingsCardItem(
     }
 }
 
-/**
- * Settings card with a Switch toggle.
- */
-@Composable
-private fun SettingsCardToggle(
-    title: String,
-    subtitle: String? = null,
-    icon: ImageVector,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    AppCard(
-        cornerRadius = 24.dp,
-        containerColor = ElectricSlateTokens.SurfacePanel,
-        borderColor = ElectricSlateTokens.BorderSubtle,
-        contentPadding = 0.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        AppListItem(
-            title = title,
-            subtitle = subtitle,
-            leadingIcon = icon,
-            leadingIconTint = ElectricSlateTokens.PrimaryAccent,
-            action = AppListItemAction.Toggle(checked = checked, onCheckedChange = onCheckedChange),
-            onClick = { onCheckedChange(!checked) }
-        )
-    }
-}
-
-/**
- * Settings card with an action button or loading spinner.
- */
-@Composable
-private fun SettingsCardAction(
-    title: String,
-    subtitle: String? = null,
-    icon: ImageVector,
-    actionIcon: ImageVector,
-    isLoading: Boolean,
-    onClick: () -> Unit
-) {
-    AppCard(
-        cornerRadius = 24.dp,
-        containerColor = ElectricSlateTokens.SurfacePanel,
-        borderColor = ElectricSlateTokens.BorderSubtle,
-        contentPadding = 0.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = !isLoading, onClick = onClick)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(ElectricSlateTokens.SurfaceElevated),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = ElectricSlateTokens.TextMuted,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    color = ElectricSlateTokens.TextPrimary,
-                    fontSize = 16.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Medium
-                )
-                if (subtitle != null) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = subtitle,
-                        color = ElectricSlateTokens.TextMuted,
-                        fontSize = 12.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Light,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            if (isLoading) {
-                CircularProgressIndicator(
-                    color = ElectricSlateTokens.PrimaryAccent,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(22.dp)
-                )
-            } else {
-                IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        imageVector = actionIcon,
-                        contentDescription = title,
-                        tint = ElectricSlateTokens.TextMuted,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-    }
-}
 
 /**
  * Storage breakdown card with pills and usage stats.

@@ -87,15 +87,29 @@ object StrokeProcessor {
         if (points.size <= 2 || tolerance <= 0f) {
             return points
         }
-        return rdpRecursive(points, 0, points.size - 1, tolerance)
+        val keep = BooleanArray(points.size)
+        keep[0] = true
+        keep[points.size - 1] = true
+        rdpMark(points, 0, points.size - 1, tolerance, keep)
+
+        val result = ArrayList<StrokePoint>(points.size)
+        for (i in points.indices) {
+            if (keep[i]) {
+                result.add(points[i])
+            }
+        }
+        return result
     }
 
-    private fun rdpRecursive(
+    private fun rdpMark(
         points: List<StrokePoint>,
         startIndex: Int,
         endIndex: Int,
-        tolerance: Float
-    ): List<StrokePoint> {
+        tolerance: Float,
+        keep: BooleanArray
+    ) {
+        if (endIndex <= startIndex + 1) return
+
         var maxDist = 0.0f
         var indexWithMaxDist = startIndex
 
@@ -110,12 +124,10 @@ object StrokeProcessor {
             }
         }
 
-        return if (maxDist > tolerance) {
-            val left = rdpRecursive(points, startIndex, indexWithMaxDist, tolerance)
-            val right = rdpRecursive(points, indexWithMaxDist, endIndex, tolerance)
-            left.dropLast(1) + right
-        } else {
-            listOf(start, end)
+        if (maxDist > tolerance) {
+            keep[indexWithMaxDist] = true
+            rdpMark(points, startIndex, indexWithMaxDist, tolerance, keep)
+            rdpMark(points, indexWithMaxDist, endIndex, tolerance, keep)
         }
     }
 

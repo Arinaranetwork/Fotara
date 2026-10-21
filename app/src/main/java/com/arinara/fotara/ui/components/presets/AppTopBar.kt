@@ -27,7 +27,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.theme.ElmsSans
@@ -36,12 +40,13 @@ import com.arinara.fotara.ui.theme.jiggleRotationClickable
 
 @Composable
 fun AppTopBar(
-    title: String,
+    title: String = "",
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onBackClick: (() -> Unit)? = null,
     navigationIcon: ImageVector = Icons.AutoMirrored.Filled.ArrowBack,
     containerColor: Color = ElectricSlateTokens.BgCanvas,
+    titleContent: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     Box(
@@ -79,32 +84,66 @@ fun AppTopBar(
                     Spacer(modifier = Modifier.width(8.dp))
                 }
 
-                Box {
-                    if (subtitle != null) {
-                        androidx.compose.foundation.layout.Column {
+                if (titleContent != null) {
+                    titleContent()
+                } else {
+                    Box {
+                        if (subtitle != null) {
+                            androidx.compose.foundation.layout.Column {
+                                Text(
+                                    text = title,
+                                    style = TextStyle(
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp,
+                                        lineHeight = 24.sp,
+                                        color = ElectricSlateTokens.TextPrimary,
+                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                        lineHeightStyle = LineHeightStyle(
+                                            alignment = LineHeightStyle.Alignment.Center,
+                                            trim = LineHeightStyle.Trim.None
+                                        )
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = subtitle,
+                                    style = TextStyle(
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Normal,
+                                        fontSize = 12.sp,
+                                        lineHeight = 16.sp,
+                                        color = ElectricSlateTokens.TextMuted,
+                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                        lineHeightStyle = LineHeightStyle(
+                                            alignment = LineHeightStyle.Alignment.Center,
+                                            trim = LineHeightStyle.Trim.None
+                                        )
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        } else {
                             Text(
                                 text = title,
-                                fontFamily = ElmsSans,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 18.sp,
-                                color = ElectricSlateTokens.TextPrimary
-                            )
-                            Text(
-                                text = subtitle,
-                                fontFamily = ElmsSans,
-                                fontWeight = FontWeight.Normal,
-                                fontSize = 12.sp,
-                                color = ElectricSlateTokens.TextMuted
+                                style = TextStyle(
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 22.sp,
+                                    lineHeight = 28.sp,
+                                    color = ElectricSlateTokens.TextPrimary,
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.None
+                                    )
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                    } else {
-                        Text(
-                            text = title,
-                            fontFamily = ElmsSans,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 20.sp,
-                            color = ElectricSlateTokens.TextPrimary
-                        )
                     }
                 }
             }

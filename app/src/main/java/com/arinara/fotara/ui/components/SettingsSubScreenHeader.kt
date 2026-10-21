@@ -6,7 +6,7 @@
 
 package com.arinara.fotara.ui.components
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,20 +14,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -35,25 +33,26 @@ import androidx.compose.ui.unit.sp
 import com.arinara.fotara.R
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
+import com.arinara.fotara.ui.theme.jiggleRotationClickable
 
 /**
- * Standardized constants for Settings sub-screen headers, derived from GeneralSettings.
+ * Standardized constants for Settings sub-screen headers, aligned with AppTopBar standards.
  */
 object SettingsSubScreenHeaderDefaults {
-    val ButtonSize: Dp = 40.dp
-    val IconSize: Dp = 20.dp
-    val ButtonCornerRadius: Dp = 20.dp
-    val ButtonBackgroundColor: Color = ElectricSlateTokens.SurfacePanel
-    val ButtonIconTint: Color = Color.White
-    val TitleSpacing: Dp = 12.dp
+    val ButtonSize: Dp = 48.dp
+    val IconSize: Dp = 24.dp
+    val ButtonCornerRadius: Dp = 24.dp
+    val ButtonBackgroundColor: Color = Color.Transparent
+    val ButtonIconTint: Color = ElectricSlateTokens.TextPrimary
+    val TitleSpacing: Dp = 8.dp
     val TitleFontSize: TextUnit = 22.sp
-    val TitleFontWeight: FontWeight = FontWeight.SemiBold
+    val TitleFontWeight: FontWeight = FontWeight.Bold
     val HorizontalPadding: Dp = 16.dp
-    val TopPadding: Dp = 8.dp
-    val BottomPadding: Dp = 6.dp
+    val TopPadding: Dp = 0.dp
+    val BottomPadding: Dp = 0.dp
     val SubtitleFontSize: TextUnit = 14.sp
     val SubtitleFontWeight: FontWeight = FontWeight.Normal
-    val TitleToSubtitleSpacing: Dp = 4.dp
+    val TitleToSubtitleSpacing: Dp = 2.dp
 }
 
 /**
@@ -75,17 +74,14 @@ fun SettingsSubScreenHeader(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .padding(
-                top = SettingsSubScreenHeaderDefaults.TopPadding,
-                bottom = SettingsSubScreenHeaderDefaults.BottomPadding
-            )
+            .height(56.dp)
+            .padding(horizontal = SettingsSubScreenHeaderDefaults.HorizontalPadding)
     ) {
-        IconButton(
-            onClick = onBackClick,
+        Box(
             modifier = Modifier
                 .size(SettingsSubScreenHeaderDefaults.ButtonSize)
-                .clip(RoundedCornerShape(SettingsSubScreenHeaderDefaults.ButtonCornerRadius))
-                .background(SettingsSubScreenHeaderDefaults.ButtonBackgroundColor)
+                .jiggleRotationClickable(onClick = onBackClick),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = navigationIcon,
@@ -102,19 +98,25 @@ fun SettingsSubScreenHeader(
         ) {
             Text(
                 text = title,
-                color = Color.White,
+                color = ElectricSlateTokens.TextPrimary,
                 fontSize = SettingsSubScreenHeaderDefaults.TitleFontSize,
+                lineHeight = 28.sp,
                 fontFamily = ElmsSans,
-                fontWeight = SettingsSubScreenHeaderDefaults.TitleFontWeight
+                fontWeight = SettingsSubScreenHeaderDefaults.TitleFontWeight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             if (subtitle != null) {
                 Spacer(modifier = Modifier.height(SettingsSubScreenHeaderDefaults.TitleToSubtitleSpacing))
                 Text(
                     text = subtitle,
-                    color = com.arinara.fotara.theme.HomeSubtitleGray,
+                    color = ElectricSlateTokens.TextMuted,
                     fontSize = SettingsSubScreenHeaderDefaults.SubtitleFontSize,
+                    lineHeight = 20.sp,
                     fontFamily = ElmsSans,
-                    fontWeight = SettingsSubScreenHeaderDefaults.SubtitleFontWeight
+                    fontWeight = SettingsSubScreenHeaderDefaults.SubtitleFontWeight,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

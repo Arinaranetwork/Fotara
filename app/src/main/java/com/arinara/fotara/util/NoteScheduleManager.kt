@@ -173,7 +173,7 @@ class NoteScheduleManager(private val context: Context) {
     }
 
     fun cancelSchedule(noteType: ScheduleNoteType, noteId: Long) {
-        val dbHelper = FotaraDbHelper(context)
+        val dbHelper = FotaraDbHelper.getInstance(context)
         val db = dbHelper.getSafeWritableDatabase()
         val values = ContentValues().apply {
             putNull("scheduled_at")
@@ -223,7 +223,7 @@ class NoteScheduleManager(private val context: Context) {
 
     fun rescheduleAllUpcoming() {
         val now = System.currentTimeMillis()
-        val dbHelper = FotaraDbHelper(context)
+        val dbHelper = FotaraDbHelper.getInstance(context)
         val upcoming = dbHelper.getUpcomingSchedules(now)
 
         for (item in upcoming) {

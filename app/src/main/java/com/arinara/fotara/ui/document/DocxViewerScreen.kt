@@ -12,6 +12,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -40,6 +41,8 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import com.arinara.fotara.ui.components.presets.AppDropdownMenu
+import com.arinara.fotara.ui.components.presets.AppOverflowMenuTrigger
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -57,6 +60,7 @@ import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.components.presets.AppCard
 import com.arinara.fotara.ui.components.presets.AppScreen
+import com.arinara.fotara.ui.components.presets.AppTopBar
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import com.arinara.fotara.util.NoteScheduleManager
 import com.arinara.fotara.util.ScheduleNoteType
@@ -132,23 +136,25 @@ fun DocxViewerScreen(
     AppScreen(
         containerColor = ElectricSlateTokens.BgCanvas,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
+            AppTopBar(
+                onBackClick = onBack,
+                titleContent = {
+                    Column(verticalArrangement = Arrangement.Center) {
                         Text(
                             text = documentNote.name,
                             color = ElectricSlateTokens.TextPrimary,
                             fontSize = 20.sp,
+                            lineHeight = 24.sp,
                             fontFamily = ElmsSans,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Reflowed Word Document",
                             color = ElectricSlateTokens.TextMuted,
                             fontSize = 12.sp,
+                            lineHeight = 16.sp,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Normal
                         )
@@ -161,15 +167,6 @@ fun DocxViewerScreen(
                                 onClick = { showScheduleDialog = true }
                             )
                         }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = ElectricSlateTokens.TextPrimary
-                        )
                     }
                 },
                 actions = {
@@ -189,29 +186,18 @@ fun DocxViewerScreen(
                     }
 
                     // Overflow menu for Schedule...
-                    Box {
-                        var showOverflowMenu by remember { mutableStateOf(false) }
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(ElectricSlateTokens.TrackInactive)
-                                .jigglePressClickable { showOverflowMenu = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More Options",
-                                tint = ElectricSlateTokens.TextPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        DropdownMenu(
+                    var showOverflowMenu by remember { mutableStateOf(false) }
+                    AppOverflowMenuTrigger(
+                        expanded = showOverflowMenu,
+                        onClick = { showOverflowMenu = true },
+                        contentDescription = "More Options",
+                        iconTint = ElectricSlateTokens.TextPrimary,
+                        containerSize = 36.dp,
+                        iconSize = 20.dp
+                    ) {
+                        AppDropdownMenu(
                             expanded = showOverflowMenu,
-                            onDismissRequest = { showOverflowMenu = false },
-                            modifier = Modifier
-                                .background(ElectricSlateTokens.SurfaceElevated)
-                                .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
+                            onDismissRequest = { showOverflowMenu = false }
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Schedule...", color = ElectricSlateTokens.TextPrimary) },
@@ -223,8 +209,7 @@ fun DocxViewerScreen(
                             )
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
+                }
             )
         }
     ) { innerPadding ->

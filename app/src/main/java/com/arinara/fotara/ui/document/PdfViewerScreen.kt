@@ -38,8 +38,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.arinara.fotara.ui.components.presets.AppDropdownMenu
 import com.arinara.fotara.ui.components.presets.AppFloatingBar
 import com.arinara.fotara.ui.components.presets.AppFloatingBarItem
+import com.arinara.fotara.ui.components.presets.AppOverflowMenuTrigger
 import com.arinara.fotara.ui.theme.jigglePressClickable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -82,6 +84,7 @@ import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.components.presets.AppCard
 import com.arinara.fotara.ui.components.presets.AppScreen
+import com.arinara.fotara.ui.components.presets.AppTopBar
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.Text
@@ -164,7 +167,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import com.arinara.fotara.theme.TagAmber
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 private val ScreenNavy = ElectricSlateTokens.BgCanvas
@@ -212,8 +217,8 @@ fun PdfViewerScreen(
     val audioRepo = remember(audioAnnotationRepository, context) {
         audioAnnotationRepository ?: com.arinara.fotara.audio.repository.SqliteAudioAnnotationRepository(com.arinara.fotara.data.db.FotaraDbHelper(context))
     }
-    val audioRecorderManager = remember(context) { com.arinara.fotara.audio.recorder.AudioRecorderManager(context) }
-    val audioPlayerManager = remember { com.arinara.fotara.audio.player.AudioPlayerManager() }
+    val audioRecorderManager = remember(context) { com.arinara.fotara.audio.recorder.AudioRecorderManager(context.applicationContext) }
+    val audioPlayerManager = remember(context) { com.arinara.fotara.audio.player.AudioPlayerManager(context.applicationContext) }
     val audioViewModel: com.arinara.fotara.audio.ui.AudioAnnotationViewModel = viewModel(
         key = "audio_pdf_${documentNote.id}",
         factory = com.arinara.fotara.audio.ui.AudioAnnotationViewModelFactory(
@@ -284,29 +289,41 @@ fun PdfViewerScreen(
     DisposableEffect(documentNote.id) {
         onDispose {
             PdfSearchHighlighter.clearCache()
-            audioViewModel.stopPlayback()
+            audioViewModel.pausePlayback()
             audioViewModel.cancelRecording()
-            audioPlayerManager.release()
-            audioRecorderManager.release()
+            pdfRenderer?.close()
+            pdfRenderer = null
         }
     }
 
-    DisposableEffect(file) {
-        try {
-            val renderer = PdfPageRenderer(file)
-            pdfRenderer = renderer
-            openErrorMessage = null
-        } catch (e: PdfPasswordException) {
-            openErrorMessage = "This document is password-protected and cannot be opened."
-        } catch (e: PdfCorruptException) {
-            openErrorMessage = "This document is corrupt or invalid: ${e.message}"
-        } catch (e: Exception) {
-            openErrorMessage = "Failed to open document: ${e.message}"
-        }
-
-        onDispose {
-            pdfRenderer?.close()
-            pdfRenderer = null
+    LaunchedEffect(file) {
+        withContext(Dispatchers.IO) {
+            try {
+                val renderer = PdfPageRenderer(file)
+                withContext(Dispatchers.Main) {
+                    pdfRenderer?.close()
+                    pdfRenderer = renderer
+                    openErrorMessage = null
+                }
+            } catch (e: PdfPasswordException) {
+                withContext(Dispatchers.Main) {
+                    pdfRenderer?.close()
+                    pdfRenderer = null
+                    openErrorMessage = "This document is password-protected and cannot be opened."
+                }
+            } catch (e: PdfCorruptException) {
+                withContext(Dispatchers.Main) {
+                    pdfRenderer?.close()
+                    pdfRenderer = null
+                    openErrorMessage = "This document is corrupt or invalid: ${e.message}"
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    pdfRenderer?.close()
+                    pdfRenderer = null
+                    openErrorMessage = "Failed to open document: ${e.message}"
+                }
+            }
         }
     }
 
@@ -346,8 +363,10 @@ fun PdfViewerScreen(
         derivedStateOf { listState.firstVisibleItemIndex }
     }
 
-    LaunchedEffect(currentVisiblePageIndex, allPdfAnnotations) {
+    LaunchedEffect(currentVisiblePageIndex, allPdfAnnotations, audioUiState.playerState) {
         val pageHasAudio = allPdfAnnotations.any { it.pdfPageIndex == currentVisiblePageIndex }
+        val isAudioActive = audioUiState.playerState is com.arinara.fotara.audio.player.AudioPlayerState.Playing ||
+                audioUiState.playerState is com.arinara.fotara.audio.player.AudioPlayerState.Paused
         if (pageHasAudio) {
             if (!userDismissedAudioDock) {
                 activeAudioPageIndex = currentVisiblePageIndex
@@ -355,7 +374,7 @@ fun PdfViewerScreen(
                 showAudioDock = true
             }
         } else {
-            if (audioUiState.recorderState !is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording && activeAudioPageIndex != currentVisiblePageIndex) {
+            if (!isAudioActive && audioUiState.recorderState !is com.arinara.fotara.audio.recorder.AudioRecorderState.Recording && activeAudioPageIndex != currentVisiblePageIndex) {
                 showAudioDock = false
                 userDismissedAudioDock = false
                 activeAudioPageIndex = null
@@ -426,15 +445,25 @@ fun PdfViewerScreen(
             .fillMaxSize()
             .background(ScreenNavy)
     ) {
-        TopAppBar(
-            title = {
+        AppTopBar(
+            onBackClick = {
+                if (zoomState.isZoomed) {
+                    coroutineScope.launch { zoomState.animateReset() }
+                } else if (isReadingMode) {
+                    isReadingMode = false
+                } else {
+                    onBack()
+                }
+            },
+            titleContent = {
                 Column(verticalArrangement = Arrangement.Center) {
                     Text(
                         text = documentNote.name,
                         color = TabCream,
                         fontSize = 22.sp,
+                        lineHeight = 28.sp,
                         fontFamily = ElmsSans,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -447,23 +476,6 @@ fun PdfViewerScreen(
                             onClick = { showScheduleDialog = true }
                         )
                     }
-                }
-            },
-            navigationIcon = {
-                IconButton(onClick = {
-                    if (zoomState.isZoomed) {
-                        coroutineScope.launch { zoomState.animateReset() }
-                    } else if (isReadingMode) {
-                        isReadingMode = false
-                    } else {
-                        onBack()
-                    }
-                }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = TabCream
-                    )
                 }
             },
             actions = {
@@ -488,30 +500,19 @@ fun PdfViewerScreen(
                     )
                 }
 
-                // Overflow menu with JigglePress
-                Box {
-                    var showOverflowMenu by remember { mutableStateOf(false) }
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(ElectricSlateTokens.TrackInactive)
-                            .jigglePressClickable { showOverflowMenu = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More Options",
-                            tint = TabCream,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    DropdownMenu(
+                // Overflow menu with spring expansion from pivot
+                var showOverflowMenu by remember { mutableStateOf(false) }
+                AppOverflowMenuTrigger(
+                    expanded = showOverflowMenu,
+                    onClick = { showOverflowMenu = true },
+                    contentDescription = "More Options",
+                    iconTint = TabCream,
+                    containerSize = 36.dp,
+                    iconSize = 20.dp
+                ) {
+                    AppDropdownMenu(
                         expanded = showOverflowMenu,
-                        onDismissRequest = { showOverflowMenu = false },
-                        modifier = Modifier
-                            .background(CardBg)
-                            .border(1.dp, BorderColor, RoundedCornerShape(12.dp))
+                        onDismissRequest = { showOverflowMenu = false }
                     ) {
                         // Reading Mode Toggle
                         DropdownMenuItem(
@@ -670,8 +671,7 @@ fun PdfViewerScreen(
                         )
                     }
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
+            }
         )
 
         // Pinned Pages Chip Row (Task 3)
@@ -1168,26 +1168,28 @@ fun PdfViewerScreen(
                     try {
                         pdfRenderer?.close()
                         pdfRenderer = null
-                        val success = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            com.arinara.fotara.util.PdfExporter.reorganizePdfPages(
+                        val (success, newRenderer) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            val ok = com.arinara.fotara.util.PdfExporter.reorganizePdfPages(
                                 context = context,
                                 sourceFile = file,
                                 pageOrder = newOrder,
                                 pageRotations = newRotations
                             )
+                            val r = try { PdfPageRenderer(file) } catch (_: Exception) { null }
+                            Pair(ok, r)
                         }
-                        if (success) {
-                            pdfRenderer = PdfPageRenderer(file)
+                        pdfRenderer = newRenderer
+                        if (success && newRenderer != null) {
                             Toast.makeText(context, "Pages updated successfully", Toast.LENGTH_SHORT).show()
                             showPageOrganizerSheet = false
                         } else {
-                            pdfRenderer = PdfPageRenderer(file)
                             Toast.makeText(context, "Failed to apply page updates", Toast.LENGTH_SHORT).show()
                         }
                     } catch (e: Exception) {
-                        try {
-                            pdfRenderer = PdfPageRenderer(file)
-                        } catch (_: Exception) {}
+                        val fallback = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            try { PdfPageRenderer(file) } catch (_: Exception) { null }
+                        }
+                        pdfRenderer = fallback
                         Toast.makeText(context, "Error updating pages: ${e.message}", Toast.LENGTH_SHORT).show()
                     } finally {
                         isApplyingOrganizerChanges = false

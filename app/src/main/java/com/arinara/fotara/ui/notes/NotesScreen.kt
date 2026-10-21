@@ -87,6 +87,7 @@ import androidx.compose.material3.Text
 import com.arinara.fotara.theme.FotaraShapes
 import com.arinara.fotara.theme.FotaraSpacing
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -277,8 +278,13 @@ fun NotesScreen(
                 )
             } else {
                 val isOverlayOpen = itemToDelete != null || itemToRename != null || itemToMove != null || showHeaderOverflowMenu || showFabCreateMenu || pendingCreateAction != null || uiState.showAddWorkspaceDialog || uiState.workspaceToRename != null || uiState.workspaceDeleteStep != WorkspaceDeleteStep.NONE
+                val isAtTop by remember {
+                    derivedStateOf {
+                        listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                    }
+                }
                 val canRefresh = PullToRefreshHelper.canTriggerRefresh(
-                    isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0,
+                    isAtTop = isAtTop,
                     isMultiSelectActive = false,
                     isSearchFocused = false,
                     isOverlayOpen = isOverlayOpen
@@ -471,20 +477,6 @@ fun NotesScreen(
     )
 }
 
-private fun handleFabCreateSelection(
-    folders: List<Folder>,
-    action: (Folder) -> Unit,
-    setPendingAction: (((Folder) -> Unit)?) -> Unit
-) {
-    if (folders.isEmpty()) {
-        return
-    }
-    if (folders.size == 1) {
-        action(folders[0])
-    } else {
-        setPendingAction(action)
-    }
-}
 
 private fun handleOpenNote(
     item: UnifiedNoteItem,

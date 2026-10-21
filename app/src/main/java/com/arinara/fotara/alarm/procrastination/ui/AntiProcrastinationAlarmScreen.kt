@@ -78,6 +78,7 @@ import com.arinara.fotara.theme.HomeCardSurface
 import com.arinara.fotara.theme.HomeMainButtonBlue
 import com.arinara.fotara.theme.HomeNearBlack
 import com.arinara.fotara.theme.HomeSubtitleGray
+import com.arinara.fotara.ui.components.presets.AppTopBar
 import com.arinara.fotara.ui.components.SettingsSubScreenHeader
 import com.arinara.fotara.theme.TagCrimson
 import com.arinara.fotara.theme.TextMuted
@@ -230,11 +231,10 @@ fun AntiProcrastinationAlarmScreen(
 
 @Composable
 private fun AntiProcrastinationTopBar(onBackClick: () -> Unit) {
-    SettingsSubScreenHeader(
+    AppTopBar(
         title = "Anti-Procrastination Alarms",
         subtitle = "Photo proof challenge required to turn off",
-        onBackClick = onBackClick,
-        modifier = Modifier.padding(horizontal = 16.dp)
+        onBackClick = onBackClick
     )
 }
 

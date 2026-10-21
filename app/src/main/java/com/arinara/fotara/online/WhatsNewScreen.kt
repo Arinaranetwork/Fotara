@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.ui.components.ChannelPill
+import com.arinara.fotara.ui.components.presets.AppTopBar
 import com.arinara.fotara.ui.components.ReleaseNotesRenderer
 import com.arinara.fotara.ui.components.RichMarkdownText
 
@@ -397,26 +398,9 @@ fun WhatsNewScreen(
             .background(ScreenNavy)
             .navigationBarsPadding()
     ) {
-        TopAppBar(
-            title = {
-                Text(
-                    text = "What's New",
-                    color = TabCream,
-                    fontSize = 22.sp,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.SemiBold
-                )
-            },
-            navigationIcon = {
-                IconButton(onClick = safeBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = TabCream
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = ScreenNavy)
+        AppTopBar(
+            title = "What's New",
+            onBackClick = safeBack
         )
 
         Column(

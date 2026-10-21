@@ -343,7 +343,8 @@ fun CanvasScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .height(56.dp)
+                    .padding(horizontal = 16.dp)
                     .onSizeChanged { topCapsulesHeightPx = it.height },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -355,10 +356,7 @@ fun CanvasScreen(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(ElectricSlateTokens.SurfacePanel)
-                        .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
+                        .size(48.dp)
                         .jiggleRotationClickable {
                             coroutineScope.launch {
                                 viewModel.flushSave()
@@ -371,7 +369,7 @@ fun CanvasScreen(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
                         tint = ElectricSlateTokens.TextPrimary,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 

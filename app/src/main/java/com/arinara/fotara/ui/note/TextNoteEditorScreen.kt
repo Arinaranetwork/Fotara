@@ -51,6 +51,8 @@ import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
+import com.arinara.fotara.ui.components.presets.AppDropdownMenu
+import com.arinara.fotara.ui.components.presets.AppOverflowMenuTrigger
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.foundation.layout.WindowInsets
@@ -177,7 +179,7 @@ fun TextNoteEditorScreen(
         audioAnnotationRepository ?: com.arinara.fotara.audio.repository.SqliteAudioAnnotationRepository(com.arinara.fotara.data.db.FotaraDbHelper(context.applicationContext))
     }
     val audioRecorderManager = remember(context) { com.arinara.fotara.audio.recorder.AudioRecorderManager(context.applicationContext) }
-    val audioPlayerManager = remember { com.arinara.fotara.audio.player.AudioPlayerManager() }
+    val audioPlayerManager = remember(context) { com.arinara.fotara.audio.player.AudioPlayerManager(context.applicationContext) }
     val audioViewModel: com.arinara.fotara.audio.ui.AudioAnnotationViewModel = viewModel(
         key = "audio_note_${state.noteId ?: 0L}",
         factory = com.arinara.fotara.audio.ui.AudioAnnotationViewModelFactory(
@@ -277,10 +279,8 @@ fun TextNoteEditorScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            audioViewModel.stopPlayback()
+            audioViewModel.pausePlayback()
             audioViewModel.cancelRecording()
-            audioPlayerManager.release()
-            audioRecorderManager.release()
             coroutineScope.launch {
                 state.flushAutosaveNow()
             }
@@ -352,29 +352,18 @@ fun TextNoteEditorScreen(
                 }
 
                 // Overflow menu for note actions (Info section + Share + Schedule)
-                Box {
-                    var showOverflowMenu by remember { mutableStateOf(false) }
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(ElectricSlateTokens.TrackInactive)
-                            .jigglePressClickable { showOverflowMenu = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More Options",
-                            tint = TabCream,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    DropdownMenu(
+                var showOverflowMenu by remember { mutableStateOf(false) }
+                AppOverflowMenuTrigger(
+                    expanded = showOverflowMenu,
+                    onClick = { showOverflowMenu = true },
+                    contentDescription = "More Options",
+                    iconTint = TabCream,
+                    containerSize = 36.dp,
+                    iconSize = 20.dp
+                ) {
+                    AppDropdownMenu(
                         expanded = showOverflowMenu,
-                        onDismissRequest = { showOverflowMenu = false },
-                        modifier = Modifier
-                            .background(CardBg)
-                            .border(1.dp, ToolbarBorder, RoundedCornerShape(12.dp))
+                        onDismissRequest = { showOverflowMenu = false }
                     ) {
                         // Info Section matching Viewer Pattern
                         Column(

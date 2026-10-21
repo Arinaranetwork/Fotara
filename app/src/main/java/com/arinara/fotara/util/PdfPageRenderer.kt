@@ -72,18 +72,18 @@ class PdfPageRenderer(val file: File) : Closeable {
             pageCount = r.pageCount
             aspectRatioCache = FloatArray(pageCount) { 0f }
 
-            // Pre-populate aspect ratio cache immediately for all pages so list layout is final before any bitmap exists
-            for (i in 0 until pageCount) {
-                var page: PdfRenderer.Page? = null
+            // Pre-populate aspect ratio for the first page immediately so default aspect ratio is accurate
+            if (pageCount > 0) {
+                var page0: PdfRenderer.Page? = null
                 try {
-                    page = r.openPage(i)
-                    val w = page.width.toFloat()
-                    val h = page.height.toFloat()
-                    aspectRatioCache[i] = if (h > 0f) w / h else 0.707f
+                    page0 = r.openPage(0)
+                    val w = page0.width.toFloat()
+                    val h = page0.height.toFloat()
+                    aspectRatioCache[0] = if (h > 0f) w / h else 0.707f
                 } catch (_: Exception) {
-                    aspectRatioCache[i] = 0.707f
+                    aspectRatioCache[0] = 0.707f
                 } finally {
-                    try { page?.close() } catch (_: Exception) {}
+                    try { page0?.close() } catch (_: Exception) {}
                 }
             }
         } catch (e: SecurityException) {
@@ -98,7 +98,25 @@ class PdfPageRenderer(val file: File) : Closeable {
     fun getPageAspectRatio(pageIndex: Int): Float {
         if (pageIndex < 0 || pageIndex >= pageCount) return 0.707f
         val cached = aspectRatioCache[pageIndex]
-        return if (cached > 0f) cached else 0.707f
+        if (cached > 0f) return cached
+        val defaultRatio = if (aspectRatioCache.isNotEmpty() && aspectRatioCache[0] > 0f) aspectRatioCache[0] else 0.707f
+        val r = renderer ?: return defaultRatio
+        return synchronized(aspectRatioCache) {
+            if (aspectRatioCache[pageIndex] > 0f) return aspectRatioCache[pageIndex]
+            var page: PdfRenderer.Page? = null
+            try {
+                page = r.openPage(pageIndex)
+                val w = page.width.toFloat()
+                val h = page.height.toFloat()
+                val ratio = if (h > 0f) w / h else defaultRatio
+                aspectRatioCache[pageIndex] = ratio
+                ratio
+            } catch (_: Exception) {
+                defaultRatio
+            } finally {
+                try { page?.close() } catch (_: Exception) {}
+            }
+        }
     }
 
     suspend fun renderPage(
@@ -261,29 +279,20 @@ class PdfPageRenderer(val file: File) : Closeable {
     }
 
     override fun close() {
+        val snapshot = pageBitmapCache.snapshot()
         pageBitmapCache.evictAll()
-        try {
-            kotlinx.coroutines.runBlocking {
-                renderMutex.withLock {
-                    try {
-                        renderer?.close()
-                    } catch (_: Exception) {}
-                    try {
-                        pfd?.close()
-                    } catch (_: Exception) {}
-                    renderer = null
-                    pfd = null
-                }
+        snapshot.values.forEach { bmp ->
+            if (!bmp.isRecycled) {
+                try { bmp.recycle() } catch (_: Exception) {}
             }
-        } catch (_: Exception) {
-            try {
-                renderer?.close()
-            } catch (_: Exception) {}
-            try {
-                pfd?.close()
-            } catch (_: Exception) {}
-            renderer = null
-            pfd = null
         }
+        try {
+            renderer?.close()
+        } catch (_: Exception) {}
+        try {
+            pfd?.close()
+        } catch (_: Exception) {}
+        renderer = null
+        pfd = null
     }
 }

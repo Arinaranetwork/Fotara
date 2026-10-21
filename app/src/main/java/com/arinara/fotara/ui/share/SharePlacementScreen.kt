@@ -64,6 +64,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.components.presets.AppScreen
+import com.arinara.fotara.ui.components.presets.AppTopBar
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -132,18 +133,21 @@ fun SharePlacementScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = ElectricSlateTokens.BgCanvas,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
+            AppTopBar(
+                navigationIcon = Icons.Default.Close,
+                onBackClick = { viewModel.requestExit() },
+                titleContent = {
+                    Column(verticalArrangement = Arrangement.Center) {
                         Text(
                             text = "Save to Fotara",
                             color = TextPrimary,
                             fontSize = 22.sp,
+                            lineHeight = 28.sp,
                             fontFamily = ElmsSans,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.Bold
                         )
                         if (!uiState.isStaging && uiState.totalRemaining > 0) {
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             val destSummary = uiState.selectedFolder?.let { f ->
                                 val sub = uiState.subfolders.find { it.id == uiState.selectedSubfolderId }?.name
                                 val grp = uiState.availableGroups.find { it.id == uiState.selectedGroupId }?.name
@@ -157,6 +161,7 @@ fun SharePlacementScreen(
                                 text = destSummary,
                                 color = FolderTabCream,
                                 fontSize = 14.sp,
+                                lineHeight = 18.sp,
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Normal,
                                 maxLines = 1,
@@ -164,17 +169,7 @@ fun SharePlacementScreen(
                             )
                         }
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { viewModel.requestExit() }) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cancel Share Session",
-                            tint = FolderTabCream
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
+                }
             )
         },
         bottomBar = {

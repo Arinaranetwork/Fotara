@@ -78,6 +78,7 @@ import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.components.presets.AppCard
 import com.arinara.fotara.ui.components.presets.AppScreen
+import com.arinara.fotara.ui.components.presets.AppTopBar
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import java.io.File
 
@@ -104,25 +105,9 @@ fun TrashScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = ElectricSlateTokens.BgCanvas,
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Trash",
-                        color = TextPrimary,
-                        fontSize = 22.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = FolderTabCream
-                        )
-                    }
-                },
+            AppTopBar(
+                title = "Trash",
+                onBackClick = onBackClick,
                 actions = {
                     if (totalTrashedCount > 0) {
                         AppButton(
@@ -134,8 +119,7 @@ fun TrashScreen(
                             cornerRadius = 12.dp
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ElectricSlateTokens.BgCanvas)
+                }
             )
         },
         modifier = modifier.fillMaxSize()

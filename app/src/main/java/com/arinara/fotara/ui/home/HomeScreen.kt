@@ -59,6 +59,8 @@ import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
+import com.arinara.fotara.ui.components.presets.AppDropdownMenu
+import com.arinara.fotara.ui.components.presets.AppOverflowMenuTrigger
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Password
 import androidx.compose.material.icons.filled.FlipToBack
@@ -99,6 +101,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -641,28 +644,19 @@ fun HomeScreen(
                                         }
 
                                         // More options menu trigger
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape)
-                                                .jigglePressClickable {
-                                                    if (!uiState.isMultiSelectMode) showHomeOverflowMenu = true
-                                                },
-                                            contentAlignment = Alignment.Center
+                                        AppOverflowMenuTrigger(
+                                            expanded = showHomeOverflowMenu && !uiState.isMultiSelectMode,
+                                            onClick = {
+                                                if (!uiState.isMultiSelectMode) showHomeOverflowMenu = true
+                                            },
+                                            contentDescription = "Options",
+                                            iconTint = ElectricSlateTokens.TextPrimary,
+                                            containerSize = 40.dp,
+                                            iconSize = 20.dp
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.MoreVert,
-                                                contentDescription = "Options",
-                                                tint = ElectricSlateTokens.TextPrimary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-
-                                            DropdownMenu(
+                                            AppDropdownMenu(
                                                 expanded = showHomeOverflowMenu && !uiState.isMultiSelectMode,
-                                                onDismissRequest = { showHomeOverflowMenu = false },
-                                                modifier = Modifier
-                                                    .background(ElectricSlateTokens.SurfaceElevated)
-                                                    .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
+                                                onDismissRequest = { showHomeOverflowMenu = false }
                                             ) {
                                                 DropdownMenuItem(
                                                     text = { Text("Check for Updates", color = ElectricSlateTokens.TextPrimary, fontSize = 14.sp, fontFamily = ElmsSans, fontWeight = FontWeight.Medium) },
@@ -859,8 +853,13 @@ fun HomeScreen(
                         ).dp
 
                         val isOverlayOpen = folderToUnlock != null || activeContextFolder != null || folderToLock != null || folderToResetPin != null || uiState.showNewFolderDialog || uiState.showBulkDeleteDialog || uiState.showAddWorkspaceDialog || uiState.workspaceToRename != null || uiState.foldersToMoveWorkspace != null || uiState.workspaceDeleteStep != WorkspaceDeleteStep.NONE || pendingNotesCreateAction != null
+                        val isAtTop by remember {
+                            derivedStateOf {
+                                homeGridState.firstVisibleItemIndex == 0 && homeGridState.firstVisibleItemScrollOffset == 0
+                            }
+                        }
                         val canRefresh = PullToRefreshHelper.canTriggerRefresh(
-                            isAtTop = homeGridState.firstVisibleItemIndex == 0 && homeGridState.firstVisibleItemScrollOffset == 0,
+                            isAtTop = isAtTop,
                             isMultiSelectActive = uiState.isMultiSelectMode,
                             isSearchFocused = uiState.isSearchActive,
                             isOverlayOpen = isOverlayOpen

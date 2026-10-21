@@ -452,6 +452,19 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_pages_doc_page ON document_pages(document_note_id, page_index)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_group_id ON photos(group_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_z ON canvas_elements(canvas_id, z_index)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_subfolder_trashed ON photos(subfolder_id, is_trashed)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_subfolder_trashed ON text_notes(subfolder_id, is_trashed)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_subfolder_trashed ON canvas_notes(subfolder_id, is_trashed)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_subfolder_trashed ON document_notes(subfolder_id, is_trashed)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_subfolder_trashed ON photo_groups(subfolder_id, is_trashed)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_updated_at ON canvas_notes(updated_at DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_trashed_deleted ON photos(is_trashed, deleted_at DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_folders_trashed_deleted ON folders(is_trashed, deleted_at DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_trashed_deleted ON photo_groups(is_trashed, deleted_at DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_trashed_deleted ON document_notes(is_trashed, deleted_at DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_trashed_deleted ON text_notes(is_trashed, deleted_at DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_trashed_deleted ON canvas_notes(is_trashed, deleted_at DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_folders_workspace_trashed ON folders(workspace_id, is_trashed)")
 
         createFtsTable(db)
     }
@@ -1000,8 +1013,8 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
         super.onConfigure(db)
         try {
             db.setForeignKeyConstraintsEnabled(true)
-            db.rawQuery("PRAGMA synchronous = NORMAL;", null)?.close()
-            db.rawQuery("PRAGMA temp_store = MEMORY;", null)?.close()
+            db.execSQL("PRAGMA synchronous = NORMAL")
+            db.execSQL("PRAGMA temp_store = MEMORY")
         } catch (_: Exception) {}
     }
 
@@ -1107,6 +1120,15 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
     }
 
     companion object {
+        @Volatile
+        private var INSTANCE: FotaraDbHelper? = null
+
+        fun getInstance(context: Context): FotaraDbHelper {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: FotaraDbHelper(context.applicationContext).also { INSTANCE = it }
+            }
+        }
+
         private val isAuxiliarySchemaVerified = java.util.concurrent.atomic.AtomicBoolean(false)
         const val DATABASE_NAME = "fotara.db"
         const val DATABASE_VERSION = 24
