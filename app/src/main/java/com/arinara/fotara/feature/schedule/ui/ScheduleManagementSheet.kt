@@ -384,6 +384,15 @@ fun ScheduleManagementSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Pre-calculate class count per day in O(N) single pass to eliminate recomposition lag
+            val dayClassCounts = remember(schedules) {
+                val counts = IntArray(8)
+                for (s in schedules) {
+                    if (s.dayOfWeek in 1..7) counts[s.dayOfWeek]++
+                }
+                counts
+            }
+
             // Day Selector Pill Bar (Mon .. Sun)
             Row(
                 modifier = Modifier
@@ -393,9 +402,9 @@ fun ScheduleManagementSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 for (day in 1..7) {
-                    val count = schedules.count { it.dayOfWeek == day }
+                    val count = dayClassCounts[day]
                     val isSelected = selectedDayOfWeek == day
-                    val shortName = ClassSchedule.getEnglishDayShortName(day)
+                    val shortName = remember(day) { ClassSchedule.getEnglishDayShortName(day) }
 
                     Box(
                         modifier = Modifier
@@ -448,10 +457,17 @@ fun ScheduleManagementSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Schedules for Selected Day
-            val daySchedules = schedules
-                .filter { it.dayOfWeek == selectedDayOfWeek }
-                .sortedBy { it.startMinute }
+            // Schedules for Selected Day (memoized to eliminate sorting/filtering churn)
+            val daySchedules = remember(schedules, selectedDayOfWeek) {
+                schedules
+                    .filter { it.dayOfWeek == selectedDayOfWeek }
+                    .sortedBy { it.startMinute }
+            }
+
+            // Pre-index folder map for O(1) card lookups
+            val folderMap = remember(folders) {
+                folders.associateBy { it.id }
+            }
 
             if (daySchedules.isEmpty()) {
                 Box(
@@ -522,7 +538,7 @@ fun ScheduleManagementSheet(
                     items(daySchedules, key = { it.id }) { schedule ->
                         ScheduleItemCard(
                             schedule = schedule,
-                            folders = folders,
+                            linkedFolder = folderMap[schedule.linkedFolderId],
                             onEdit = { editingSchedule = schedule },
                             onDelete = { scheduleToDelete = schedule }
                         )
@@ -816,12 +832,10 @@ fun ScheduleManagementSheet(
 @Composable
 private fun ScheduleItemCard(
     schedule: ClassSchedule,
-    folders: List<Folder>,
+    linkedFolder: Folder?,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val linkedFolder = folders.firstOrNull { it.id == schedule.linkedFolderId }
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -870,11 +884,13 @@ private fun ScheduleItemCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                // Room & Lecturer
-                val details = buildList {
-                    if (!schedule.roomName.isNullOrBlank()) add(schedule.roomName)
-                    if (!schedule.instructorName.isNullOrBlank()) add(schedule.instructorName)
-                }.joinToString(" • ")
+                // Room & Lecturer (memoized to eliminate list/string allocation on scroll)
+                val details = remember(schedule.roomName, schedule.instructorName) {
+                    buildList {
+                        if (!schedule.roomName.isNullOrBlank()) add(schedule.roomName)
+                        if (!schedule.instructorName.isNullOrBlank()) add(schedule.instructorName)
+                    }.joinToString(" • ")
+                }
 
                 if (details.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))

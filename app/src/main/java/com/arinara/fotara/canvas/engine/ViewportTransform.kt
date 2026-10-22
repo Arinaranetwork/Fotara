@@ -101,6 +101,46 @@ object ViewportTransform {
     }
 
     /**
+     * Converts world X coordinate to screen space using primitive floats (zero allocation).
+     */
+    fun worldToScreenX(worldX: Float, viewport: ViewportState): Float {
+        val safeScale = sanitizeScale(viewport.scale)
+        val safeTx = sanitizeFloat(viewport.translateX, 0f)
+        val safeWorldX = sanitizeFloat(worldX, 0f)
+        return sanitizeFloat(safeWorldX * safeScale + safeTx, 0f)
+    }
+
+    /**
+     * Converts world Y coordinate to screen space using primitive floats (zero allocation).
+     */
+    fun worldToScreenY(worldY: Float, viewport: ViewportState): Float {
+        val safeScale = sanitizeScale(viewport.scale)
+        val safeTy = sanitizeFloat(viewport.translateY, 0f)
+        val safeWorldY = sanitizeFloat(worldY, 0f)
+        return sanitizeFloat(safeWorldY * safeScale + safeTy, 0f)
+    }
+
+    /**
+     * Converts screen X coordinate to world space using primitive floats (zero allocation).
+     */
+    fun screenToWorldX(screenX: Float, viewport: ViewportState): Float {
+        val safeScale = sanitizeScale(viewport.scale)
+        val safeTx = sanitizeFloat(viewport.translateX, 0f)
+        val safeScreenX = sanitizeFloat(screenX, 0f)
+        return sanitizeFloat((safeScreenX - safeTx) / safeScale, 0f)
+    }
+
+    /**
+     * Converts screen Y coordinate to world space using primitive floats (zero allocation).
+     */
+    fun screenToWorldY(screenY: Float, viewport: ViewportState): Float {
+        val safeScale = sanitizeScale(viewport.scale)
+        val safeTy = sanitizeFloat(viewport.translateY, 0f)
+        val safeScreenY = sanitizeFloat(screenY, 0f)
+        return sanitizeFloat((safeScreenY - safeTy) / safeScale, 0f)
+    }
+
+    /**
      * Converts a world coordinate to screen space:
      * Screen = World * scale + Translation
      */
@@ -109,15 +149,7 @@ object ViewportTransform {
         worldY: Float,
         viewport: ViewportState
     ): Pair<Float, Float> {
-        val safeScale = sanitizeScale(viewport.scale)
-        val safeTx = sanitizeFloat(viewport.translateX, 0f)
-        val safeTy = sanitizeFloat(viewport.translateY, 0f)
-        val safeWorldX = sanitizeFloat(worldX, 0f)
-        val safeWorldY = sanitizeFloat(worldY, 0f)
-
-        val screenX = safeWorldX * safeScale + safeTx
-        val screenY = safeWorldY * safeScale + safeTy
-        return Pair(sanitizeFloat(screenX, 0f), sanitizeFloat(screenY, 0f))
+        return Pair(worldToScreenX(worldX, viewport), worldToScreenY(worldY, viewport))
     }
 
     /**
@@ -129,15 +161,7 @@ object ViewportTransform {
         screenY: Float,
         viewport: ViewportState
     ): Pair<Float, Float> {
-        val safeScale = sanitizeScale(viewport.scale)
-        val safeTx = sanitizeFloat(viewport.translateX, 0f)
-        val safeTy = sanitizeFloat(viewport.translateY, 0f)
-        val safeScreenX = sanitizeFloat(screenX, 0f)
-        val safeScreenY = sanitizeFloat(screenY, 0f)
-
-        val worldX = (safeScreenX - safeTx) / safeScale
-        val worldY = (safeScreenY - safeTy) / safeScale
-        return Pair(sanitizeFloat(worldX, 0f), sanitizeFloat(worldY, 0f))
+        return Pair(screenToWorldX(screenX, viewport), screenToWorldY(screenY, viewport))
     }
 
     /**

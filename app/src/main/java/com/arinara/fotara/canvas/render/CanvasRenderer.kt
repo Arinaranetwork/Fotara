@@ -18,6 +18,7 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Typeface
 import com.arinara.fotara.canvas.engine.CanvasRect
 import com.arinara.fotara.canvas.engine.QuadTreeSpatialIndex
 import com.arinara.fotara.canvas.engine.StrokePathBuilder
@@ -100,13 +101,18 @@ class CanvasRenderer(
     private val drawPath = Path()
     private val lassoPath = Path()
     private val selectionBoxPath = Path()
-    private val tileSrcRect = Rect()
-    private val tileDestRect = Rect()
-    private val transformMatrix = Matrix()
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val imageSrcRect = Rect()
     private val imageDstRectF = RectF()
-    private val imageBitmapCache = LinkedHashMap<String, Bitmap>(16, 0.75f, true)
+    private val textBgRectF = RectF()
+    private val typefaceNormal = Typeface.create("sans-serif", Typeface.NORMAL)
+    private val typefaceBold = Typeface.create("sans-serif", Typeface.BOLD)
+    private val maxCacheEntries = 32
+    private val imageBitmapCache = object : LinkedHashMap<String, Bitmap>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean {
+            return size > maxCacheEntries
+        }
+    }
     private val layerCompositePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val elementZOrderComparator = compareBy<CanvasElement> { it.zIndex }.thenBy { it.id }
 
@@ -512,14 +518,14 @@ class CanvasRenderer(
             TextBackgroundStyle.FROSTED_DARK -> {
                 textBgPaint.style = Paint.Style.FILL
                 textBgPaint.color = 0xD91E293B.toInt() // Frosted dark #1E293B (~85% alpha)
-                val bgRect = RectF(0f, 0f, element.width, element.height)
-                canvas.drawRoundRect(bgRect, 12f, 12f, textBgPaint)
+                textBgRectF.set(0f, 0f, element.width, element.height)
+                canvas.drawRoundRect(textBgRectF, 12f, 12f, textBgPaint)
             }
             TextBackgroundStyle.SOLID_LIGHT -> {
                 textBgPaint.style = Paint.Style.FILL
                 textBgPaint.color = 0xFFFFFFFF.toInt()
-                val bgRect = RectF(0f, 0f, element.width, element.height)
-                canvas.drawRoundRect(bgRect, 12f, 12f, textBgPaint)
+                textBgRectF.set(0f, 0f, element.width, element.height)
+                canvas.drawRoundRect(textBgRectF, 12f, 12f, textBgPaint)
             }
         }
 
@@ -527,11 +533,7 @@ class CanvasRenderer(
         textPaint.color = element.color.toInt()
         textPaint.alpha = (255 * layerOpacity).toInt().coerceIn(0, 255)
         textPaint.textSize = element.fontSizeSp * 2.2f
-        val typefaceStyle = when {
-            element.fontWeight >= 700 -> android.graphics.Typeface.BOLD
-            else -> android.graphics.Typeface.NORMAL
-        }
-        textPaint.typeface = android.graphics.Typeface.create("sans-serif", typefaceStyle)
+        textPaint.typeface = if (element.fontWeight >= 700) typefaceBold else typefaceNormal
 
         val paddingX = 16f
         val lines = element.text.split("\n")

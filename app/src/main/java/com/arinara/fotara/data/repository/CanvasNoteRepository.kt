@@ -15,6 +15,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -131,24 +132,24 @@ class SqliteCanvasNoteRepository(
                     note.title.lowercase().contains(trimmed)
                 }
             }
-        }
+        }.distinctUntilChanged()
 
     override fun getCanvasNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<CanvasNote>> {
         return canvasNotesFlow.map { list ->
             list.filter { note ->
                 note.folderId == folderId && (subfolderId == null || note.subfolderId == subfolderId)
             }
-        }
+        }.distinctUntilChanged()
     }
 
     override fun getCanvasNotesByGroup(groupId: Long): Flow<List<CanvasNote>> {
         return canvasNotesFlow.map { list ->
             list.filter { note -> note.groupId == groupId }
-        }
+        }.distinctUntilChanged()
     }
 
     override fun getCanvasNoteById(id: Long): Flow<CanvasNote?> {
-        return canvasNotesFlow.map { list -> list.find { it.id == id } }
+        return canvasNotesFlow.map { list -> list.find { it.id == id } }.distinctUntilChanged()
     }
 
     override suspend fun getCanvasNoteByIdOnce(id: Long): CanvasNote? = withContext(Dispatchers.IO) {

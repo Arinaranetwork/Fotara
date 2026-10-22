@@ -458,6 +458,7 @@ class SqliteFolderRepository(
             db.execSQL("UPDATE text_notes SET is_trashed = 0, deleted_at = NULL WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("UPDATE canvas_notes SET is_trashed = 0, deleted_at = NULL WHERE folder_id = ?", arrayOf(id.toString()))
             db.execSQL("UPDATE document_notes SET is_trashed = 0, deleted_at = NULL WHERE folder_id = ?", arrayOf(id.toString()))
+            db.execSQL("UPDATE photo_groups SET is_trashed = 0, deleted_at = NULL WHERE folder_id = ?", arrayOf(id.toString()))
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()

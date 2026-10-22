@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -322,7 +323,7 @@ class NotesViewModel(
                 ) { scheds, cutoffTime ->
                     val state = scheduleCutoffEngine.evaluateCapsuleState(scheds, cutoffTime)
                     Pair(scheds, Pair(state, cutoffTime))
-                }.collect { (scheds, stateAndCutoff) ->
+                }.distinctUntilChanged().collect { (scheds, stateAndCutoff) ->
                     val (state, cutoff) = stateAndCutoff
                     _uiState.update { prev ->
                         prev.copy(

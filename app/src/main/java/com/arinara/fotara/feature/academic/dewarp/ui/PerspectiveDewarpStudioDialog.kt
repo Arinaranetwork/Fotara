@@ -37,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -113,6 +114,12 @@ fun PerspectiveDewarpStudioDialog(
         }
         previewBitmap = bmp
         isLoadingPreview = false
+    }
+
+    DisposableEffect(previewBitmap) {
+        onDispose {
+            previewBitmap?.recycle()
+        }
     }
 
     Dialog(
@@ -254,11 +261,11 @@ fun PerspectiveDewarpStudioDialog(
                             fun normToScreen(n: Offset): Offset =
                                 Offset(offsetX + n.x * displayedW, offsetY + n.y * displayedH)
 
-                            fun screenToNorm(s: Offset): Offset {
-                                val nx = ((s.x - offsetX) / displayedW).coerceIn(0f, 1f)
-                                val ny = ((s.y - offsetY) / displayedH).coerceIn(0f, 1f)
-                                return Offset(nx, ny)
-                            }
+                            val quadPath = remember { Path() }
+                            val loupePath = remember { Path() }
+                            val frameStroke = remember { Stroke(width = 2f) }
+                            val handleRingStroke = remember { Stroke(width = 2.5f) }
+                            val loupeRingStroke = remember { Stroke(width = 2.5f) }
 
                             // Touch event handling for 4 draggable corner pins
                             Canvas(
@@ -322,13 +329,12 @@ fun PerspectiveDewarpStudioDialog(
                                 val sBL = normToScreen(bl)
 
                                 // 2. Draw quadrilateral fill and structural frame
-                                val quadPath = Path().apply {
-                                    moveTo(sTL.x, sTL.y)
-                                    lineTo(sTR.x, sTR.y)
-                                    lineTo(sBR.x, sBR.y)
-                                    lineTo(sBL.x, sBL.y)
-                                    close()
-                                }
+                                quadPath.reset()
+                                quadPath.moveTo(sTL.x, sTL.y)
+                                quadPath.lineTo(sTR.x, sTR.y)
+                                quadPath.lineTo(sBR.x, sBR.y)
+                                quadPath.lineTo(sBL.x, sBL.y)
+                                quadPath.close()
 
                                 drawPath(
                                     path = quadPath,
@@ -337,7 +343,7 @@ fun PerspectiveDewarpStudioDialog(
                                 drawPath(
                                     path = quadPath,
                                     color = ElectricSlateTokens.PrimaryAccent,
-                                    style = Stroke(width = 2.dp.toPx())
+                                    style = frameStroke
                                 )
 
                                 // 3. Draw grid guideline cross
@@ -371,7 +377,7 @@ fun PerspectiveDewarpStudioDialog(
                                         color = ElectricSlateTokens.PrimaryAccent,
                                         radius = outerRadius,
                                         center = cornerPos,
-                                        style = Stroke(width = 2.5.dp.toPx())
+                                        style = handleRingStroke
                                     )
                                     // Center indicator dot
                                     drawCircle(
@@ -403,9 +409,8 @@ fun PerspectiveDewarpStudioDialog(
                                         y = loupeCenterY
                                     )
 
-                                    val loupePath = Path().apply {
-                                        addOval(Rect(loupeCenter, loupeRadius))
-                                    }
+                                    loupePath.reset()
+                                    loupePath.addOval(Rect(loupeCenter, loupeRadius))
 
                                     // Draw loupe background
                                     drawCircle(
@@ -443,7 +448,7 @@ fun PerspectiveDewarpStudioDialog(
                                         color = ElectricSlateTokens.PrimaryAccent,
                                         radius = loupeRadius,
                                         center = loupeCenter,
-                                        style = Stroke(width = 2.5.dp.toPx())
+                                        style = loupeRingStroke
                                     )
 
                                     // Loupe center crosshair (+)

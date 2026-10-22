@@ -93,25 +93,43 @@ object BitmapDewarpUtils {
     ): Boolean {
         if (!sourceFile.exists()) return false
 
-        val fullBmp = BitmapFactory.decodeFile(sourceFile.absolutePath) ?: return false
-        val pixelCorners = normalizedCorners.map { norm ->
-            QuadPoint(norm.x * fullBmp.width, norm.y * fullBmp.height)
+        val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(sourceFile.absolutePath, boundsOptions)
+        val origW = boundsOptions.outWidth
+        val origH = boundsOptions.outHeight
+        if (origW <= 0 || origH <= 0) return false
+
+        var inSampleSize = 1
+        var w = origW
+        var h = origH
+        val maxDim = 4096
+        while (w > maxDim || h > maxDim) {
+            inSampleSize *= 2
+            w /= 2
+            h /= 2
         }
 
-        val rectifiedBmp = dewarpBitmap(fullBmp, pixelCorners, filterMode)
-        if (rectifiedBmp != fullBmp) {
-            fullBmp.recycle()
+        val decodeOptions = BitmapFactory.Options().apply {
+            this.inSampleSize = inSampleSize
         }
-
+        val fullBmp = BitmapFactory.decodeFile(sourceFile.absolutePath, decodeOptions) ?: return false
+        var rectifiedBmp: Bitmap? = null
         return try {
+            val pixelCorners = normalizedCorners.map { norm ->
+                QuadPoint(norm.x * fullBmp.width, norm.y * fullBmp.height)
+            }
+            rectifiedBmp = dewarpBitmap(fullBmp, pixelCorners, filterMode)
             FileOutputStream(destinationFile).use { out ->
                 rectifiedBmp.compress(Bitmap.CompressFormat.JPEG, 92, out)
             }
-            rectifiedBmp.recycle()
             true
         } catch (_: Exception) {
-            rectifiedBmp.recycle()
             false
+        } finally {
+            if (rectifiedBmp != null && rectifiedBmp != fullBmp) {
+                rectifiedBmp.recycle()
+            }
+            fullBmp.recycle()
         }
     }
 

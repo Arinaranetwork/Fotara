@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,8 +67,8 @@ fun ZoomableBox(
     val coroutineScope = rememberCoroutineScope()
 
     // Notify parent whenever zoom state crosses 1.001f
-    LaunchedEffect(scale) {
-        val isZoomed = scale > 1.001f
+    val isZoomed by remember { derivedStateOf { scale > 1.001f } }
+    LaunchedEffect(isZoomed) {
         onZoomChanged(isZoomed)
     }
 

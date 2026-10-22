@@ -31,6 +31,9 @@ import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -115,7 +118,7 @@ class TimetableGlanceWidget : GlanceAppWidget() {
         val ColorActiveIndicator = ColorProvider(day = Color(0xFF16A34A), night = Color(0xFF22C55E))
     }
 
-    override val sizeMode = SizeMode.Responsive(setOf(SIZE_COMPACT, SIZE_MEDIUM, SIZE_FULL))
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val state = queryUnifiedScheduleState(context)
@@ -314,9 +317,16 @@ class TimetableGlanceWidget : GlanceAppWidget() {
                                 Text(
                                     text = "${cls.startTimeFormatted} ${cls.subjectName}",
                                     style = TextStyle(color = ColorTextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                                    maxLines = 1,
+                                    modifier = GlanceModifier.padding(bottom = 2.dp)
+                                )
+                            }
+                            if (day.classes.size > 3) {
+                                Text(
+                                    text = "+${day.classes.size - 3} more",
+                                    style = TextStyle(color = ColorTagAmber, fontSize = 9.sp, fontWeight = FontWeight.Bold),
                                     maxLines = 1
                                 )
-                                Spacer(modifier = GlanceModifier.height(2.dp))
                             }
                         }
                     }
@@ -397,18 +407,20 @@ class TimetableGlanceWidget : GlanceAppWidget() {
                                 style = TextStyle(color = ColorTextMuted, fontSize = 9.sp)
                             )
                         } else {
-                            day.classes.take(3).forEach { cls ->
+                            day.classes.take(2).forEach { cls ->
                                 Text(
-                                    text = cls.startTimeFormatted,
+                                    text = "${cls.startTimeFormatted} ${cls.subjectName}",
+                                    style = TextStyle(color = ColorTextPrimary, fontSize = 8.sp),
+                                    maxLines = 1,
+                                    modifier = GlanceModifier.padding(bottom = 2.dp)
+                                )
+                            }
+                            if (day.classes.size > 2) {
+                                Text(
+                                    text = "+${day.classes.size - 2}",
                                     style = TextStyle(color = ColorTagAmber, fontSize = 8.sp, fontWeight = FontWeight.Bold),
                                     maxLines = 1
                                 )
-                                Text(
-                                    text = cls.subjectName,
-                                    style = TextStyle(color = ColorTextPrimary, fontSize = 9.sp),
-                                    maxLines = 1
-                                )
-                                Spacer(modifier = GlanceModifier.height(2.dp))
                             }
                         }
                     }
@@ -425,7 +437,7 @@ class TimetableGlanceWidget : GlanceAppWidget() {
         val allSchedules = mutableListOf<ClassSchedule>()
 
         try {
-            val dbHelper = FotaraDbHelper(context)
+            val dbHelper = FotaraDbHelper.getInstance(context)
             val db = dbHelper.getSafeReadableDatabase()
             val cursor = db.rawQuery(
                 """
@@ -570,33 +582,46 @@ class TimetableGlanceWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TimetableGlanceWidget()
 
     companion object {
+        private var debounceJob: Job? = null
+        private val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
         fun triggerUpdate(context: Context) {
             notifyDataChanged(context)
         }
 
         fun notifyDataChanged(context: Context) {
-            val appWidgetManager = AppWidgetManager.getInstance(context)
-            val componentName = ComponentName(context, TimetableGlanceWidgetReceiver::class.java)
-            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
-            if (appWidgetIds.isNotEmpty()) {
-                val intent = Intent(context, TimetableGlanceWidgetReceiver::class.java).apply {
-                    action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, appWidgetIds)
-                }
-                context.sendBroadcast(intent)
-            }
+            val appContext = context.applicationContext
+            try {
+                val appWidgetManager = AppWidgetManager.getInstance(appContext)
+                val componentName = ComponentName(appContext, TimetableGlanceWidgetReceiver::class.java)
+                val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
 
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    val manager = GlanceAppWidgetManager(context)
-                    val glanceIds = manager.getGlanceIds(TimetableGlanceWidget::class.java)
-                    val widget = TimetableGlanceWidget()
-                    for (glanceId in glanceIds) {
-                        widget.update(context, glanceId)
-                    }
-                } catch (e: Exception) {
-                    Log.e("TimetableWidget", "Failed to update glance widgets", e)
+                // 1. Guard: If user has no Timetable widget placed on home screen, abort immediately! Zero overhead.
+                if (appWidgetIds.isEmpty()) {
+                    return
                 }
+
+                // 2. Debounce rapid updates to coalesce multiple mutations (e.g., adding classes or batch import) into a single pass
+                synchronized(this) {
+                    debounceJob?.cancel()
+                    debounceJob = updateScope.launch {
+                        delay(350L)
+                        try {
+                            val manager = GlanceAppWidgetManager(appContext)
+                            val glanceIds = manager.getGlanceIds(TimetableGlanceWidget::class.java)
+                            if (glanceIds.isEmpty()) return@launch
+
+                            val widget = TimetableGlanceWidget()
+                            for (glanceId in glanceIds) {
+                                widget.update(appContext, glanceId)
+                            }
+                        } catch (e: Exception) {
+                            Log.e("TimetableWidget", "Failed to update glance widgets", e)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("TimetableWidget", "Error checking widget IDs", e)
             }
         }
     }

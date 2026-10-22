@@ -398,15 +398,26 @@ object PerspectiveDewarpEngine {
         val totalDst = targetWidth * targetHeight
         val dstPixels = IntArray(totalDst)
 
+        val m = invMatrix.values
+        val m0 = m[0]; val m1 = m[1]; val m2 = m[2]
+        val m3 = m[3]; val m4 = m[4]; val m5 = m[5]
+        val m6 = m[6]; val m7 = m[7]; val m8 = m[8]
+
         for (y in 0 until targetHeight) {
             val rowOffset = y * targetWidth
             val sampleY = y + 0.5f
+            val wy = m7 * sampleY + m8
+            val xy = m1 * sampleY + m2
+            val yy = m4 * sampleY + m5
             for (x in 0 until targetWidth) {
                 val sampleX = x + 0.5f
-                val srcPt = invMatrix.mapPoint(sampleX, sampleY)
+                val w = m6 * sampleX + wy
+                val normalizer = if (kotlin.math.abs(w) > 1e-7f) 1f / w else 1f
+                val srcPtX = (m0 * sampleX + xy) * normalizer
+                val srcPtY = (m3 * sampleX + yy) * normalizer
 
-                val sx = srcPt.x - 0.5f
-                val sy = srcPt.y - 0.5f
+                val sx = srcPtX - 0.5f
+                val sy = srcPtY - 0.5f
 
                 if (sx >= 0f && sx <= srcW - 1f && sy >= 0f && sy <= srcH - 1f) {
                     val x0 = sx.toInt()

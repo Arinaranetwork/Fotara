@@ -33,6 +33,9 @@ object PhotoDrawingRenderer {
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
+    private val textBgRect = android.graphics.RectF()
+    private val typefaceNormal = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+    private val typefaceBold = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
 
     /**
      * Renders a list of [StrokeElement] onto [canvas] with optional transformation.
@@ -168,21 +171,20 @@ object PhotoDrawingRenderer {
             TextBackgroundStyle.FROSTED_DARK -> {
                 textBgPaint.style = Paint.Style.FILL
                 textBgPaint.color = 0xD91E293B.toInt()
-                val bgRect = android.graphics.RectF(0f, 0f, element.width, element.height)
-                canvas.drawRoundRect(bgRect, 8f, 8f, textBgPaint)
+                textBgRect.set(0f, 0f, element.width, element.height)
+                canvas.drawRoundRect(textBgRect, 8f, 8f, textBgPaint)
             }
             TextBackgroundStyle.SOLID_LIGHT -> {
                 textBgPaint.style = Paint.Style.FILL
                 textBgPaint.color = 0xFFFFFFFF.toInt()
-                val bgRect = android.graphics.RectF(0f, 0f, element.width, element.height)
-                canvas.drawRoundRect(bgRect, 8f, 8f, textBgPaint)
+                textBgRect.set(0f, 0f, element.width, element.height)
+                canvas.drawRoundRect(textBgRect, 8f, 8f, textBgPaint)
             }
         }
 
         textPaint.color = element.color.toInt()
         textPaint.textSize = element.fontSizeSp * 1.5f
-        val typefaceStyle = if (element.fontWeight >= 700) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL
-        textPaint.typeface = android.graphics.Typeface.create("sans-serif", typefaceStyle)
+        textPaint.typeface = if (element.fontWeight >= 700) typefaceBold else typefaceNormal
 
         val paddingX = 12f
         val lines = element.text.split("\n")

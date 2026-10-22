@@ -1092,19 +1092,28 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_z ON canvas_elements(canvas_id, z_index)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_subfolders_trashed ON subfolders(is_trashed, created_at ASC)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_updated_at ON text_notes(updated_at DESC)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_link_groups_type_created ON link_groups(target_type, created_at DESC)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_trashed_created ON photo_groups(is_trashed, created_at DESC)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_subfolder_trashed ON photos(subfolder_id, is_trashed)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_folder_trashed ON photos(folder_id, is_trashed)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_folder_trashed ON canvas_notes(folder_id, is_trashed)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_folder_trashed ON text_notes(folder_id, is_trashed)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_folder_trashed ON document_notes(folder_id, is_trashed)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_trashed_deleted ON photos(is_trashed, deleted_at)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_folder ON photo_groups(folder_id, subfolder_id)")
 
-            // Phase 95: Ensure group_id column exists in canvas_notes and text_notes
+            // Phase 95/98: Ensure group_id column exists in canvas_notes and text_notes with cursor.use
             try {
-                val c = db.rawQuery("PRAGMA table_info(canvas_notes)", null)
                 var hasGroupId = false
-                while (c.moveToNext()) {
-                    val nameIdx = c.getColumnIndex("name")
-                    if (nameIdx != -1 && c.getString(nameIdx) == "group_id") {
-                        hasGroupId = true
-                        break
+                db.rawQuery("PRAGMA table_info(canvas_notes)", null).use { c ->
+                    while (c.moveToNext()) {
+                        val nameIdx = c.getColumnIndex("name")
+                        if (nameIdx != -1 && c.getString(nameIdx) == "group_id") {
+                            hasGroupId = true
+                            break
+                        }
                     }
                 }
-                c.close()
                 if (!hasGroupId) {
                     db.execSQL("ALTER TABLE canvas_notes ADD COLUMN group_id INTEGER DEFAULT NULL")
                 }
@@ -1112,16 +1121,16 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
             } catch (_: Exception) {}
 
             try {
-                val cText = db.rawQuery("PRAGMA table_info(text_notes)", null)
                 var hasTextGroupId = false
-                while (cText.moveToNext()) {
-                    val nameIdx = cText.getColumnIndex("name")
-                    if (nameIdx != -1 && cText.getString(nameIdx) == "group_id") {
-                        hasTextGroupId = true
-                        break
+                db.rawQuery("PRAGMA table_info(text_notes)", null).use { cText ->
+                    while (cText.moveToNext()) {
+                        val nameIdx = cText.getColumnIndex("name")
+                        if (nameIdx != -1 && cText.getString(nameIdx) == "group_id") {
+                            hasTextGroupId = true
+                            break
+                        }
                     }
                 }
-                cText.close()
                 if (!hasTextGroupId) {
                     db.execSQL("ALTER TABLE text_notes ADD COLUMN group_id INTEGER DEFAULT NULL")
                 }

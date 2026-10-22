@@ -17,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -126,15 +127,15 @@ class SqliteTextNoteRepository(
     override fun getTextNotesByFolder(folderId: Long, subfolderId: Long?): Flow<List<TextNote>> =
         textNotesFlow.map { list ->
             list.filter { it.folderId == folderId && (subfolderId == null || it.subfolderId == subfolderId) && it.groupId == null }
-        }
+        }.distinctUntilChanged()
 
     override fun getTextNotesByGroup(groupId: Long): Flow<List<TextNote>> =
         textNotesFlow.map { list ->
             list.filter { it.groupId == groupId }
-        }
+        }.distinctUntilChanged()
 
     override fun getTextNoteById(id: Long): Flow<TextNote?> =
-        textNotesFlow.map { list -> list.firstOrNull { it.id == id } }
+        textNotesFlow.map { list -> list.firstOrNull { it.id == id } }.distinctUntilChanged()
 
     override suspend fun getTextNoteByIdOnce(id: Long): TextNote? = withContext(Dispatchers.IO) {
         textNotesFlow.value.firstOrNull { it.id == id }

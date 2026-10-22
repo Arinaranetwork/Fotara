@@ -19,6 +19,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import com.arinara.fotara.data.model.DestinationType
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Photo
@@ -488,15 +489,20 @@ class SharePlacementViewModel(
         _uiState.update { it.copy(folderToUnlock = null) }
     }
 
+    private var folderDetailsJob: Job? = null
+
     private fun loadFolderDetails(folderId: Long) {
-        viewModelScope.launch {
-            folderRepository.getSubfolders(folderId).collect { subList ->
-                _uiState.update { it.copy(subfolders = subList) }
+        folderDetailsJob?.cancel()
+        folderDetailsJob = viewModelScope.launch {
+            launch {
+                folderRepository.getSubfolders(folderId).collect { subList ->
+                    _uiState.update { it.copy(subfolders = subList) }
+                }
             }
-        }
-        viewModelScope.launch {
-            photoRepository.getGroupsByFolder(folderId).collect { groupList ->
-                _uiState.update { it.copy(availableGroups = groupList) }
+            launch {
+                photoRepository.getGroupsByFolder(folderId).collect { groupList ->
+                    _uiState.update { it.copy(availableGroups = groupList) }
+                }
             }
         }
     }

@@ -4,8 +4,8 @@ plugins {
   alias(libs.plugins.kotlin.serialization)
 }
 
-val appVersionCode = 73
-val appVersionName = "2.0.1"
+val appVersionCode = 74
+val appVersionName = "2.0.2"
 val appChannel = when {
     appVersionName.contains("alpha", ignoreCase = true) -> "alpha"
     appVersionName.contains("beta", ignoreCase = true) -> "beta"
