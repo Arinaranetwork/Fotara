@@ -21,13 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import com.arinara.fotara.expression.ExpressionEngine
 import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
@@ -50,7 +47,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.arinara.fotara.data.model.TagColor
 import com.arinara.fotara.theme.FolderBodyBlue
 import com.arinara.fotara.theme.FolderTextWhite
-import com.arinara.fotara.theme.MidnightCardOutline
 import com.arinara.fotara.theme.MidnightSurface
 import com.arinara.fotara.theme.TextMuted
 import com.arinara.fotara.theme.TextSecondary
@@ -88,28 +84,15 @@ fun NewFolderDialog(
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
+                ExpressionAutocompleteField(
                     value = name,
                     onValueChange = {
                         name = it
                         if (it.isNotBlank()) errorMessage = null
                     },
-                    label = { Text("Subject or Topic Name") },
-                    placeholder = { Text("e.g. Organic Chemistry") },
-                    singleLine = true,
-                    isError = errorMessage != null,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = FolderBodyBlue,
-                        unfocusedBorderColor = MidnightCardOutline,
-                        focusedLabelColor = FolderBodyBlue,
-                        unfocusedLabelColor = TextSecondary,
-                        cursorColor = FolderBodyBlue
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester)
+                    placeholder = "e.g. Organic Chemistry or !date",
+                    focusRequester = focusRequester,
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 if (errorMessage != null) {
@@ -185,7 +168,8 @@ fun NewFolderDialog(
                     if (name.isBlank()) {
                         errorMessage = "Folder name cannot be empty"
                     } else {
-                        onCreate(name.trim(), selectedColor.hex, isPinned)
+                        val resolved = ExpressionEngine.lockStaticExpressions(name.trim())
+                        onCreate(resolved, selectedColor.hex, isPinned)
                     }
                 }
             )

@@ -7,6 +7,8 @@
 package com.arinara.fotara.util
 
 import com.arinara.fotara.R
+import com.arinara.fotara.expression.ExpressionContext
+import com.arinara.fotara.expression.ExpressionEngine
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -122,7 +124,20 @@ object FileNamePresetHelper {
             .replace("{time}", timeStr)
             .replace("{count}", countStr)
 
-        return sanitizeFileName(replaced, fallback = "Fotara_Combined")
+        val resolved = if (replaced.contains("!")) {
+            ExpressionEngine.resolve(
+                input = replaced,
+                context = ExpressionContext(
+                    folder = folderName,
+                    pages = itemCount,
+                    isFileName = true
+                )
+            )
+        } else {
+            replaced
+        }
+
+        return sanitizeFileName(resolved, fallback = "Fotara_Combined")
     }
 
     fun buildFinalFileName(
@@ -141,7 +156,19 @@ object FileNamePresetHelper {
             if (raw.endsWith(ext, ignoreCase = true)) {
                 raw = raw.substring(0, raw.length - ext.length)
             }
-            val sanitized = sanitizeFileName(raw, fallback = "")
+            val resolvedExpr = if (raw.contains("!")) {
+                ExpressionEngine.resolve(
+                    input = raw,
+                    context = ExpressionContext(
+                        folder = folderName,
+                        pages = itemCount,
+                        isFileName = true
+                    )
+                )
+            } else {
+                raw
+            }
+            val sanitized = sanitizeFileName(resolvedExpr, fallback = "")
             if (sanitized.isNotBlank()) {
                 candidateBase = sanitized
             }

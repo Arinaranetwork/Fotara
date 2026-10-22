@@ -47,6 +47,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import com.arinara.fotara.ui.components.ExpressionAutocompleteField
+import com.arinara.fotara.expression.ExpressionContext
+import com.arinara.fotara.expression.ExpressionEngine
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
@@ -102,22 +105,23 @@ fun CanvasRenameDialog(
             )
         },
         text = {
-            OutlinedTextField(
+            ExpressionAutocompleteField(
                 value = renameInput,
                 onValueChange = { renameInput = it },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = ElectricSlateTokens.TextPrimary,
-                    unfocusedTextColor = ElectricSlateTokens.TextPrimary,
-                    focusedBorderColor = ElectricSlateTokens.PrimaryAccent,
-                    unfocusedBorderColor = ElectricSlateTokens.BorderSubtle
-                )
+                context = ExpressionContext(title = initialTitle),
+                modifier = Modifier.fillMaxWidth()
             )
         },
         confirmButton = {
             AppButton(
                 text = "Save",
-                onClick = { onSave(renameInput) },
+                onClick = {
+                    val resolved = ExpressionEngine.lockStaticExpressions(
+                        renameInput.trim(),
+                        ExpressionContext(title = initialTitle)
+                    )
+                    onSave(resolved)
+                },
                 variant = AppButtonVariant.PRIMARY,
                 height = 36.dp
             )
@@ -756,17 +760,11 @@ fun CanvasTextOptionsDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedTextField(
+                Text("Annotation Text", color = ElectricSlateTokens.TextMuted, fontSize = 14.sp)
+                ExpressionAutocompleteField(
                     value = textInput,
                     onValueChange = { textInput = it },
-                    label = { Text("Annotation Text") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = ElectricSlateTokens.TextPrimary,
-                        unfocusedTextColor = ElectricSlateTokens.TextPrimary,
-                        focusedBorderColor = ElectricSlateTokens.PrimaryAccent,
-                        unfocusedBorderColor = ElectricSlateTokens.BorderSubtle,
-                        cursorColor = ElectricSlateTokens.PrimaryAccent
-                    ),
+                    placeholder = "Type text or !date, !time...",
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -899,7 +897,8 @@ fun CanvasTextOptionsDialog(
             AppButton(
                 text = "Save",
                 onClick = {
-                    onSave(textInput, fontSize, textColor, fontWeight, bgStyle, alignment)
+                    val resolved = ExpressionEngine.lockStaticExpressions(textInput)
+                    onSave(resolved, fontSize, textColor, fontWeight, bgStyle, alignment)
                 },
                 variant = AppButtonVariant.PRIMARY,
                 height = 36.dp

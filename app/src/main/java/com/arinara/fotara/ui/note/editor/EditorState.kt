@@ -387,6 +387,21 @@ class EditorState(
         }
     }
 
+    fun lockExpressionsOnSave(folderName: String? = null) {
+        val context = com.arinara.fotara.expression.ExpressionContext(
+            title = title,
+            folder = folderName
+        )
+        val lockedTitle = com.arinara.fotara.expression.ExpressionEngine.lockStaticExpressions(title, context)
+        if (lockedTitle != title) {
+            title = lockedTitle
+        }
+        val lockedBody = com.arinara.fotara.expression.ExpressionEngine.lockStaticExpressions(bodyValue.text, context)
+        if (lockedBody != bodyValue.text) {
+            bodyValue = bodyValue.copy(text = lockedBody)
+        }
+    }
+
     suspend fun purgeIfCompletelyBlank(): Boolean {
         if (title.isBlank() && bodyValue.text.isBlank() && noteId != null && noteId!! > 0) {
             textNoteRepository.purgeTextNotePermanently(noteId!!)

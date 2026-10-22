@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.arinara.fotara.ui.theme.jigglePressClickable
 import androidx.compose.foundation.text.BasicTextField
+import com.arinara.fotara.ui.components.ExpressionAutocompleteField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import android.net.Uri
@@ -267,6 +268,7 @@ fun TextNoteEditorScreen(
         coroutineScope.launch {
             val purged = state.purgeIfCompletelyBlank()
             if (!purged) {
+                state.lockExpressionsOnSave()
                 state.flushAutosaveNow()
             }
             onBack()
@@ -282,6 +284,7 @@ fun TextNoteEditorScreen(
             audioViewModel.pausePlayback()
             audioViewModel.cancelRecording()
             coroutineScope.launch {
+                state.lockExpressionsOnSave()
                 state.flushAutosaveNow()
             }
         }
@@ -407,8 +410,14 @@ fun TextNoteEditorScreen(
                                     id = currentId,
                                     folderId = folderId,
                                     subfolderId = subfolderId,
-                                    title = state.title.ifBlank { "Untitled Note" },
-                                    bodyMarkdown = state.bodyValue.text,
+                                    title = com.arinara.fotara.expression.ExpressionEngine.resolve(
+                                        state.title.ifBlank { "Untitled Note" },
+                                        com.arinara.fotara.expression.ExpressionContext(title = state.title)
+                                    ),
+                                    bodyMarkdown = com.arinara.fotara.expression.ExpressionEngine.resolve(
+                                        state.bodyValue.text,
+                                        com.arinara.fotara.expression.ExpressionContext(title = state.title)
+                                    ),
                                     createdAt = System.currentTimeMillis(),
                                     updatedAt = System.currentTimeMillis()
                                 )
@@ -610,7 +619,7 @@ fun TextNoteEditorScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Title Input
-                BasicTextField(
+                ExpressionAutocompleteField(
                     value = state.title,
                     onValueChange = {
                         if (activeHighlightQuery != null || searchHighlightAlpha.value > 0f) {
@@ -619,26 +628,14 @@ fun TextNoteEditorScreen(
                         }
                         state.onTitleChange(it)
                     },
+                    placeholder = stringResource(R.string.editor_placeholder_title),
                     textStyle = TextStyle(
                         color = TabCream,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     ),
-                    cursorBrush = SolidColor(AccentGold),
-                    modifier = Modifier.fillMaxWidth(),
-                    decorationBox = { innerTextField ->
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            if (state.title.isEmpty()) {
-                                Text(
-                                    text = stringResource(R.string.editor_placeholder_title),
-                                    color = TextMuted,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            innerTextField()
-                        }
-                    }
+                    context = com.arinara.fotara.expression.ExpressionContext(title = state.title),
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 if (state.scheduledAt != null) {

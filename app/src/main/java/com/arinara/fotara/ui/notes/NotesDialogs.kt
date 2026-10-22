@@ -22,8 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,7 +39,10 @@ import androidx.compose.ui.unit.sp
 import com.arinara.fotara.R
 import com.arinara.fotara.data.model.Folder
 import com.arinara.fotara.data.model.Workspace
+import com.arinara.fotara.expression.ExpressionContext
+import com.arinara.fotara.expression.ExpressionEngine
 import com.arinara.fotara.theme.ElmsSans
+import com.arinara.fotara.ui.components.ExpressionAutocompleteField
 import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
 import com.arinara.fotara.ui.components.workspaceGroupedFolderItems
@@ -117,26 +118,21 @@ fun NotesRenameDialog(
             )
         },
         text = {
-            OutlinedTextField(
+            ExpressionAutocompleteField(
                 value = text,
                 onValueChange = { text = it },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedBorderColor = ElectricSlateTokens.PrimaryAccent,
-                    unfocusedBorderColor = ElectricSlateTokens.BorderSubtle,
-                    focusedTextColor = ElectricSlateTokens.TextPrimary,
-                    unfocusedTextColor = ElectricSlateTokens.TextPrimary
-                ),
-                shape = RoundedCornerShape(12.dp),
+                placeholder = "Note title...",
+                context = ExpressionContext(title = item.title),
                 modifier = Modifier.fillMaxWidth()
             )
         },
         confirmButton = {
             AppButton(
                 text = "Save",
-                onClick = { onConfirm(text) },
+                onClick = {
+                    val resolved = ExpressionEngine.lockStaticExpressions(text.trim(), ExpressionContext(title = item.title))
+                    onConfirm(resolved)
+                },
                 variant = AppButtonVariant.PRIMARY
             )
         },

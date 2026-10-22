@@ -29,8 +29,6 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,13 +38,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arinara.fotara.R
+import com.arinara.fotara.expression.ExpressionContext
+import com.arinara.fotara.expression.ExpressionEngine
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.ui.components.presets.AppButton
 import com.arinara.fotara.ui.components.presets.AppButtonVariant
@@ -172,6 +171,19 @@ fun UnifiedShareDialog(
         )
     }
 
+    val resolveAndSanitize = { raw: String ->
+        if (raw.isNotBlank()) {
+            ExpressionEngine.sanitizeFileName(
+                ExpressionEngine.lockStaticExpressions(
+                    raw,
+                    ExpressionContext(folder = folderName, pages = totalPages, isFileName = true)
+                )
+            )
+        } else {
+            null
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -212,7 +224,7 @@ fun UnifiedShareDialog(
                     subtitle = "Compile all notes and document pages into a single PDF",
                     enabled = true,
                     disabledReason = null,
-                    onClick = { onFormatSelected(ShareFormatChoice.PDF, customFileName.ifBlank { null }) }
+                    onClick = { onFormatSelected(ShareFormatChoice.PDF, resolveAndSanitize(customFileName)) }
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -223,43 +235,28 @@ fun UnifiedShareDialog(
                     subtitle = "Compile images and text into an editable Word document",
                     enabled = true,
                     disabledReason = null,
-                    onClick = { onFormatSelected(ShareFormatChoice.WORD, customFileName.ifBlank { null }) }
+                    onClick = { onFormatSelected(ShareFormatChoice.WORD, resolveAndSanitize(customFileName)) }
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Optional custom file name input (Task 3)
-                OutlinedTextField(
+                Text(
+                    text = stringResource(R.string.share_file_name_label),
+                    fontSize = 12.sp,
+                    color = ElectricSlateTokens.TextMuted,
+                    fontFamily = ElmsSans
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                ExpressionAutocompleteField(
                     value = customFileName,
                     onValueChange = { customFileName = it },
-                    singleLine = true,
-                    label = {
-                        Text(
-                            text = stringResource(R.string.share_file_name_label),
-                            fontSize = 12.sp,
-                            fontFamily = ElmsSans
-                        )
-                    },
-                    placeholder = {
-                        Text(
-                            text = defaultBaseName,
-                            color = ElectricSlateTokens.TextMuted.copy(alpha = 0.5f),
-                            fontSize = 14.sp,
-                            fontFamily = ElmsSans
-                        )
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = ElectricSlateTokens.TextPrimary,
-                        unfocusedTextColor = ElectricSlateTokens.TextPrimary,
-                        focusedBorderColor = ElectricSlateTokens.PrimaryAccent,
-                        unfocusedBorderColor = ElectricSlateTokens.BorderSubtle,
-                        cursorColor = ElectricSlateTokens.PrimaryAccent,
-                        focusedLabelColor = ElectricSlateTokens.PrimaryAccent,
-                        unfocusedLabelColor = ElectricSlateTokens.TextMuted,
-                        focusedContainerColor = ElectricSlateTokens.BgCanvas,
-                        unfocusedContainerColor = ElectricSlateTokens.BgCanvas
+                    placeholder = defaultBaseName,
+                    isFileName = true,
+                    context = ExpressionContext(
+                        folder = folderName,
+                        pages = totalPages,
+                        isFileName = true
                     ),
-                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 

@@ -287,7 +287,11 @@ fun FolderCard(
                             onDone = {
                                 val trimmed = editValue.text.trim()
                                 if (trimmed.isNotEmpty()) {
-                                    onRename(trimmed)
+                                    val resolved = com.arinara.fotara.expression.ExpressionEngine.lockStaticExpressions(
+                                        trimmed,
+                                        com.arinara.fotara.expression.ExpressionContext(folder = folder.name)
+                                    )
+                                    onRename(resolved)
                                 }
                                 isEditing = false
                                 keyboardController?.hide()
@@ -298,7 +302,11 @@ fun FolderCard(
                         onClick = {
                             val trimmed = editValue.text.trim()
                             if (trimmed.isNotEmpty()) {
-                                onRename(trimmed)
+                                val resolved = com.arinara.fotara.expression.ExpressionEngine.lockStaticExpressions(
+                                    trimmed,
+                                    com.arinara.fotara.expression.ExpressionContext(folder = folder.name)
+                                )
+                                onRename(resolved)
                             }
                             isEditing = false
                             keyboardController?.hide()
@@ -315,7 +323,12 @@ fun FolderCard(
                 }
             } else {
                 Text(
-                    text = folder.name,
+                    text = remember(folder.name) {
+                        com.arinara.fotara.expression.ExpressionEngine.resolve(
+                            folder.name,
+                            com.arinara.fotara.expression.ExpressionContext(folder = folder.name)
+                        )
+                    },
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Medium,

@@ -466,6 +466,28 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_notes_trashed_deleted ON canvas_notes(is_trashed, deleted_at DESC)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_folders_workspace_trashed ON folders(workspace_id, is_trashed)")
 
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS custom_expressions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                type TEXT NOT NULL,
+                value TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS expression_counters (
+                scope_id TEXT NOT NULL PRIMARY KEY,
+                counter_value INTEGER NOT NULL DEFAULT 0,
+                updated_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+
         createFtsTable(db)
     }
 
@@ -1007,6 +1029,33 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v24 (text_notes group_id) failed: ${e.message}")
             }
         }
+        if (oldVersion < 25) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS custom_expressions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        type TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS expression_counters (
+                        scope_id TEXT NOT NULL PRIMARY KEY,
+                        counter_value INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v25 (custom_expressions & counters) failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -1131,7 +1180,7 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
 
         private val isAuxiliarySchemaVerified = java.util.concurrent.atomic.AtomicBoolean(false)
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 24
+        const val DATABASE_VERSION = 25
         const val HOME_WORKSPACE_ID = 1L
         const val ARCHIVE_WORKSPACE_ID = 2L
         const val HOME_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000001"
@@ -1452,6 +1501,121 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
         } catch (_: Exception) {}
 
         return results.sortedBy { it.scheduledAt }
+    }
+
+    // --- Expression Title Persistence ---
+
+    fun insertCustomExpression(name: String, type: String, value: String): Long {
+        val db = getSafeWritableDatabase()
+        val now = System.currentTimeMillis()
+        val values = android.content.ContentValues().apply {
+            put("name", name.trim().removePrefix("!"))
+            put("type", type)
+            put("value", value)
+            put("created_at", now)
+            put("updated_at", now)
+        }
+        return db.insertWithOnConflict("custom_expressions", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun updateCustomExpression(id: Long, name: String, type: String, value: String): Boolean {
+        val db = getSafeWritableDatabase()
+        val values = android.content.ContentValues().apply {
+            put("name", name.trim().removePrefix("!"))
+            put("type", type)
+            put("value", value)
+            put("updated_at", System.currentTimeMillis())
+        }
+        return db.update("custom_expressions", values, "id = ?", arrayOf(id.toString())) > 0
+    }
+
+    fun deleteCustomExpression(id: Long): Boolean {
+        val db = getSafeWritableDatabase()
+        return db.delete("custom_expressions", "id = ?", arrayOf(id.toString())) > 0
+    }
+
+    fun getAllCustomExpressions(): List<com.arinara.fotara.expression.CustomExpression> {
+        val db = getSafeReadableDatabase()
+        val list = mutableListOf<com.arinara.fotara.expression.CustomExpression>()
+        try {
+            val cursor = db.query(
+                "custom_expressions",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "created_at ASC"
+            )
+            cursor.use {
+                val idCol = it.getColumnIndexOrThrow("id")
+                val nameCol = it.getColumnIndexOrThrow("name")
+                val typeCol = it.getColumnIndexOrThrow("type")
+                val valueCol = it.getColumnIndexOrThrow("value")
+                val createdCol = it.getColumnIndexOrThrow("created_at")
+                val updatedCol = it.getColumnIndexOrThrow("updated_at")
+
+                while (it.moveToNext()) {
+                    val typeStr = it.getString(typeCol)
+                    val type = try {
+                        com.arinara.fotara.expression.ExpressionType.valueOf(typeStr)
+                    } catch (_: Exception) {
+                        com.arinara.fotara.expression.ExpressionType.WORD
+                    }
+                    list.add(
+                        com.arinara.fotara.expression.CustomExpression(
+                            id = it.getLong(idCol),
+                            name = it.getString(nameCol),
+                            type = type,
+                            value = it.getString(valueCol),
+                            createdAt = it.getLong(createdCol),
+                            updatedAt = it.getLong(updatedCol)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("FotaraDbHelper", "Failed to query custom_expressions: ${e.message}")
+        }
+        return list
+    }
+
+    fun getNextExpressionCounter(scopeId: String): Int {
+        val db = getSafeWritableDatabase()
+        db.beginTransaction()
+        try {
+            var currentValue = 0
+            val cursor = db.rawQuery(
+                "SELECT counter_value FROM expression_counters WHERE scope_id = ?",
+                arrayOf(scopeId)
+            )
+            cursor.use {
+                if (it.moveToFirst()) {
+                    currentValue = it.getInt(0)
+                }
+            }
+            val nextValue = currentValue + 1
+            val values = android.content.ContentValues().apply {
+                put("scope_id", scopeId)
+                put("counter_value", nextValue)
+                put("updated_at", System.currentTimeMillis())
+            }
+            db.insertWithOnConflict("expression_counters", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            db.setTransactionSuccessful()
+            return nextValue
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun resetExpressionCounter(scopeId: String) {
+        val db = getSafeWritableDatabase()
+        val values = android.content.ContentValues().apply {
+            put("scope_id", scopeId)
+            put("counter_value", 0)
+            put("updated_at", System.currentTimeMillis())
+        }
+        db.insertWithOnConflict("expression_counters", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 }
 

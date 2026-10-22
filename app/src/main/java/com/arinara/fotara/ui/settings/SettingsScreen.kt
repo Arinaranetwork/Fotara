@@ -176,6 +176,7 @@ import kotlinx.coroutines.launch
  */
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoFixHigh
 import com.arinara.fotara.data.repository.SpaceRepository
 import com.arinara.fotara.data.repository.WorkspaceRepository
 import com.arinara.fotara.feature.backup.ui.BackupRestoreScreen
@@ -187,6 +188,7 @@ enum class SettingsSection(
 ) {
     PROFILE("Profile", "Photo, border, banner, name, email", Icons.Default.Person),
     GENERAL("General", "Grid density, default sort order", Icons.Default.GridView),
+    FEATURE("Feature", "Expression Title and dynamic shorthand tokens", Icons.Default.AutoFixHigh),
     APPEARANCE("Appearance", "Theme mode and display options", Icons.Default.Palette),
     OCR("OCR & Recognition", "On-device text extraction", Icons.Default.TextFields),
     NOTIFICATIONS("Notifications & Deadlines", "Reminders and test alert", Icons.Default.Notifications),
@@ -227,6 +229,7 @@ fun SettingsScreen(
     var showDesignSystemDebugScreen by rememberSaveable { mutableStateOf(false) }
     var showHomeRefinedShowcaseScreen by rememberSaveable { mutableStateOf(false) }
     var showDiagnosticScreen by rememberSaveable { mutableStateOf(false) }
+    var showExpressionScreen by rememberSaveable { mutableStateOf(false) }
 
     val actualFriendsRepo = remember(context, friendsRepository) {
         friendsRepository ?: LocalFriendsRepository(context)
@@ -245,16 +248,19 @@ fun SettingsScreen(
             showDesignSystemDebugScreen = false
             showHomeRefinedShowcaseScreen = false
             showDiagnosticScreen = false
+            showExpressionScreen = false
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(activeSection, activeLegalDocument, showFriendsScreen, showBackupRestoreScreen, showDesignSystemDebugScreen, showHomeRefinedShowcaseScreen, showDiagnosticScreen) {
-        onSubScreenStateChanged?.invoke(activeSection != null || activeLegalDocument != null || showFriendsScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen || showDiagnosticScreen)
+    androidx.compose.runtime.LaunchedEffect(activeSection, activeLegalDocument, showFriendsScreen, showBackupRestoreScreen, showDesignSystemDebugScreen, showHomeRefinedShowcaseScreen, showDiagnosticScreen, showExpressionScreen) {
+        onSubScreenStateChanged?.invoke(activeSection != null || activeLegalDocument != null || showFriendsScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen || showDiagnosticScreen || showExpressionScreen)
     }
 
-    BackHandler(enabled = activeLegalDocument != null || showFriendsScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen || showDiagnosticScreen || activeSection != null) {
+    BackHandler(enabled = activeLegalDocument != null || showFriendsScreen || showBackupRestoreScreen || showDesignSystemDebugScreen || showHomeRefinedShowcaseScreen || showDiagnosticScreen || showExpressionScreen || activeSection != null) {
         if (activeLegalDocument != null) {
             activeLegalDocument = null
+        } else if (showExpressionScreen) {
+            showExpressionScreen = false
         } else if (showFriendsScreen) {
             showFriendsScreen = false
         } else if (showBackupRestoreScreen) {
@@ -483,6 +489,19 @@ fun SettingsScreen(
         BackHandler { showAntiProcrastinationScreen = false }
         com.arinara.fotara.alarm.procrastination.ui.AntiProcrastinationAlarmScreen(
             onBackClick = { showAntiProcrastinationScreen = false },
+            modifier = Modifier.fillMaxSize()
+        )
+        return
+    }
+
+    if (showExpressionScreen) {
+        BackHandler { showExpressionScreen = false }
+        val expressionRepo = remember(context) {
+            com.arinara.fotara.expression.DefaultExpressionRepository.getInstance(context)
+        }
+        ExpressionSettingsScreen(
+            onBack = { showExpressionScreen = false },
+            expressionRepository = expressionRepo,
             modifier = Modifier.fillMaxSize()
         )
         return
@@ -764,6 +783,16 @@ fun SettingsScreen(
                                 subtitle = uiState.userSettings.getEffectiveSavedImageRelativePath(),
                                 icon = Icons.Default.Image,
                                 onClick = { showSavedImageLocationDialog = true }
+                            )
+                        }
+                    }
+                    SettingsSection.FEATURE -> {
+                        item {
+                            SettingsRowItem(
+                                title = "Expression Title",
+                                subtitle = "Configure shorthand tokens, custom words, and combinations",
+                                icon = Icons.Default.AutoFixHigh,
+                                onClick = { showExpressionScreen = true }
                             )
                         }
                     }
