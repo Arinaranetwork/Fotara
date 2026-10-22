@@ -905,7 +905,7 @@ private fun CustomExpressionEditorSheet(
             if (!validation.isValid && validation.errorMessage != null) {
                 AppNoticeBanner(
                     visible = true,
-                    message = validation.errorMessage!!,
+                    message = validation.errorMessage,
                     variant = AppNoticeVariant.ERROR
                 )
             }

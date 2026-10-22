@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,11 +33,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +47,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
@@ -55,8 +56,16 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.arinara.fotara.expression.CustomExpression
 import com.arinara.fotara.expression.ExpressionContext
@@ -67,6 +76,7 @@ import com.arinara.fotara.ui.theme.jigglePressClickable
 
 /**
  * Text field wrapper with autocomplete suggestions triggered by '!' and real-time live preview.
+ * Uses a pure window Popup with position provider to avoid SubcomposeLayout intrinsic measurement collisions.
  * Fully compliant with Electric Slate Dark Theme tokens, shape tokens, and TalkBack accessibility.
  */
 @Composable
@@ -92,11 +102,16 @@ fun ExpressionAutocompleteField(
     keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    var containerWidthDp by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
 
     // Detect active '!' query from current cursor position
     val activeTrigger = remember(value.text, value.selection) {
-        findExpressionTrigger(value.text, value.selection.start)
+        findExpressionTrigger(value.text, value.selection)
     }
+
+    // Dismiss state resets whenever activeTrigger changes
+    var isDismissedManually by remember(activeTrigger) { mutableStateOf(false) }
 
     val suggestions = remember(activeTrigger, customExpressions, disabledBuiltIns) {
         if (activeTrigger != null) {
@@ -110,21 +125,25 @@ fun ExpressionAutocompleteField(
         }
     }
 
-    val showSuggestionsPopup = isFocused && activeTrigger != null && suggestions.isNotEmpty()
+    val showSuggestionsPopup = isFocused && activeTrigger != null && suggestions.isNotEmpty() && !isDismissedManually
 
     // Real-time preview calculation
     val previewText = remember(value.text, context, isFileName, customExpressions, disabledBuiltIns) {
         if (value.text.contains("!")) {
-            val resolved = ExpressionEngine.resolve(
-                input = value.text,
-                context = context.copy(isFileName = isFileName),
-                customExpressions = customExpressions,
-                disabledBuiltIns = disabledBuiltIns
-            )
-            if (isFileName) {
-                ExpressionEngine.sanitizeFileName(resolved)
-            } else {
-                resolved
+            try {
+                val resolved = ExpressionEngine.resolve(
+                    input = value.text,
+                    context = context.copy(isFileName = isFileName),
+                    customExpressions = customExpressions,
+                    disabledBuiltIns = disabledBuiltIns
+                )
+                if (isFileName) {
+                    ExpressionEngine.sanitizeFileName(resolved)
+                } else {
+                    resolved
+                }
+            } catch (_: Exception) {
+                ""
             }
         } else {
             ""
@@ -138,6 +157,9 @@ fun ExpressionAutocompleteField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .onGloballyPositioned { coordinates ->
+                    containerWidthDp = with(density) { coordinates.size.width.toDp() }
+                }
                 .clip(RoundedCornerShape(12.dp))
                 .background(ElectricSlateTokens.SurfacePanel)
                 .border(
@@ -176,43 +198,57 @@ fun ExpressionAutocompleteField(
                 }
             )
 
-            // Autocomplete Popup attached to input box
-            DropdownMenu(
-                expanded = showSuggestionsPopup,
-                onDismissRequest = { /* Keep open while user types */ },
-                properties = PopupProperties(focusable = false),
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .heightIn(max = 240.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(ElectricSlateTokens.SurfaceElevated)
-                    .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(16.dp))
-                    .padding(vertical = 4.dp)
-            ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 230.dp)
+            // Autocomplete Popup attached via Window Popup (Zero SubcomposeLayout Intrinsic Measurement collisions)
+            if (showSuggestionsPopup) {
+                val marginPx = with(density) { 6.dp.roundToPx() }
+                val positionProvider = remember(density, marginPx) {
+                    ExpressionAutocompletePositionProvider(density, marginPx)
+                }
+
+                Popup(
+                    popupPositionProvider = positionProvider,
+                    onDismissRequest = { isDismissedManually = true },
+                    properties = PopupProperties(
+                        focusable = false,
+                        dismissOnClickOutside = true,
+                        dismissOnBackPress = true
+                    )
                 ) {
-                    items(suggestions, key = { it.token }) { suggestion ->
-                        SuggestionItemRow(
-                            suggestion = suggestion,
-                            onClick = {
-                                if (activeTrigger != null) {
-                                    val before = value.text.substring(0, activeTrigger.startIndex)
-                                    val after = value.text.substring(activeTrigger.cursorIndex)
-                                    val replacement = "!${suggestion.token} "
-                                    val newText = before + replacement + after
-                                    val newCursor = before.length + replacement.length
-                                    onValueChange(
-                                        TextFieldValue(
-                                            text = newText,
-                                            selection = TextRange(newCursor)
+                    val popupWidth = if (containerWidthDp > 260.dp) containerWidthDp else 300.dp
+                    Box(
+                        modifier = Modifier
+                            .width(popupWidth)
+                            .heightIn(max = 240.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(ElectricSlateTokens.SurfaceElevated)
+                            .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(16.dp))
+                            .padding(vertical = 4.dp)
+                    ) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 232.dp)
+                        ) {
+                            items(suggestions, key = { it.token }) { suggestion ->
+                                SuggestionItemRow(
+                                    suggestion = suggestion,
+                                    onClick = {
+                                        val trigger = activeTrigger ?: return@SuggestionItemRow
+                                        val before = value.text.substring(0, trigger.startIndex)
+                                        val after = value.text.substring(trigger.cursorIndex)
+                                        val replacement = "!${suggestion.token} "
+                                        val newText = before + replacement + after
+                                        val newCursor = before.length + replacement.length
+                                        onValueChange(
+                                            TextFieldValue(
+                                                text = newText,
+                                                selection = TextRange(newCursor)
+                                            )
                                         )
-                                    )
-                                }
+                                    }
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
@@ -332,6 +368,42 @@ fun ExpressionAutocompleteField(
     )
 }
 
+/**
+ * Custom popup position provider aligning the autocomplete suggestions popup with the text field anchor,
+ * ensuring automatic flipping above the input field if the soft keyboard restricts bottom clearance.
+ */
+private class ExpressionAutocompletePositionProvider(
+    private val density: Density,
+    private val marginPx: Int
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize
+    ): IntOffset {
+        // Clamp x so popup stays fully within window bounds horizontally
+        val x = anchorBounds.left.coerceIn(
+            0,
+            (windowSize.width - popupContentSize.width).coerceAtLeast(0)
+        )
+
+        val spaceBelow = windowSize.height - anchorBounds.bottom
+        val spaceAbove = anchorBounds.top
+
+        // If enough space below, or if space below is greater than space above, place below
+        val y = if (spaceBelow >= popupContentSize.height || spaceBelow >= spaceAbove) {
+            (anchorBounds.bottom + marginPx).coerceAtMost(
+                (windowSize.height - popupContentSize.height).coerceAtLeast(0)
+            )
+        } else {
+            (anchorBounds.top - popupContentSize.height - marginPx).coerceAtLeast(0)
+        }
+
+        return IntOffset(x, y)
+    }
+}
+
 @Composable
 private fun SuggestionItemRow(
     suggestion: ExpressionDefinition,
@@ -383,7 +455,7 @@ private fun SuggestionItemRow(
             Text(
                 text = suggestion.category.name,
                 color = ElectricSlateTokens.TextMuted,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -396,7 +468,9 @@ private data class TriggerInfo(
     val query: String
 )
 
-private fun findExpressionTrigger(text: String, cursor: Int): TriggerInfo? {
+private fun findExpressionTrigger(text: String, selection: TextRange): TriggerInfo? {
+    if (!selection.collapsed) return null
+    val cursor = selection.start
     if (cursor <= 0 || cursor > text.length) return null
 
     var i = cursor - 1
