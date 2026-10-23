@@ -5,7 +5,7 @@ plugins {
 }
 
 val appVersionCode = 74
-val appVersionName = "2.0.2"
+val appVersionName = "2.0.2-beta"
 val appChannel = when {
     appVersionName.contains("alpha", ignoreCase = true) -> "alpha"
     appVersionName.contains("beta", ignoreCase = true) -> "beta"
