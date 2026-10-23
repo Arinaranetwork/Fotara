@@ -77,7 +77,7 @@ interface AppContainer {
 class DefaultAppContainer(override val context: Context) : AppContainer {
 
     private val dbHelper by lazy {
-        FotaraDbHelper(context)
+        FotaraDbHelper.getInstance(context)
     }
 
     override val photoStorageManager: PhotoStorageManager by lazy {

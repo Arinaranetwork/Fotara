@@ -195,6 +195,7 @@ fun CanvasBackgroundPickerDialog(
 @Composable
 fun CanvasSettingsDialog(
     stylusOnlyDrawing: Boolean,
+    palmRejectionEnabled: Boolean = true,
     onToggleStylusOnly: (Boolean) -> Unit,
     onTogglePalmRejection: (Boolean) -> Unit,
     onOpenBackgroundPicker: () -> Unit,
@@ -251,7 +252,7 @@ fun CanvasSettingsDialog(
                         Text("Ignores broad hand touches when pen is active.", color = ElectricSlateTokens.TextMuted, fontSize = 12.sp)
                     }
                     Switch(
-                        checked = true,
+                        checked = palmRejectionEnabled,
                         onCheckedChange = onTogglePalmRejection,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = ElectricSlateTokens.PrimaryAccent,

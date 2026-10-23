@@ -13,7 +13,6 @@ import com.arinara.fotara.data.model.Photo
 import com.arinara.fotara.data.model.PhotoGroup
 import com.arinara.fotara.data.model.RecentDestination
 import com.arinara.fotara.data.model.Subfolder
-
 import com.arinara.fotara.data.model.TextNote
 import androidx.compose.runtime.Immutable
 
@@ -22,14 +21,16 @@ sealed interface UndoAction {
         val photos: List<Photo>,
         val groups: List<PhotoGroup>,
         val documents: List<DocumentNote> = emptyList(),
-        val textNotes: List<TextNote> = emptyList()
+        val textNotes: List<TextNote> = emptyList(),
+        val canvasNotes: List<com.arinara.fotara.data.model.CanvasNote> = emptyList()
     ) : UndoAction
 
     data class Move(
         val photoMoves: List<Triple<Long, Long, Long?>>, // photoId, originalFolderId, originalSubfolderId
         val groupMoves: List<Triple<Long, Long, Long?>>,  // groupId, originalFolderId, originalSubfolderId
         val documentMoves: List<Triple<Long, Long, Long?>> = emptyList(), // docId, originalFolderId, originalSubfolderId
-        val textNoteMoves: List<Triple<Long, Long, Long?>> = emptyList() // textNoteId, originalFolderId, originalSubfolderId
+        val textNoteMoves: List<Triple<Long, Long, Long?>> = emptyList(), // textNoteId, originalFolderId, originalSubfolderId
+        val canvasNoteMoves: List<Triple<Long, Long, Long?>> = emptyList() // canvasNoteId, originalFolderId, originalSubfolderId
     ) : UndoAction
 
     data class Ungroup(

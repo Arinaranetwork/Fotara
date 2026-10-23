@@ -70,6 +70,7 @@ data class CanvasToolState(
     val highlighterBlendMode: StrokeBlendMode = StrokeBlendMode.MULTIPLY,
     val eraserRadius: Float = 24.0f,
     val stylusOnlyDrawing: Boolean = false,
+    val palmRejectionEnabled: Boolean = true,
     val selection: CanvasSelection = CanvasSelection.Empty,
     val textFontSizeSp: Float = 18f,
     val textColor: Long = 0xFFF8FAFC, // Electric Slate TextPrimary

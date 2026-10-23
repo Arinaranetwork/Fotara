@@ -35,8 +35,40 @@ data class CanvasNote(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
         other as CanvasNote
-        return id == other.id
+        return id == other.id &&
+            folderId == other.folderId &&
+            subfolderId == other.subfolderId &&
+            title == other.title &&
+            thumbnailPath == other.thumbnailPath &&
+            createdAt == other.createdAt &&
+            updatedAt == other.updatedAt &&
+            addedAt == other.addedAt &&
+            tagColor == other.tagColor &&
+            linkedDeadline == other.linkedDeadline &&
+            scheduledAt == other.scheduledAt &&
+            alertType == other.alertType &&
+            scheduleTitle == other.scheduleTitle &&
+            isPinned == other.isPinned &&
+            groupId == other.groupId &&
+            isTrashed == other.isTrashed &&
+            deletedAt == other.deletedAt &&
+            (dataBlob?.contentEquals(other.dataBlob) ?: (other.dataBlob == null))
     }
 
-    override fun hashCode(): Int = id.hashCode()
+    override fun hashCode(): Int {
+        var result = id.hashCode()
+        result = 31 * result + folderId.hashCode()
+        result = 31 * result + (subfolderId?.hashCode() ?: 0)
+        result = 31 * result + title.hashCode()
+        result = 31 * result + (dataBlob?.contentHashCode() ?: 0)
+        result = 31 * result + (thumbnailPath?.hashCode() ?: 0)
+        result = 31 * result + updatedAt.hashCode()
+        result = 31 * result + (tagColor?.hashCode() ?: 0)
+        result = 31 * result + (linkedDeadline?.hashCode() ?: 0)
+        result = 31 * result + (scheduledAt?.hashCode() ?: 0)
+        result = 31 * result + isPinned.hashCode()
+        result = 31 * result + (groupId?.hashCode() ?: 0)
+        result = 31 * result + isTrashed.hashCode()
+        return result
+    }
 }

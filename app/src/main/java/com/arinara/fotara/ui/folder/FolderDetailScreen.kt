@@ -1065,7 +1065,7 @@ fun FolderDetailScreen(
 
                 val isOverlayOpen = quickActionPhoto != null || photoToRename != null || inspectingPhoto != null || inspectingGroup != null || groupActionTarget != null || groupToRename != null || groupToDelete != null || showCreateGroupDialog || showAddPhotosToGroupDialog || showAddToGroupDialog || photoToCopy != null || groupToMove != null || showExportFormatDialog || groupToExport != null || showBatchRenameDialog || showUnifiedShareDialog || inspectingDocument != null || inspectingDocx != null || textNoteActionTarget != null || canvasNoteActionTarget != null || showMovePhotosDialog || showBatchColorDialog
                 val canRefresh = PullToRefreshHelper.canTriggerRefresh(
-                    isAtTop = gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0,
+                    isAtTop = remember(gridState) { androidx.compose.runtime.derivedStateOf { gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0 } }.value,
                     isMultiSelectActive = uiState.isBatchSelectMode || uiState.isSubfolderMultiSelectMode,
                     isSearchFocused = false,
                     isOverlayOpen = isOverlayOpen
@@ -2041,6 +2041,44 @@ fun FolderDetailScreen(
                 viewModel.splitPdfToImages(doc.id)
                 pdfToSplit = null
             }
+        )
+    }
+
+    documentToColor?.let { doc ->
+        GroupColorDialog(
+            onDismiss = { documentToColor = null },
+            onSelectColor = { colorHex ->
+                viewModel.updateDocumentTagColor(doc.id, colorHex)
+                documentToColor = null
+            }
+        )
+    }
+
+    documentToDeadline?.let { doc ->
+        LaunchedEffect(doc.id) {
+            if (doc.linkedDeadline != null) {
+                viewModel.setDocumentDeadline(doc.id, null)
+            } else {
+                val tomorrow = System.currentTimeMillis() + 24 * 60 * 60 * 1000L
+                viewModel.setDocumentDeadline(doc.id, tomorrow)
+            }
+            documentToDeadline = null
+        }
+    }
+
+    documentToMove?.let { doc ->
+        DestinationPickerDialog(
+            title = "Move Document \"${doc.name}\" to...",
+            recentDestinations = uiState.recentDestinations.filter { it.type != DestinationType.GROUP },
+            availableFolders = uiState.availableFolders,
+            currentFolderId = uiState.folder?.id,
+            currentSubfolders = uiState.subfolders,
+            workspaces = uiState.workspaces,
+            onSelectDestination = { targetFolderId, targetSubId ->
+                viewModel.moveDocument(doc.id, targetFolderId, targetSubId)
+                documentToMove = null
+            },
+            onDismiss = { documentToMove = null }
         )
     }
 

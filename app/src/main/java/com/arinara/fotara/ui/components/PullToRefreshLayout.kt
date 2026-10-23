@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -174,7 +175,7 @@ fun PullToRefreshLayout(
 
         // Indicator floating strictly above top edge fade
         val activeOrHolding = isRefreshing || isHoldingFloor
-        val indicatorVisible = pullOffset.value > 0f || activeOrHolding
+        val indicatorVisible by remember(activeOrHolding) { derivedStateOf { pullOffset.value > 0f || activeOrHolding } }
 
         if (indicatorVisible) {
             val contentDesc = stringResource(

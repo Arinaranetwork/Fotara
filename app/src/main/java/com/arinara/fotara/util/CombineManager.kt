@@ -62,18 +62,19 @@ class CombineManager(
     private val photoDrawingRepository: PhotoDrawingRepository? = null
 ) {
     private val appContext = context.applicationContext
+    private val resolvedAssetManager by lazy { canvasAssetManager ?: CanvasAssetManager(appContext) }
     private val docxExporter = DocxExporter(appContext)
 
     private val resolvedPhotoDrawingRepository by lazy {
         photoDrawingRepository ?: run {
-            val dbHelper = FotaraDbHelper(appContext)
+            val dbHelper = FotaraDbHelper.getInstance(appContext)
             SqlitePhotoDrawingRepository(dbHelper)
         }
     }
 
     private val resolvedCanvasRepository by lazy {
         canvasRepository ?: run {
-            val dbHelper = FotaraDbHelper(appContext)
+            val dbHelper = FotaraDbHelper.getInstance(appContext)
             val assetMgr = canvasAssetManager ?: CanvasAssetManager(appContext)
             com.arinara.fotara.canvas.persistence.DefaultCanvasRepository(
                 canvasDao = com.arinara.fotara.canvas.persistence.SqliteCanvasDao(dbHelper),
@@ -196,7 +197,7 @@ class CombineManager(
                         ensureActive()
                         val doc = resolvedCanvasRepository.loadDocument(item.canvasNote.id)
                         if (doc != null && !isCanvasEmpty(doc)) {
-                            val bitmap = CanvasImageExporter.renderCanvasToBitmap(doc, canvasAssetManager)
+                            val bitmap = CanvasImageExporter.renderCanvasToBitmap(doc, resolvedAssetManager)
                             if (bitmap != null) {
                                 try {
                                     currentPageNum++
@@ -282,7 +283,7 @@ class CombineManager(
                 is CombineItem.CanvasNoteItem -> {
                     val doc = resolvedCanvasRepository.loadDocument(item.canvasNote.id)
                     if (doc != null && !isCanvasEmpty(doc)) {
-                        val bitmap = CanvasImageExporter.renderCanvasToBitmap(doc, canvasAssetManager)
+                        val bitmap = CanvasImageExporter.renderCanvasToBitmap(doc, resolvedAssetManager)
                         if (bitmap != null) {
                             val tempFile = File(exportsDir, "temp_canvas_${item.canvasNote.id}_${System.currentTimeMillis()}.png")
                             FileOutputStream(tempFile).use { fos ->

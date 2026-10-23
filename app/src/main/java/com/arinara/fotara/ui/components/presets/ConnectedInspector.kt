@@ -20,12 +20,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -46,6 +49,8 @@ fun ConnectedInspector(
 ) {
     val scaleAnim = remember { Animatable(if (visible) 1f else 0f) }
     val alphaAnim = remember { Animatable(if (visible) 1f else 0f) }
+    val neckPath = remember { Path() }
+    val lateralPath = remember { Path() }
 
     LaunchedEffect(visible) {
         if (visible) {
@@ -57,7 +62,8 @@ fun ConnectedInspector(
         }
     }
 
-    if (scaleAnim.value > 0.01f) {
+    val shouldRender by remember { derivedStateOf { scaleAnim.value > 0.01f } }
+    if (shouldRender) {
         Column(
             modifier = modifier
                 .graphicsLayer {
@@ -106,51 +112,49 @@ fun ConnectedInspector(
                 val topNeckHalfWidth = 24.dp.toPx()
                 val bottomNeckHalfWidth = 14.dp.toPx()
 
-                val path = Path().apply {
-                    // Top attachment point (broad base at bottom of card)
-                    moveTo(anchorCenterX - topNeckHalfWidth, 0f)
-                    lineTo(anchorCenterX + topNeckHalfWidth, 0f)
+                neckPath.reset()
+                // Top attachment point (broad base at bottom of card)
+                neckPath.moveTo(anchorCenterX - topNeckHalfWidth, 0f)
+                neckPath.lineTo(anchorCenterX + topNeckHalfWidth, 0f)
 
-                    // Right organic bezier curve down to bottom tool anchor
-                    cubicTo(
-                        anchorCenterX + topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
-                        anchorCenterX + bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
-                        anchorCenterX + bottomNeckHalfWidth, canvasHeight
-                    )
+                // Right organic bezier curve down to bottom tool anchor
+                neckPath.cubicTo(
+                    anchorCenterX + topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
+                    anchorCenterX + bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
+                    anchorCenterX + bottomNeckHalfWidth, canvasHeight
+                )
 
-                    // Bottom attachment line
-                    lineTo(anchorCenterX - bottomNeckHalfWidth, canvasHeight)
+                // Bottom attachment line
+                neckPath.lineTo(anchorCenterX - bottomNeckHalfWidth, canvasHeight)
 
-                    // Left organic bezier curve up to card
-                    cubicTo(
-                        anchorCenterX - bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
-                        anchorCenterX - topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
-                        anchorCenterX - topNeckHalfWidth, 0f
-                    )
-                    close()
-                }
+                // Left organic bezier curve up to card
+                neckPath.cubicTo(
+                    anchorCenterX - bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
+                    anchorCenterX - topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
+                    anchorCenterX - topNeckHalfWidth, 0f
+                )
+                neckPath.close()
 
-                drawPath(path = path, color = containerColor)
+                drawPath(path = neckPath, color = containerColor)
 
                 // Draw subtle lateral outlines matching BorderSubtle
-                val lateralPath = Path().apply {
-                    moveTo(anchorCenterX + topNeckHalfWidth, 0f)
-                    cubicTo(
-                        anchorCenterX + topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
-                        anchorCenterX + bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
-                        anchorCenterX + bottomNeckHalfWidth, canvasHeight
-                    )
-                    moveTo(anchorCenterX - bottomNeckHalfWidth, canvasHeight)
-                    cubicTo(
-                        anchorCenterX - bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
-                        anchorCenterX - topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
-                        anchorCenterX - topNeckHalfWidth, 0f
-                    )
-                }
+                lateralPath.reset()
+                lateralPath.moveTo(anchorCenterX + topNeckHalfWidth, 0f)
+                lateralPath.cubicTo(
+                    anchorCenterX + topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
+                    anchorCenterX + bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
+                    anchorCenterX + bottomNeckHalfWidth, canvasHeight
+                )
+                lateralPath.moveTo(anchorCenterX - bottomNeckHalfWidth, canvasHeight)
+                lateralPath.cubicTo(
+                    anchorCenterX - bottomNeckHalfWidth * 1.3f, canvasHeight * 0.65f,
+                    anchorCenterX - topNeckHalfWidth * 0.7f, canvasHeight * 0.45f,
+                    anchorCenterX - topNeckHalfWidth, 0f
+                )
                 drawPath(
                     path = lateralPath,
                     color = borderColor,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                    style = Stroke(width = 1.dp.toPx())
                 )
             }
         }

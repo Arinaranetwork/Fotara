@@ -885,12 +885,13 @@ class FolderDetailViewModel(
         val groupIds = _uiState.value.selectedGroupIds.toList()
         val docIds = _uiState.value.selectedDocumentIds.toList()
         val textNoteIds = _uiState.value.selectedTextNoteIds.toList()
-        val totalCount = photoIds.size + groupIds.size + docIds.size + textNoteIds.size
+        val canvasNoteIds = _uiState.value.selectedCanvasNoteIds.toList()
+        val totalCount = photoIds.size + groupIds.size + docIds.size + textNoteIds.size + canvasNoteIds.size
         if (totalCount !in 2..4) {
             _uiState.update { it.copy(userMessage = "Select between 2 and 4 items to link") }
             return
         }
-        val itemIds = photoIds + groupIds.map { -it } + docIds.map { it + 1_000_000_000L } + textNoteIds.map { it + 2_000_000_000L }
+        val itemIds = photoIds + groupIds.map { -it } + docIds.map { it + 1_000_000_000L } + textNoteIds.map { it + 2_000_000_000L } + canvasNoteIds.map { it + 3_000_000_000L }
         viewModelScope.launch {
             photoRepository.createGridLinkGroup(itemIds)
             exitBatchSelectMode()
@@ -1024,6 +1025,7 @@ class FolderDetailViewModel(
         val groupsToTrash = _uiState.value.groups.filter { it.id in groupIds }
         val docsToTrash = _uiState.value.documents.filter { it.id in docIds }
         val textNotesToTrash = _uiState.value.textNotes.filter { it.id in textNoteIds }
+        val canvasNotesToTrash = _uiState.value.canvasNotes.filter { it.id in canvasNoteIds }
 
         viewModelScope.launch {
             if (photoIds.isNotEmpty()) {
@@ -1048,7 +1050,7 @@ class FolderDetailViewModel(
             val total = photoIds.size + groupIds.size + docIds.size + textNoteIds.size + canvasNoteIds.size
             _uiState.update {
                 it.copy(
-                    pendingUndoAction = UndoAction.Delete(photosToTrash, groupsToTrash, docsToTrash, textNotesToTrash),
+                    pendingUndoAction = UndoAction.Delete(photosToTrash, groupsToTrash, docsToTrash, textNotesToTrash, canvasNotesToTrash),
                     userMessage = "Moved $total item${if (total > 1) "s" else ""} to Trash"
                 )
             }
@@ -1067,10 +1069,12 @@ class FolderDetailViewModel(
         val currentGroups = _uiState.value.groups.filter { it.id in groupIds }
         val currentDocs = _uiState.value.documents.filter { it.id in docIds }
         val currentTextNotes = _uiState.value.textNotes.filter { it.id in textNoteIds }
+        val currentCanvasNotes = _uiState.value.canvasNotes.filter { it.id in canvasNoteIds }
         val photoMoves = currentPhotos.map { Triple(it.id, it.folderId, it.subfolderId) }
         val groupMoves = currentGroups.map { Triple(it.id, it.folderId, it.subfolderId) }
         val docMoves = currentDocs.map { Triple(it.id, it.folderId, it.subfolderId) }
         val textNoteMoves = currentTextNotes.map { Triple(it.id, it.folderId, it.subfolderId) }
+        val canvasNoteMoves = currentCanvasNotes.map { Triple(it.id, it.folderId, it.subfolderId) }
 
         viewModelScope.launch {
             if (photoIds.isNotEmpty()) {
@@ -1101,7 +1105,7 @@ class FolderDetailViewModel(
             val total = photoIds.size + groupIds.size + docIds.size + textNoteIds.size + canvasNoteIds.size
             _uiState.update {
                 it.copy(
-                    pendingUndoAction = UndoAction.Move(photoMoves, groupMoves, docMoves, textNoteMoves),
+                    pendingUndoAction = UndoAction.Move(photoMoves, groupMoves, docMoves, textNoteMoves, canvasNoteMoves),
                     userMessage = "Moved $total item${if (total > 1) "s" else ""}"
                 )
             }
@@ -1169,6 +1173,9 @@ class FolderDetailViewModel(
                     for (textNote in action.textNotes) {
                         textNoteRepository?.restoreTextNote(textNote.id)
                     }
+                    for (canvasNote in action.canvasNotes) {
+                        canvasNoteRepository?.restoreCanvasNote(canvasNote.id)
+                    }
                     _uiState.update { it.copy(pendingUndoAction = null, userMessage = "Undo: Items restored") }
                 }
                 is UndoAction.Move -> {
@@ -1183,6 +1190,9 @@ class FolderDetailViewModel(
                     }
                     for ((textNoteId, origFolder, origSub) in action.textNoteMoves) {
                         textNoteRepository?.moveTextNote(textNoteId, origFolder, origSub)
+                    }
+                    for ((canvasNoteId, origFolder, origSub) in action.canvasNoteMoves) {
+                        canvasNoteRepository?.moveCanvasNote(canvasNoteId, origFolder, origSub)
                     }
                     _uiState.update { it.copy(pendingUndoAction = null, userMessage = "Undo: Items moved back") }
                 }
@@ -1278,7 +1288,8 @@ class FolderDetailViewModel(
         val groupIds = _uiState.value.selectedGroupIds.toList()
         val docIds = _uiState.value.selectedDocumentIds.toList()
         val textNoteIds = _uiState.value.selectedTextNoteIds.toList()
-        if (photoIds.isEmpty() && groupIds.isEmpty() && docIds.isEmpty() && textNoteIds.isEmpty()) return
+        val canvasNoteIds = _uiState.value.selectedCanvasNoteIds.toList()
+        if (photoIds.isEmpty() && groupIds.isEmpty() && docIds.isEmpty() && textNoteIds.isEmpty() && canvasNoteIds.isEmpty()) return
         viewModelScope.launch {
             if (photoIds.isNotEmpty()) {
                 photoRepository.updatePhotosTagColor(photoIds, colorHex)
@@ -1291,6 +1302,9 @@ class FolderDetailViewModel(
             }
             for (tnId in textNoteIds) {
                 textNoteRepository?.updateTagColor(tnId, colorHex)
+            }
+            for (cnId in canvasNoteIds) {
+                canvasNoteRepository?.updateTagColor(cnId, colorHex)
             }
             exitBatchSelectMode()
             _uiState.update { it.copy(userMessage = "Updated tag color") }

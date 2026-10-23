@@ -15,7 +15,7 @@ class DbSchemaV22Test {
     @Test
     fun databaseVersion_isAtLeastTwentyTwo() {
         assertTrue(FotaraDbHelper.DATABASE_VERSION >= 22)
-        assertEquals(25, FotaraDbHelper.DATABASE_VERSION)
+        assertEquals(26, FotaraDbHelper.DATABASE_VERSION)
     }
 
     @Test

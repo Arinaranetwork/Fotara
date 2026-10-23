@@ -520,7 +520,8 @@ fun MainNavigation(
                         folderRepository = appContainer.folderRepository,
                         settingsRepository = appContainer.settingsRepository,
                         scheduleManager = appContainer.noteScheduleManager,
-                        workspaceRepository = appContainer.workspaceRepository
+                        workspaceRepository = appContainer.workspaceRepository,
+                        friendsRepository = appContainer.friendsRepository
                     )
                 )
                 com.arinara.fotara.ui.canvas.CanvasScreen(

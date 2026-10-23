@@ -24,6 +24,8 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,13 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.arinara.fotara.feature.collab.model.CollabRole
 import com.arinara.fotara.feature.collab.model.CollabRoomCode
 import com.arinara.fotara.theme.ElmsSans
 import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import com.arinara.fotara.ui.theme.jigglePressClickable
 
 /**
- * Modal dialog to enter a 6-digit collaborative room code (FT-XXXX) or initiate a new room.
+ * Modal dialog to enter a custom 4-character collaborative room code (`FT-XXXX`) to host or join
+ * a live study canvas.
  * When [activeRoomCode] is non-null, enforces the Active Session Guard so the user cannot create
  * or join another session without explicitly leaving the current session first.
  */
@@ -59,9 +63,15 @@ fun CollabRoomJoinDialog(
     onJoinRoom: (String) -> Unit,
     onCreateRoom: () -> Unit,
     modifier: Modifier = Modifier,
+    onCreateCustomRoom: ((String) -> Unit)? = null,
+    localUserName: String = "Fotara User",
+    localUserRole: CollabRole = CollabRole.MEMBER,
     activeRoomCode: String? = null,
     activePeerCount: Int = 1,
+    externalErrorMessage: String? = null,
+    onClearExternalError: (() -> Unit)? = null,
     onOpenChat: (() -> Unit)? = null,
+    onOpenRoomSettings: (() -> Unit)? = null,
     onLeaveActiveRoom: (() -> Unit)? = null
 ) {
     var rawSuffix by remember { mutableStateOf("") }
@@ -69,6 +79,7 @@ fun CollabRoomJoinDialog(
     var keypadMode by remember { mutableStateOf(false) } // false = 0-9 digits, true = A-Z alphabet
     val clipboardManager = LocalClipboardManager.current
 
+    val displayedError = errorMessage ?: externalErrorMessage
     val dialogShape = RoundedCornerShape(20.dp)
 
     Dialog(
@@ -111,13 +122,22 @@ fun CollabRoomJoinDialog(
                             )
                         }
 
-                        Text(
-                            text = if (activeRoomCode != null) "Active Study Session" else "Live Study Canvas",
-                            fontFamily = ElmsSans,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            color = ElectricSlateTokens.TextPrimary
-                        )
+                        Column {
+                            Text(
+                                text = if (activeRoomCode != null) "Active Study Session" else "Live Study Canvas",
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = ElectricSlateTokens.TextPrimary
+                            )
+                            Text(
+                                text = "Connected as $localUserName",
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 11.sp,
+                                color = ElectricSlateTokens.PrimaryAccent
+                            )
+                        }
                     }
 
                     Box(
@@ -145,7 +165,11 @@ fun CollabRoomJoinDialog(
                     // ACTIVE SESSION GUARD: Prevent creating/joining while a room is active
                     // =========================================================================
                     Text(
-                        text = "You are already connected to an active collaborative room. Leave the current room first before creating or joining another session.",
+                        text = if (localUserRole == CollabRole.HOST) {
+                            "You are hosting this room. If you leave, the room will close for all participants."
+                        } else {
+                            "You are connected to an active collaborative room. Leave the current room first before creating or joining another session."
+                        },
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp,
@@ -171,7 +195,7 @@ fun CollabRoomJoinDialog(
                         ) {
                             Column {
                                 Text(
-                                    text = "Current Room Code",
+                                    text = "Current Room Code • ${localUserRole.name}",
                                     fontFamily = ElmsSans,
                                     fontSize = 11.sp,
                                     color = ElectricSlateTokens.TextMuted
@@ -226,7 +250,7 @@ fun CollabRoomJoinDialog(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (onOpenChat != null) {
                             Row(
@@ -247,9 +271,38 @@ fun CollabRoomJoinDialog(
                                 )
                                 Spacer(modifier = Modifier.size(6.dp))
                                 Text(
-                                    text = "Open Chat",
+                                    text = "Chat",
                                     fontFamily = ElmsSans,
                                     fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = ElectricSlateTokens.TextPrimary
+                                )
+                            }
+                        }
+
+                        if (onOpenRoomSettings != null) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(ElectricSlateTokens.SurfaceElevated)
+                                    .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
+                                    .jigglePressClickable(onClick = onOpenRoomSettings),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Settings,
+                                    contentDescription = null,
+                                    tint = ElectricSlateTokens.TextPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.size(6.dp))
+                                Text(
+                                    text = "Settings",
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp,
                                     color = ElectricSlateTokens.TextPrimary
                                 )
@@ -268,7 +321,7 @@ fun CollabRoomJoinDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Leave Session",
+                                text = "Leave",
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
@@ -278,7 +331,7 @@ fun CollabRoomJoinDialog(
                     }
                 } else {
                     Text(
-                        text = "Enter 6-digit room code or initiate a new study canvas.",
+                        text = "Enter your custom 4-character room code (FT-XXXX) to create a room as Host or join an existing study room.",
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp,
@@ -287,9 +340,9 @@ fun CollabRoomJoinDialog(
                         textAlign = TextAlign.Start
                     )
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    // Room Code Slot Boxes: [ FT - ] [ S1 ] [ S2 ] [ S3 ] [ S4 ]
+                    // Room Code Slot Boxes: [ FT - ] [ S1 ] [ S2 ] [ S3 ] [ S4 ] + [ Auto ]
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
@@ -299,17 +352,17 @@ fun CollabRoomJoinDialog(
                         Box(
                             modifier = Modifier
                                 .height(48.dp)
-                                .padding(end = 8.dp)
+                                .padding(end = 6.dp)
                                 .background(ElectricSlateTokens.SurfaceElevated, RoundedCornerShape(12.dp))
                                 .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
-                                .padding(horizontal = 12.dp),
+                                .padding(horizontal = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "FT -",
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp,
+                                fontSize = 16.sp,
                                 color = ElectricSlateTokens.TextMuted,
                                 letterSpacing = 1.sp
                             )
@@ -322,8 +375,8 @@ fun CollabRoomJoinDialog(
 
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
-                                    .padding(horizontal = 3.dp)
+                                    .size(46.dp)
+                                    .padding(horizontal = 2.dp)
                                     .background(ElectricSlateTokens.BgCanvas, RoundedCornerShape(12.dp))
                                     .border(
                                         width = if (isCurrentSlot) 2.dp else 1.dp,
@@ -341,20 +394,57 @@ fun CollabRoomJoinDialog(
                                 )
                             }
                         }
+
+                        // Quick Randomize / Auto-Fill Custom Code Button
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 6.dp)
+                                .height(46.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(ElectricSlateTokens.SurfaceElevated)
+                                .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
+                                .jigglePressClickable {
+                                    rawSuffix = CollabRoomCode.generateRandomCode().removePrefix(CollabRoomCode.PREFIX)
+                                    errorMessage = null
+                                    onClearExternalError?.invoke()
+                                }
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Refresh,
+                                    contentDescription = "Generate Code",
+                                    tint = ElectricSlateTokens.PrimaryAccent,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Auto",
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.sp,
+                                    color = ElectricSlateTokens.TextPrimary
+                                )
+                            }
+                        }
                     }
 
-                    if (errorMessage != null) {
+                    if (!displayedError.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = errorMessage ?: "",
+                            text = displayedError,
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Normal,
                             fontSize = 12.sp,
-                            color = ElectricSlateTokens.Destructive
+                            color = ElectricSlateTokens.Destructive,
+                            textAlign = TextAlign.Center
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // Keypad Mode Switcher Row: [ Numbers 0-9 ] [ Letters A-Z ]
                     Row(
@@ -424,6 +514,7 @@ fun CollabRoomJoinDialog(
                                                 if (rawSuffix.length < 4) {
                                                     rawSuffix += key
                                                     errorMessage = null
+                                                    onClearExternalError?.invoke()
                                                 }
                                             }
                                         )
@@ -441,6 +532,7 @@ fun CollabRoomJoinDialog(
                                     onClick = {
                                         rawSuffix = ""
                                         errorMessage = null
+                                        onClearExternalError?.invoke()
                                     }
                                 )
 
@@ -451,6 +543,7 @@ fun CollabRoomJoinDialog(
                                         if (rawSuffix.isNotEmpty()) {
                                             rawSuffix = rawSuffix.dropLast(1)
                                             errorMessage = null
+                                            onClearExternalError?.invoke()
                                         }
                                     }
                                 )
@@ -478,6 +571,7 @@ fun CollabRoomJoinDialog(
                                                 if (rawSuffix.length < 4) {
                                                     rawSuffix += key
                                                     errorMessage = null
+                                                    onClearExternalError?.invoke()
                                                 }
                                             }
                                         )
@@ -491,6 +585,7 @@ fun CollabRoomJoinDialog(
                                                 if (rawSuffix.isNotEmpty()) {
                                                     rawSuffix = rawSuffix.dropLast(1)
                                                     errorMessage = null
+                                                    onClearExternalError?.invoke()
                                                 }
                                             }
                                         )
@@ -500,9 +595,10 @@ fun CollabRoomJoinDialog(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
                     // Bottom Action Buttons: [ Create Room ] [ Join Room ]
+                    val isCodeComplete = rawSuffix.length == 4
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -513,32 +609,52 @@ fun CollabRoomJoinDialog(
                                 .height(44.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(ElectricSlateTokens.SurfaceElevated)
-                                .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
-                                .clickable(onClick = onCreateRoom),
+                                .border(
+                                    1.dp,
+                                    if (isCodeComplete) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .clickable {
+                                    when {
+                                        rawSuffix.length == 4 -> {
+                                            val customFullCode = "FT-$rawSuffix"
+                                            if (onCreateCustomRoom != null) {
+                                                onCreateCustomRoom(customFullCode)
+                                            } else {
+                                                onCreateRoom()
+                                            }
+                                        }
+                                        rawSuffix.isEmpty() -> {
+                                            onCreateRoom()
+                                        }
+                                        else -> {
+                                            errorMessage = "Enter all 4 characters (or tap Auto) to create your room"
+                                        }
+                                    }
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Create Room",
+                                text = if (isCodeComplete) "Create (FT-$rawSuffix)" else "Create Room",
                                 fontFamily = ElmsSans,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp,
                                 color = ElectricSlateTokens.TextPrimary
                             )
                         }
 
-                        val isJoinEnabled = rawSuffix.length == 4
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(44.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isJoinEnabled) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TrackInactive)
+                                .background(if (isCodeComplete) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TrackInactive)
                                 .border(
                                     1.dp,
-                                    if (isJoinEnabled) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle,
+                                    if (isCodeComplete) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle,
                                     RoundedCornerShape(12.dp)
                                 )
-                                .clickable(enabled = isJoinEnabled) {
+                                .clickable(enabled = isCodeComplete) {
                                     val fullCode = "FT-$rawSuffix"
                                     if (CollabRoomCode.isValid(fullCode)) {
                                         onJoinRoom(fullCode)
@@ -549,11 +665,11 @@ fun CollabRoomJoinDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Join",
+                                text = if (isCodeComplete) "Join (FT-$rawSuffix)" else "Join",
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
-                                color = if (isJoinEnabled) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted
+                                color = if (isCodeComplete) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted
                             )
                         }
                     }

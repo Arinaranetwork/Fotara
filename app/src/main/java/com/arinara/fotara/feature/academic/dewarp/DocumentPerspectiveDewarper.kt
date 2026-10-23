@@ -253,6 +253,7 @@ class WhiteboardContrastFilter {
 
     /**
      * Filters a pixel buffer to whiten background shadows while boosting pen stroke contrast.
+     * Mutates the buffer's pixel array in-place for zero extra multi-megabyte heap allocation.
      *
      * @param buffer Input ARGB pixel buffer.
      * @param contrastMultiplier Contrast amplification factor (default: 1.6x).
@@ -263,14 +264,14 @@ class WhiteboardContrastFilter {
         contrastMultiplier: Float = 1.6f,
         shadowReductionThreshold: Int = 180
     ): PixelBuffer {
-        val outputPixels = processPixels(
+        processPixelsInPlace(
             pixels = buffer.pixels,
             width = buffer.width,
             height = buffer.height,
             contrastMultiplier = contrastMultiplier,
             shadowReductionThreshold = shadowReductionThreshold
         )
-        return PixelBuffer(buffer.width, buffer.height, outputPixels)
+        return buffer
     }
 
     /**
@@ -285,7 +286,20 @@ class WhiteboardContrastFilter {
     ): IntArray {
         val total = kotlin.math.min(pixels.size, (width * height).coerceAtLeast(0))
         if (total == 0) return IntArray(0)
-        val out = IntArray(total)
+        val out = pixels.copyOf(total)
+        processPixelsInPlace(out, width, height, contrastMultiplier, shadowReductionThreshold)
+        return out
+    }
+
+    private fun processPixelsInPlace(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+        contrastMultiplier: Float = 1.6f,
+        shadowReductionThreshold: Int = 180
+    ) {
+        val total = kotlin.math.min(pixels.size, (width * height).coerceAtLeast(0))
+        if (total == 0) return
 
         // 1. Calculate approximate luminance distribution to detect ambient lighting
         var sumLuminance = 0L
@@ -334,10 +348,8 @@ class WhiteboardContrastFilter {
                 newB = centeredB.toInt().coerceIn(0, 255)
             }
 
-            out[i] = (a shl 24) or (newR shl 16) or (newG shl 8) or newB
+            pixels[i] = (a shl 24) or (newR shl 16) or (newG shl 8) or newB
         }
-
-        return out
     }
 }
 
@@ -480,7 +492,7 @@ object PerspectiveDewarpEngine {
     }
 
     /**
-     * Applies optical enhancement filters to rectified pixel buffers.
+     * Applies optical enhancement filters to rectified pixel buffers in-place.
      */
     fun applyFilter(
         buffer: PixelBuffer,
@@ -496,7 +508,6 @@ object PerspectiveDewarpEngine {
 
     private fun applyHighContrastBw(buffer: PixelBuffer): PixelBuffer {
         val total = buffer.width * buffer.height
-        val out = IntArray(total)
         val pixels = buffer.pixels
 
         var sumLum = 0L
@@ -516,12 +527,12 @@ object PerspectiveDewarpEngine {
             val g = (c ushr 8) and 0xFF
             val b = c and 0xFF
             val lum = (77 * r + 150 * g + 29 * b) shr 8
-            out[i] = if (lum < threshold) {
+            pixels[i] = if (lum < threshold) {
                 -0x1000000 // 0xFF000000 pure black
             } else {
                 -1 // 0xFFFFFFFF pure white
             }
         }
-        return PixelBuffer(buffer.width, buffer.height, out)
+        return buffer
     }
 }

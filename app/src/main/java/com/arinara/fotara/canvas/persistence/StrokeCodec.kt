@@ -52,13 +52,14 @@ object StrokeCodec {
 
             if (points.isNotEmpty()) {
                 val first = points[0]
+                val firstPressureByte = (first.pressure * 255.0f).roundToInt().coerceIn(0, 255)
                 out.writeFloat(first.x)
                 out.writeFloat(first.y)
-                out.writeByte((first.pressure * 255.0f).roundToInt().coerceIn(0, 255))
+                out.writeByte(firstPressureByte)
 
                 var prevX = first.x
                 var prevY = first.y
-                var prevP = first.pressure
+                var prevP = firstPressureByte / 255.0f
 
                 for (i in 1 until points.size) {
                     val p = points[i]
@@ -70,9 +71,9 @@ object StrokeCodec {
                     writeSignedVarInt(out, deltaY)
                     out.writeByte(deltaP)
 
-                    prevX = p.x
-                    prevY = p.y
-                    prevP = p.pressure
+                    prevX += (deltaX / QUANTIZATION_SCALE)
+                    prevY += (deltaY / QUANTIZATION_SCALE)
+                    prevP = (prevP + (deltaP / 255.0f)).coerceIn(0.05f, 1.0f)
                 }
             }
         }
@@ -102,16 +103,16 @@ object StrokeCodec {
                 }
 
                 val toolOrdinal = input.readByte().toInt()
-                val toolType = if (toolOrdinal in StrokeToolType.values().indices) {
-                    StrokeToolType.values()[toolOrdinal]
+                val toolType = if (toolOrdinal in StrokeToolType.entries.indices) {
+                    StrokeToolType.entries[toolOrdinal]
                 } else {
                     StrokeToolType.PEN
                 }
 
                 val blendMode = if (version == FORMAT_VERSION_V2) {
                     val blendOrdinal = input.readByte().toInt()
-                    if (blendOrdinal in StrokeBlendMode.values().indices) {
-                        StrokeBlendMode.values()[blendOrdinal]
+                    if (blendOrdinal in StrokeBlendMode.entries.indices) {
+                        StrokeBlendMode.entries[blendOrdinal]
                     } else {
                         StrokeBlendMode.NORMAL
                     }

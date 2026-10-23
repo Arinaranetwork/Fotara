@@ -316,6 +316,7 @@ fun PdfPageEditorScreen(
             val currentEraserSizeDp by rememberUpdatedState(eraserSizeDp)
             val currentHighlighterBlendMode by rememberUpdatedState(highlighterBlendMode)
             val currentIsDrawingVisible by rememberUpdatedState(isDrawingVisible)
+            val currentShapeSnapping by rememberUpdatedState(shapeSnapping)
 
             // 1. Initial base fit render
             LaunchedEffect(uiState.pageIndex, uiState.isLoading, targetWidthPx, targetHeightPx) {
@@ -488,7 +489,7 @@ fun PdfPageEditorScreen(
                                                 currentPathPoints.add(pt)
                                                 livePoints = currentPathPoints.toList()
 
-                                                if (currentActiveTool == DrawingTool.PEN && !isShapeSnapped) {
+                                                if (currentActiveTool == DrawingTool.PEN && currentShapeSnapping && !isShapeSnapped) {
                                                     val slopPx = 36f * densityPx
                                                     val moveDist = (change.position - shapeHoldAnchorPt).getDistance()
                                                     val now = System.currentTimeMillis()

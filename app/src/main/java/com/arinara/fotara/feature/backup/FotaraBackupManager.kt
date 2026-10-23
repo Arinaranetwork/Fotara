@@ -134,16 +134,28 @@ class FotaraBackupManager(private val context: Context) {
             }
         }
 
+        private val HEX_CHARS = "0123456789abcdef".toCharArray()
+
+        fun bytesToHex(bytes: ByteArray): String {
+            val out = CharArray(bytes.size * 2)
+            for (i in bytes.indices) {
+                val v = bytes[i].toInt() and 0xFF
+                out[i * 2] = HEX_CHARS[v ushr 4]
+                out[i * 2 + 1] = HEX_CHARS[v and 0x0F]
+            }
+            return String(out)
+        }
+
         fun computeSha256(data: ByteArray): String {
             val md = MessageDigest.getInstance("SHA-256")
             val digest = md.digest(data)
-            return digest.joinToString("") { "%02x".format(it) }
+            return bytesToHex(digest)
         }
     }
 
     suspend fun isDatabaseEmpty(): Boolean = withContext(Dispatchers.IO) {
         try {
-            val dbHelper = FotaraDbHelper(context)
+            val dbHelper = FotaraDbHelper.getInstance(context)
             val db = dbHelper.getSafeReadableDatabase()
             val folderCount = queryCount(db, "folders")
             val photoCount = queryCount(db, "photos")
@@ -170,31 +182,208 @@ class FotaraBackupManager(private val context: Context) {
     ): Result<BackupManifest> = withContext(Dispatchers.IO) {
         try {
             onProgress(0.1f)
-            val dbHelper = FotaraDbHelper(context)
+            val dbHelper = FotaraDbHelper.getInstance(context)
             val db = dbHelper.getSafeReadableDatabase()
 
             // 1. Gather Database Records
-            val spacesArray = queryTableToJson(db, "spaces")
-            val workspacesArray = queryTableToJson(db, "workspaces")
-            val foldersArray = queryTableToJson(db, "folders")
-            val subfoldersArray = queryTableToJson(db, "subfolders")
-            val photosArray = queryTableToJson(db, "photos")
-            val textNotesArray = queryTableToJson(db, "text_notes")
-            val documentNotesArray = queryTableToJson(db, "document_notes")
-            val documentPagesArray = queryTableToJson(db, "document_pages")
-            val schedulesArray = queryTableToJson(db, "class_schedules")
+            val rawSpacesArray = queryTableToJson(db, "spaces")
+            val rawWorkspacesArray = queryTableToJson(db, "workspaces")
+            val rawFoldersArray = queryTableToJson(db, "folders")
+            val rawSubfoldersArray = queryTableToJson(db, "subfolders")
+            val rawPhotosArray = queryTableToJson(db, "photos")
+            val rawTextNotesArray = queryTableToJson(db, "text_notes")
+            val rawDocumentNotesArray = queryTableToJson(db, "document_notes")
+            val rawDocumentPagesArray = queryTableToJson(db, "document_pages")
+            val rawSchedulesArray = queryTableToJson(db, "class_schedules")
+
+            val selectiveScope = scope as? BackupScope.Selective
+            val spacesArray = if (selectiveScope != null && selectiveScope.spaceUuids.isNotEmpty()) {
+                org.json.JSONArray().apply {
+                    for (i in 0 until rawSpacesArray.length()) {
+                        val obj = rawSpacesArray.getJSONObject(i)
+                        val uuid = obj.optString("uuid", "")
+                        val idStr = obj.optLong("id").toString()
+                        if (uuid in selectiveScope.spaceUuids || idStr in selectiveScope.spaceUuids) put(obj)
+                    }
+                }
+            } else rawSpacesArray
+
+            val allowedSpaceIds = HashSet<Long>()
+            for (i in 0 until spacesArray.length()) {
+                allowedSpaceIds.add(spacesArray.getJSONObject(i).optLong("id"))
+            }
+
+            val workspacesArray = if (selectiveScope != null) {
+                org.json.JSONArray().apply {
+                    for (i in 0 until rawWorkspacesArray.length()) {
+                        val obj = rawWorkspacesArray.getJSONObject(i)
+                        val wsUuid = obj.optString("uuid", "")
+                        val wsIdStr = obj.optLong("id").toString()
+                        val spId = obj.optLong("space_id")
+                        val matchWs = selectiveScope.workspaceUuids.isEmpty() ||
+                            wsUuid in selectiveScope.workspaceUuids ||
+                            wsIdStr in selectiveScope.workspaceUuids
+                        val matchSp = selectiveScope.spaceUuids.isEmpty() || spId in allowedSpaceIds
+                        if (matchWs && matchSp) put(obj)
+                    }
+                }
+            } else rawWorkspacesArray
+
+            val allowedWorkspaceIds = HashSet<Long>()
+            for (i in 0 until workspacesArray.length()) {
+                allowedWorkspaceIds.add(workspacesArray.getJSONObject(i).optLong("id"))
+            }
+
+            val foldersArray = if (selectiveScope != null) {
+                org.json.JSONArray().apply {
+                    for (i in 0 until rawFoldersArray.length()) {
+                        val obj = rawFoldersArray.getJSONObject(i)
+                        if (obj.optLong("workspace_id") in allowedWorkspaceIds) put(obj)
+                    }
+                }
+            } else rawFoldersArray
+
+            val allowedFolderIds = HashSet<Long>()
+            for (i in 0 until foldersArray.length()) {
+                allowedFolderIds.add(foldersArray.getJSONObject(i).optLong("id"))
+            }
+
+            val subfoldersArray = if (selectiveScope != null) {
+                org.json.JSONArray().apply {
+                    for (i in 0 until rawSubfoldersArray.length()) {
+                        val obj = rawSubfoldersArray.getJSONObject(i)
+                        if (obj.optLong("folder_id") in allowedFolderIds) put(obj)
+                    }
+                }
+            } else rawSubfoldersArray
+
+            val photosArray = if (selectiveScope != null) {
+                org.json.JSONArray().apply {
+                    for (i in 0 until rawPhotosArray.length()) {
+                        val obj = rawPhotosArray.getJSONObject(i)
+                        if (obj.optLong("folder_id") in allowedFolderIds) put(obj)
+                    }
+                }
+            } else rawPhotosArray
+
+            val textNotesArray = if (selectiveScope != null) {
+                org.json.JSONArray().apply {
+                    for (i in 0 until rawTextNotesArray.length()) {
+                        val obj = rawTextNotesArray.getJSONObject(i)
+                        if (obj.optLong("folder_id") in allowedFolderIds) put(obj)
+                    }
+                }
+            } else rawTextNotesArray
+
+            val documentNotesArray = if (selectiveScope != null) {
+                org.json.JSONArray().apply {
+                    for (i in 0 until rawDocumentNotesArray.length()) {
+                        val obj = rawDocumentNotesArray.getJSONObject(i)
+                        if (obj.optLong("folder_id") in allowedFolderIds) put(obj)
+                    }
+                }
+            } else rawDocumentNotesArray
+
+            val allowedDocIds = HashSet<Long>()
+            for (i in 0 until documentNotesArray.length()) {
+                allowedDocIds.add(documentNotesArray.getJSONObject(i).optLong("id"))
+            }
+
+            val documentPagesArray = if (selectiveScope != null) {
+                org.json.JSONArray().apply {
+                    for (i in 0 until rawDocumentPagesArray.length()) {
+                        val obj = rawDocumentPagesArray.getJSONObject(i)
+                        if (obj.optLong("document_note_id") in allowedDocIds) put(obj)
+                    }
+                }
+            } else rawDocumentPagesArray
+
+            val schedulesArray = rawSchedulesArray
+
+            // 2. Detect and encrypt Private Space data with AES-GCM (and exclude from plaintext dbJson)
+            val privateSpaceIds = mutableSetOf<Long>()
+            val privateSpacesArray = org.json.JSONArray()
+            val publicSpacesArray = org.json.JSONArray()
+            for (i in 0 until spacesArray.length()) {
+                val obj = spacesArray.getJSONObject(i)
+                if (obj.optBoolean("is_private", false) || obj.optInt("is_private", 0) == 1) {
+                    privateSpaceIds.add(obj.optLong("id"))
+                    privateSpacesArray.put(obj)
+                } else {
+                    publicSpacesArray.put(obj)
+                }
+            }
+
+            val privateWorkspaceIds = mutableSetOf<Long>()
+            val privateWorkspacesArray = org.json.JSONArray()
+            val publicWorkspacesArray = org.json.JSONArray()
+            for (i in 0 until workspacesArray.length()) {
+                val obj = workspacesArray.getJSONObject(i)
+                if (privateSpaceIds.contains(obj.optLong("space_id"))) {
+                    privateWorkspaceIds.add(obj.optLong("id"))
+                    privateWorkspacesArray.put(obj)
+                } else {
+                    publicWorkspacesArray.put(obj)
+                }
+            }
+
+            val privateFolderIds = mutableSetOf<Long>()
+            val privateFoldersArray = org.json.JSONArray()
+            val publicFoldersArray = org.json.JSONArray()
+            for (i in 0 until foldersArray.length()) {
+                val obj = foldersArray.getJSONObject(i)
+                if (privateWorkspaceIds.contains(obj.optLong("workspace_id"))) {
+                    privateFolderIds.add(obj.optLong("id"))
+                    privateFoldersArray.put(obj)
+                } else {
+                    publicFoldersArray.put(obj)
+                }
+            }
+
+            val privateTextNotesArray = org.json.JSONArray()
+            val publicTextNotesArray = org.json.JSONArray()
+            for (i in 0 until textNotesArray.length()) {
+                val obj = textNotesArray.getJSONObject(i)
+                if (privateFolderIds.contains(obj.optLong("folder_id"))) {
+                    privateTextNotesArray.put(obj)
+                } else {
+                    publicTextNotesArray.put(obj)
+                }
+            }
+
+            val privatePhotosArray = org.json.JSONArray()
+            val publicPhotosArray = org.json.JSONArray()
+            for (i in 0 until photosArray.length()) {
+                val obj = photosArray.getJSONObject(i)
+                if (privateFolderIds.contains(obj.optLong("folder_id"))) {
+                    privatePhotosArray.put(obj)
+                } else {
+                    publicPhotosArray.put(obj)
+                }
+            }
+
+            val privateDocsArray = org.json.JSONArray()
+            val publicDocsArray = org.json.JSONArray()
+            for (i in 0 until documentNotesArray.length()) {
+                val obj = documentNotesArray.getJSONObject(i)
+                if (privateFolderIds.contains(obj.optLong("folder_id"))) {
+                    privateDocsArray.put(obj)
+                } else {
+                    publicDocsArray.put(obj)
+                }
+            }
 
             val dbJson = JSONObject().apply {
                 put("app", "Fotara")
                 put("version", 2)
                 put("exportedAt", System.currentTimeMillis())
-                put("spaces", spacesArray)
-                put("workspaces", workspacesArray)
-                put("folders", foldersArray)
+                put("spaces", publicSpacesArray)
+                put("workspaces", publicWorkspacesArray)
+                put("folders", publicFoldersArray)
                 put("subfolders", subfoldersArray)
-                put("photos", photosArray)
-                put("text_notes", textNotesArray)
-                put("document_notes", documentNotesArray)
+                put("photos", publicPhotosArray)
+                put("text_notes", publicTextNotesArray)
+                put("document_notes", publicDocsArray)
                 put("document_pages", documentPagesArray)
                 put("class_schedules", schedulesArray)
             }
@@ -204,7 +393,7 @@ class FotaraBackupManager(private val context: Context) {
 
             onProgress(0.3f)
 
-            // 2. Identify Attachments
+            // 3. Identify Attachments
             val attachmentFiles = mutableListOf<File>()
             val baseDirs = listOf("photos", "thumbnails", "documents", "document_pages")
             for (dirName in baseDirs) {
@@ -214,61 +403,6 @@ class FotaraBackupManager(private val context: Context) {
                     if (files != null) {
                         attachmentFiles.addAll(files.filter { it.isFile })
                     }
-                }
-            }
-
-            // 3. Detect and encrypt Private Space data with AES-GCM
-            val privateSpaceIds = mutableSetOf<Long>()
-            val privateSpacesArray = org.json.JSONArray()
-            for (i in 0 until spacesArray.length()) {
-                val obj = spacesArray.getJSONObject(i)
-                if (obj.optBoolean("is_private", false) || obj.optInt("is_private", 0) == 1) {
-                    privateSpaceIds.add(obj.optLong("id"))
-                    privateSpacesArray.put(obj)
-                }
-            }
-
-            val privateWorkspaceIds = mutableSetOf<Long>()
-            val privateWorkspacesArray = org.json.JSONArray()
-            for (i in 0 until workspacesArray.length()) {
-                val obj = workspacesArray.getJSONObject(i)
-                if (privateSpaceIds.contains(obj.optLong("space_id"))) {
-                    privateWorkspaceIds.add(obj.optLong("id"))
-                    privateWorkspacesArray.put(obj)
-                }
-            }
-
-            val privateFolderIds = mutableSetOf<Long>()
-            val privateFoldersArray = org.json.JSONArray()
-            for (i in 0 until foldersArray.length()) {
-                val obj = foldersArray.getJSONObject(i)
-                if (privateWorkspaceIds.contains(obj.optLong("workspace_id"))) {
-                    privateFolderIds.add(obj.optLong("id"))
-                    privateFoldersArray.put(obj)
-                }
-            }
-
-            val privateTextNotesArray = org.json.JSONArray()
-            for (i in 0 until textNotesArray.length()) {
-                val obj = textNotesArray.getJSONObject(i)
-                if (privateFolderIds.contains(obj.optLong("folder_id"))) {
-                    privateTextNotesArray.put(obj)
-                }
-            }
-
-            val privatePhotosArray = org.json.JSONArray()
-            for (i in 0 until photosArray.length()) {
-                val obj = photosArray.getJSONObject(i)
-                if (privateFolderIds.contains(obj.optLong("folder_id"))) {
-                    privatePhotosArray.put(obj)
-                }
-            }
-
-            val privateDocsArray = org.json.JSONArray()
-            for (i in 0 until documentNotesArray.length()) {
-                val obj = documentNotesArray.getJSONObject(i)
-                if (privateFolderIds.contains(obj.optLong("folder_id"))) {
-                    privateDocsArray.put(obj)
                 }
             }
 
@@ -692,7 +826,7 @@ class FotaraBackupManager(private val context: Context) {
                             android.database.Cursor.FIELD_TYPE_BLOB -> {
                                 val blob = c.getBlob(i)
                                 if (blob != null) {
-                                    val hex = blob.joinToString("") { "%02x".format(it) }
+                                    val hex = bytesToHex(blob)
                                     obj.put(colName, hex)
                                 } else {
                                     obj.put(colName, JSONObject.NULL)

@@ -12,6 +12,8 @@ import androidx.lifecycle.viewModelScope
 import com.arinara.fotara.feature.friends.data.FriendsRepository
 import com.arinara.fotara.feature.friends.model.FriendProfile
 import com.arinara.fotara.feature.friends.model.StudyPresenceStatus
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -122,12 +124,16 @@ class FriendsViewModel(
         )
     )
 
+    private var searchPeerJob: Job? = null
+
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
+        searchPeerJob?.cancel()
         val trimmed = query.trim()
         val clean = trimmed.removePrefix("@").lowercase()
         if (clean.length >= 3) {
-            viewModelScope.launch {
+            searchPeerJob = viewModelScope.launch {
+                delay(200)
                 _isSearchingPeer.value = true
                 val peer = repository.findUserByHandle(clean)
                 _discoveredPeer.value = peer
@@ -140,7 +146,8 @@ class FriendsViewModel(
     }
 
     fun searchPeerDirect(handle: String, onResult: (FriendProfile?) -> Unit = {}) {
-        viewModelScope.launch {
+        searchPeerJob?.cancel()
+        searchPeerJob = viewModelScope.launch {
             _isSearchingPeer.value = true
             val peer = repository.findUserByHandle(handle)
             _discoveredPeer.value = peer

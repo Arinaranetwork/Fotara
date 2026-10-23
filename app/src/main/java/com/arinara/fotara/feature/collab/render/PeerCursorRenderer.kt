@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.arinara.fotara.feature.collab.model.CollabPeer
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Geometric bounds for a floating participant name tag pill.
@@ -40,6 +41,11 @@ object PeerCursorRenderer {
     const val DEFAULT_PILL_HORIZONTAL_PADDING: Float = 16.0f
     const val POINTER_SIZE_DP: Float = 16.0f
 
+    private val reusablePointerPath = Path()
+    private val outlineStroke = Stroke(width = 3.0f)
+    private val pillBorderStroke = Stroke(width = 1.5f)
+    private val parsedColorCache = ConcurrentHashMap<String, Color>()
+
     /**
      * Determines whether a collaborator has reported recent activity.
      */
@@ -56,8 +62,9 @@ object PeerCursorRenderer {
      */
     fun parseColor(colorHex: String?, fallback: Color = Color(0xFF2563EB)): Color {
         if (colorHex.isNullOrBlank()) return fallback
+        parsedColorCache[colorHex]?.let { return it }
         val clean = colorHex.trim().removePrefix("#")
-        return try {
+        val resolved = try {
             when (clean.length) {
                 6 -> {
                     val colorInt = clean.toLong(16) or 0xFF000000L
@@ -79,6 +86,8 @@ object PeerCursorRenderer {
         } catch (_: Exception) {
             fallback
         }
+        parsedColorCache[colorHex] = resolved
+        return resolved
     }
 
     /**
@@ -123,44 +132,49 @@ object PeerCursorRenderer {
         )
     }
 
+    private fun populatePointerPath(target: Path, tipX: Float, tipY: Float, scale: Float = 1.0f): Path {
+        target.reset()
+        val s = if (scale > 0f) scale else 1.0f
+        target.moveTo(tipX, tipY)
+        target.lineTo(tipX + 14f * s, tipY + 12f * s)
+        target.lineTo(tipX + 6f * s, tipY + 12f * s)
+        target.lineTo(tipX + 2f * s, tipY + 18f * s)
+        target.close()
+        return target
+    }
+
     /**
      * Builds the directional pointer arrow path with its tip placed at the given coordinates.
      */
     fun buildPointerPath(tipX: Float, tipY: Float, scale: Float = 1.0f): Path {
-        val path = Path()
-        val s = if (scale > 0f) scale else 1.0f
-
-        path.moveTo(tipX, tipY)
-        path.lineTo(tipX + 14f * s, tipY + 12f * s)
-        path.lineTo(tipX + 6f * s, tipY + 12f * s)
-        path.lineTo(tipX + 2f * s, tipY + 18f * s)
-        path.close()
-
-        return path
+        return populatePointerPath(Path(), tipX, tipY, scale)
     }
 
     /**
-     * Renders active peer cursors directly onto a Compose DrawScope.
+     * Renders active peer cursors directly onto a Compose DrawScope with zero per-frame list/Path allocations.
      */
     fun renderPeerCursors(
         drawScope: DrawScope,
         peers: List<CollabPeer>,
+        localPeerId: String? = null,
         viewportWidth: Float = Float.MAX_VALUE,
         viewportHeight: Float = Float.MAX_VALUE,
         nowMs: Long = System.currentTimeMillis(),
         activeWindowMs: Long = DEFAULT_ACTIVE_WINDOW_MS
     ) {
-        val activePeers = peers.filter { isPeerActive(it, nowMs, activeWindowMs) }
+        for (i in peers.indices) {
+            val peer = peers[i]
+            if (localPeerId != null && peer.peerId == localPeerId) continue
+            if (!isPeerActive(peer, nowMs, activeWindowMs)) continue
 
-        for (peer in activePeers) {
             val peerColor = parseColor(peer.colorHex)
-            val pointerPath = buildPointerPath(peer.lastCursorX, peer.lastCursorY)
+            val pointerPath = populatePointerPath(reusablePointerPath, peer.lastCursorX, peer.lastCursorY)
 
             // Draw dark outline for contrast against any canvas background
             drawScope.drawPath(
                 path = pointerPath,
                 color = Color(0xFF0A0D14),
-                style = Stroke(width = 3.0f)
+                style = outlineStroke
             )
 
             // Fill arrow with participant's identity color
@@ -200,7 +214,7 @@ object PeerCursorRenderer {
                 topLeft = Offset(pill.left, pill.top),
                 size = Size(pill.width, pill.height),
                 cornerRadius = CornerRadius(8f, 8f),
-                style = Stroke(width = 1.5f)
+                style = pillBorderStroke
             )
         }
     }

@@ -53,19 +53,22 @@ data class Photo(
             }
         }
 
-        // 2. Hashtags extracted from caption and note via regex
-        val hashtagRegex = Regex("""#([a-zA-Z0-9_]{2,24})""")
+        // 2. Hashtags extracted from caption and note via pre-compiled regex
         caption?.let { text ->
-            hashtagRegex.findAll(text).forEach { match ->
+            HASHTAG_REGEX.findAll(text).forEach { match ->
                 extracted.add(match.groupValues[1].lowercase())
             }
         }
         note?.let { text ->
-            hashtagRegex.findAll(text).forEach { match ->
+            HASHTAG_REGEX.findAll(text).forEach { match ->
                 extracted.add(match.groupValues[1].lowercase())
             }
         }
 
         return extracted.toList().sorted()
+    }
+
+    companion object {
+        private val HASHTAG_REGEX = Regex("""#([a-zA-Z0-9_]{2,24})""")
     }
 }

@@ -87,6 +87,8 @@ data class FriendProfile(
     }
 
     companion object {
+        private val fieldRegexCache = java.util.concurrent.ConcurrentHashMap<String, Regex>()
+
         private fun escapeJson(input: String): String {
             return input
                 .replace("\\", "\\\\")
@@ -111,7 +113,9 @@ data class FriendProfile(
                 if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null
 
                 fun extractField(fieldName: String): String? {
-                    val pattern = "\"$fieldName\"\\s*:\\s*(\"[^\"]*\"|null|true|false|\\d+)".toRegex()
+                    val pattern = fieldRegexCache.getOrPut(fieldName) {
+                        "\"$fieldName\"\\s*:\\s*(\"[^\"]*\"|null|true|false|\\d+)".toRegex()
+                    }
                     val match = pattern.find(trimmed) ?: return null
                     val rawVal = match.groupValues[1]
                     return when {

@@ -272,8 +272,7 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
             """.trimIndent()
         )
 
-        // SQLite FTS4 Virtual Table for Instant Search (compatible with standard Android libsqlite)
-        createFtsTable(db)
+        // (createFtsTable(db) is invoked once at the end of onCreate after all base tables exist)
 
         // High-performance B-tree indexes on added_at columns for instant date filtering & widget queries
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_added_at ON photos(added_at)")
@@ -1156,7 +1155,7 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_canvas_elements_z ON canvas_elements(canvas_id, z_index)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_subfolders_trashed ON subfolders(is_trashed, created_at ASC)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_notes_updated_at ON text_notes(updated_at DESC)")
-            db.execSQL("CREATE INDEX IF NOT EXISTS idx_link_groups_type_created ON link_groups(target_type, created_at DESC)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_link_groups_type_created ON link_groups(item_type, created_at DESC)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_trashed_created ON photo_groups(is_trashed, created_at DESC)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_subfolder_trashed ON photos(subfolder_id, is_trashed)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_folder_trashed ON photos(folder_id, is_trashed)")

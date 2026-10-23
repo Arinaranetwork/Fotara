@@ -139,7 +139,10 @@ data class CanvasUiState(
     val showTextOptions: Boolean = false,
     val editingTextLayer: com.arinara.fotara.canvas.model.TextLayerElement? = null,
     val folders: List<Folder> = emptyList(),
-    val workspaces: List<Workspace> = emptyList()
+    val workspaces: List<Workspace> = emptyList(),
+    val userProfile: com.arinara.fotara.data.model.UserProfile = com.arinara.fotara.data.model.UserProfile(),
+    val friends: List<com.arinara.fotara.feature.friends.model.FriendProfile> = emptyList(),
+    val myUserHandle: String = ""
 )
 
 class CanvasViewModel(
@@ -153,7 +156,8 @@ class CanvasViewModel(
     private val folderRepository: FolderRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
     private val scheduleManager: NoteScheduleManager? = null,
-    private val workspaceRepository: WorkspaceRepository? = null
+    private val workspaceRepository: WorkspaceRepository? = null,
+    private val friendsRepository: com.arinara.fotara.feature.friends.data.FriendsRepository? = null
 ) : ViewModel() {
 
     // Core C8 & C9 Engine Components
@@ -193,6 +197,30 @@ class CanvasViewModel(
             viewModelScope.launch {
                 repo.observeWorkspaces().collect { wsList ->
                     _uiState.update { it.copy(workspaces = wsList) }
+                }
+            }
+        }
+
+        settingsRepository?.let { repo ->
+            viewModelScope.launch {
+                repo.profileFlow.collect { profile ->
+                    _uiState.update { it.copy(userProfile = profile) }
+                }
+            }
+        }
+
+        friendsRepository?.let { repo ->
+            _uiState.update {
+                it.copy(myUserHandle = repo.getClaimedUsername().ifBlank { repo.getMyHandle() })
+            }
+            viewModelScope.launch {
+                repo.getFriendsFlow().collect { friendList ->
+                    _uiState.update {
+                        it.copy(
+                            friends = friendList,
+                            myUserHandle = repo.getClaimedUsername().ifBlank { repo.getMyHandle() }
+                        )
+                    }
                 }
             }
         }
@@ -441,7 +469,60 @@ class CanvasViewModel(
     }
 
     fun setPalmRejection(enabled: Boolean) {
+        toolController.toolState = toolController.toolState.copy(palmRejectionEnabled = enabled)
         pointerStateMachine.palmRejectionRadiusThreshold = if (enabled) 60.0f else 9999.0f
+        _uiState.update { it.copy(toolState = toolController.toolState) }
+    }
+
+    fun applyRemoteCollabStrokes(remoteStrokes: List<com.arinara.fotara.feature.collab.model.CollabStroke>) {
+        if (remoteStrokes.isEmpty()) return
+        val currentDoc = _uiState.value.document
+        val existingIds = currentDoc.elements.mapTo(HashSet(currentDoc.elements.size)) { it.id }
+        val targetLayerId = _uiState.value.activeLayerId.ifBlank { currentDoc.getPrimaryLayerId() }
+        var nextZ = (currentDoc.elements.filter { it.layerId == targetLayerId }.maxOfOrNull { it.zIndex } ?: 0) + 1
+        val newElements = ArrayList<CanvasElement>(remoteStrokes.size)
+
+        for (strokeMsg in remoteStrokes) {
+            if (strokeMsg.strokeId in existingIds) continue
+            val flat = strokeMsg.points
+            if (flat.size < 2) continue
+            val pts = ArrayList<com.arinara.fotara.canvas.model.StrokePoint>(flat.size / 2)
+            var i = 0
+            while (i + 1 < flat.size) {
+                pts.add(com.arinara.fotara.canvas.model.StrokePoint(flat[i], flat[i + 1], 1.0f))
+                i += 2
+            }
+            if (pts.isEmpty()) continue
+            val colorLong = try {
+                val clean = strokeMsg.colorHex.trim().removePrefix("#")
+                when (clean.length) {
+                    6 -> clean.toLong(16) or 0xFF000000L
+                    8 -> clean.toLong(16)
+                    else -> 0xFFF8FAFC
+                }
+            } catch (_: Exception) {
+                0xFFF8FAFC
+            }
+            val width = strokeMsg.strokeWidth.coerceIn(1f, 80f)
+            val bounds = StrokeProcessor.computeBounds(pts, width)
+            newElements.add(
+                StrokeElement(
+                    id = strokeMsg.strokeId,
+                    layerId = targetLayerId,
+                    points = pts,
+                    color = colorLong,
+                    width = width,
+                    toolType = StrokeToolType.PEN,
+                    blendMode = com.arinara.fotara.canvas.model.StrokeBlendMode.NORMAL,
+                    bounds = bounds,
+                    zIndex = nextZ++
+                )
+            )
+            existingIds.add(strokeMsg.strokeId)
+        }
+        if (newElements.isEmpty()) return
+        val updatedDoc = currentDoc.copy(elements = currentDoc.elements + newElements)
+        onDocumentModified(updatedDoc, null)
     }
 
     fun renameCanvas(newTitle: String) {
@@ -1879,7 +1960,8 @@ class CanvasViewModelFactory(
     private val folderRepository: FolderRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
     private val scheduleManager: NoteScheduleManager? = null,
-    private val workspaceRepository: WorkspaceRepository? = null
+    private val workspaceRepository: WorkspaceRepository? = null,
+    private val friendsRepository: com.arinara.fotara.feature.friends.data.FriendsRepository? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -1894,7 +1976,8 @@ class CanvasViewModelFactory(
             folderRepository = folderRepository,
             settingsRepository = settingsRepository,
             scheduleManager = scheduleManager,
-            workspaceRepository = workspaceRepository
+            workspaceRepository = workspaceRepository,
+            friendsRepository = friendsRepository
         ) as T
     }
 }

@@ -32,6 +32,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,7 +91,8 @@ fun AppNoticeBanner(
         AppNoticeVariant.SUCCESS -> TagEmerald to Icons.Default.CheckCircle
     }
 
-    if (scaleAnim.value > 0.01f) {
+    val shouldRender by remember { derivedStateOf { scaleAnim.value > 0.01f } }
+    if (shouldRender) {
         Box(
             modifier = modifier
                 .fillMaxWidth()

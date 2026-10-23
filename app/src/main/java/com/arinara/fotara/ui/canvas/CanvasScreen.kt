@@ -150,6 +150,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -241,7 +242,53 @@ fun CanvasScreen(
         }
     }
 
-    val collabEngine = remember { CollabSessionEngine() }
+    val collabPrefs = remember(context) {
+        context.getSharedPreferences("fotara_collab_prefs", android.content.Context.MODE_PRIVATE)
+    }
+    val persistentCollabDeviceId = remember(collabPrefs) {
+        collabPrefs.getString("collab_device_id", null) ?: java.util.UUID.randomUUID().toString().also { generated ->
+            collabPrefs.edit().putString("collab_device_id", generated).apply()
+        }
+    }
+    val realProfileName = remember(uiState.userProfile) {
+        uiState.userProfile.resolvedName(defaultFallback = "Fotara User")
+    }
+    val realProfilePronouns = remember(uiState.userProfile) {
+        uiState.userProfile.pronouns.trim()
+    }
+    val resolvedUserHandle = remember(uiState.myUserHandle, realProfileName) {
+        uiState.myUserHandle.ifBlank { realProfileName }
+    }
+    val collabEngine = remember(persistentCollabDeviceId) {
+        CollabSessionEngine(
+            initialLocalUserTag = realProfileName,
+            initialLocalDeviceId = persistentCollabDeviceId,
+            initialLocalPronouns = realProfilePronouns,
+            initialLocalUserHandle = resolvedUserHandle,
+            enableLanTransport = true
+        ).also { engine ->
+            val rawPresets = collabPrefs.getString("collab_privacy_presets", null).orEmpty()
+            if (rawPresets.isNotBlank()) {
+                engine.loadSavedPrivacyPresets(
+                    com.arinara.fotara.feature.collab.model.CollabPrivacyPreset.decodeList(rawPresets)
+                )
+            }
+        }
+    }
+    LaunchedEffect(realProfileName, realProfilePronouns, persistentCollabDeviceId, resolvedUserHandle) {
+        collabEngine.syncUserProfile(
+            realName = realProfileName,
+            pronouns = realProfilePronouns,
+            deviceId = persistentCollabDeviceId,
+            userHandle = resolvedUserHandle
+        )
+    }
+    LaunchedEffect(uiState.friends) {
+        val friendIdentities = uiState.friends.flatMap { friend ->
+            listOf(friend.handle, friend.displayName).filter { it.isNotBlank() }
+        }
+        collabEngine.syncHostFriends(friendIdentities)
+    }
     DisposableEffect(collabEngine) {
         onDispose {
             collabEngine.close()
@@ -252,10 +299,49 @@ fun CanvasScreen(
     val collabPeers = remember(collabPeersMap) { collabPeersMap.values.toList() }
     val collabChatMessages by collabEngine.chatMessages.collectAsStateWithLifecycle()
     val collabUnreadChatCount by collabEngine.unreadChatCount.collectAsStateWithLifecycle()
+    val collabLocalRole by collabEngine.localRole.collectAsStateWithLifecycle()
+    val collabPinnedMessage by collabEngine.pinnedChatMessage.collectAsStateWithLifecycle()
+    val collabIsChatBlocked by collabEngine.isLocalUserChatBlocked.collectAsStateWithLifecycle()
+    val collabCanDraw by collabEngine.canLocalUserDraw.collectAsStateWithLifecycle()
+    val collabCanCreateSheets by collabEngine.canLocalUserCreateSheets.collectAsStateWithLifecycle()
+    val collabPeerVolumes by collabEngine.peerVolumes.collectAsStateWithLifecycle()
+    val collabLocallyMutedPeers by collabEngine.locallyMutedPeerIds.collectAsStateWithLifecycle()
+    val collabAudioBitrate by collabEngine.audioBitrateKbps.collectAsStateWithLifecycle()
+    val collabRoomMaxBitrate by collabEngine.roomMaxBitrateKbps.collectAsStateWithLifecycle()
+    val collabAccessMode by collabEngine.accessMode.collectAsStateWithLifecycle()
+    val collabIsGlobalDrawingDisabled by collabEngine.isGlobalDrawingDisabled.collectAsStateWithLifecycle()
+    val collabIsGlobalSheetDisabled by collabEngine.isGlobalSheetCreationDisabled.collectAsStateWithLifecycle()
+    val collabMaxParticipants by collabEngine.maxParticipants.collectAsStateWithLifecycle()
+    val collabJoinPolicy by collabEngine.joinPolicy.collectAsStateWithLifecycle()
+    val collabAllowedHandles by collabEngine.allowedUserHandles.collectAsStateWithLifecycle()
+    val collabInvitedHandles by collabEngine.invitedUserHandles.collectAsStateWithLifecycle()
+    val collabSavedPresets by collabEngine.savedPrivacyPresets.collectAsStateWithLifecycle()
+    val collabActivePresetId by collabEngine.activePresetId.collectAsStateWithLifecycle()
+    val collabBufferedStrokesCount by collabEngine.bufferedStrokesCount.collectAsStateWithLifecycle()
+    val collabErrorMessage by collabEngine.lastErrorMessage.collectAsStateWithLifecycle()
+    LaunchedEffect(collabSavedPresets) {
+        val encoded = com.arinara.fotara.feature.collab.model.CollabPrivacyPreset.encodeList(collabSavedPresets)
+        collabPrefs.edit().putString("collab_privacy_presets", encoded).apply()
+    }
+    LaunchedEffect(collabBufferedStrokesCount) {
+        if (collabBufferedStrokesCount > 0) {
+            val remoteStrokes = collabEngine.consumeBufferedStrokes()
+            if (remoteStrokes.isNotEmpty()) {
+                viewModel.applyRemoteCollabStrokes(remoteStrokes)
+            }
+        }
+    }
     var showCollabJoinDialog by remember { mutableStateOf(false) }
     var showCollabChatSheet by remember { mutableStateOf(false) }
+    var showCollabSettingsSheet by remember { mutableStateOf(false) }
     LaunchedEffect(showCollabChatSheet) {
         collabEngine.setChatSheetOpen(showCollabChatSheet)
+    }
+    LaunchedEffect(collabRoomCode) {
+        if (collabRoomCode == null) {
+            showCollabChatSheet = false
+            showCollabSettingsSheet = false
+        }
     }
     var drawingViewRef by remember { mutableStateOf<CanvasDrawingView?>(null) }
     var showOverflowMenu by remember { mutableStateOf(false) }
@@ -303,7 +389,31 @@ fun CanvasScreen(
                     historyManager = viewModel.historyManager,
                     spatialIndex = viewModel.spatialIndex,
                     onDocumentChanged = { updatedDoc, dirtyRect ->
-                        viewModel.onDocumentModified(updatedDoc, dirtyRect)
+                        if (collabRoomCode == null || collabCanDraw) {
+                            val prevElements = uiState.document.elements
+                            viewModel.onDocumentModified(updatedDoc, dirtyRect)
+                            if (collabRoomCode != null && updatedDoc.elements.size > prevElements.size) {
+                                val prevIds = prevElements.mapTo(HashSet(prevElements.size)) { it.id }
+                                for (el in updatedDoc.elements) {
+                                    if (el is com.arinara.fotara.canvas.model.StrokeElement && el.id !in prevIds && el.points.isNotEmpty()) {
+                                        val hexColor = String.format("#%06X", (el.color and 0xFFFFFFL))
+                                        val flatPoints = ArrayList<Float>(el.points.size * 2)
+                                        for (pt in el.points) {
+                                            flatPoints.add(pt.x)
+                                            flatPoints.add(pt.y)
+                                        }
+                                        collabEngine.broadcastStroke(
+                                            points = flatPoints,
+                                            colorHex = hexColor,
+                                            strokeWidth = el.width,
+                                            strokeId = el.id
+                                        )
+                                        val lastPt = el.points.last()
+                                        collabEngine.updateCursor(lastPt.x, lastPt.y)
+                                    }
+                                }
+                            }
+                        }
                     }
                 ).apply {
                     onViewportChanged = { v ->
@@ -326,6 +436,23 @@ fun CanvasScreen(
             }
         )
 
+        if (collabRoomCode != null && collabPeers.size > 1) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .drawWithContent {
+                        drawContent()
+                        com.arinara.fotara.feature.collab.render.PeerCursorRenderer.renderPeerCursors(
+                            drawScope = this,
+                            peers = collabPeers,
+                            localPeerId = collabEngine.localPeerId,
+                            viewportWidth = size.width,
+                            viewportHeight = size.height
+                        )
+                    }
+            )
+        }
+
         // ==========================================
         // Z1 & Z2: Top Unified Responsive Header Row
         // ==========================================
@@ -342,10 +469,14 @@ fun CanvasScreen(
                     peers = collabPeers,
                     onLeaveClick = {
                         showCollabChatSheet = false
+                        showCollabSettingsSheet = false
                         collabEngine.leaveRoom()
                     },
+                    localRole = collabLocalRole,
+                    canLocalUserDraw = collabCanDraw,
                     unreadChatCount = collabUnreadChatCount,
                     onChatClick = { showCollabChatSheet = true },
+                    onSettingsClick = { showCollabSettingsSheet = true },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -394,8 +525,12 @@ fun CanvasScreen(
                         .height(44.dp)
                         .clip(RoundedCornerShape(999.dp))
                         .jigglePressClickable {
-                            renameInput = uiState.title
-                            viewModel.setRenameDialogVisible(true)
+                            if (uiState.saveState == SaveState.ERROR) {
+                                viewModel.retrySave()
+                            } else {
+                                renameInput = uiState.title
+                                viewModel.setRenameDialogVisible(true)
+                            }
                         }
                 ) {
                     Row(
@@ -1191,19 +1326,20 @@ fun CanvasScreen(
 
                             if (resolvedSheets.size < com.arinara.fotara.canvas.model.CanvasDocument.MAX_SHEETS) {
                                 item {
+                                    val canAddNewSheet = collabRoomCode == null || collabCanCreateSheets
                                     Box(
                                         modifier = Modifier
                                             .size(28.dp)
                                             .clip(CircleShape)
-                                            .background(ElectricSlateTokens.SurfaceElevated)
+                                            .background(if (canAddNewSheet) ElectricSlateTokens.SurfaceElevated else ElectricSlateTokens.TrackInactive)
                                             .border(1.dp, ElectricSlateTokens.BorderSubtle, CircleShape)
-                                            .jigglePressClickable { viewModel.addSheet() },
+                                            .jigglePressClickable(enabled = canAddNewSheet) { viewModel.addSheet() },
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Add,
                                             contentDescription = "Add Sheet",
-                                            tint = ElectricSlateTokens.TextSecondary,
+                                            tint = if (canAddNewSheet) ElectricSlateTokens.TextSecondary else ElectricSlateTokens.TextMuted,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -1745,6 +1881,7 @@ fun CanvasScreen(
         if (uiState.showSettingsDialog) {
             CanvasSettingsDialog(
                 stylusOnlyDrawing = uiState.toolState.stylusOnlyDrawing,
+                palmRejectionEnabled = uiState.toolState.palmRejectionEnabled,
                 onToggleStylusOnly = { viewModel.setStylusOnlyMode(it) },
                 onTogglePalmRejection = { viewModel.setPalmRejection(it) },
                 onOpenBackgroundPicker = {
@@ -1995,27 +2132,65 @@ fun CanvasScreen(
                 }
             }
         }
-        // Collab Room Join Dialog (with Active Session Guard)
+        // Collab Room Join Dialog (with Custom Room Code Creation & Active Session Guard)
         if (showCollabJoinDialog) {
             CollabRoomJoinDialog(
-                onDismissRequest = { showCollabJoinDialog = false },
+                onDismissRequest = {
+                    collabEngine.clearErrorMessage()
+                    showCollabJoinDialog = false
+                },
                 onJoinRoom = { code ->
-                    if (collabEngine.joinRoom(code, "Friend", "#7A5AF8")) {
+                    if (collabEngine.joinRoom(
+                            code = code,
+                            userTag = realProfileName,
+                            colorHex = "#7A5AF8",
+                            pronouns = realProfilePronouns,
+                            userHandle = resolvedUserHandle
+                        )
+                    ) {
                         showCollabJoinDialog = false
                     }
                 },
                 onCreateRoom = {
-                    collabEngine.createRoom()
-                    showCollabJoinDialog = false
+                    val created = collabEngine.createRoom(
+                        userTag = realProfileName,
+                        colorHex = "#7A5AF8",
+                        pronouns = realProfilePronouns,
+                        userHandle = resolvedUserHandle
+                    )
+                    if (created.isNotBlank()) {
+                        showCollabJoinDialog = false
+                    }
                 },
+                onCreateCustomRoom = { customCode ->
+                    if (collabEngine.createCustomRoom(
+                            customCode = customCode,
+                            userTag = realProfileName,
+                            colorHex = "#7A5AF8",
+                            pronouns = realProfilePronouns,
+                            userHandle = resolvedUserHandle
+                        )
+                    ) {
+                        showCollabJoinDialog = false
+                    }
+                },
+                localUserName = realProfileName,
+                localUserRole = collabLocalRole,
                 activeRoomCode = collabRoomCode,
                 activePeerCount = collabPeers.size,
+                externalErrorMessage = collabErrorMessage,
+                onClearExternalError = { collabEngine.clearErrorMessage() },
                 onOpenChat = {
                     showCollabJoinDialog = false
                     showCollabChatSheet = true
                 },
+                onOpenRoomSettings = {
+                    showCollabJoinDialog = false
+                    showCollabSettingsSheet = true
+                },
                 onLeaveActiveRoom = {
                     showCollabChatSheet = false
+                    showCollabSettingsSheet = false
                     collabEngine.leaveRoom()
                     showCollabJoinDialog = false
                 }
@@ -2031,7 +2206,69 @@ fun CanvasScreen(
                 onSendMessage = { msgText ->
                     collabEngine.sendChatMessage(msgText)
                 },
-                onDismissRequest = { showCollabChatSheet = false }
+                onDismissRequest = { showCollabChatSheet = false },
+                localUserName = realProfileName,
+                localRole = collabLocalRole,
+                pinnedMessage = collabPinnedMessage,
+                isLocalUserChatBlocked = collabIsChatBlocked,
+                onPinMessage = { msgId ->
+                    collabEngine.pinChatMessage(msgId)
+                },
+                onDeleteMessage = { msgId ->
+                    collabEngine.deleteChatMessage(msgId)
+                },
+                onOpenSettings = {
+                    showCollabChatSheet = false
+                    showCollabSettingsSheet = true
+                }
+            )
+        }
+
+        // Collab Room & Audio / Moderation / Privacy Settings Sheet
+        if (showCollabSettingsSheet && collabRoomCode != null) {
+            com.arinara.fotara.feature.collab.ui.CollabRoomSettingsSheet(
+                roomCode = collabRoomCode!!,
+                localPeerId = collabEngine.localPeerId,
+                localRole = collabLocalRole,
+                peers = collabPeers,
+                peerVolumes = collabPeerVolumes,
+                locallyMutedPeerIds = collabLocallyMutedPeers,
+                audioBitrateKbps = collabAudioBitrate,
+                roomMaxBitrateKbps = collabRoomMaxBitrate,
+                accessMode = collabAccessMode,
+                isGlobalDrawingDisabled = collabIsGlobalDrawingDisabled,
+                isGlobalSheetCreationDisabled = collabIsGlobalSheetDisabled,
+                maxParticipants = collabMaxParticipants,
+                joinPolicy = collabJoinPolicy,
+                allowedUserHandles = collabAllowedHandles,
+                invitedUserHandles = collabInvitedHandles,
+                savedPrivacyPresets = collabSavedPresets,
+                activePresetId = collabActivePresetId,
+                hostFriends = uiState.friends,
+                onSetMaxParticipants = { maxUsers -> collabEngine.setMaxParticipants(maxUsers) },
+                onSetJoinPolicy = { policy -> collabEngine.setJoinPolicy(policy) },
+                onAddAllowedUserHandle = { handle -> collabEngine.addAllowedUserHandle(handle) },
+                onRemoveAllowedUserHandle = { handle -> collabEngine.removeAllowedUserHandle(handle) },
+                onInviteUser = { handle -> collabEngine.inviteUser(handle) },
+                onRevokeInvitation = { handle -> collabEngine.revokeInvitation(handle) },
+                onSavePrivacyPreset = { presetName -> collabEngine.savePrivacyPreset(presetName) },
+                onApplyPrivacyPreset = { presetId -> collabEngine.applyPrivacyPreset(presetId) },
+                onDeletePrivacyPreset = { presetId -> collabEngine.deletePrivacyPreset(presetId) },
+                onSetPeerVolume = { peerId, vol -> collabEngine.setPeerVolume(peerId, vol) },
+                onToggleLocalPeerMute = { peerId -> collabEngine.toggleLocalPeerMute(peerId) },
+                onSetAudioBitrate = { kbps -> collabEngine.setAudioBitrateKbps(kbps) },
+                onSetRoomMaxBitrate = { maxKbps -> collabEngine.setRoomMaxBitrateKbps(maxKbps) },
+                onSetAccessMode = { mode -> collabEngine.setAccessMode(mode) },
+                onSetGlobalDrawingDisabled = { disabled -> collabEngine.setGlobalDrawingDisabled(disabled) },
+                onSetGlobalSheetCreationDisabled = { disabled -> collabEngine.setGlobalSheetCreationDisabled(disabled) },
+                onSetPeerDrawingDisabled = { peerId, disabled -> collabEngine.setPeerDrawingDisabled(peerId, disabled) },
+                onSetPeerSheetCreationDisabled = { peerId, disabled -> collabEngine.setPeerSheetCreationDisabled(peerId, disabled) },
+                onSetPeerAdmin = { peerId, isAdmin -> collabEngine.setPeerAdmin(peerId, isAdmin) },
+                onTransferHostOwnership = { newHostPeerId -> collabEngine.transferHostOwnership(newHostPeerId) },
+                onSetPeerRoomMuted = { peerId, isMuted -> collabEngine.setPeerRoomMuted(peerId, isMuted) },
+                onSetPeerChatBlocked = { peerId, isBlocked -> collabEngine.setPeerChatBlocked(peerId, isBlocked) },
+                onKickPeer = { peerId -> collabEngine.kickPeer(peerId) },
+                onDismissRequest = { showCollabSettingsSheet = false }
             )
         }
     }
