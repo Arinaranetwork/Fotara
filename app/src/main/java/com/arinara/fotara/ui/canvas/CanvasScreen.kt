@@ -242,14 +242,6 @@ fun CanvasScreen(
         }
     }
 
-    val collabPrefs = remember(context) {
-        context.getSharedPreferences("fotara_collab_prefs", android.content.Context.MODE_PRIVATE)
-    }
-    val persistentCollabDeviceId = remember(collabPrefs) {
-        collabPrefs.getString("collab_device_id", null) ?: java.util.UUID.randomUUID().toString().also { generated ->
-            collabPrefs.edit().putString("collab_device_id", generated).apply()
-        }
-    }
     val realProfileName = remember(uiState.userProfile) {
         uiState.userProfile.resolvedName(defaultFallback = "Fotara User")
     }
@@ -259,20 +251,34 @@ fun CanvasScreen(
     val resolvedUserHandle = remember(uiState.myUserHandle, realProfileName) {
         uiState.myUserHandle.ifBlank { realProfileName }
     }
-    val collabEngine = remember(persistentCollabDeviceId) {
+    var persistentCollabDeviceId by remember { mutableStateOf("") }
+    var collabPrefsLoaded by remember { mutableStateOf(false) }
+    val collabEngine = remember {
         CollabSessionEngine(
             initialLocalUserTag = realProfileName,
-            initialLocalDeviceId = persistentCollabDeviceId,
             initialLocalPronouns = realProfilePronouns,
             initialLocalUserHandle = resolvedUserHandle,
             enableLanTransport = true
-        ).also { engine ->
-            val rawPresets = collabPrefs.getString("collab_privacy_presets", null).orEmpty()
-            if (rawPresets.isNotBlank()) {
-                engine.loadSavedPrivacyPresets(
-                    com.arinara.fotara.feature.collab.model.CollabPrivacyPreset.decodeList(rawPresets)
-                )
+        )
+    }
+    LaunchedEffect(collabEngine) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val prefs = context.getSharedPreferences("fotara_collab_prefs", android.content.Context.MODE_PRIVATE)
+            val deviceId = prefs.getString("collab_device_id", null)
+                ?: java.util.UUID.randomUUID().toString().also { generated ->
+                    prefs.edit().putString("collab_device_id", generated).apply()
+                }
+            val rawPresets = prefs.getString("collab_privacy_presets", null).orEmpty()
+            val decodedPresets = if (rawPresets.isNotBlank()) {
+                com.arinara.fotara.feature.collab.model.CollabPrivacyPreset.decodeList(rawPresets)
+            } else {
+                emptyList()
             }
+            persistentCollabDeviceId = deviceId
+            if (decodedPresets.isNotEmpty()) {
+                collabEngine.loadSavedPrivacyPresets(decodedPresets)
+            }
+            collabPrefsLoaded = true
         }
     }
     LaunchedEffect(realProfileName, realProfilePronouns, persistentCollabDeviceId, resolvedUserHandle) {
@@ -319,9 +325,13 @@ fun CanvasScreen(
     val collabActivePresetId by collabEngine.activePresetId.collectAsStateWithLifecycle()
     val collabBufferedStrokesCount by collabEngine.bufferedStrokesCount.collectAsStateWithLifecycle()
     val collabErrorMessage by collabEngine.lastErrorMessage.collectAsStateWithLifecycle()
-    LaunchedEffect(collabSavedPresets) {
-        val encoded = com.arinara.fotara.feature.collab.model.CollabPrivacyPreset.encodeList(collabSavedPresets)
-        collabPrefs.edit().putString("collab_privacy_presets", encoded).apply()
+    LaunchedEffect(collabSavedPresets, collabPrefsLoaded) {
+        if (!collabPrefsLoaded) return@LaunchedEffect
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val prefs = context.getSharedPreferences("fotara_collab_prefs", android.content.Context.MODE_PRIVATE)
+            val encoded = com.arinara.fotara.feature.collab.model.CollabPrivacyPreset.encodeList(collabSavedPresets)
+            prefs.edit().putString("collab_privacy_presets", encoded).apply()
+        }
     }
     LaunchedEffect(collabBufferedStrokesCount) {
         if (collabBufferedStrokesCount > 0) {
@@ -332,6 +342,7 @@ fun CanvasScreen(
         }
     }
     var showCollabJoinDialog by remember { mutableStateOf(false) }
+    var isJoiningCollabRoom by remember { mutableStateOf(false) }
     var showCollabChatSheet by remember { mutableStateOf(false) }
     var showCollabSettingsSheet by remember { mutableStateOf(false) }
     LaunchedEffect(showCollabChatSheet) {
@@ -2136,19 +2147,34 @@ fun CanvasScreen(
         if (showCollabJoinDialog) {
             CollabRoomJoinDialog(
                 onDismissRequest = {
-                    collabEngine.clearErrorMessage()
-                    showCollabJoinDialog = false
+                    if (!isJoiningCollabRoom) {
+                        collabEngine.clearErrorMessage()
+                        showCollabJoinDialog = false
+                    }
                 },
                 onJoinRoom = { code ->
-                    if (collabEngine.joinRoom(
-                            code = code,
-                            userTag = realProfileName,
-                            colorHex = "#7A5AF8",
-                            pronouns = realProfilePronouns,
-                            userHandle = resolvedUserHandle
-                        )
-                    ) {
-                        showCollabJoinDialog = false
+                    if (!isJoiningCollabRoom) {
+                        isJoiningCollabRoom = true
+                        collabEngine.clearErrorMessage()
+                        coroutineScope.launch {
+                            val joined = try {
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    collabEngine.joinRoom(
+                                        code = code,
+                                        userTag = realProfileName,
+                                        colorHex = "#7A5AF8",
+                                        pronouns = realProfilePronouns,
+                                        requireActiveHost = true,
+                                        userHandle = resolvedUserHandle
+                                    )
+                                }
+                            } finally {
+                                isJoiningCollabRoom = false
+                            }
+                            if (joined) {
+                                showCollabJoinDialog = false
+                            }
+                        }
                     }
                 },
                 onCreateRoom = {
@@ -2178,6 +2204,7 @@ fun CanvasScreen(
                 localUserRole = collabLocalRole,
                 activeRoomCode = collabRoomCode,
                 activePeerCount = collabPeers.size,
+                isJoining = isJoiningCollabRoom,
                 externalErrorMessage = collabErrorMessage,
                 onClearExternalError = { collabEngine.clearErrorMessage() },
                 onOpenChat = {

@@ -260,9 +260,17 @@ class ScheduleDisableAndNoteLogicTest {
         assertFalse(joinResult)
         assertEquals(firstRoomCode, engine.roomCode.value)
 
-        // After explicitly leaving the room, creating or joining a new session is allowed
+        // After explicitly leaving the room, joining an uncreated room still fails,
+        // and joining an actively hosted room succeeds
         engine.leaveRoom()
         assertFalse(engine.isSessionActive)
+        assertFalse(engine.joinRoom(differentCode, "Joiner"))
+
+        val otherHost = com.arinara.fotara.feature.collab.engine.CollabSessionEngine(
+            initialLocalPeerId = "peer-host-2",
+            initialLocalUserTag = "OtherHost"
+        )
+        assertTrue(otherHost.createCustomRoom(differentCode, "OtherHost"))
         assertTrue(engine.joinRoom(differentCode, "Joiner"))
         assertEquals(differentCode, engine.roomCode.value)
     }

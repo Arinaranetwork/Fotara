@@ -31,6 +31,7 @@ class FotaraApp : Application(), ImageLoaderFactory {
                 val logFile = File(filesDir, "crash.log")
                 logFile.writeText(
                     "FOTARA FATAL CRASH [${Date()}]\n" +
+                    "Version: ${BuildConfig.VERSION_NAME}\n" +
                     "Thread: ${thread.name}\n" +
                     Log.getStackTraceString(throwable)
                 )

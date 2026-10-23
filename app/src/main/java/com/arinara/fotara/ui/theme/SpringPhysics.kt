@@ -96,7 +96,7 @@ fun Modifier.jigglePressClickable(
                 targetValue = 1.00f,
                 animationSpec = SpringPhysics.JigglePressSpec
             )
-        } else {
+        } else if (scaleAnim.value != 1.00f) {
             scaleAnim.animateTo(
                 targetValue = 1.00f,
                 animationSpec = SpringPhysics.JigglePressSpec
@@ -225,7 +225,7 @@ fun Modifier.jigglePressCombinedClickable(
                 targetValue = 1.00f,
                 animationSpec = SpringPhysics.JigglePressSpec
             )
-        } else {
+        } else if (scaleAnim.value != 1.00f) {
             scaleAnim.animateTo(
                 targetValue = 1.00f,
                 animationSpec = SpringPhysics.JigglePressSpec

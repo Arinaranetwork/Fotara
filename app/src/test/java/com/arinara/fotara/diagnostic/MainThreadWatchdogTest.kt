@@ -25,6 +25,18 @@ class MainThreadWatchdogTest {
 
         val topMethod = MainThreadWatchdog.extractTopAppMethod(stackTrace)
         assertEquals("CanvasDrawingView.onDrawStrokes(CanvasDrawingView.kt:142)", topMethod)
+        assertTrue(!MainThreadWatchdog.isIdleLooperStack(stackTrace))
+    }
+
+    @Test
+    fun isIdleLooperStack_identifiesPureIdleMessageQueueWait() {
+        val idleStack = arrayOf(
+            StackTraceElement("android.os.MessageQueue", "nativePollOnce", "MessageQueue.java", -2),
+            StackTraceElement("android.os.MessageQueue", "next", "MessageQueue.java", 335),
+            StackTraceElement("android.os.Looper", "loop", "Looper.java", 183),
+            StackTraceElement("android.app.ActivityThread", "main", "ActivityThread.java", 8010)
+        )
+        assertTrue(MainThreadWatchdog.isIdleLooperStack(idleStack))
     }
 
     @Test

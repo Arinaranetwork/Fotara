@@ -68,6 +68,7 @@ fun CollabRoomJoinDialog(
     localUserRole: CollabRole = CollabRole.MEMBER,
     activeRoomCode: String? = null,
     activePeerCount: Int = 1,
+    isJoining: Boolean = false,
     externalErrorMessage: String? = null,
     onClearExternalError: (() -> Unit)? = null,
     onOpenChat: (() -> Unit)? = null,
@@ -648,13 +649,17 @@ fun CollabRoomJoinDialog(
                                 .weight(1f)
                                 .height(44.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isCodeComplete) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TrackInactive)
+                                .background(
+                                    if (isCodeComplete && !isJoining) ElectricSlateTokens.PrimaryAccent
+                                    else ElectricSlateTokens.TrackInactive
+                                )
                                 .border(
                                     1.dp,
-                                    if (isCodeComplete) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.BorderSubtle,
+                                    if (isCodeComplete && !isJoining) ElectricSlateTokens.PrimaryAccent
+                                    else ElectricSlateTokens.BorderSubtle,
                                     RoundedCornerShape(12.dp)
                                 )
-                                .clickable(enabled = isCodeComplete) {
+                                .clickable(enabled = isCodeComplete && !isJoining) {
                                     val fullCode = "FT-$rawSuffix"
                                     if (CollabRoomCode.isValid(fullCode)) {
                                         onJoinRoom(fullCode)
@@ -665,11 +670,15 @@ fun CollabRoomJoinDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (isCodeComplete) "Join (FT-$rawSuffix)" else "Join",
+                                text = when {
+                                    isJoining -> "Checking Host..."
+                                    isCodeComplete -> "Join (FT-$rawSuffix)"
+                                    else -> "Join"
+                                },
                                 fontFamily = ElmsSans,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
-                                color = if (isCodeComplete) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted
+                                color = if (isCodeComplete && !isJoining) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted
                             )
                         }
                     }

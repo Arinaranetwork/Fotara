@@ -279,7 +279,7 @@ fun EditorToolbar(
             ToolbarActionItem(
                 icon = Icons.Outlined.FormatClear,
                 description = "Clear Formatting",
-                enabled = state.bodyValue.text.isNotEmpty(),
+                enabled = androidx.compose.runtime.remember(state) { androidx.compose.runtime.derivedStateOf { state.charCount > 0 } }.value,
                 onClick = { state.executeAction { EditorActions.clearFormatting(it) } }
             )
             ToolbarActionItem(

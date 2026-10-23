@@ -44,7 +44,7 @@ object DiagnosticZipExporter {
         val zipFile = File(exportDir, "Fotara_Diagnostic_$timestampStr.zip")
 
         val hw = AppDiagnosticLogger.getHardwareInfo(context)
-        val summaryReport = AppDiagnosticLogger.generateFullReport(context)
+        val summaryReport = AppDiagnosticLogger.generateFullReport(context, precomputedHw = hw)
         val eventsCsv = generateActivityEventsCsv(AppDiagnosticLogger.getAllEvents())
         val ramCsv = generateRamTimelineCsv(AppDiagnosticLogger.getAllRamSamples())
         val workerCsv = generateWorkerMemoryCsv(AppDiagnosticLogger.getAllWorkerRecords())
@@ -89,6 +89,8 @@ object DiagnosticZipExporter {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
+        // Pause watchdog before opening the system Android Share Sheet so ChooserActivity window transition isn't flagged
+        AppDiagnosticLogger.setActivityForeground(false)
         val chooser = Intent.createChooser(shareIntent, "Share Diagnostic Bundle (.zip)")
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(chooser)

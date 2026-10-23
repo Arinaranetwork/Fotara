@@ -20,7 +20,7 @@
 
 <br />
 
-<img src="Assets/Banners/FotaraBanner_1.9_2026-10-09.jpg" alt="Fotara Workspace Showcase" width="100%" />
+<img src="Assets/Banners/FotaraBanner_2.1_2026-10-23.jpg" alt="Fotara Workspace Showcase" width="100%" />
 
 <p align="center">
   <i>Fotara runtime environment on Android: Rich Markdown and KaTeX math editor, infinite vector Drawing Canvas, and adaptive multi-day schedule widget.</i>
@@ -76,7 +76,7 @@ Fotara follows three distinct deployment channels to guarantee stability for eve
 
 | Channel | Identifier | Stability & Intent | Update Cadence | Distribution |
 |:---|:---|:---|:---|:---|
-| **Stable** | `v<major>.<moderate>.<minor>` (e.g. `v1.8.4`) | Battle-tested production builds intended for primary devices and critical academic schedules. | Monthly / Milestone releases | [GitHub Releases](https://github.com/Arinaranetwork/Fotara/releases) |
+| **Stable** | `v<major>.<moderate>.<minor>` (e.g. `v2.1.0`) | Battle-tested production builds intended for primary devices and critical academic schedules. | Monthly / Milestone releases | [GitHub Releases](https://github.com/Arinaranetwork/Fotara/releases) |
 | **Beta** | `v<major>.<moderate>.<minor>-beta` (e.g. `v1.9.0-beta`) | Feature-complete milestone builds undergoing broad compatibility validation and field testing. | Bi-weekly releases | [GitHub Releases (Pre-Release)](https://github.com/Arinaranetwork/Fotara/releases) |
 | **Alpha** | `v<major>.<moderate>.<minor>-alpha` (e.g. `v1.9.4-alpha`) | Active development branch containing early experimental tools, canvas extensions, and architectural updates. | Continuous preview builds | [GitHub Releases (Tags)](https://github.com/Arinaranetwork/Fotara/releases) |
 

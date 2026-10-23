@@ -194,6 +194,14 @@ object AppDiagnosticLogger {
     private val _latestStuckAlertFlow = MutableStateFlow<StuckErrorRecord?>(null)
     val latestStuckAlertFlow: StateFlow<StuckErrorRecord?> = _latestStuckAlertFlow.asStateFlow()
 
+    @Volatile
+    private var cachedFilesDirKb: Long = 0L
+    @Volatile
+    private var cachedCacheDirKb: Long = 0L
+    @Volatile
+    private var lastFolderSizeCheckUptimeMs: Long = 0L
+    private const val FOLDER_SIZE_CACHE_TTL_MS: Long = 10_000L
+
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
     fun initialize(context: Context) {
@@ -214,12 +222,15 @@ object AppDiagnosticLogger {
         if (_isDiagnosticSystemEnabled.value) {
             recordEvent("Logger", "Diagnostic system initialized")
 
-            // Check for previous crash log from a fatal crash
+            // Check for previous crash log from a fatal crash (ignore/purge stale logs from older app versions)
             try {
                 val crashFile = File(context.filesDir, "crash.log")
                 if (crashFile.exists()) {
                     val crashText = crashFile.readText()
-                    if (crashText.isNotBlank()) {
+                    val currentVersionTag = "Version: ${com.arinara.fotara.BuildConfig.VERSION_NAME}"
+                    if (crashText.isBlank() || !crashText.contains(currentVersionTag)) {
+                        crashFile.delete()
+                    } else {
                         recordEvent("CrashRecovery", "Detected previous fatal crash log (${crashFile.length()} bytes)")
                     }
                 }
@@ -227,10 +238,26 @@ object AppDiagnosticLogger {
         }
     }
 
+    fun setActivityForeground(foreground: Boolean) {
+        watchdog?.setForegroundState(foreground)
+    }
+
+    fun clearCrashLog(context: Context?) {
+        if (context == null) return
+        try {
+            val crashFile = File(context.filesDir, "crash.log")
+            if (crashFile.exists()) {
+                crashFile.delete()
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun updateMonitorsLifecycle() {
         if (_isDiagnosticSystemEnabled.value && (_isOverlayEnabled.value || _isDeveloperModeEnabled.value)) {
             framePacingMonitor.start()
-            watchdog?.start()
+            if (isFirstFrameCaptured.get()) {
+                watchdog?.start()
+            }
         } else {
             framePacingMonitor.stop()
             watchdog?.stop()
@@ -275,10 +302,13 @@ object AppDiagnosticLogger {
     fun recordStuckError(record: StuckErrorRecord) {
         if (!_isDiagnosticSystemEnabled.value) return
         _latestStuckAlertFlow.value = record
+        var shouldLogEvent = true
         synchronized(stuckHistory) {
             val existing = stuckHistory.find { it.id == record.id }
             if (existing != null) {
                 stuckHistory.remove(existing)
+                // Only emit a second event if the hitch escalated into a severe freeze
+                shouldLogEvent = !existing.isSevereFreeze && record.isSevereFreeze
             }
             stuckHistory.addFirst(record)
             while (stuckHistory.size > MAX_STUCK_HISTORY) {
@@ -286,8 +316,10 @@ object AppDiagnosticLogger {
             }
             _stuckErrorsFlow.value = stuckHistory.toList()
         }
-        val prefix = if (record.isSevereFreeze) "SEVERE FREEZE" else "HITCH"
-        recordEvent("StuckError", "[$prefix ${record.durationMs}ms] ${record.topMethod}")
+        if (shouldLogEvent) {
+            val prefix = if (record.isSevereFreeze) "SEVERE FREEZE" else "HITCH"
+            recordEvent("StuckError", "[$prefix ${record.durationMs}ms] ${record.topMethod}")
+        }
     }
 
     fun clearStuckAlert() {
@@ -295,12 +327,13 @@ object AppDiagnosticLogger {
         watchdog?.clearAlert()
     }
 
-    fun clearEvents() {
+    fun clearEvents(context: Context? = null) {
         eventHistory.clear()
         _eventsFlow.value = emptyList()
         historySize.set(0)
         lastEventTag = null
         lastEventMessage = null
+        clearCrashLog(context)
         if (_isDiagnosticSystemEnabled.value) {
             recordEvent("Logger", "Activity log cleared by developer")
         }
@@ -426,6 +459,7 @@ object AppDiagnosticLogger {
                 totalColdStartMs = totalCold
             )
         }
+        updateMonitorsLifecycle()
         recordEvent("UI", "Home UI first frame displayed! Total cold start: ${totalCold}ms")
     }
 
@@ -564,8 +598,14 @@ object AppDiagnosticLogger {
 
         if (context != null) {
             try {
-                appFilesKb = getFolderSize(context.filesDir) / 1024
-                appCacheKb = getFolderSize(context.cacheDir) / 1024
+                val nowUptime = SystemClock.elapsedRealtime()
+                if (lastFolderSizeCheckUptimeMs == 0L || (nowUptime - lastFolderSizeCheckUptimeMs) >= FOLDER_SIZE_CACHE_TTL_MS) {
+                    cachedFilesDirKb = getFolderSize(context.filesDir) / 1024
+                    cachedCacheDirKb = getFolderSize(context.cacheDir) / 1024
+                    lastFolderSizeCheckUptimeMs = nowUptime
+                }
+                appFilesKb = cachedFilesDirKb
+                appCacheKb = cachedCacheDirKb
 
                 val dbFile = context.getDatabasePath("fotara.db")
                 val walFile = context.getDatabasePath("fotara.db-wal")
@@ -577,7 +617,13 @@ object AppDiagnosticLogger {
 
                 val crashFile = File(context.filesDir, "crash.log")
                 if (crashFile.exists()) {
-                    crashLogText = crashFile.readText()
+                    val rawCrash = crashFile.readText()
+                    val currentVersionTag = "Version: ${com.arinara.fotara.BuildConfig.VERSION_NAME}"
+                    if (rawCrash.contains(currentVersionTag)) {
+                        crashLogText = rawCrash
+                    } else {
+                        crashFile.delete()
+                    }
                 }
 
                 val dm = context.resources.displayMetrics
@@ -659,8 +705,8 @@ object AppDiagnosticLogger {
         )
     }
 
-    fun generateFullReport(context: Context? = null): String {
-        val hw = getHardwareInfo(context)
+    fun generateFullReport(context: Context? = null, precomputedHw: HardwareInfo? = null): String {
+        val hw = precomputedHw ?: getHardwareInfo(context)
         val metrics = _startupMetricsFlow.value
         val recentEvents = eventHistory.toList()
         val errors = errorHistory.toList()

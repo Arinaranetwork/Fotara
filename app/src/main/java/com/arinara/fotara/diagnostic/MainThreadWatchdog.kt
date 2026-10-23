@@ -37,6 +37,8 @@ class MainThreadWatchdog(
     private val onStuckDetected: ((StuckErrorRecord) -> Unit)? = null
 ) {
     private val isRunning = AtomicBoolean(false)
+    private val isForeground = AtomicBoolean(true)
+    private val pingInFlight = AtomicBoolean(false)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mainThread = Looper.getMainLooper().thread
 
@@ -51,6 +53,15 @@ class MainThreadWatchdog(
 
     private val pingRunnable = Runnable {
         lastPingCompletedUptime.set(SystemClock.uptimeMillis())
+        pingInFlight.set(false)
+    }
+
+    fun setForegroundState(foreground: Boolean) {
+        val now = SystemClock.uptimeMillis()
+        isForeground.set(foreground)
+        lastPingDispatchUptime.set(now)
+        lastPingCompletedUptime.set(now)
+        pingInFlight.set(false)
     }
 
     fun start() {
@@ -58,6 +69,7 @@ class MainThreadWatchdog(
             val now = SystemClock.uptimeMillis()
             lastPingDispatchUptime.set(now)
             lastPingCompletedUptime.set(now)
+            pingInFlight.set(false)
 
             watchdogThread = Thread({
                 var isHandlingFreeze = false
@@ -65,10 +77,26 @@ class MainThreadWatchdog(
                 var capturedRecord: StuckErrorRecord? = null
 
                 while (isRunning.get()) {
-                    val dispatchTime = SystemClock.uptimeMillis()
-                    lastPingDispatchUptime.set(dispatchTime)
+                    if (!isForeground.get()) {
+                        val idleNow = SystemClock.uptimeMillis()
+                        lastPingDispatchUptime.set(idleNow)
+                        lastPingCompletedUptime.set(idleNow)
+                        pingInFlight.set(false)
+                        isHandlingFreeze = false
+                        capturedRecord = null
+                        try {
+                            Thread.sleep(checkIntervalMs)
+                        } catch (_: InterruptedException) {
+                            break
+                        }
+                        continue
+                    }
 
-                    mainHandler.post(pingRunnable)
+                    if (pingInFlight.compareAndSet(false, true)) {
+                        val dispatchTime = SystemClock.uptimeMillis()
+                        lastPingDispatchUptime.set(dispatchTime)
+                        mainHandler.post(pingRunnable)
+                    }
 
                     try {
                         Thread.sleep(checkIntervalMs)
@@ -76,16 +104,26 @@ class MainThreadWatchdog(
                         break
                     }
 
+                    if (!isForeground.get()) {
+                        continue
+                    }
+
                     val nowCheck = SystemClock.uptimeMillis()
                     val completedTime = lastPingCompletedUptime.get()
                     val lagMs = nowCheck - completedTime
 
-                    if (lagMs >= hitchThresholdMs) {
+                    if (lagMs >= hitchThresholdMs && pingInFlight.get()) {
                         if (!isHandlingFreeze) {
+                            val stackTrace = mainThread.stackTrace
+                            if (isIdleLooperStack(stackTrace)) {
+                                // Main thread is idle in MessageQueue.nativePollOnce (e.g. system sheet or sync barrier)
+                                lastPingCompletedUptime.set(nowCheck)
+                                pingInFlight.set(false)
+                                continue
+                            }
                             // Fresh freeze/hitch detected!
                             isHandlingFreeze = true
                             frozenStartTimeUptime = completedTime
-                            val stackTrace = mainThread.stackTrace
                             val topMethod = extractTopAppMethod(stackTrace)
                             val formattedStack = formatStackTrace(stackTrace)
                             val activeScreen = AppDiagnosticLogger.currentScreen.value
@@ -105,9 +143,10 @@ class MainThreadWatchdog(
                         } else {
                             // Continuing freeze
                             capturedRecord?.let { current ->
+                                val totalFrozenMs = nowCheck - frozenStartTimeUptime
                                 val updated = current.copy(
-                                    durationMs = nowCheck - frozenStartTimeUptime,
-                                    isSevereFreeze = (nowCheck - frozenStartTimeUptime) >= freezeThresholdMs
+                                    durationMs = totalFrozenMs,
+                                    isSevereFreeze = totalFrozenMs >= freezeThresholdMs
                                 )
                                 capturedRecord = updated
                                 _latestAlertFlow.value = updated
@@ -145,6 +184,18 @@ class MainThreadWatchdog(
     }
 
     companion object {
+        /**
+         * Returns true when the main thread is sitting idle in `MessageQueue.nativePollOnce`
+         * with no active Fotara application frames on the call stack.
+         */
+        fun isIdleLooperStack(stackTrace: Array<StackTraceElement>): Boolean {
+            if (stackTrace.isEmpty()) return true
+            val top = stackTrace[0]
+            val isAtNativePoll = top.className == "android.os.MessageQueue" && top.methodName == "nativePollOnce"
+            if (!isAtNativePoll) return false
+            return stackTrace.none { it.className.startsWith("com.arinara.fotara") }
+        }
+
         fun extractTopAppMethod(stackTrace: Array<StackTraceElement>): String {
             for (element in stackTrace) {
                 val className = element.className

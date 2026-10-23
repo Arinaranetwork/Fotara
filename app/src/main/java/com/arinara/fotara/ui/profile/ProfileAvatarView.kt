@@ -85,9 +85,17 @@ fun ProfileAvatar(
                 .clip(CircleShape)
                 .background(ElectricSlateTokens.SurfaceElevated)
         ) {
-            val file = remember(avatarPath, avatarUpdatedAt) { avatarPath?.let { File(it) } }
-            if (file != null && file.exists()) {
-                val cacheKey = "${file.absolutePath}_${if (avatarUpdatedAt > 0L) avatarUpdatedAt else file.lastModified()}"
+            val resolvedAvatarInfo = remember(avatarPath, avatarUpdatedAt) {
+                val f = avatarPath?.takeIf { it.isNotBlank() }?.let { File(it) }
+                if (f != null && f.exists()) {
+                    val key = "${f.absolutePath}_${if (avatarUpdatedAt > 0L) avatarUpdatedAt else f.lastModified()}"
+                    f to key
+                } else {
+                    null
+                }
+            }
+            if (resolvedAvatarInfo != null) {
+                val (file, cacheKey) = resolvedAvatarInfo
                 val imageRequest = remember(cacheKey) {
                     ImageRequest.Builder(context)
                         .data(file)

@@ -980,10 +980,14 @@ fun DiagnosticInfoScreen(
                     AppButton(
                         text = "Copy Full Diagnostic Report",
                         onClick = {
-                            val report = AppDiagnosticLogger.generateFullReport(context)
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                            clipboard?.setPrimaryClip(ClipData.newPlainText("Fotara Diagnostic Report", report))
-                            Toast.makeText(context, "Full diagnostic report copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            coroutineScope.launch {
+                                val report = withContext(Dispatchers.IO) {
+                                    AppDiagnosticLogger.generateFullReport(context)
+                                }
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                clipboard?.setPrimaryClip(ClipData.newPlainText("Fotara Diagnostic Report", report))
+                                Toast.makeText(context, "Full diagnostic report copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1016,7 +1020,7 @@ fun DiagnosticInfoScreen(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(ElectricSlateTokens.SurfaceElevated)
                                 .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(8.dp))
-                                .clickable { AppDiagnosticLogger.clearEvents() }
+                                .clickable { AppDiagnosticLogger.clearEvents(context) }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(

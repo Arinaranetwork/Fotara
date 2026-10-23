@@ -6,6 +6,7 @@
 
 package com.arinara.fotara.feature.collab
 
+import com.arinara.fotara.feature.collab.engine.CollabRoomRegistry
 import com.arinara.fotara.feature.collab.engine.CollabSessionEngine
 import com.arinara.fotara.feature.collab.engine.CollabSessionState
 import com.arinara.fotara.feature.collab.model.CollabMessage
@@ -28,6 +29,7 @@ class CollabSessionEngineTest {
 
     @Before
     fun setUp() {
+        CollabRoomRegistry.clearAllForTesting()
         engine = CollabSessionEngine(
             initialLocalPeerId = "local_p1",
             initialLocalUserTag = "TestHost",
@@ -70,18 +72,40 @@ class CollabSessionEngineTest {
     }
 
     @Test
+    fun testJoinRoomWithoutActiveHostFails() {
+        // Attempting to join a room code that nobody has created/hosted yet MUST fail
+        val success = engine.joinRoom("FT-8821", userTag = "CollaboratorBob", colorHex = "#EFE8DA")
+        assertFalse(success)
+        assertEquals(CollabSessionState.DISCONNECTED, engine.state.value)
+        assertNull(engine.roomCode.value)
+        assertTrue(engine.activePeers.value.isEmpty())
+        assertNotNull(engine.lastErrorMessage.value)
+        assertTrue(engine.lastErrorMessage.value!!.contains("FT-8821"))
+        assertTrue(engine.lastErrorMessage.value!!.contains("No active host"))
+    }
+
+    @Test
     fun testJoinRoomWithValidCode() {
+        val hostEngine = CollabSessionEngine(
+            initialLocalPeerId = "host_p0",
+            initialLocalUserTag = "HostAlice",
+            initialLocalColorHex = "#7A5AF8"
+        )
+        assertTrue(hostEngine.createCustomRoom("FT-8821", userTag = "HostAlice"))
+
         val success = engine.joinRoom("FT-8821", userTag = "CollaboratorBob", colorHex = "#EFE8DA")
         assertTrue(success)
         assertEquals(CollabSessionState.IN_ROOM, engine.state.value)
         assertEquals("FT-8821", engine.roomCode.value)
+        assertEquals("host_p0", engine.hostPeerId.value)
 
         val peers = engine.activePeers.value
-        assertEquals(1, peers.size)
+        assertEquals(2, peers.size)
         val localPeer = peers["local_p1"]
         assertNotNull(localPeer)
         assertEquals("CollaboratorBob", localPeer?.userTag)
         assertEquals("#EFE8DA", localPeer?.colorHex)
+        assertEquals("HostAlice", peers["host_p0"]?.userTag)
 
         // Verify JoinRoom and PeerJoined dispatched
         val joinMsg = dispatchedMessages.filterIsInstance<CollabMessage.JoinRoom>().firstOrNull()
@@ -91,6 +115,27 @@ class CollabSessionEngineTest {
         val peerJoinedMsg = dispatchedMessages.filterIsInstance<CollabMessage.PeerJoined>().firstOrNull()
         assertNotNull(peerJoinedMsg)
         assertEquals("local_p1", peerJoinedMsg?.peerId)
+    }
+
+    @Test
+    fun testJoinRoomWithRemoteHostAnnounceSucceeds() {
+        // Simulate receiving a HostAnnounce from another device on the LAN before joining
+        engine.receiveMessage(
+            CollabMessage.HostAnnounce(
+                roomCode = "FT-9942",
+                sessionToken = "lan_token_9942",
+                hostPeerId = "remote_host_peer",
+                hostUserName = "RemoteHostUser",
+                lanIp = "192.168.1.42",
+                lanPort = 51234
+            )
+        )
+        val success = engine.joinRoom("FT-9942", userTag = "JoinerEve")
+        assertTrue(success)
+        assertEquals(CollabSessionState.IN_ROOM, engine.state.value)
+        assertEquals("FT-9942", engine.roomCode.value)
+        assertEquals("remote_host_peer", engine.hostPeerId.value)
+        assertEquals("lan_token_9942", engine.sessionToken.value)
     }
 
     @Test

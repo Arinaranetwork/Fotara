@@ -375,12 +375,16 @@ class CollabSessionEngine(
         _pinnedChatMessageId.value = null
         _pinnedChatMessage.value = null
 
+        lanTransport?.startHostServer()
+        val boundLanPort = lanTransport?.localTcpPort ?: 0
+
         CollabRoomRegistry.registerHostRoom(
             roomCode = candidateCode,
             sessionToken = newToken,
             hostPeerId = localPeerId,
             hostUserName = localUserTag,
             createdAt = now,
+            lanPort = boundLanPort,
             engineRef = this
         )
 
@@ -405,14 +409,13 @@ class CollabSessionEngine(
         _unreadChatCount.value = 0
 
         _state.value = CollabSessionState.IN_ROOM
-        lanTransport?.startHostServer()
 
         val announce = CollabMessage.HostAnnounce(
             roomCode = candidateCode,
             sessionToken = newToken,
             hostPeerId = localPeerId,
             hostUserName = localUserTag,
-            lanPort = lanTransport?.localTcpPort ?: 0,
+            lanPort = boundLanPort,
             maxBitrateKbps = _roomMaxBitrateKbps.value,
             createdAt = now
         )
@@ -469,7 +472,7 @@ class CollabSessionEngine(
         userTag: String = localUserTag,
         colorHex: String = localColorHex,
         pronouns: String = localPronouns,
-        requireActiveHost: Boolean = false,
+        requireActiveHost: Boolean = true,
         userHandle: String = localUserHandle
     ): Boolean {
         if (userHandle.isNotBlank()) {
@@ -495,14 +498,27 @@ class CollabSessionEngine(
             return false
         }
 
-        val hostedRecord = CollabRoomRegistry.findRoom(normalizedCode)
+        val resolvedUserTag = userTag.trim().ifEmpty { localUserTag.ifEmpty { "Fotara User" } }
+        var hostedRecord = CollabRoomRegistry.findRoom(normalizedCode)
+        if (hostedRecord != null && hostedRecord.hostPeerId == localPeerId && _state.value != CollabSessionState.IN_ROOM) {
+            CollabRoomRegistry.unregisterRoom(normalizedCode, localPeerId)
+            hostedRecord = null
+        }
+        if (hostedRecord == null && lanTransport != null) {
+            hostedRecord = lanTransport.probeRoomHost(
+                roomCode = normalizedCode,
+                joinerPeerId = localPeerId,
+                joinerDeviceId = localDeviceId,
+                joinerUserName = resolvedUserTag,
+                timeoutMs = 650L
+            )
+        }
         if (requireActiveHost && hostedRecord == null) {
             _lastErrorMessage.value =
-                "Room $normalizedCode not found. Check the code with the host and try again."
+                "Room $normalizedCode not found. No active host has created this room yet — tap Create to host it."
             return false
         }
 
-        val resolvedUserTag = userTag.trim().ifEmpty { localUserTag.ifEmpty { "Fotara User" } }
         // Pre-join Host Privacy & Capacity Verification when an in-process Host is available
         hostedRecord?.engineRef?.let { hostEngine ->
             if (hostEngine !== this) {
@@ -581,6 +597,9 @@ class CollabSessionEngine(
 
         _state.value = CollabSessionState.IN_ROOM
         lanTransport?.startJoinerDiscovery()
+        if (hostedRecord != null && hostedRecord.lanIp.isNotBlank() && hostedRecord.lanPort > 0) {
+            lanTransport?.connectToHost(hostedRecord.lanIp, hostedRecord.lanPort)
+        }
 
         val whoHas = CollabMessage.WhoHasRoom(
             roomCode = normalizedCode,
@@ -1693,6 +1712,9 @@ class CollabSessionEngine(
                 }
             }
             is CollabMessage.HostAnnounce -> {
+                if (message.hostPeerId != localPeerId) {
+                    CollabRoomRegistry.registerRemoteHostAnnouncement(message)
+                }
                 val activeCode = _roomCode.value
                 if (activeCode != null && activeCode.equals(message.roomCode, ignoreCase = true)) {
                     if (_sessionToken.value.isBlank()) {

@@ -146,12 +146,14 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        AppDiagnosticLogger.setActivityForeground(true)
         appContainer?.dialogCoordinator?.setActivityResumed(true)
         checkAndEnqueueConsent()
     }
 
     override fun onPause() {
         super.onPause()
+        AppDiagnosticLogger.setActivityForeground(false)
         appContainer?.dialogCoordinator?.setActivityResumed(false)
     }
 

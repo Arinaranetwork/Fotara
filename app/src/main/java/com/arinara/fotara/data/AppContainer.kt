@@ -225,6 +225,7 @@ class DefaultAppContainer(override val context: Context) : AppContainer {
     init {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             // Defer non-critical startup maintenance past the initial UI rendering window
+            try { dbHelper.writableDatabase } catch (_: Exception) {}
             delay(7000L)
             try {
                 photoRepository.purgeOldTrashedItems(30)
