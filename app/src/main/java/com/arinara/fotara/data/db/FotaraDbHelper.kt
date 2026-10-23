@@ -1113,6 +1113,8 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
 
                 try {
                     context.getSharedPreferences("fotara_anti_procrastination_alarms", android.content.Context.MODE_PRIVATE).edit().clear().apply()
+                    com.arinara.fotara.feature.schedule.notification.ScheduleNotificationScheduler(context)
+                        .purgeLegacyAntiProcrastinationAlarmsAndPrefs()
                 } catch (_: Exception) {}
             } catch (e: Exception) {
                 android.util.Log.e("FotaraDbHelper", "Migration v26 (schedule refinements) failed: ${e.message}")

@@ -6,6 +6,7 @@
 
 package com.arinara.fotara.feature.collab.engine
 
+import com.arinara.fotara.feature.collab.model.CollabChatMessage
 import com.arinara.fotara.feature.collab.model.CollabMessage
 import com.arinara.fotara.feature.collab.model.CollabPeer
 import com.arinara.fotara.feature.collab.model.CollabRoomCode
@@ -32,17 +33,19 @@ enum class CollabSessionState {
 
 /**
  * Pure state machine and real-time synchronization engine for live collaborative canvas rooms.
- * Manages peer memberships, vector stroke buffering, cursor interpolation, and timeout eviction.
+ * Manages peer memberships, vector stroke buffering, real-time room chat, active session guarding,
+ * cursor interpolation, and timeout eviction.
  */
 class CollabSessionEngine(
     initialLocalPeerId: String = UUID.randomUUID().toString(),
     initialLocalUserTag: String = "Host",
-    initialLocalColorHex: String = "#2563EB"
+    initialLocalColorHex: String = "#7A5AF8"
 ) : AutoCloseable {
 
     companion object {
         const val DEFAULT_PEER_TIMEOUT_MS: Long = 15_000L
         const val MAX_STROKE_BUFFER_SIZE: Int = 1_000
+        const val MAX_CHAT_HISTORY_SIZE: Int = 200
     }
 
     @Volatile
@@ -66,6 +69,16 @@ class CollabSessionEngine(
     private val _activePeers = MutableStateFlow<Map<String, CollabPeer>>(emptyMap())
     val activePeers: StateFlow<Map<String, CollabPeer>> = _activePeers.asStateFlow()
 
+    private val _chatMessages = MutableStateFlow<List<CollabChatMessage>>(emptyList())
+    val chatMessages: StateFlow<List<CollabChatMessage>> = _chatMessages.asStateFlow()
+
+    private val _unreadChatCount = MutableStateFlow(0)
+    val unreadChatCount: StateFlow<Int> = _unreadChatCount.asStateFlow()
+
+    @Volatile
+    var isChatSheetOpen: Boolean = false
+        private set
+
     private val _outgoingMessages = MutableSharedFlow<CollabMessage>(extraBufferCapacity = 64)
     val outgoingMessages: SharedFlow<CollabMessage> = _outgoingMessages.asSharedFlow()
 
@@ -73,6 +86,12 @@ class CollabSessionEngine(
     private val strokeBuffer = ConcurrentLinkedQueue<CollabStroke>()
     private val _bufferedStrokesCount = MutableStateFlow(0)
     val bufferedStrokesCount: StateFlow<Int> = _bufferedStrokesCount.asStateFlow()
+
+    /**
+     * Returns true if a collaborative room is currently active.
+     */
+    val isSessionActive: Boolean
+        get() = _state.value == CollabSessionState.IN_ROOM && _roomCode.value != null
 
     /**
      * Optional transport bridge callback for external networks (WebSockets / WebRTC data channels).
@@ -89,11 +108,19 @@ class CollabSessionEngine(
 
     /**
      * Creates a new collaborative study room, generating an official 6-digit room code `FT-XXXX`.
+     * Guarded: if a session is already active, returns the existing room code without overwriting
+     * or resetting the active session. Call [leaveRoom] first to start a different session.
      */
+    @Synchronized
     fun createRoom(
         userTag: String = localUserTag,
         colorHex: String = localColorHex
     ): String {
+        val existingCode = _roomCode.value
+        if (_state.value == CollabSessionState.IN_ROOM && !existingCode.isNullOrBlank()) {
+            return existingCode
+        }
+
         localUserTag = userTag
         localColorHex = colorHex
 
@@ -112,6 +139,8 @@ class CollabSessionEngine(
 
         strokeBuffer.clear()
         _bufferedStrokesCount.value = 0
+        _chatMessages.value = emptyList()
+        _unreadChatCount.value = 0
 
         _state.value = CollabSessionState.IN_ROOM
 
@@ -127,7 +156,9 @@ class CollabSessionEngine(
 
     /**
      * Joins an existing collaborative study room by validating the 6-digit room code `FT-XXXX`.
+     * Guarded: if another session is already active, rejects joining until [leaveRoom] is called.
      */
+    @Synchronized
     fun joinRoom(
         code: String,
         userTag: String = localUserTag,
@@ -137,15 +168,23 @@ class CollabSessionEngine(
             return false
         }
 
+        val normalizedCode = CollabRoomCode.normalize(code)
+        val existingCode = _roomCode.value
+        if (_state.value == CollabSessionState.IN_ROOM && !existingCode.isNullOrBlank()) {
+            // Cannot overwrite an already active session with a new session
+            return existingCode == normalizedCode
+        }
+
         localUserTag = userTag
         localColorHex = colorHex
 
-        val normalizedCode = CollabRoomCode.normalize(code)
         _state.value = CollabSessionState.CONNECTING
         _roomCode.value = normalizedCode
 
         strokeBuffer.clear()
         _bufferedStrokesCount.value = 0
+        _chatMessages.value = emptyList()
+        _unreadChatCount.value = 0
 
         _activePeers.value = mapOf(
             localPeerId to CollabPeer(
@@ -178,6 +217,7 @@ class CollabSessionEngine(
     /**
      * Leaves the active collaborative room and resets session state to DISCONNECTED.
      */
+    @Synchronized
     fun leaveRoom() {
         if (_state.value != CollabSessionState.DISCONNECTED) {
             val leaveMsg = CollabMessage.LeaveRoom(peerId = localPeerId)
@@ -187,8 +227,64 @@ class CollabSessionEngine(
         _state.value = CollabSessionState.DISCONNECTED
         _roomCode.value = null
         _activePeers.value = emptyMap()
+        _chatMessages.value = emptyList()
+        _unreadChatCount.value = 0
+        isChatSheetOpen = false
         strokeBuffer.clear()
         _bufferedStrokesCount.value = 0
+    }
+
+    /**
+     * Sends a real-time chat message to all collaborators in the active room.
+     */
+    fun sendChatMessage(rawText: String): CollabChatMessage? {
+        if (!isSessionActive) return null
+        val sanitized = rawText.trim().take(500)
+        if (sanitized.isEmpty()) return null
+
+        val now = System.currentTimeMillis()
+        val msgId = UUID.randomUUID().toString()
+        val chatEntry = CollabChatMessage(
+            messageId = msgId,
+            peerId = localPeerId,
+            senderTag = localUserTag,
+            senderColorHex = localColorHex,
+            text = sanitized,
+            timestamp = now,
+            isLocal = true
+        )
+
+        _chatMessages.update { current ->
+            (current + chatEntry).takeLast(MAX_CHAT_HISTORY_SIZE)
+        }
+
+        val broadcast = CollabMessage.ChatBroadcast(
+            messageId = msgId,
+            peerId = localPeerId,
+            senderTag = localUserTag,
+            senderColorHex = localColorHex,
+            text = sanitized,
+            timestamp = now
+        )
+        dispatchMessage(broadcast)
+        return chatEntry
+    }
+
+    /**
+     * Updates whether the chat sheet UI is currently visible and clears unread badge when opened.
+     */
+    fun setChatSheetOpen(isOpen: Boolean) {
+        isChatSheetOpen = isOpen
+        if (isOpen) {
+            _unreadChatCount.value = 0
+        }
+    }
+
+    /**
+     * Clears the unread chat badge counter manually.
+     */
+    fun markChatRead() {
+        _unreadChatCount.value = 0
     }
 
     /**
@@ -246,7 +342,6 @@ class CollabSessionEngine(
     fun receiveMessage(message: CollabMessage) {
         when (message) {
             is CollabMessage.JoinRoom -> {
-                // Inform the joiner about local peer existence if in room
                 if (_state.value == CollabSessionState.IN_ROOM) {
                     val echo = CollabMessage.PeerJoined(
                         peerId = localPeerId,
@@ -275,7 +370,6 @@ class CollabSessionEngine(
                 }
             }
             is CollabMessage.StrokeBroadcast -> {
-                // Buffer the stroke for canvas ingestion
                 val stroke = CollabStroke(
                     strokeId = message.strokeId,
                     peerId = "peer",
@@ -301,9 +395,49 @@ class CollabSessionEngine(
                         ) ?: CollabPeer(
                             peerId = message.peerId,
                             userTag = "Peer ${message.peerId.take(4)}",
-                            colorHex = "#2563EB",
+                            colorHex = "#7A5AF8",
                             lastCursorX = message.x,
                             lastCursorY = message.y,
+                            lastActiveMs = message.timestamp
+                        )
+                        current + (message.peerId to updated)
+                    }
+                }
+            }
+            is CollabMessage.ChatBroadcast -> {
+                val isFromSelf = message.peerId == localPeerId
+                var addedNew = false
+                _chatMessages.update { current ->
+                    if (current.any { it.messageId == message.messageId }) {
+                        current
+                    } else {
+                        addedNew = true
+                        val entry = CollabChatMessage(
+                            messageId = message.messageId,
+                            peerId = message.peerId,
+                            senderTag = message.senderTag,
+                            senderColorHex = message.senderColorHex,
+                            text = message.text,
+                            timestamp = message.timestamp,
+                            isLocal = isFromSelf
+                        )
+                        (current + entry).takeLast(MAX_CHAT_HISTORY_SIZE)
+                    }
+                }
+                if (addedNew && !isFromSelf) {
+                    if (!isChatSheetOpen) {
+                        _unreadChatCount.update { it + 1 }
+                    }
+                    _activePeers.update { current ->
+                        val existing = current[message.peerId]
+                        val updated = existing?.copy(
+                            userTag = message.senderTag,
+                            colorHex = message.senderColorHex,
+                            lastActiveMs = message.timestamp
+                        ) ?: CollabPeer(
+                            peerId = message.peerId,
+                            userTag = message.senderTag,
+                            colorHex = message.senderColorHex,
                             lastActiveMs = message.timestamp
                         )
                         current + (message.peerId to updated)
@@ -361,7 +495,6 @@ class CollabSessionEngine(
         val currentCode = _roomCode.value ?: return false
         _state.value = CollabSessionState.RECONNECTING
 
-        // Restore to in-room
         _state.value = CollabSessionState.IN_ROOM
         val rejoin = CollabMessage.JoinRoom(
             roomCode = currentCode,

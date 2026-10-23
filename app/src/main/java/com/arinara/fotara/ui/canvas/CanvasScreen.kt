@@ -250,7 +250,13 @@ fun CanvasScreen(
     val collabRoomCode by collabEngine.roomCode.collectAsStateWithLifecycle()
     val collabPeersMap by collabEngine.activePeers.collectAsStateWithLifecycle()
     val collabPeers = remember(collabPeersMap) { collabPeersMap.values.toList() }
+    val collabChatMessages by collabEngine.chatMessages.collectAsStateWithLifecycle()
+    val collabUnreadChatCount by collabEngine.unreadChatCount.collectAsStateWithLifecycle()
     var showCollabJoinDialog by remember { mutableStateOf(false) }
+    var showCollabChatSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(showCollabChatSheet) {
+        collabEngine.setChatSheetOpen(showCollabChatSheet)
+    }
     var drawingViewRef by remember { mutableStateOf<CanvasDrawingView?>(null) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var showShareSheet by remember { mutableStateOf(false) }
@@ -334,7 +340,12 @@ fun CanvasScreen(
                 CollabSessionBar(
                     roomCode = collabRoomCode!!,
                     peers = collabPeers,
-                    onLeaveClick = { collabEngine.leaveRoom() },
+                    onLeaveClick = {
+                        showCollabChatSheet = false
+                        collabEngine.leaveRoom()
+                    },
+                    unreadChatCount = collabUnreadChatCount,
+                    onChatClick = { showCollabChatSheet = true },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -597,13 +608,45 @@ fun CanvasScreen(
                                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, null, tint = ElectricSlateTokens.TextMuted) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Collaborative Study Room", color = ElectricSlateTokens.TextPrimary) },
+                                text = {
+                                    Text(
+                                        text = if (collabRoomCode != null) "Active Room ($collabRoomCode)" else "Collaborative Study Room",
+                                        color = if (collabRoomCode != null) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextPrimary
+                                    )
+                                },
                                 onClick = {
                                     showOverflowMenu = false
                                     showCollabJoinDialog = true
                                 },
-                                leadingIcon = { Icon(Icons.Default.Group, null, tint = ElectricSlateTokens.TextMuted) }
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Group,
+                                        null,
+                                        tint = if (collabRoomCode != null) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextMuted
+                                    )
+                                }
                             )
+                            if (collabRoomCode != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = if (collabUnreadChatCount > 0) "Room Chat ($collabUnreadChatCount new)" else "Room Chat",
+                                            color = ElectricSlateTokens.TextPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        showCollabChatSheet = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Group,
+                                            null,
+                                            tint = ElectricSlateTokens.TextMuted
+                                        )
+                                    }
+                                )
+                            }
                             HorizontalDivider(color = ElectricSlateTokens.BorderSubtle)
                             DropdownMenuItem(
                                 text = { Text("Delete Note", color = ElectricSlateTokens.Destructive) },
@@ -1952,18 +1995,43 @@ fun CanvasScreen(
                 }
             }
         }
-        // Collab Room Join Dialog
+        // Collab Room Join Dialog (with Active Session Guard)
         if (showCollabJoinDialog) {
             CollabRoomJoinDialog(
                 onDismissRequest = { showCollabJoinDialog = false },
                 onJoinRoom = { code ->
-                    collabEngine.joinRoom(code, "Friend", "#2563EB")
-                    showCollabJoinDialog = false
+                    if (collabEngine.joinRoom(code, "Friend", "#7A5AF8")) {
+                        showCollabJoinDialog = false
+                    }
                 },
                 onCreateRoom = {
                     collabEngine.createRoom()
                     showCollabJoinDialog = false
+                },
+                activeRoomCode = collabRoomCode,
+                activePeerCount = collabPeers.size,
+                onOpenChat = {
+                    showCollabJoinDialog = false
+                    showCollabChatSheet = true
+                },
+                onLeaveActiveRoom = {
+                    showCollabChatSheet = false
+                    collabEngine.leaveRoom()
+                    showCollabJoinDialog = false
                 }
+            )
+        }
+
+        // Collab Room Real-Time Chat Sheet
+        if (showCollabChatSheet && collabRoomCode != null) {
+            com.arinara.fotara.feature.collab.ui.CollabChatSheet(
+                roomCode = collabRoomCode!!,
+                peers = collabPeers,
+                messages = collabChatMessages,
+                onSendMessage = { msgText ->
+                    collabEngine.sendChatMessage(msgText)
+                },
+                onDismissRequest = { showCollabChatSheet = false }
             )
         }
     }

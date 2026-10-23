@@ -68,6 +68,7 @@ class ScheduleNotificationScheduler(private val context: Context) {
      */
     fun rescheduleAllClassAlarms() {
         try {
+            purgeLegacyAntiProcrastinationAlarmsAndPrefs()
             val db = FotaraDbHelper.getInstance(context).getSafeReadableDatabase()
             val schedules = mutableListOf<ClassSchedule>()
             db.rawQuery(
@@ -105,34 +106,124 @@ class ScheduleNotificationScheduler(private val context: Context) {
     }
 
     /**
+     * Cancels any leftover scheduled alarms and purges stored preferences from the removed
+     * Anti-Procrastination Study Alarm (photo proof challenge) feature on app update or migration.
+     */
+    fun purgeLegacyAntiProcrastinationAlarmsAndPrefs() {
+        try {
+            val legacyPrefNames = listOf(
+                "anti_procrastination_alarms",
+                "anti_procrastination_prefs",
+                "procrastination_alarm_prefs"
+            )
+            for (prefName in legacyPrefNames) {
+                context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit().clear().apply()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    context.deleteSharedPreferences(prefName)
+                }
+            }
+
+            val settingsPrefs = context.getSharedPreferences("fotara_settings", Context.MODE_PRIVATE)
+            val legacyKeys = settingsPrefs.all.keys.filter {
+                it.contains("procrastination", ignoreCase = true) ||
+                    it.contains("photo_challenge", ignoreCase = true)
+            }
+            if (legacyKeys.isNotEmpty()) {
+                val editor = settingsPrefs.edit()
+                legacyKeys.forEach { editor.remove(it) }
+                editor.apply()
+            }
+
+            val legacyActions = listOf(
+                "com.arinara.fotara.ACTION_ANTI_PROCRASTINATION_ALARM",
+                "com.arinara.fotara.alarm.ACTION_ANTI_PROCRASTINATION_ALARM",
+                "com.arinara.fotara.alarm.ACTION_TRIGGER_CHALLENGE"
+            )
+            for (action in legacyActions) {
+                for (reqCode in 0..20) {
+                    val intent = Intent(action).setPackage(context.packageName)
+                    val pi = PendingIntent.getBroadcast(
+                        context,
+                        reqCode,
+                        intent,
+                        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    if (pi != null) {
+                        alarmManager.cancel(pi)
+                        pi.cancel()
+                    }
+                }
+                for (reqCode in 7000..7025) {
+                    val intent = Intent(action).setPackage(context.packageName)
+                    val pi = PendingIntent.getBroadcast(
+                        context,
+                        reqCode,
+                        intent,
+                        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    if (pi != null) {
+                        alarmManager.cancel(pi)
+                        pi.cancel()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("ScheduleNotificationScheduler", "Legacy anti-procrastination cleanup warning", e)
+        }
+    }
+
+    fun canScheduleExactAlarms(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                alarmManager.canScheduleExactAlarms()
+            } catch (_: Exception) {
+                false
+            }
+        } else {
+            true
+        }
+    }
+
+    fun areNotificationsEnabled(): Boolean {
+        return try {
+            notificationManager.areNotificationsEnabled()
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    /**
      * Reschedules all alarms for today & evening based on the full list of schedules,
      * respecting disabled days and attaching per-day notes.
      */
     fun rescheduleAll(schedules: List<ClassSchedule>, cutoffTimeStr: String = "18:00") {
-        if (schedules.isEmpty()) return
-
         val now = Calendar.getInstance()
         val currentDay = ScheduleCutoffEngine.getCurrentDayOfWeek(now)
 
         // Check if today is disabled
         val isTodayDisabled = isDayDisabledSync(currentDay, now.timeInMillis)
+        val hasNotesToday = getNotesForTodaySync(currentDay, now.timeInMillis).isNotEmpty()
 
         // 1. Morning Digest (06:30 today or tomorrow)
-        scheduleDailyAlarm(
-            alarmType = TYPE_MORNING_DIGEST,
-            hour = 6,
-            minute = 30,
-            requestCode = REQ_MORNING_DIGEST
-        )
+        if (schedules.isNotEmpty() || hasNotesToday) {
+            scheduleDailyAlarm(
+                alarmType = TYPE_MORNING_DIGEST,
+                hour = 6,
+                minute = 30,
+                requestCode = REQ_MORNING_DIGEST
+            )
+        }
 
         // 2. Evening Rollover Digest (at cutoff time)
-        val cutoffMin = ClassSchedule.parseTimeToMinutes(cutoffTimeStr) ?: (18 * 60)
-        scheduleDailyAlarm(
-            alarmType = TYPE_EVENING_ROLLOVER,
-            hour = cutoffMin / 60,
-            minute = cutoffMin % 60,
-            requestCode = REQ_EVENING_ROLLOVER
-        )
+        if (schedules.isNotEmpty()) {
+            val cutoffMin = ClassSchedule.parseTimeToMinutes(cutoffTimeStr) ?: (18 * 60)
+            scheduleDailyAlarm(
+                alarmType = TYPE_EVENING_ROLLOVER,
+                hour = cutoffMin / 60,
+                minute = cutoffMin % 60,
+                requestCode = REQ_EVENING_ROLLOVER
+            )
+        }
 
         // 3. Pre-class heads up for today's remaining classes (H-10 min) - Suppressed if today is disabled!
         val todayClasses = schedules.filter { it.dayOfWeek == currentDay }

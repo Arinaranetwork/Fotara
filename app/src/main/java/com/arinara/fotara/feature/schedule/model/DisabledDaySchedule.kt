@@ -35,4 +35,6 @@ data class DisabledDaySchedule(
             "Disabled until $dateStr"
         }
     }
+
+    fun formatStatusLabel(): String = formatBadgeText()
 }

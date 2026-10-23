@@ -353,6 +353,92 @@ fun ScheduleManagementSheet(
                 }
             }
 
+            // Android 12+ Exact Alarm & Android 13+ Post Notifications Permission Check & Fallback Banner
+            val schedulerHelper = remember(context) { ScheduleNotificationScheduler(context) }
+            var hasNotificationPermission by remember {
+                mutableStateOf(
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        androidx.core.content.ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.POST_NOTIFICATIONS
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    } else {
+                        schedulerHelper.areNotificationsEnabled()
+                    }
+                )
+            }
+            var hasExactAlarmPermission by remember {
+                mutableStateOf(schedulerHelper.canScheduleExactAlarms())
+            }
+            val notifPermissionLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestPermission()
+            ) { granted ->
+                hasNotificationPermission = granted
+            }
+
+            if (!hasNotificationPermission || !hasExactAlarmPermission) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(ElectricSlateTokens.SurfaceElevated)
+                        .border(1.dp, ElectricSlateTokens.BorderSubtle, RoundedCornerShape(12.dp))
+                        .clickable {
+                            if (!hasNotificationPermission && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            } else if (!hasExactAlarmPermission && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                try {
+                                    val intent = android.content.Intent(
+                                        android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = null,
+                                tint = ElectricSlateTokens.PrimaryAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = if (!hasNotificationPermission) {
+                                    "Notifications disabled • Tap to allow class reminders"
+                                } else {
+                                    "Using windowed alarm fallback • Tap to enable Exact Alarms"
+                                },
+                                color = ElectricSlateTokens.TextMuted,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                fontFamily = ElmsSans
+                            )
+                        }
+                        Text(
+                            text = "Allow",
+                            color = ElectricSlateTokens.PrimaryAccent,
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             // Pre-calculate class count per day in O(N) single pass to eliminate recomposition lag

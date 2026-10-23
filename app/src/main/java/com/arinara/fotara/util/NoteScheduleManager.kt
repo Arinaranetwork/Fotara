@@ -422,6 +422,9 @@ class BootReceiver : BroadcastReceiver() {
                     // Phase 99: Restore class schedule alarms, morning notes & evening rollover on reboot
                     val scheduleScheduler = com.arinara.fotara.feature.schedule.notification.ScheduleNotificationScheduler(context)
                     scheduleScheduler.rescheduleAllClassAlarms()
+
+                    // Refresh Timetable AppWidget after reboot / update / timezone change
+                    com.arinara.fotara.widget.TimetableGlanceWidgetReceiver.notifyDataChanged(context)
                 } catch (e: Exception) {
                     android.util.Log.e("BootReceiver", "Failed to reschedule on boot", e)
                 } finally {

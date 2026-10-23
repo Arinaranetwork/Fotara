@@ -236,4 +236,121 @@ class ScheduleDisableAndNoteLogicTest {
         repo.deleteDayNote(id)
         assertEquals(0, repo.getDayNotesOnce(3).size)
     }
+
+    @Test
+    fun testActiveSessionGuard_blocksCreatingOrJoiningNewRoomWhileInRoom() {
+        val engine = com.arinara.fotara.feature.collab.engine.CollabSessionEngine(
+            initialLocalPeerId = "peer-host-1",
+            initialLocalUserTag = "HostUser"
+        )
+        assertFalse(engine.isSessionActive)
+
+        val firstRoomCode = engine.createRoom()
+        assertTrue(engine.isSessionActive)
+        assertEquals(firstRoomCode, engine.roomCode.value)
+
+        // Attempting to create another room while one is already active must NOT overwrite it
+        val secondCreateAttempt = engine.createRoom("AnotherUser")
+        assertEquals(firstRoomCode, secondCreateAttempt)
+        assertEquals(firstRoomCode, engine.roomCode.value)
+
+        // Attempting to join a different room while active must be rejected (return false)
+        val differentCode = if (firstRoomCode == "FT-9999") "FT-8888" else "FT-9999"
+        val joinResult = engine.joinRoom(differentCode, "Joiner")
+        assertFalse(joinResult)
+        assertEquals(firstRoomCode, engine.roomCode.value)
+
+        // After explicitly leaving the room, creating or joining a new session is allowed
+        engine.leaveRoom()
+        assertFalse(engine.isSessionActive)
+        assertTrue(engine.joinRoom(differentCode, "Joiner"))
+        assertEquals(differentCode, engine.roomCode.value)
+    }
+
+    @Test
+    fun testCollabRealTimeChat_sendReceiveEncodeDecodeAndUnreadBadge() {
+        val engine = com.arinara.fotara.feature.collab.engine.CollabSessionEngine(
+            initialLocalPeerId = "peer-local",
+            initialLocalUserTag = "Alice",
+            initialLocalColorHex = "#7A5AF8"
+        )
+        engine.createRoom()
+
+        // Send local chat message
+        val sent = engine.sendChatMessage("Hello team! Let's review chapter 4.")
+        assertNotNull(sent)
+        assertEquals(1, engine.chatMessages.value.size)
+        assertEquals(0, engine.unreadChatCount.value)
+        assertTrue(engine.chatMessages.value.first().isLocal)
+
+        // Encode & decode a remote peer ChatBroadcast with quotes and special chars
+        val remoteBroadcast = com.arinara.fotara.feature.collab.model.CollabMessage.ChatBroadcast(
+            messageId = "msg-remote-101",
+            peerId = "peer-remote-2",
+            senderTag = "Bob",
+            senderColorHex = "#7A5AF8",
+            text = "Got it! Checking \"Section 4.2\" now.",
+            timestamp = 1760000000000L
+        )
+        val encodedJson = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.encode(remoteBroadcast)
+        val decodedMsg = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.decode(encodedJson)
+        assertTrue(decodedMsg is com.arinara.fotara.feature.collab.model.CollabMessage.ChatBroadcast)
+        val decodedChat = decodedMsg as com.arinara.fotara.feature.collab.model.CollabMessage.ChatBroadcast
+        assertEquals("Got it! Checking \"Section 4.2\" now.", decodedChat.text)
+        assertEquals("Bob", decodedChat.senderTag)
+
+        // Receive while chat sheet is closed -> increments unread count
+        engine.setChatSheetOpen(false)
+        engine.receiveMessage(decodedChat)
+        assertEquals(2, engine.chatMessages.value.size)
+        assertEquals(1, engine.unreadChatCount.value)
+
+        // Duplicate message ID is ignored (idempotent)
+        engine.receiveMessage(decodedChat)
+        assertEquals(2, engine.chatMessages.value.size)
+        assertEquals(1, engine.unreadChatCount.value)
+
+        // Opening chat sheet clears unread count
+        engine.setChatSheetOpen(true)
+        assertEquals(0, engine.unreadChatCount.value)
+    }
+
+    @Test
+    fun testTimetableWidgetItemFormatting_andOneTimeVsRepeatingNoteActiveCheck() {
+        val widgetItem = com.arinara.fotara.widget.TimetableWidgetItem(
+            id = 42L,
+            dayOfWeek = 5,
+            startMinute = 8 * 60 + 30,
+            endMinute = 10 * 60,
+            subjectName = "Organic Chemistry",
+            roomName = "Lab 204",
+            instructorName = "Dr. Lin",
+            linkedFolderId = null,
+            colorHex = "#7A5AF8"
+        )
+        assertEquals("08:30", widgetItem.startTimeFormatted)
+        assertEquals("10:00", widgetItem.endTimeFormatted)
+        assertEquals("08:30 - 10:00", widgetItem.timeRangeFormatted)
+
+        val oct23 = Calendar.getInstance().apply {
+            set(2026, Calendar.OCTOBER, 23, 9, 0, 0)
+        }.timeInMillis
+        val oct30 = Calendar.getInstance().apply {
+            set(2026, Calendar.OCTOBER, 30, 9, 0, 0)
+        }.timeInMillis
+
+        val oneTimeNote = ScheduleDayNote(
+            id = 10L,
+            dayOfWeek = 5,
+            dateMillis = ScheduleDayNote.normalizeToStartOfDay(oct23),
+            noteText = "Bring lab coat",
+            isRepeatingWeekly = false
+        )
+        assertTrue(oneTimeNote.isActiveForDate(oct23))
+        assertFalse(oneTimeNote.isActiveForDate(oct30))
+
+        val weeklyNote = oneTimeNote.copy(isRepeatingWeekly = true)
+        assertTrue(weeklyNote.isActiveForDate(oct23))
+        assertTrue(weeklyNote.isActiveForDate(oct30))
+    }
 }

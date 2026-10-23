@@ -102,6 +102,17 @@ sealed class CollabMessage {
         override val messageType: String = TYPE_CURSOR_BROADCAST
     }
 
+    data class ChatBroadcast(
+        val messageId: String = UUID.randomUUID().toString(),
+        val peerId: String,
+        val senderTag: String,
+        val senderColorHex: String,
+        val text: String,
+        val timestamp: Long = System.currentTimeMillis()
+    ) : CollabMessage() {
+        override val messageType: String = TYPE_CHAT_BROADCAST
+    }
+
     data class LeaveRoom(
         val peerId: String
     ) : CollabMessage() {
@@ -113,6 +124,7 @@ sealed class CollabMessage {
         const val TYPE_PEER_JOINED = "PEER_JOINED"
         const val TYPE_STROKE_BROADCAST = "STROKE_BROADCAST"
         const val TYPE_CURSOR_BROADCAST = "CURSOR_BROADCAST"
+        const val TYPE_CHAT_BROADCAST = "CHAT_BROADCAST"
         const val TYPE_LEAVE_ROOM = "LEAVE_ROOM"
     }
 }
@@ -139,6 +151,19 @@ data class CollabStroke(
     val colorHex: String,
     val strokeWidth: Float,
     val timestamp: Long = System.currentTimeMillis()
+)
+
+/**
+ * Real-time chat message exchanged inside an active collaborative study room.
+ */
+data class CollabChatMessage(
+    val messageId: String = UUID.randomUUID().toString(),
+    val peerId: String,
+    val senderTag: String,
+    val senderColorHex: String,
+    val text: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val isLocal: Boolean = false
 )
 
 /**
@@ -182,6 +207,17 @@ object CollabProtocolCodec {
                     append("\"timestamp\":").append(message.timestamp).append("}")
                 }
             }
+            is CollabMessage.ChatBroadcast -> {
+                buildString {
+                    append("{\"type\":\"").append(CollabMessage.TYPE_CHAT_BROADCAST).append("\",")
+                    append("\"messageId\":\"").append(escapeJson(message.messageId)).append("\",")
+                    append("\"peerId\":\"").append(escapeJson(message.peerId)).append("\",")
+                    append("\"senderTag\":\"").append(escapeJson(message.senderTag)).append("\",")
+                    append("\"senderColorHex\":\"").append(escapeJson(message.senderColorHex)).append("\",")
+                    append("\"text\":\"").append(escapeJson(message.text)).append("\",")
+                    append("\"timestamp\":").append(message.timestamp).append("}")
+                }
+            }
             is CollabMessage.LeaveRoom -> {
                 buildString {
                     append("{\"type\":\"").append(CollabMessage.TYPE_LEAVE_ROOM).append("\",")
@@ -201,19 +237,19 @@ object CollabProtocolCodec {
             CollabMessage.TYPE_JOIN_ROOM -> {
                 val roomCode = extractStringField(trimmed, "roomCode")?.take(16) ?: return null
                 val userTag = extractStringField(trimmed, "userTag")?.take(50) ?: ""
-                val colorHex = extractStringField(trimmed, "colorHex")?.take(10) ?: "#2563EB"
+                val colorHex = extractStringField(trimmed, "colorHex")?.take(10) ?: "#7A5AF8"
                 CollabMessage.JoinRoom(roomCode, userTag, colorHex)
             }
             CollabMessage.TYPE_PEER_JOINED -> {
                 val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: return null
                 val userTag = extractStringField(trimmed, "userTag")?.take(50) ?: ""
-                val colorHex = extractStringField(trimmed, "colorHex")?.take(10) ?: "#2563EB"
+                val colorHex = extractStringField(trimmed, "colorHex")?.take(10) ?: "#7A5AF8"
                 CollabMessage.PeerJoined(peerId, userTag, colorHex)
             }
             CollabMessage.TYPE_STROKE_BROADCAST -> {
                 val strokeId = extractStringField(trimmed, "strokeId")?.take(100) ?: UUID.randomUUID().toString()
                 val points = extractFloatFieldList(trimmed, "points").take(10_000)
-                val colorHex = extractStringField(trimmed, "colorHex")?.take(10) ?: "#2563EB"
+                val colorHex = extractStringField(trimmed, "colorHex")?.take(10) ?: "#7A5AF8"
                 val rawStrokeWidth = extractFloatField(trimmed, "strokeWidth") ?: 4.0f
                 val strokeWidth = if (rawStrokeWidth.isNaN()) 4.0f else rawStrokeWidth.coerceIn(0.1f, 200f)
                 CollabMessage.StrokeBroadcast(strokeId, points, colorHex, strokeWidth)
@@ -226,6 +262,23 @@ object CollabProtocolCodec {
                 val y = if (rawY.isNaN() || rawY.isInfinite()) 0.0f else rawY.coerceIn(-500_000f, 500_000f)
                 val timestamp = extractLongField(trimmed, "timestamp") ?: System.currentTimeMillis()
                 CollabMessage.CursorBroadcast(peerId, x, y, timestamp)
+            }
+            CollabMessage.TYPE_CHAT_BROADCAST -> {
+                val messageId = extractStringField(trimmed, "messageId")?.take(100) ?: UUID.randomUUID().toString()
+                val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: return null
+                val senderTag = extractStringField(trimmed, "senderTag")?.take(50) ?: "Peer"
+                val senderColorHex = extractStringField(trimmed, "senderColorHex")?.take(10) ?: "#7A5AF8"
+                val text = extractStringField(trimmed, "text")?.take(500)?.trim() ?: return null
+                if (text.isEmpty()) return null
+                val timestamp = extractLongField(trimmed, "timestamp") ?: System.currentTimeMillis()
+                CollabMessage.ChatBroadcast(
+                    messageId = messageId,
+                    peerId = peerId,
+                    senderTag = senderTag,
+                    senderColorHex = senderColorHex,
+                    text = text,
+                    timestamp = timestamp
+                )
             }
             CollabMessage.TYPE_LEAVE_ROOM -> {
                 val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: return null
@@ -243,9 +296,18 @@ object CollabProtocolCodec {
             .replace("\t", "\\t")
     }
 
+    private fun unescapeJson(value: String): String {
+        return value.replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
+            .replace("\\\"", "\"")
+            .replace("\\\\", "\\")
+    }
+
     private fun extractStringField(json: String, fieldName: String): String? {
-        val pattern = Regex("\"$fieldName\"\\s*:\\s*\"([^\"]*)\"")
-        return pattern.find(json)?.groupValues?.get(1)
+        val pattern = Regex("\"$fieldName\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
+        val rawMatch = pattern.find(json)?.groupValues?.get(1) ?: return null
+        return unescapeJson(rawMatch)
     }
 
     private fun extractFloatField(json: String, fieldName: String): Float? {

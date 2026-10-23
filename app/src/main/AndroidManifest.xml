@@ -131,7 +131,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Consolidated Schedule Glance Widget (Phase 64 - Unified Responsive Schedule AppWidget) -->
+        <!-- Consolidated Schedule AppWidget (Native RemoteViews + RemoteViewsService) -->
         <receiver
             android:name=".widget.TimetableGlanceWidgetReceiver"
             android:enabled="true"
@@ -139,12 +139,18 @@
             android:label="@string/widget_schedule_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.arinara.fotara.action.REFRESH_TIMETABLE_WIDGET" />
+                <action android:name="com.arinara.fotara.action.SELECT_WIDGET_DAY" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/timetable_widget_info" />
         </receiver>
 
+        <service
+            android:name=".widget.TimetableRemoteViewsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
 
     </application>
 

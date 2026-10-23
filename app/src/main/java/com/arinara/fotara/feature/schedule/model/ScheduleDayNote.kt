@@ -7,6 +7,7 @@
 package com.arinara.fotara.feature.schedule.model
 
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -36,6 +37,27 @@ data class ScheduleDayNote(
         } else {
             val dateStr = SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date(dateMillis))
             "One-time: $dateStr"
+        }
+    }
+
+    fun isActiveForDate(targetDateMillis: Long): Boolean {
+        if (isRepeatingWeekly) return true
+        val c1 = Calendar.getInstance().apply { timeInMillis = dateMillis }
+        val c2 = Calendar.getInstance().apply { timeInMillis = targetDateMillis }
+        return c1.get(Calendar.YEAR) == c2.get(Calendar.YEAR) &&
+            c1.get(Calendar.DAY_OF_YEAR) == c2.get(Calendar.DAY_OF_YEAR)
+    }
+
+    companion object {
+        fun normalizeToStartOfDay(millis: Long): Long {
+            val cal = Calendar.getInstance().apply {
+                timeInMillis = millis
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            return cal.timeInMillis
         }
     }
 }
