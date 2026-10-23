@@ -413,9 +413,20 @@ class BootReceiver : BroadcastReceiver() {
             action == Intent.ACTION_TIME_CHANGED ||
             action == Intent.ACTION_TIMEZONE_CHANGED
         ) {
+            val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
-                val manager = NoteScheduleManager(context)
-                manager.rescheduleAllUpcoming()
+                try {
+                    val manager = NoteScheduleManager(context)
+                    manager.rescheduleAllUpcoming()
+
+                    // Phase 99: Restore class schedule alarms, morning notes & evening rollover on reboot
+                    val scheduleScheduler = com.arinara.fotara.feature.schedule.notification.ScheduleNotificationScheduler(context)
+                    scheduleScheduler.rescheduleAllClassAlarms()
+                } catch (e: Exception) {
+                    android.util.Log.e("BootReceiver", "Failed to reschedule on boot", e)
+                } finally {
+                    pendingResult.finish()
+                }
             }
         }
     }

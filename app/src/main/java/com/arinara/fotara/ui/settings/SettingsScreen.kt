@@ -360,7 +360,6 @@ fun SettingsScreen(
     var showStorageLocationDialog by remember { mutableStateOf(false) }
     var showCombineFileNameDialog by remember { mutableStateOf(false) }
     var showSavedImageLocationDialog by remember { mutableStateOf(false) }
-    var showAntiProcrastinationScreen by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         val initialMsg = viewModel.consumeFeedbackMessage()
@@ -485,14 +484,7 @@ fun SettingsScreen(
         return
     }
 
-    if (showAntiProcrastinationScreen) {
-        BackHandler { showAntiProcrastinationScreen = false }
-        com.arinara.fotara.alarm.procrastination.ui.AntiProcrastinationAlarmScreen(
-            onBackClick = { showAntiProcrastinationScreen = false },
-            modifier = Modifier.fillMaxSize()
-        )
-        return
-    }
+
 
     if (showExpressionScreen) {
         BackHandler { showExpressionScreen = false }
@@ -900,17 +892,7 @@ fun SettingsScreen(
                                 }
                             )
                         }
-                        item { SettingsListDivider() }
-                        item {
-                            SettingsRowItem(
-                                title = "Study Alarms & Anti-Procrastination",
-                                subtitle = "Photo-proof challenge alarms (Temporarily Disabled)",
-                                icon = Icons.Default.Alarm,
-                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                enabled = false,
-                                onClick = {}
-                            )
-                        }
+
                     }
                     SettingsSection.STORAGE -> {
                         item {

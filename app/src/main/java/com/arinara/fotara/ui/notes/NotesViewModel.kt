@@ -41,7 +41,11 @@ import com.arinara.fotara.ui.home.WorkspaceDeleteStep
 
 import com.arinara.fotara.feature.schedule.engine.ScheduleCapsuleState
 import com.arinara.fotara.feature.schedule.engine.ScheduleCutoffEngine
+import com.arinara.fotara.feature.schedule.engine.DisableDuration
 import com.arinara.fotara.feature.schedule.model.ClassSchedule
+import com.arinara.fotara.feature.schedule.model.DisabledDaySchedule
+import com.arinara.fotara.feature.schedule.model.ScheduleDayNote
+import java.util.Calendar
 import com.arinara.fotara.feature.schedule.notification.ScheduleNotificationScheduler
 import com.arinara.fotara.data.repository.ScheduleRepository
 import com.arinara.fotara.data.repository.SettingsRepository
@@ -73,7 +77,17 @@ data class NotesUiState(
     val schedules: List<ClassSchedule> = emptyList(),
     val scheduleCapsuleState: ScheduleCapsuleState = ScheduleCapsuleState.Empty(),
     val scheduleRolloverTime: String = "18:00",
-    val isScheduleSheetOpen: Boolean = false
+    val isScheduleSheetOpen: Boolean = false,
+    val disabledScheduleDays: Map<Int, DisabledDaySchedule> = emptyMap(),
+    val scheduleDayNotes: List<ScheduleDayNote> = emptyList()
+)
+
+private data class ScheduleStateBundle(
+    val scheds: List<ClassSchedule>,
+    val state: ScheduleCapsuleState,
+    val cutoff: String,
+    val disabledMap: Map<Int, DisabledDaySchedule>,
+    val dayNotes: List<ScheduleDayNote>
 )
 
 private data class RawNotesBundle(
@@ -319,17 +333,26 @@ class NotesViewModel(
                     ?: MutableStateFlow("18:00")
                 combine(
                     scheduleRepository.getAllSchedules(),
-                    rolloverFlow
-                ) { scheds, cutoffTime ->
-                    val state = scheduleCutoffEngine.evaluateCapsuleState(scheds, cutoffTime)
-                    Pair(scheds, Pair(state, cutoffTime))
-                }.distinctUntilChanged().collect { (scheds, stateAndCutoff) ->
-                    val (state, cutoff) = stateAndCutoff
+                    rolloverFlow,
+                    scheduleRepository.getDisabledDays(),
+                    scheduleRepository.getAllDayNotes()
+                ) { scheds, cutoffTime, disabledMap, allDayNotes ->
+                    val nowMs = System.currentTimeMillis()
+                    val activeOffDays = disabledMap.filter { !it.value.isExpired(nowMs) }.keys
+                    val state = scheduleCutoffEngine.evaluateCapsuleState(
+                        allSchedules = scheds,
+                        cutoffTimeStr = cutoffTime,
+                        disabledDays = activeOffDays
+                    )
+                    ScheduleStateBundle(scheds, state, cutoffTime, disabledMap, allDayNotes)
+                }.distinctUntilChanged().collect { bundle ->
                     _uiState.update { prev ->
                         prev.copy(
-                            schedules = scheds,
-                            scheduleCapsuleState = state,
-                            scheduleRolloverTime = cutoff
+                            schedules = bundle.scheds,
+                            scheduleCapsuleState = bundle.state,
+                            scheduleRolloverTime = bundle.cutoff,
+                            disabledScheduleDays = bundle.disabledMap,
+                            scheduleDayNotes = bundle.dayNotes
                         )
                     }
                 }
@@ -623,6 +646,36 @@ class NotesViewModel(
     fun updateScheduleRolloverTime(timeStr: String) {
         viewModelScope.launch {
             settingsRepository?.updateScheduleRolloverTime(timeStr)
+            triggerNotificationReschedule()
+        }
+    }
+
+    fun disableDay(dayOfWeek: Int, duration: DisableDuration) {
+        viewModelScope.launch {
+            val cutoff = _uiState.value.scheduleRolloverTime
+            val cutoffMin = ClassSchedule.parseTimeToMinutes(cutoff) ?: (18 * 60)
+            scheduleRepository?.disableDay(dayOfWeek, duration, Calendar.getInstance(), cutoffMin)
+            triggerNotificationReschedule()
+        }
+    }
+
+    fun reenableDay(dayOfWeek: Int) {
+        viewModelScope.launch {
+            scheduleRepository?.reenableDay(dayOfWeek)
+            triggerNotificationReschedule()
+        }
+    }
+
+    fun saveDayNote(note: ScheduleDayNote) {
+        viewModelScope.launch {
+            scheduleRepository?.saveDayNote(note)
+            triggerNotificationReschedule()
+        }
+    }
+
+    fun deleteDayNote(id: Long) {
+        viewModelScope.launch {
+            scheduleRepository?.deleteDayNote(id)
             triggerNotificationReschedule()
         }
     }

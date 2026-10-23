@@ -1872,6 +1872,63 @@ class FakeScheduleRepository(
     override suspend fun refresh() {
         updateFlow()
     }
+
+    private val dayNotes = mutableListOf<com.arinara.fotara.feature.schedule.model.ScheduleDayNote>()
+    private val disabledDays = mutableMapOf<Int, com.arinara.fotara.feature.schedule.model.DisabledDaySchedule>()
+
+    override fun getAllDayNotes(): kotlinx.coroutines.flow.Flow<List<com.arinara.fotara.feature.schedule.model.ScheduleDayNote>> =
+        kotlinx.coroutines.flow.flowOf(dayNotes.toList())
+
+    override fun getDayNotes(dayOfWeek: Int): kotlinx.coroutines.flow.Flow<List<com.arinara.fotara.feature.schedule.model.ScheduleDayNote>> =
+        kotlinx.coroutines.flow.flowOf(dayNotes.filter { it.dayOfWeek == dayOfWeek })
+
+    override suspend fun getDayNotesOnce(dayOfWeek: Int): List<com.arinara.fotara.feature.schedule.model.ScheduleDayNote> =
+        dayNotes.filter { it.dayOfWeek == dayOfWeek }
+
+    override suspend fun saveDayNote(note: com.arinara.fotara.feature.schedule.model.ScheduleDayNote): Long {
+        val id = if (note.id > 0) note.id else nextId++
+        val entry = note.copy(id = id)
+        dayNotes.removeAll { it.id == id }
+        dayNotes.add(entry)
+        return id
+    }
+
+    override suspend fun deleteDayNote(id: Long): Boolean = dayNotes.removeAll { it.id == id }
+
+    override fun getDisabledDays(): kotlinx.coroutines.flow.Flow<Map<Int, com.arinara.fotara.feature.schedule.model.DisabledDaySchedule>> =
+        kotlinx.coroutines.flow.flowOf(disabledDays.toMap())
+
+    override suspend fun getDisabledDaysOnce(): Map<Int, com.arinara.fotara.feature.schedule.model.DisabledDaySchedule> =
+        disabledDays.toMap()
+
+    override suspend fun isDayDisabled(dayOfWeek: Int, nowMs: Long): Boolean {
+        val record = disabledDays[dayOfWeek] ?: return false
+        return !record.isExpired(nowMs)
+    }
+
+    override suspend fun disableDay(
+        dayOfWeek: Int,
+        duration: com.arinara.fotara.feature.schedule.engine.DisableDuration,
+        nowCalendar: java.util.Calendar,
+        cutoffMinute: Int
+    ): Boolean {
+        val expiry = com.arinara.fotara.feature.schedule.engine.ScheduleDisableEngine.calculateExpiry(
+            duration = duration,
+            targetDayOfWeek = dayOfWeek,
+            nowCalendar = nowCalendar,
+            cutoffMinute = cutoffMinute
+        )
+        disabledDays[dayOfWeek] = com.arinara.fotara.feature.schedule.model.DisabledDaySchedule(
+            dayOfWeek = dayOfWeek,
+            disabledUntilMs = expiry,
+            mode = duration.name
+        )
+        return true
+    }
+
+    override suspend fun reenableDay(dayOfWeek: Int): Boolean {
+        return disabledDays.remove(dayOfWeek) != null
+    }
 }
 
 

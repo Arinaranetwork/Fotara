@@ -473,7 +473,13 @@ fun NotesScreen(
         onSaveSchedule = { viewModel.saveSchedule(it) },
         onDeleteSchedule = { viewModel.deleteSchedule(it) },
         onBatchImportSchedules = { viewModel.batchImportSchedules(it) },
-        onUpdateCutoffTime = { viewModel.updateScheduleRolloverTime(it) }
+        onUpdateCutoffTime = { viewModel.updateScheduleRolloverTime(it) },
+        disabledDays = uiState.disabledScheduleDays,
+        dayNotes = uiState.scheduleDayNotes,
+        onDisableDay = { day, duration -> viewModel.disableDay(day, duration) },
+        onReenableDay = { day -> viewModel.reenableDay(day) },
+        onSaveDayNote = { note -> viewModel.saveDayNote(note) },
+        onDeleteDayNote = { id -> viewModel.deleteDayNote(id) }
     )
 }
 

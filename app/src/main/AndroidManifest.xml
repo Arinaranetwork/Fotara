@@ -146,23 +146,6 @@
         </receiver>
 
 
-        <!-- Anti-Procrastination Alarm Components (Phase 45) -->
-        <activity
-            android:name=".alarm.procrastination.ui.PhotoProofChallengeActivity"
-            android:exported="false"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
-            android:excludeFromRecents="true"
-            android:theme="@style/Theme.Fotara" />
-
-        <receiver
-            android:name=".alarm.procrastination.receiver.AntiProcrastinationAlarmReceiver"
-            android:exported="false" />
-
-        <service
-            android:name=".alarm.procrastination.service.AntiProcrastinationRingtoneService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
     </application>
 
 </manifest>

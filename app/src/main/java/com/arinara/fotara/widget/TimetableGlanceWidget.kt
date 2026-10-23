@@ -259,7 +259,7 @@ class TimetableGlanceWidget : GlanceAppWidget() {
             ) {
                 Column(modifier = GlanceModifier.defaultWeight()) {
                     Text(
-                        text = "Class Schedule • ${state.singleDayData.dayName}",
+                        text = "Class Schedule - ${state.singleDayData.dayName}",
                         style = TextStyle(color = ColorPrimaryBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold),
                         maxLines = 1
                     )
@@ -468,6 +468,22 @@ class TimetableGlanceWidget : GlanceAppWidget() {
             Log.e("TimetableGlanceWidget", "Failed to query timetable data", e)
         }
 
+        val disabledDaySet = mutableSetOf<Int>()
+        val nowMs = System.currentTimeMillis()
+        try {
+            val dbHelper = FotaraDbHelper.getInstance(context)
+            val db = dbHelper.getSafeReadableDatabase()
+            db.rawQuery("SELECT day_of_week, disabled_until_ms FROM disabled_schedule_days", null).use { c ->
+                while (c.moveToNext()) {
+                    val day = c.getInt(0)
+                    val until = c.getLong(1)
+                    if (until > nowMs) {
+                        disabledDaySet.add(day)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
         val prefs = context.getSharedPreferences("fotara_settings", Context.MODE_PRIVATE)
         val cutoffStr = prefs.getString(SettingsRepository.KEY_SCHEDULE_ROLLOVER_TIME, "18:00") ?: "18:00"
         val cutoffMinute = ClassSchedule.parseTimeToMinutes(cutoffStr) ?: (18 * 60)
@@ -480,19 +496,22 @@ class TimetableGlanceWidget : GlanceAppWidget() {
         val targetDayName: String
         val headerTitle: String
         val targetClasses: List<ClassSchedule>
+        val isCurrentDayDisabled = disabledDaySet.contains(currentDay)
 
         if (isRollover) {
             var nextDay = if (currentDay == 7) 1 else currentDay + 1
-            var found = allSchedules.filter { it.dayOfWeek == nextDay }.sortedBy { it.startMinute }
+            var found = if (disabledDaySet.contains(nextDay)) emptyList() else allSchedules.filter { it.dayOfWeek == nextDay }.sortedBy { it.startMinute }
             if (found.isEmpty()) {
                 for (offset in 2..7) {
                     var candidate = (currentDay + offset)
                     if (candidate > 7) candidate -= 7
-                    val candidateClasses = allSchedules.filter { it.dayOfWeek == candidate }.sortedBy { it.startMinute }
-                    if (candidateClasses.isNotEmpty()) {
-                        nextDay = candidate
-                        found = candidateClasses
-                        break
+                    if (!disabledDaySet.contains(candidate)) {
+                        val candidateClasses = allSchedules.filter { it.dayOfWeek == candidate }.sortedBy { it.startMinute }
+                        if (candidateClasses.isNotEmpty()) {
+                            nextDay = candidate
+                            found = candidateClasses
+                            break
+                        }
                     }
                 }
             }
@@ -505,11 +524,12 @@ class TimetableGlanceWidget : GlanceAppWidget() {
         } else {
             targetDayOfWeek = currentDay
             targetDayName = "Today"
-            headerTitle = "Today (${ClassSchedule.getEnglishDayShortName(currentDay)})"
-            targetClasses = allSchedules.filter { it.dayOfWeek == currentDay }.sortedBy { it.startMinute }
+            headerTitle = if (isCurrentDayDisabled) "Today (${ClassSchedule.getEnglishDayShortName(currentDay)}) (Off)" else "Today (${ClassSchedule.getEnglishDayShortName(currentDay)})"
+            targetClasses = if (isCurrentDayDisabled) emptyList() else allSchedules.filter { it.dayOfWeek == currentDay }.sortedBy { it.startMinute }
         }
 
         val subheader = when {
+            isCurrentDayDisabled && !isRollover -> "Schedule disabled for today"
             isRollover -> "${targetClasses.size} Scheduled ${if (targetClasses.size == 1) "Class" else "Classes"}"
             targetClasses.isNotEmpty() -> "${targetClasses.size} Scheduled ${if (targetClasses.size == 1) "Class" else "Classes"}"
             else -> "No classes scheduled"
@@ -526,10 +546,11 @@ class TimetableGlanceWidget : GlanceAppWidget() {
 
         // 7-day mapping (1=Monday ... 7=Sunday)
         val fullWeeklyDays = (1..7).map { dayNum ->
-            val dayClasses = allSchedules.filter { it.dayOfWeek == dayNum }.map { it.toWidgetItem() }
+            val isDayOff = disabledDaySet.contains(dayNum)
+            val dayClasses = if (isDayOff) emptyList() else allSchedules.filter { it.dayOfWeek == dayNum }.map { it.toWidgetItem() }
             DayScheduleData(
                 dayOfWeek = dayNum,
-                dayShortName = ClassSchedule.getEnglishDayShortName(dayNum),
+                dayShortName = if (isDayOff) "${ClassSchedule.getEnglishDayShortName(dayNum)} (Off)" else ClassSchedule.getEnglishDayShortName(dayNum),
                 isToday = (dayNum == currentDay),
                 classes = dayClasses
             )
@@ -539,15 +560,15 @@ class TimetableGlanceWidget : GlanceAppWidget() {
         val multiDays = (0..3).map { offset ->
             var d = currentDay + offset
             if (d > 7) d -= 7
-            val dayClasses = allSchedules.filter { it.dayOfWeek == d }.map { it.toWidgetItem() }
+            val isDayOff = disabledDaySet.contains(d)
+            val dayClasses = if (isDayOff) emptyList() else allSchedules.filter { it.dayOfWeek == d }.map { it.toWidgetItem() }
             DayScheduleData(
                 dayOfWeek = d,
-                dayShortName = ClassSchedule.getEnglishDayShortName(d),
+                dayShortName = if (isDayOff) "${ClassSchedule.getEnglishDayShortName(d)} (Off)" else ClassSchedule.getEnglishDayShortName(d),
                 isToday = (d == currentDay),
                 classes = dayClasses
             )
         }
-
         return UnifiedScheduleWidgetState(
             singleDayData = singleDayData,
             multiDayPreview = multiDays,

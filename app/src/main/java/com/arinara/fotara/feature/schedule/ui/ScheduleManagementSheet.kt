@@ -67,6 +67,20 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.ui.draw.alpha
+import com.arinara.fotara.feature.schedule.engine.DisableDuration
+import com.arinara.fotara.feature.schedule.model.DisabledDaySchedule
+import com.arinara.fotara.feature.schedule.model.ScheduleDayNote
+import com.arinara.fotara.ui.components.presets.AppButton
+import com.arinara.fotara.ui.components.presets.AppButtonVariant
+import com.arinara.fotara.ui.components.presets.AppCard
+import com.arinara.fotara.ui.theme.ElectricSlateTokens
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -120,7 +134,13 @@ fun ScheduleManagementSheet(
     onSaveSchedule: (ClassSchedule) -> Unit,
     onDeleteSchedule: (Long) -> Unit,
     onBatchImportSchedules: (List<ClassSchedule>) -> Unit,
-    onUpdateCutoffTime: (String) -> Unit
+    onUpdateCutoffTime: (String) -> Unit,
+    disabledDays: Map<Int, DisabledDaySchedule> = emptyMap(),
+    dayNotes: List<ScheduleDayNote> = emptyList(),
+    onDisableDay: ((Int, DisableDuration) -> Unit)? = null,
+    onReenableDay: ((Int) -> Unit)? = null,
+    onSaveDayNote: ((ScheduleDayNote) -> Unit)? = null,
+    onDeleteDayNote: ((Long) -> Unit)? = null
 ) {
     if (!isOpen) return
 
@@ -137,8 +157,15 @@ fun ScheduleManagementSheet(
     var isCreatingNew by remember { mutableStateOf(false) }
     var scheduleToDelete by remember { mutableStateOf<ClassSchedule?>(null) }
     var isEditingCutoff by remember { mutableStateOf(false) }
-    var showAntiProcrastinationScreen by remember { mutableStateOf(false) }
     var showTemplateGuideDialog by remember { mutableStateOf(false) }
+
+    // Phase 99: Day Disabler & Day Notes States
+    var showDisableDayDialog by remember { mutableStateOf(false) }
+    var selectedDisableDuration by remember { mutableStateOf(DisableDuration.ONLY_THIS_DAY) }
+    var showDayNoteDialog by remember { mutableStateOf(false) }
+    var editingDayNote by remember { mutableStateOf<ScheduleDayNote?>(null) }
+    var dayNoteInputText by remember { mutableStateOf("") }
+    var dayNoteIsRepeating by remember { mutableStateOf(false) }
     var exportedTemplatePath by remember { mutableStateOf<String?>(null) }
 
     // Import states
@@ -328,62 +355,6 @@ fun ScheduleManagementSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Anti-Procrastination Study Alarm Card (Temporarily Disabled per A-024)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(HomeCardSurface.copy(alpha = 0.5f))
-                    .border(1.dp, HomeCardBorder.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Alarm,
-                            contentDescription = null,
-                            tint = Color(0xFF6B7280),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Column {
-                            Text(
-                                text = "Anti-Procrastination Study Alarm",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp,
-                                fontFamily = ElmsSans,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "Photo proof challenge (Temporarily Disabled)",
-                                color = Color(0xFF6B7280),
-                                fontSize = 11.sp,
-                                lineHeight = 14.sp,
-                                fontFamily = ElmsSans
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = "Disabled",
-                        color = Color(0xFF6B7280),
-                        fontSize = 12.sp,
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
             // Pre-calculate class count per day in O(N) single pass to eliminate recomposition lag
             val dayClassCounts = remember(schedules) {
                 val counts = IntArray(8)
@@ -405,6 +376,7 @@ fun ScheduleManagementSheet(
                     val count = dayClassCounts[day]
                     val isSelected = selectedDayOfWeek == day
                     val shortName = remember(day) { ClassSchedule.getEnglishDayShortName(day) }
+                    val isDayOff = disabledDays[day]?.let { !it.isExpired(System.currentTimeMillis()) } == true
 
                     Box(
                         modifier = Modifier
@@ -423,7 +395,7 @@ fun ScheduleManagementSheet(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = shortName,
+                                text = if (isDayOff) "$shortName (Off)" else shortName,
                                 color = if (isSelected) TextPrimary else Color(0xFF94A3B8),
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
@@ -457,6 +429,203 @@ fun ScheduleManagementSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            val nowMs = remember { System.currentTimeMillis() }
+            val currentDayDisabledRecord = disabledDays[selectedDayOfWeek]?.takeIf { !it.isExpired(nowMs) }
+            val isSelectedDayDisabled = currentDayDisabledRecord != null
+            val selectedDayNotes = remember(dayNotes, selectedDayOfWeek) {
+                dayNotes.filter { it.dayOfWeek == selectedDayOfWeek }
+            }
+
+            // Day Status & Disable Control Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${ClassSchedule.getEnglishDayName(selectedDayOfWeek)} Schedule",
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                if (isSelectedDayDisabled) {
+                    AppButton(
+                        text = "Re-enable",
+                        variant = AppButtonVariant.Secondary,
+                        onClick = { onReenableDay?.invoke(selectedDayOfWeek) },
+                        modifier = Modifier.height(32.dp)
+                    )
+                } else {
+                    AppButton(
+                        text = "Disable Day",
+                        variant = AppButtonVariant.Secondary,
+                        onClick = { showDisableDayDialog = true },
+                        modifier = Modifier.height(32.dp)
+                    )
+                }
+            }
+
+            // If day is disabled: show clear notice banner
+            if (isSelectedDayDisabled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(HomeCardSurface)
+                        .border(1.dp, TagAmber.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Block,
+                            contentDescription = null,
+                            tint = TagAmber,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = currentDayDisabledRecord!!.formatBadgeText(),
+                                color = TagAmber,
+                                fontSize = 12.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Morning summary, reminders, and widget entries are paused.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                fontFamily = ElmsSans
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Per-Day Note Card or Add Button
+            if (selectedDayNotes.isNotEmpty()) {
+                selectedDayNotes.forEach { note ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(HomeCardSurface)
+                            .border(1.dp, ElectricSlateTokens.PrimaryAccent.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PushPin,
+                                    contentDescription = null,
+                                    tint = ElectricSlateTokens.PrimaryAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = note.noteText,
+                                        color = TextPrimary,
+                                        fontSize = 13.sp,
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = note.formatDateLabel(),
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 11.sp,
+                                        fontFamily = ElmsSans
+                                    )
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                IconButton(
+                                    onClick = {
+                                        editingDayNote = note
+                                        dayNoteInputText = note.noteText
+                                        dayNoteIsRepeating = note.isRepeatingWeekly
+                                        showDayNoteDialog = true
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Edit note",
+                                        tint = Color(0xFF94A3B8),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onDeleteDayNote?.invoke(note.id) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete note",
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(HomeCardSurface.copy(alpha = 0.5f))
+                        .border(1.dp, HomeCardBorder.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .clickable {
+                            editingDayNote = null
+                            dayNoteInputText = ""
+                            dayNoteIsRepeating = false
+                            showDayNoteDialog = true
+                        }
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = null,
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "+ Attach note to ${ClassSchedule.getEnglishDayShortName(selectedDayOfWeek)}",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 12.sp,
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
             // Schedules for Selected Day (memoized to eliminate sorting/filtering churn)
             val daySchedules = remember(schedules, selectedDayOfWeek) {
                 schedules
@@ -532,7 +701,8 @@ fun ScheduleManagementSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 20.dp)
+                        .alpha(if (isSelectedDayDisabled) 0.55f else 1f),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(daySchedules, key = { it.id }) { schedule ->
@@ -816,16 +986,184 @@ fun ScheduleManagementSheet(
         )
     }
 
-    if (showAntiProcrastinationScreen) {
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showAntiProcrastinationScreen = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            com.arinara.fotara.alarm.procrastination.ui.AntiProcrastinationAlarmScreen(
-                onBackClick = { showAntiProcrastinationScreen = false },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+    if (showDisableDayDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisableDayDialog = false },
+            containerColor = HomeCardSurface,
+            title = {
+                Text(
+                    text = "Disable ${ClassSchedule.getEnglishDayName(selectedDayOfWeek)}'s Schedule",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Choose how long to pause morning briefings, class reminders, and widget entries for this day:",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 13.sp,
+                        fontFamily = ElmsSans
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    DisableDuration.values().forEach { duration ->
+                        val isSelected = selectedDisableDuration == duration
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) HomeMainButtonBlue.copy(alpha = 0.15f) else Color.Transparent)
+                                .clickable { selectedDisableDuration = duration }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { selectedDisableDuration = duration },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = HomeMainButtonBlue,
+                                    unselectedColor = Color(0xFF64748B)
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = duration.label,
+                                color = if (isSelected) TextPrimary else Color(0xFFCBD5E1),
+                                fontSize = 13.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDisableDay?.invoke(selectedDayOfWeek, selectedDisableDuration)
+                        showDisableDayDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue)
+                ) {
+                    Text("Disable Schedule", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisableDayDialog = false }) {
+                    Text("Cancel", color = Color(0xFF94A3B8), fontFamily = ElmsSans)
+                }
+            }
+        )
+    }
+
+    if (showDayNoteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDayNoteDialog = false },
+            containerColor = HomeCardSurface,
+            title = {
+                Text(
+                    text = if (editingDayNote != null) "Edit Day Note" else "Attach Note to ${ClassSchedule.getEnglishDayName(selectedDayOfWeek)}",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontFamily = ElmsSans,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedTextField(
+                        value = dayNoteInputText,
+                        onValueChange = { dayNoteInputText = it },
+                        label = { Text("Note (e.g. Bring lab coat)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = HomeMainButtonBlue,
+                            unfocusedBorderColor = HomeCardBorder,
+                            focusedLabelColor = HomeMainButtonBlue,
+                            unfocusedLabelColor = Color(0xFF94A3B8)
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "Repeat weekly",
+                                color = TextPrimary,
+                                fontSize = 13.sp,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Applies every ${ClassSchedule.getEnglishDayName(selectedDayOfWeek)}",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                fontFamily = ElmsSans
+                            )
+                        }
+                        Switch(
+                            checked = dayNoteIsRepeating,
+                            onCheckedChange = { dayNoteIsRepeating = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = TextPrimary,
+                                checkedTrackColor = HomeMainButtonBlue,
+                                uncheckedThumbColor = Color(0xFF64748B),
+                                uncheckedTrackColor = Color(0xFF1E293B)
+                            )
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (dayNoteInputText.isNotBlank()) {
+                            val targetCal = java.util.Calendar.getInstance()
+                            val currentDayIso = ScheduleCutoffEngine.getCurrentDayOfWeek(targetCal)
+                            val dayOffset = (selectedDayOfWeek - currentDayIso + 7) % 7
+                            targetCal.add(java.util.Calendar.DAY_OF_YEAR, dayOffset)
+                            targetCal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                            targetCal.set(java.util.Calendar.MINUTE, 0)
+                            targetCal.set(java.util.Calendar.SECOND, 0)
+                            targetCal.set(java.util.Calendar.MILLISECOND, 0)
+
+                            val targetDateMs = if (editingDayNote != null && !dayNoteIsRepeating && editingDayNote!!.dayOfWeek == selectedDayOfWeek) {
+                                editingDayNote!!.dateMillis
+                            } else {
+                                targetCal.timeInMillis
+                            }
+
+                            val note = ScheduleDayNote(
+                                id = editingDayNote?.id ?: 0L,
+                                dayOfWeek = selectedDayOfWeek,
+                                dateMillis = targetDateMs,
+                                noteText = dayNoteInputText.trim(),
+                                isRepeatingWeekly = dayNoteIsRepeating
+                            )
+                            onSaveDayNote?.invoke(note)
+                        }
+                        showDayNoteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HomeMainButtonBlue),
+                    enabled = dayNoteInputText.isNotBlank()
+                ) {
+                    Text("Save Note", color = TextPrimary, fontFamily = ElmsSans, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDayNoteDialog = false }) {
+                    Text("Cancel", color = Color(0xFF94A3B8), fontFamily = ElmsSans)
+                }
+            }
+        )
     }
 }
 

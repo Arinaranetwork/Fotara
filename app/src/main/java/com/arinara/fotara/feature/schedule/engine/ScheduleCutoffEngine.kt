@@ -77,13 +77,14 @@ class ScheduleCutoffEngine {
 
     /**
      * Resolves the current schedule state for capsule display given all weekly schedules,
-     * the configured rollover time (e.g. "18:00"), and the current simulated or live time.
+     * the configured rollover time (e.g. "18:00"), current time, and any disabled days.
      */
     fun evaluateCapsuleState(
         allSchedules: List<ClassSchedule>,
         cutoffTimeStr: String = "18:00",
         currentDayOfWeek: Int = getCurrentDayOfWeek(),
-        currentMinuteOfDay: Int = getCurrentMinuteOfDay()
+        currentMinuteOfDay: Int = getCurrentMinuteOfDay(),
+        disabledDays: Set<Int> = emptySet()
     ): ScheduleCapsuleState {
         if (allSchedules.isEmpty()) {
             return ScheduleCapsuleState.Empty("No classes scheduled today")
@@ -92,11 +93,12 @@ class ScheduleCutoffEngine {
         val cutoffMinute = ClassSchedule.parseTimeToMinutes(cutoffTimeStr) ?: (18 * 60)
         val isPastCutoff = currentMinuteOfDay >= cutoffMinute
 
-        if (isPastCutoff) {
-            // Cutoff passed: roll over to tomorrow (or upcoming next academic day, e.g. Monday)
+        if (isPastCutoff || currentDayOfWeek in disabledDays) {
+            // Cutoff passed or today is disabled: roll over to next enabled academic day
             return computeRolloverState(
                 allSchedules = allSchedules,
-                currentDayOfWeek = currentDayOfWeek
+                currentDayOfWeek = currentDayOfWeek,
+                disabledDays = disabledDays
             )
         } else {
             // Daytime pre-cutoff: evaluate today's classes
@@ -109,7 +111,8 @@ class ScheduleCutoffEngine {
                 return computeRolloverState(
                     allSchedules = allSchedules,
                     currentDayOfWeek = currentDayOfWeek,
-                    defaultPrefixTomorrow = false
+                    defaultPrefixTomorrow = false,
+                    disabledDays = disabledDays
                 )
             }
 
@@ -135,12 +138,12 @@ class ScheduleCutoffEngine {
                 )
             }
 
-            // All classes today are finished
-            val nextAcademicDay = findNextAcademicDay(allSchedules, currentDayOfWeek)
+            // All classes for today have ended: find next academic day
+            val nextDayInfo = findNextAcademicDay(allSchedules, currentDayOfWeek, disabledDays)
             return ScheduleCapsuleState.TodayFinished(
-                nextScheduleDayName = nextAcademicDay?.dayName,
-                nextFirstClass = nextAcademicDay?.classes?.firstOrNull(),
-                nextClassCount = nextAcademicDay?.classes?.size ?: 0
+                nextScheduleDayName = nextDayInfo?.dayName,
+                nextFirstClass = nextDayInfo?.classes?.firstOrNull(),
+                nextClassCount = nextDayInfo?.classes?.size ?: 0
             )
         }
     }
@@ -153,11 +156,14 @@ class ScheduleCutoffEngine {
 
     private fun findNextAcademicDay(
         allSchedules: List<ClassSchedule>,
-        fromDayOfWeek: Int
+        fromDayOfWeek: Int,
+        disabledDays: Set<Int> = emptySet()
     ): NextDayInfo? {
         for (offset in 1..7) {
             var targetDay = (fromDayOfWeek + offset)
             if (targetDay > 7) targetDay -= 7
+
+            if (targetDay in disabledDays) continue
 
             val classesForDay = allSchedules
                 .filter { it.dayOfWeek == targetDay }
@@ -178,9 +184,10 @@ class ScheduleCutoffEngine {
     private fun computeRolloverState(
         allSchedules: List<ClassSchedule>,
         currentDayOfWeek: Int,
-        defaultPrefixTomorrow: Boolean = true
+        defaultPrefixTomorrow: Boolean = true,
+        disabledDays: Set<Int> = emptySet()
     ): ScheduleCapsuleState {
-        val nextDayInfo = findNextAcademicDay(allSchedules, currentDayOfWeek)
+        val nextDayInfo = findNextAcademicDay(allSchedules, currentDayOfWeek, disabledDays)
             ?: return ScheduleCapsuleState.Empty("No upcoming classes scheduled this week")
 
         val targetDayName = if (nextDayInfo.dayName == "Tomorrow" && !defaultPrefixTomorrow) {

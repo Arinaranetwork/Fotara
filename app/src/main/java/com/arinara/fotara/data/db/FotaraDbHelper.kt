@@ -431,6 +431,33 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_class_schedules_day ON class_schedules(day_of_week, start_minute)")
 
+        // Phase 99: Schedule Day Notes & Disabled Schedule Days tables
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS schedule_day_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                day_of_week INTEGER NOT NULL,
+                date_millis INTEGER NOT NULL,
+                note_text TEXT NOT NULL,
+                is_repeating_weekly INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_schedule_day_notes_day ON schedule_day_notes(day_of_week, date_millis)")
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS disabled_schedule_days (
+                day_of_week INTEGER PRIMARY KEY,
+                disabled_until_ms INTEGER NOT NULL,
+                mode TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+
         // Audio annotations table and indexes
         db.execSQL(
             """
@@ -1056,6 +1083,41 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
                 android.util.Log.e("FotaraDbHelper", "Migration v25 (custom_expressions & counters) failed: ${e.message}")
             }
         }
+        if (oldVersion < 26) {
+            try {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS schedule_day_notes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        day_of_week INTEGER NOT NULL,
+                        date_millis INTEGER NOT NULL,
+                        note_text TEXT NOT NULL,
+                        is_repeating_weekly INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_schedule_day_notes_day ON schedule_day_notes(day_of_week, date_millis)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS disabled_schedule_days (
+                        day_of_week INTEGER PRIMARY KEY,
+                        disabled_until_ms INTEGER NOT NULL,
+                        mode TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+
+                try {
+                    context.getSharedPreferences("fotara_anti_procrastination_alarms", android.content.Context.MODE_PRIVATE).edit().clear().apply()
+                } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.e("FotaraDbHelper", "Migration v26 (schedule refinements) failed: ${e.message}")
+            }
+        }
     }
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -1101,6 +1163,9 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_document_notes_folder_trashed ON document_notes(folder_id, is_trashed)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_photos_trashed_deleted ON photos(is_trashed, deleted_at)")
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_photo_groups_folder ON photo_groups(folder_id, subfolder_id)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS schedule_day_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, day_of_week INTEGER NOT NULL, date_millis INTEGER NOT NULL, note_text TEXT NOT NULL, is_repeating_weekly INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_schedule_day_notes_day ON schedule_day_notes(day_of_week, date_millis)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS disabled_schedule_days (day_of_week INTEGER PRIMARY KEY, disabled_until_ms INTEGER NOT NULL, mode TEXT NOT NULL, updated_at INTEGER NOT NULL)")
 
             // Phase 95/98: Ensure group_id column exists in canvas_notes and text_notes with cursor.use
             try {
@@ -1189,7 +1254,7 @@ class FotaraDbHelper(context: Context) : SQLiteOpenHelper(
 
         private val isAuxiliarySchemaVerified = java.util.concurrent.atomic.AtomicBoolean(false)
         const val DATABASE_NAME = "fotara.db"
-        const val DATABASE_VERSION = 25
+        const val DATABASE_VERSION = 26
         const val HOME_WORKSPACE_ID = 1L
         const val ARCHIVE_WORKSPACE_ID = 2L
         const val HOME_WORKSPACE_UUID = "00000000-0000-4000-8000-000000000001"
