@@ -39,6 +39,7 @@ open class UsernameManager(
     companion object {
         const val PREFS_NAME = "fotara_username_prefs"
         const val KEY_CLAIMED_USERNAME = "key_claimed_username"
+        const val KEY_CLAIMED_DISPLAY_NAME = "key_claimed_display_name"
         const val KEY_LAST_CLAIM_TIMESTAMP = "key_last_claim_timestamp"
         const val KEY_INSTALL_UUID = "key_install_uuid"
 
@@ -68,6 +69,10 @@ open class UsernameManager(
             return ""
         }
         return if (raw.startsWith("@")) raw else "@$raw"
+    }
+
+    fun getClaimedDisplayName(): String {
+        return prefs.getString(KEY_CLAIMED_DISPLAY_NAME, null)?.trim().orEmpty()
     }
 
     fun getRemainingCooldownDays(): Int {
@@ -112,8 +117,8 @@ open class UsernameManager(
             val url = URL(endpoint)
             connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
-                connectTimeout = 10000
-                readTimeout = 10000
+                connectTimeout = 2500
+                readTimeout = 2500
                 setRequestProperty("User-Agent", "Fotara-Android-App")
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("apikey", supabaseKey)
@@ -155,8 +160,8 @@ open class UsernameManager(
             val url = URL(endpoint)
             connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
-                connectTimeout = 10000
-                readTimeout = 10000
+                connectTimeout = 2500
+                readTimeout = 2500
                 setRequestProperty("User-Agent", "Fotara-Android-App")
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("apikey", supabaseKey)
@@ -209,8 +214,8 @@ open class UsernameManager(
             val payloadBytes = payloadObj.toString().toByteArray(Charsets.UTF_8)
             connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
-                connectTimeout = 10000
-                readTimeout = 10000
+                connectTimeout = 2500
+                readTimeout = 2500
                 doOutput = true
                 setRequestProperty("User-Agent", "Fotara-Android-App")
                 setRequestProperty("Accept", "application/json")
@@ -280,6 +285,7 @@ open class UsernameManager(
         val claimedHandle = "@$clean"
         prefs.edit()
             .putString(KEY_CLAIMED_USERNAME, claimedHandle)
+            .putString(KEY_CLAIMED_DISPLAY_NAME, trimmedDisplayName)
             .putLong(KEY_LAST_CLAIM_TIMESTAMP, now)
             .apply()
 

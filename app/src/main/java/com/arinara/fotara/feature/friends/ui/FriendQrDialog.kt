@@ -341,7 +341,8 @@ fun FriendQrDialog(
                             peerNameInput = it
                             inputError = null
                         },
-                        label = { Text("Full Display Name") },
+                        label = { Text("Display Name (Optional)") },
+                        placeholder = { Text("Auto-resolved from code or network") },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF3B82F6),
@@ -376,20 +377,8 @@ fun FriendQrDialog(
                                 inputError = "Please enter a handle or share code"
                                 return@Button
                             }
-                            if (name.isEmpty()) {
-                                inputError = "Please enter a display name"
-                                return@Button
-                            }
 
-                            // Extract handle if formatted as share code
-                            val handle = if (rawCode.startsWith("FOTARA-FRIEND-")) {
-                                val parts = rawCode.split("-")
-                                if (parts.size >= 3) "@${parts[2]}" else rawCode
-                            } else {
-                                rawCode
-                            }
-
-                            onAddFriendFromCode(handle, name)
+                            onAddFriendFromCode(rawCode, name)
                         },
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),

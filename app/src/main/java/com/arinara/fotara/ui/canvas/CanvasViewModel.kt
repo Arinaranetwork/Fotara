@@ -65,6 +65,8 @@ import com.arinara.fotara.data.repository.FolderRepository
 import com.arinara.fotara.data.repository.PhotoRepository
 import com.arinara.fotara.data.repository.SettingsRepository
 import com.arinara.fotara.data.repository.WorkspaceRepository
+import com.arinara.fotara.feature.collab.model.CollabMessage
+import com.arinara.fotara.feature.collab.model.CollabStroke
 import com.arinara.fotara.util.NoteScheduleManager
 import com.arinara.fotara.util.ScheduleAlertType
 import com.arinara.fotara.util.ScheduleNoteType
@@ -72,8 +74,11 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -83,9 +88,23 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
+
+data class CollabCanvasDiff(
+    val upsertedStrokes: List<CollabMessage.StrokeBroadcast> = emptyList(),
+    val upsertedTexts: List<CollabMessage.TextElementSync> = emptyList(),
+    val upsertedImages: List<CollabMessage.ImageElementSync> = emptyList(),
+    val removedElementIds: List<String> = emptyList()
+) {
+    val isEmpty: Boolean
+        get() = upsertedStrokes.isEmpty() &&
+            upsertedTexts.isEmpty() &&
+            upsertedImages.isEmpty() &&
+            removedElementIds.isEmpty()
+}
 
 enum class SaveState {
     SAVED,
@@ -172,10 +191,19 @@ class CanvasViewModel(
         CanvasUiState(
             canvasId = initialCanvasId,
             folderId = initialFolderId,
-            subfolderId = initialSubfolderId
+            subfolderId = initialSubfolderId,
+            userProfile = settingsRepository?.profileFlow?.value ?: com.arinara.fotara.data.model.UserProfile(),
+            myUserHandle = friendsRepository?.let { repo ->
+                repo.getClaimedUsername().ifBlank { repo.getMyHandle() }
+            }.orEmpty()
         )
     )
     val uiState: StateFlow<CanvasUiState> = _uiState.asStateFlow()
+
+    private val _localCollabDiffs = MutableSharedFlow<CollabCanvasDiff>(extraBufferCapacity = 64)
+    val localCollabDiffs: SharedFlow<CollabCanvasDiff> = _localCollabDiffs.asSharedFlow()
+
+    private val encodedAssetBase64Cache = ConcurrentHashMap<String, String>()
 
     private var autosaveJob: Job? = null
     private val saveMutex = Mutex()
@@ -291,10 +319,67 @@ class CanvasViewModel(
         }
     }
 
+    /**
+     * Saves the active local canvas and spawns a brand-new empty canvas note dedicated to a joined
+     * collaborative room so the joiner starts cleanly with the Host's canvas data without mixing
+     * any pre-existing local canvas elements.
+     */
+    suspend fun spawnNewCanvasForCollabJoin(roomCode: String): Long {
+        flushSave()
+        val normalizedCode = roomCode.trim().uppercase().ifBlank { "ROOM" }
+        val collabTitle = "Collab • $normalizedCode"
+        val emptyDoc = CanvasDocument(title = collabTitle, elements = emptyList())
+        val currentFolderId = _uiState.value.folderId
+        val currentSubfolderId = _uiState.value.subfolderId
+
+        val newId = withContext(NonCancellable + Dispatchers.IO) {
+            val createdId = canvasNoteRepository.createCanvasNote(
+                folderId = currentFolderId,
+                subfolderId = currentSubfolderId,
+                title = collabTitle
+            )
+            canvasRepository.saveDocumentImmediate(createdId, emptyDoc)
+            createdId
+        }
+
+        sheetHistorySnapshots.clear()
+        toolController.clearSelection()
+        historyManager.clear()
+        spatialIndex.rebuild(emptyList())
+        tileCacheManager.invalidateAll()
+        canvasRenderer.clearImageCache()
+        isDirty = false
+        retryAttempt = 0
+
+        val primaryLayerId = emptyDoc.getPrimaryLayerId()
+        toolController.activeLayerId = primaryLayerId
+        _uiState.update {
+            it.copy(
+                canvasId = newId,
+                title = collabTitle,
+                document = emptyDoc,
+                activeLayerId = primaryLayerId,
+                toolState = toolController.toolState,
+                scheduledAt = null,
+                alertType = null,
+                saveState = SaveState.SAVED,
+                canUndo = false,
+                canRedo = false,
+                showExperimentalNotice = false
+            )
+        }
+        return newId
+    }
+
     // ==========================================
     // Document Synchronization & Autosave
     // ==========================================
-    fun onDocumentModified(updatedDoc: CanvasDocument, dirtyRect: CanvasRect?) {
+    fun onDocumentModified(
+        updatedDoc: CanvasDocument,
+        dirtyRect: CanvasRect?,
+        emitCollabDiff: Boolean = true
+    ) {
+        val previousDoc = _uiState.value.document
         _uiState.update {
             it.copy(
                 document = updatedDoc,
@@ -310,7 +395,162 @@ class CanvasViewModel(
         } else {
             tileCacheManager.invalidateAll()
         }
+        if (emitCollabDiff && previousDoc !== updatedDoc) {
+            publishLocalCollabDiff(previousDoc, updatedDoc)
+        }
         triggerDebouncedAutosave()
+    }
+
+    private fun publishLocalCollabDiff(
+        previousDoc: CanvasDocument,
+        updatedDoc: CanvasDocument
+    ) {
+        val prevMap = previousDoc.elements.associateBy { it.id }
+        val newMap = updatedDoc.elements.associateBy { it.id }
+        val removedIds = prevMap.keys.filter { it !in newMap.keys }
+        val changedOrAdded = updatedDoc.elements.filter { el -> prevMap[el.id] != el }
+        if (removedIds.isEmpty() && changedOrAdded.isEmpty()) return
+
+        viewModelScope.launch(Dispatchers.Default) {
+            val strokes = ArrayList<CollabMessage.StrokeBroadcast>()
+            val texts = ArrayList<CollabMessage.TextElementSync>()
+            val images = ArrayList<CollabMessage.ImageElementSync>()
+
+            for (el in changedOrAdded) {
+                when (el) {
+                    is StrokeElement -> {
+                        strokes.add(el.toCollabStrokeBroadcast())
+                    }
+                    is TextLayerElement -> {
+                        texts.add(el.toCollabTextSync())
+                    }
+                    is ImageElement -> {
+                        val prevImg = prevMap[el.id] as? ImageElement
+                        val needAssetBytes = prevImg == null || prevImg.assetId != el.assetId
+                        val base64 = if (needAssetBytes) {
+                            encodedAssetBase64Cache.getOrPut(el.assetId) {
+                                withContext(Dispatchers.IO) {
+                                    canvasAssetManager.encodeAssetToBase64(el.assetId)
+                                }
+                            }
+                        } else {
+                            ""
+                        }
+                        images.add(el.toCollabImageSync(base64))
+                    }
+                }
+            }
+
+            val diff = CollabCanvasDiff(
+                upsertedStrokes = strokes,
+                upsertedTexts = texts,
+                upsertedImages = images,
+                removedElementIds = removedIds
+            )
+            if (!diff.isEmpty) {
+                _localCollabDiffs.tryEmit(diff)
+            }
+        }
+    }
+
+    /**
+     * Emits a full snapshot of all current canvas elements (`StrokeElement`, `TextLayerElement`,
+     * and `ImageElement` with Base64 asset payload) so newly joined collaborators receive
+     * existing content on the Host's canvas.
+     */
+    fun emitFullCanvasSnapshotForCollab() {
+        val snapshotElements = _uiState.value.document.elements
+        if (snapshotElements.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val strokes = ArrayList<CollabMessage.StrokeBroadcast>()
+            val texts = ArrayList<CollabMessage.TextElementSync>()
+            val images = ArrayList<CollabMessage.ImageElementSync>()
+            for (el in snapshotElements) {
+                when (el) {
+                    is StrokeElement -> strokes.add(el.toCollabStrokeBroadcast())
+                    is TextLayerElement -> texts.add(el.toCollabTextSync())
+                    is ImageElement -> {
+                        val base64 = encodedAssetBase64Cache.getOrPut(el.assetId) {
+                            canvasAssetManager.encodeAssetToBase64(el.assetId)
+                        }
+                        images.add(el.toCollabImageSync(base64))
+                    }
+                }
+            }
+            val diff = CollabCanvasDiff(
+                upsertedStrokes = strokes,
+                upsertedTexts = texts,
+                upsertedImages = images
+            )
+            if (!diff.isEmpty) {
+                _localCollabDiffs.tryEmit(diff)
+            }
+        }
+    }
+
+    private fun StrokeElement.toCollabStrokeBroadcast(): CollabMessage.StrokeBroadcast {
+        val flat = ArrayList<Float>(points.size * 2)
+        for (pt in points) {
+            flat.add(pt.x)
+            flat.add(pt.y)
+        }
+        val hex = String.format(java.util.Locale.US, "#%08X", color and 0xFFFFFFFFL)
+        return CollabMessage.StrokeBroadcast(
+            strokeId = id,
+            points = flat,
+            colorHex = hex,
+            strokeWidth = width,
+            toolType = toolType.name,
+            blendMode = blendMode.name,
+            layerId = layerId,
+            zIndex = zIndex
+        )
+    }
+
+    private fun TextLayerElement.toCollabTextSync(): CollabMessage.TextElementSync {
+        return CollabMessage.TextElementSync(
+            elementId = id,
+            layerId = layerId,
+            text = text,
+            x = x,
+            y = y,
+            width = width,
+            height = height,
+            fontSizeSp = fontSizeSp,
+            color = color,
+            fontWeight = fontWeight,
+            backgroundStyle = backgroundStyle.name,
+            alignment = alignment.name,
+            rotationDegrees = rotationDegrees,
+            zIndex = zIndex
+        )
+    }
+
+    private fun ImageElement.toCollabImageSync(imageBase64: String): CollabMessage.ImageElementSync {
+        return CollabMessage.ImageElementSync(
+            elementId = id,
+            layerId = layerId,
+            assetId = assetId,
+            x = x,
+            y = y,
+            width = width,
+            height = height,
+            scale = scale,
+            rotationDegrees = rotationDegrees,
+            zIndex = zIndex,
+            imageBase64 = imageBase64,
+            chromaKeyEnabled = vfxParams.chromaKeyEnabled,
+            keyColor = vfxParams.keyColor,
+            tolerance = vfxParams.tolerance,
+            edgeSoftening = vfxParams.edgeSoftening,
+            brightness = vfxParams.brightness,
+            contrast = vfxParams.contrast,
+            saturation = vfxParams.saturation,
+            temperature = vfxParams.temperature,
+            redBalance = vfxParams.redBalance,
+            greenBalance = vfxParams.greenBalance,
+            blueBalance = vfxParams.blueBalance
+        )
     }
 
     fun setZoomPercentage(scale: Float) {
@@ -422,6 +662,7 @@ class CanvasViewModel(
                 saveState = SaveState.SAVING
             )
         }
+        publishLocalCollabDiff(currentDoc, undoneDoc)
         triggerDebouncedAutosave()
     }
 
@@ -440,6 +681,7 @@ class CanvasViewModel(
                 saveState = SaveState.SAVING
             )
         }
+        publishLocalCollabDiff(currentDoc, redoneDoc)
         triggerDebouncedAutosave()
     }
 
@@ -474,55 +716,210 @@ class CanvasViewModel(
         _uiState.update { it.copy(toolState = toolController.toolState) }
     }
 
-    fun applyRemoteCollabStrokes(remoteStrokes: List<com.arinara.fotara.feature.collab.model.CollabStroke>) {
-        if (remoteStrokes.isEmpty()) return
-        val currentDoc = _uiState.value.document
-        val existingIds = currentDoc.elements.mapTo(HashSet(currentDoc.elements.size)) { it.id }
-        val targetLayerId = _uiState.value.activeLayerId.ifBlank { currentDoc.getPrimaryLayerId() }
-        var nextZ = (currentDoc.elements.filter { it.layerId == targetLayerId }.maxOfOrNull { it.zIndex } ?: 0) + 1
-        val newElements = ArrayList<CanvasElement>(remoteStrokes.size)
+    fun applyRemoteCollabStrokes(remoteStrokes: List<CollabStroke>) {
+        applyRemoteCollabSync(
+            remoteStrokes = remoteStrokes,
+            remoteTexts = emptyList(),
+            remoteImages = emptyList(),
+            remoteRemovals = emptyList()
+        )
+    }
 
-        for (strokeMsg in remoteStrokes) {
-            if (strokeMsg.strokeId in existingIds) continue
-            val flat = strokeMsg.points
-            if (flat.size < 2) continue
-            val pts = ArrayList<com.arinara.fotara.canvas.model.StrokePoint>(flat.size / 2)
-            var i = 0
-            while (i + 1 < flat.size) {
-                pts.add(com.arinara.fotara.canvas.model.StrokePoint(flat[i], flat[i + 1], 1.0f))
-                i += 2
-            }
-            if (pts.isEmpty()) continue
-            val colorLong = try {
-                val clean = strokeMsg.colorHex.trim().removePrefix("#")
-                when (clean.length) {
-                    6 -> clean.toLong(16) or 0xFF000000L
-                    8 -> clean.toLong(16)
-                    else -> 0xFFF8FAFC
+    fun applyRemoteCollabSync(
+        remoteStrokes: List<CollabStroke>,
+        remoteTexts: List<CollabMessage.TextElementSync>,
+        remoteImages: List<CollabMessage.ImageElementSync>,
+        remoteRemovals: List<CollabMessage.ElementsRemoveSync>
+    ) {
+        if (remoteStrokes.isEmpty() && remoteTexts.isEmpty() && remoteImages.isEmpty() && remoteRemovals.isEmpty()) {
+            return
+        }
+
+        viewModelScope.launch {
+            var assetsDecoded = false
+            if (remoteImages.any { it.imageBase64.isNotBlank() }) {
+                withContext(Dispatchers.IO) {
+                    for (imgMsg in remoteImages) {
+                        if (imgMsg.imageBase64.isNotBlank()) {
+                            if (canvasAssetManager.saveRemoteAssetFromBase64(imgMsg.assetId, imgMsg.imageBase64)) {
+                                encodedAssetBase64Cache[imgMsg.assetId] = imgMsg.imageBase64
+                                assetsDecoded = true
+                            }
+                        }
+                    }
                 }
-            } catch (_: Exception) {
-                0xFFF8FAFC
             }
-            val width = strokeMsg.strokeWidth.coerceIn(1f, 80f)
-            val bounds = StrokeProcessor.computeBounds(pts, width)
-            newElements.add(
-                StrokeElement(
+            if (assetsDecoded) {
+                canvasRenderer.clearImageCache()
+            }
+
+            val currentDoc = _uiState.value.document
+            val validLayerIds = currentDoc.layers.mapTo(HashSet()) { it.id }
+            val fallbackLayerId = _uiState.value.activeLayerId.ifBlank { currentDoc.getPrimaryLayerId() }
+            val elementMap = LinkedHashMap<String, CanvasElement>(currentDoc.elements.size + 16)
+            for (el in currentDoc.elements) {
+                elementMap[el.id] = el
+            }
+
+            var modified = false
+
+            // 1. Apply removals
+            for (rem in remoteRemovals) {
+                for (id in rem.elementIds) {
+                    if (elementMap.remove(id) != null) {
+                        modified = true
+                    }
+                }
+            }
+
+            var nextZ = (elementMap.values.maxOfOrNull { it.zIndex } ?: 0) + 1
+
+            // 2. Apply strokes (insert or update transformed stroke)
+            for (strokeMsg in remoteStrokes) {
+                val flat = strokeMsg.points
+                if (flat.size < 2) continue
+                val pts = ArrayList<com.arinara.fotara.canvas.model.StrokePoint>(flat.size / 2)
+                var i = 0
+                while (i + 1 < flat.size) {
+                    pts.add(com.arinara.fotara.canvas.model.StrokePoint(flat[i], flat[i + 1], 1.0f))
+                    i += 2
+                }
+                if (pts.isEmpty()) continue
+                val colorLong = try {
+                    val clean = strokeMsg.colorHex.trim().removePrefix("#")
+                    when (clean.length) {
+                        6 -> clean.toLong(16) or 0xFF000000L
+                        8 -> clean.toLong(16)
+                        else -> 0xFFF8FAFC
+                    }
+                } catch (_: Exception) {
+                    0xFFF8FAFC
+                }
+                val width = strokeMsg.strokeWidth.coerceIn(1f, 200f)
+                val bounds = StrokeProcessor.computeBounds(pts, width)
+                val resolvedLayerId = if (strokeMsg.layerId in validLayerIds) strokeMsg.layerId else fallbackLayerId
+                val resolvedToolType = try {
+                    StrokeToolType.valueOf(strokeMsg.toolType)
+                } catch (_: Exception) {
+                    StrokeToolType.PEN
+                }
+                val resolvedBlendMode = try {
+                    com.arinara.fotara.canvas.model.StrokeBlendMode.valueOf(strokeMsg.blendMode)
+                } catch (_: Exception) {
+                    com.arinara.fotara.canvas.model.StrokeBlendMode.NORMAL
+                }
+                val existing = elementMap[strokeMsg.strokeId]
+                val resolvedZ = if (strokeMsg.zIndex > 0) strokeMsg.zIndex else (existing?.zIndex ?: nextZ++)
+                val newStroke = StrokeElement(
                     id = strokeMsg.strokeId,
-                    layerId = targetLayerId,
+                    layerId = resolvedLayerId,
                     points = pts,
                     color = colorLong,
                     width = width,
-                    toolType = StrokeToolType.PEN,
-                    blendMode = com.arinara.fotara.canvas.model.StrokeBlendMode.NORMAL,
+                    toolType = resolvedToolType,
+                    blendMode = resolvedBlendMode,
                     bounds = bounds,
-                    zIndex = nextZ++
+                    zIndex = resolvedZ
                 )
-            )
-            existingIds.add(strokeMsg.strokeId)
+                if (existing != newStroke) {
+                    elementMap[strokeMsg.strokeId] = newStroke
+                    modified = true
+                }
+            }
+
+            // 3. Apply text annotation elements (insert or update edited/moved text)
+            for (txtMsg in remoteTexts) {
+                val resolvedLayerId = if (txtMsg.layerId in validLayerIds) txtMsg.layerId else fallbackLayerId
+                val bgStyle = try {
+                    TextBackgroundStyle.valueOf(txtMsg.backgroundStyle)
+                } catch (_: Exception) {
+                    TextBackgroundStyle.TRANSPARENT
+                }
+                val align = try {
+                    com.arinara.fotara.canvas.model.TextLayerAlignment.valueOf(txtMsg.alignment)
+                } catch (_: Exception) {
+                    com.arinara.fotara.canvas.model.TextLayerAlignment.LEFT
+                }
+                val existing = elementMap[txtMsg.elementId]
+                val resolvedZ = if (txtMsg.zIndex > 0) txtMsg.zIndex else (existing?.zIndex ?: nextZ++)
+                val newText = TextLayerElement(
+                    id = txtMsg.elementId,
+                    layerId = resolvedLayerId,
+                    text = txtMsg.text,
+                    x = txtMsg.x,
+                    y = txtMsg.y,
+                    width = txtMsg.width,
+                    height = txtMsg.height,
+                    fontSizeSp = txtMsg.fontSizeSp,
+                    color = txtMsg.color,
+                    fontWeight = txtMsg.fontWeight,
+                    backgroundStyle = bgStyle,
+                    alignment = align,
+                    rotationDegrees = txtMsg.rotationDegrees,
+                    bounds = CanvasRect(
+                        left = txtMsg.x,
+                        top = txtMsg.y,
+                        right = txtMsg.x + txtMsg.width,
+                        bottom = txtMsg.y + txtMsg.height
+                    ),
+                    zIndex = resolvedZ
+                ).withDynamicBounds()
+                if (existing != newText) {
+                    elementMap[txtMsg.elementId] = newText
+                    modified = true
+                }
+            }
+
+            // 4. Apply image elements (insert or update moved/scaled/rotated/VFX image)
+            for (imgMsg in remoteImages) {
+                val resolvedLayerId = if (imgMsg.layerId in validLayerIds) imgMsg.layerId else fallbackLayerId
+                val existing = elementMap[imgMsg.elementId]
+                val resolvedZ = if (imgMsg.zIndex > 0) imgMsg.zIndex else (existing?.zIndex ?: nextZ++)
+                val vfx = com.arinara.fotara.canvas.vfx.VfxParameters(
+                    chromaKeyEnabled = imgMsg.chromaKeyEnabled,
+                    keyColor = imgMsg.keyColor,
+                    tolerance = imgMsg.tolerance,
+                    edgeSoftening = imgMsg.edgeSoftening,
+                    brightness = imgMsg.brightness,
+                    contrast = imgMsg.contrast,
+                    saturation = imgMsg.saturation,
+                    temperature = imgMsg.temperature,
+                    redBalance = imgMsg.redBalance,
+                    greenBalance = imgMsg.greenBalance,
+                    blueBalance = imgMsg.blueBalance
+                )
+                val scaledW = imgMsg.width * imgMsg.scale
+                val scaledH = imgMsg.height * imgMsg.scale
+                val newImg = ImageElement(
+                    id = imgMsg.elementId,
+                    layerId = resolvedLayerId,
+                    assetId = imgMsg.assetId,
+                    x = imgMsg.x,
+                    y = imgMsg.y,
+                    width = imgMsg.width,
+                    height = imgMsg.height,
+                    scale = imgMsg.scale,
+                    rotationDegrees = imgMsg.rotationDegrees,
+                    vfxParams = vfx,
+                    bounds = CanvasRect(
+                        left = imgMsg.x,
+                        top = imgMsg.y,
+                        right = imgMsg.x + scaledW,
+                        bottom = imgMsg.y + scaledH
+                    ),
+                    zIndex = resolvedZ
+                )
+                if (existing != newImg || assetsDecoded) {
+                    elementMap[imgMsg.elementId] = newImg
+                    modified = true
+                }
+            }
+
+            if (modified) {
+                val updatedDoc = currentDoc.copy(elements = elementMap.values.toList())
+                onDocumentModified(updatedDoc, dirtyRect = null, emitCollabDiff = false)
+            }
         }
-        if (newElements.isEmpty()) return
-        val updatedDoc = currentDoc.copy(elements = currentDoc.elements + newElements)
-        onDocumentModified(updatedDoc, null)
     }
 
     fun renameCanvas(newTitle: String) {
@@ -746,6 +1143,7 @@ class CanvasViewModel(
         }
         spatialIndex.rebuild(updated.elements)
         tileCacheManager.invalidateAll()
+        publishLocalCollabDiff(currentDoc, updated)
         triggerDebouncedAutosave()
     }
 
@@ -1096,6 +1494,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(currentDoc, updatedDoc)
             triggerDebouncedAutosave()
         } else {
             val (worldX, worldY) = ViewportTransform.screenToWorld(screenWidth / 2f, screenHeight / 2f, viewport)
@@ -1153,6 +1552,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(currentDoc, updatedDoc)
             triggerDebouncedAutosave()
         }
     }
@@ -1174,6 +1574,7 @@ class CanvasViewModel(
                 canRedo = historyManager.canRedo
             )
         }
+        publishLocalCollabDiff(currentDoc, updatedDoc)
         triggerDebouncedAutosave()
     }
 
@@ -1196,6 +1597,7 @@ class CanvasViewModel(
                 canRedo = historyManager.canRedo
             )
         }
+        publishLocalCollabDiff(currentDoc, updatedDoc)
         triggerDebouncedAutosave()
     }
 
@@ -1341,6 +1743,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(state.document, updatedDoc)
             triggerDebouncedAutosave()
         }
     }
@@ -1364,6 +1767,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(state.document, updatedDoc)
             triggerDebouncedAutosave()
         }
     }
@@ -1388,6 +1792,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(state.document, updatedDoc)
             triggerDebouncedAutosave()
         }
     }
@@ -1412,6 +1817,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(state.document, updatedDoc)
             triggerDebouncedAutosave()
         }
     }
@@ -1436,6 +1842,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(state.document, updatedDoc)
             triggerDebouncedAutosave()
         }
     }
@@ -1460,6 +1867,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(state.document, updatedDoc)
             triggerDebouncedAutosave()
         }
     }
@@ -1484,6 +1892,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(state.document, updatedDoc)
             triggerDebouncedAutosave()
         }
     }
@@ -1508,6 +1917,7 @@ class CanvasViewModel(
                     canRedo = historyManager.canRedo
                 )
             }
+            publishLocalCollabDiff(state.document, updatedDoc)
             triggerDebouncedAutosave()
         }
     }
@@ -1695,6 +2105,7 @@ class CanvasViewModel(
                 canRedo = historyManager.canRedo
             )
         }
+        publishLocalCollabDiff(currentDoc, updated)
         triggerDebouncedAutosave()
     }
 

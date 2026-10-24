@@ -160,16 +160,30 @@ fun FriendsScreen(
         userProfile.bannerPath,
         userProfile.pronouns
     ) {
+        val resolvedOwnDisplayName = userProfile.name.trim()
+            .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
+            ?: uiState.claimedUsername.removePrefix("@").ifBlank { "My Profile" }
         FriendProfile(
             id = "self_user",
             handle = uiState.claimedUsername,
-            displayName = userProfile.resolvedName("My Profile"),
+            displayName = resolvedOwnDisplayName,
             avatarUrl = userProfile.avatarPath,
             pronouns = userProfile.pronouns,
             studyStatus = uiState.myPresenceStatus,
             currentSubject = uiState.mySubject,
             followersCount = uiState.followersCount,
             followingCount = uiState.followingCount
+        )
+    }
+
+    LaunchedEffect(userProfile.name, userProfile.pronouns, userProfile.avatarPath, uiState.claimedUsername) {
+        val effectiveName = userProfile.name.trim()
+            .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
+            ?: uiState.claimedUsername.removePrefix("@")
+        viewModel.syncMyProfile(
+            displayName = effectiveName,
+            pronouns = userProfile.pronouns,
+            avatarUrl = userProfile.avatarPath
         )
     }
 
@@ -1753,22 +1767,49 @@ private fun DiscoveredPeerCard(
                         fontSize = 13.sp,
                         color = FolderTabCream
                     )
+                    Text(
+                        text = if (!peer.currentSubject.isNullOrBlank() && peer.isActive) {
+                            "${peer.studyStatus.displayLabel} • ${peer.currentSubject}"
+                        } else {
+                            peer.studyStatus.displayLabel
+                        },
+                        fontFamily = ElmsSans,
+                        fontSize = 11.sp,
+                        color = if (peer.isActive) Color(0xFF34D399) else TextSecondary
+                    )
                 }
 
-                Button(
-                    onClick = onViewProfile,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
-                    border = BorderStroke(1.dp, Color(0xFF334155)),
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    Text(
-                        text = "View Profile",
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 12.sp,
-                        color = Color.White
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(
+                        onClick = onAddFriend,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
+                        border = BorderStroke(1.dp, Color(0xFF3B82F6)),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text(
+                            text = "Add Friend",
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            color = Color.White
+                        )
+                    }
+                    Button(
+                        onClick = onViewProfile,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
+                        border = BorderStroke(1.dp, Color(0xFF334155)),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text(
+                            text = "Profile",
+                            fontFamily = ElmsSans,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            color = Color.White
+                        )
+                    }
                 }
             }
 

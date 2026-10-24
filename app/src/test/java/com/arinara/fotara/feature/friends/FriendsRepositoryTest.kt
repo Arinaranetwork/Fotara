@@ -79,8 +79,9 @@ class FriendsRepositoryTest {
 
     @Before
     fun setUp() {
+        com.arinara.fotara.feature.friends.data.FriendPeerRegistry.clearAllForTesting()
         prefs = TestSharedPreferences()
-        repository = LocalFriendsRepository(prefs, createTestUsernameManager())
+        repository = LocalFriendsRepository(prefs, createTestUsernameManager(), enableLanTransport = false)
     }
 
     @Test
@@ -208,7 +209,7 @@ class FriendsRepositoryTest {
         repository.updatePresence(StudyPresenceStatus.OPEN_TO_COLLAB, "Calculus III")
 
         // Instantiate second repository with same preferences backing
-        val newRepoInstance = LocalFriendsRepository(prefs, createTestUsernameManager())
+        val newRepoInstance = LocalFriendsRepository(prefs, createTestUsernameManager(), enableLanTransport = false)
         val loadedFriends = newRepoInstance.getFriendsFlow().first()
 
         assertEquals(2, loadedFriends.size)
@@ -278,7 +279,7 @@ class FriendsRepositoryTest {
             testFollower.toJson()
         ).apply()
 
-        val repoWithFollower = LocalFriendsRepository(prefs, createTestUsernameManager())
+        val repoWithFollower = LocalFriendsRepository(prefs, createTestUsernameManager(), enableLanTransport = false)
         val initialFollowers = repoWithFollower.getFollowersFlow().first()
         assertEquals(1, initialFollowers.size)
 
@@ -336,6 +337,51 @@ class FriendsRepositoryTest {
         val friend = result.getOrNull()
         assertNotNull(friend)
         assertEquals("Remote Alex", friend!!.displayName)
+    }
+
+    @Test
+    fun testMultiDeviceLanPresenceUpdatesFriendOnlineStatusAndSubject() = runTest {
+        val added = repository.addFriend("@device_two", "").getOrThrow()
+        assertEquals(StudyPresenceStatus.OFFLINE, added.studyStatus)
+
+        // Simulate receiving a live LAN presence packet from Device 2
+        com.arinara.fotara.feature.friends.data.FriendPeerRegistry.recordPeer(
+            com.arinara.fotara.feature.friends.model.FriendProfile(
+                id = "dev2-uuid",
+                handle = "@device_two",
+                displayName = "Device Two Scholar",
+                studyStatus = StudyPresenceStatus.STUDYING,
+                currentSubject = "Quantum Mechanics"
+            )
+        )
+
+        val liveFriends = repository.getFriendsFlow().first()
+        assertEquals(1, liveFriends.size)
+        val liveFriend = liveFriends[0]
+        assertEquals("@device_two", liveFriend.handle)
+        assertEquals("Device Two Scholar", liveFriend.displayName)
+        assertEquals(StudyPresenceStatus.STUDYING, liveFriend.studyStatus)
+        assertEquals("Quantum Mechanics", liveFriend.currentSubject)
+    }
+
+    @Test
+    fun testAddFriendWithShareCodeDecodesLiveMetadata() = runTest {
+        val shareCode = com.arinara.fotara.feature.friends.data.FriendShareCodeCodec.encode(
+            com.arinara.fotara.feature.friends.model.FriendProfile(
+                id = "maya-id",
+                handle = "@maya_lin",
+                displayName = "Maya Lin",
+                studyStatus = StudyPresenceStatus.OPEN_TO_COLLAB,
+                currentSubject = "Linear Algebra"
+            )
+        )
+        val result = repository.addFriend(shareCode, "")
+        assertTrue(result.isSuccess)
+        val friend = result.getOrThrow()
+        assertEquals("@maya_lin", friend.handle)
+        assertEquals("Maya Lin", friend.displayName)
+        assertEquals(StudyPresenceStatus.OPEN_TO_COLLAB, friend.studyStatus)
+        assertEquals("Linear Algebra", friend.currentSubject)
     }
 }
 

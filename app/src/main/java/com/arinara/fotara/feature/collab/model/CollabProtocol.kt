@@ -302,9 +302,82 @@ sealed class CollabMessage {
         val colorHex: String,
         val strokeWidth: Float,
         val peerId: String = "",
-        val sessionToken: String = ""
+        val sessionToken: String = "",
+        val toolType: String = "PEN",
+        val blendMode: String = "NORMAL",
+        val layerId: String = "layer_default",
+        val zIndex: Int = 0
     ) : CollabMessage() {
         override val messageType: String = TYPE_STROKE_BROADCAST
+    }
+
+    data class TextElementSync(
+        val elementId: String,
+        val layerId: String = "layer_default",
+        val text: String,
+        val x: Float,
+        val y: Float,
+        val width: Float,
+        val height: Float,
+        val fontSizeSp: Float = 18f,
+        val color: Long = 0xFFF8FAFC,
+        val fontWeight: Int = 500,
+        val backgroundStyle: String = "TRANSPARENT",
+        val alignment: String = "LEFT",
+        val rotationDegrees: Float = 0f,
+        val zIndex: Int = 0,
+        val peerId: String = "",
+        val sessionToken: String = ""
+    ) : CollabMessage() {
+        override val messageType: String = TYPE_TEXT_ELEMENT_SYNC
+    }
+
+    data class ImageElementSync(
+        val elementId: String,
+        val layerId: String = "layer_default",
+        val assetId: String,
+        val x: Float,
+        val y: Float,
+        val width: Float,
+        val height: Float,
+        val scale: Float = 1f,
+        val rotationDegrees: Float = 0f,
+        val zIndex: Int = 0,
+        val imageBase64: String = "",
+        val chromaKeyEnabled: Boolean = false,
+        val keyColor: Long = 0xFF00FF00,
+        val tolerance: Float = 0.25f,
+        val edgeSoftening: Float = 0.08f,
+        val brightness: Float = 0f,
+        val contrast: Float = 1f,
+        val saturation: Float = 1f,
+        val temperature: Float = 0f,
+        val redBalance: Float = 1f,
+        val greenBalance: Float = 1f,
+        val blueBalance: Float = 1f,
+        val peerId: String = "",
+        val sessionToken: String = ""
+    ) : CollabMessage() {
+        override val messageType: String = TYPE_IMAGE_ELEMENT_SYNC
+    }
+
+    data class ElementsRemoveSync(
+        val elementIds: List<String>,
+        val peerId: String = "",
+        val sessionToken: String = ""
+    ) : CollabMessage() {
+        override val messageType: String = TYPE_ELEMENTS_REMOVE_SYNC
+    }
+
+    data class AudioStreamFrame(
+        val peerId: String,
+        val sequenceNumber: Long,
+        val sampleRateHz: Int = 16000,
+        val pcmDataBase64: String,
+        val bitrateKbps: Int = CollabAudioBitrate.BALANCED_32_KBPS,
+        val sessionToken: String = ""
+    ) : CollabMessage() {
+        override val messageType: String = TYPE_AUDIO_STREAM_FRAME
     }
 
     data class CursorBroadcast(
@@ -444,6 +517,10 @@ sealed class CollabMessage {
         const val TYPE_JOIN_REJECTED = "JOIN_REJECTED"
         const val TYPE_PEER_JOINED = "PEER_JOINED"
         const val TYPE_STROKE_BROADCAST = "STROKE_BROADCAST"
+        const val TYPE_TEXT_ELEMENT_SYNC = "TEXT_ELEMENT_SYNC"
+        const val TYPE_IMAGE_ELEMENT_SYNC = "IMAGE_ELEMENT_SYNC"
+        const val TYPE_ELEMENTS_REMOVE_SYNC = "ELEMENTS_REMOVE_SYNC"
+        const val TYPE_AUDIO_STREAM_FRAME = "AUDIO_STREAM_FRAME"
         const val TYPE_CURSOR_BROADCAST = "CURSOR_BROADCAST"
         const val TYPE_CHAT_BROADCAST = "CHAT_BROADCAST"
         const val TYPE_PIN_CHAT_MESSAGE = "PIN_CHAT_MESSAGE"
@@ -491,7 +568,11 @@ data class CollabStroke(
     val points: List<Float>,
     val colorHex: String,
     val strokeWidth: Float,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val toolType: String = "PEN",
+    val blendMode: String = "NORMAL",
+    val layerId: String = "layer_default",
+    val zIndex: Int = 0
 )
 
 /**
@@ -574,13 +655,78 @@ object CollabProtocolCodec {
                 append("\"audioBitrateKbps\":").append(message.audioBitrateKbps).append(",")
                 append("\"sessionToken\":\"").append(escapeJson(message.sessionToken)).append("\"}")
             }
-            is CollabMessage.StrokeBroadcast -> buildString(256) {
+            is CollabMessage.StrokeBroadcast -> buildString(320) {
                 append("{\"type\":\"").append(CollabMessage.TYPE_STROKE_BROADCAST).append("\",")
                 append("\"strokeId\":\"").append(escapeJson(message.strokeId)).append("\",")
                 append("\"points\":[").append(message.points.joinToString(",")).append("],")
                 append("\"colorHex\":\"").append(escapeJson(message.colorHex)).append("\",")
                 append("\"strokeWidth\":").append(message.strokeWidth).append(",")
                 append("\"peerId\":\"").append(escapeJson(message.peerId)).append("\",")
+                append("\"sessionToken\":\"").append(escapeJson(message.sessionToken)).append("\",")
+                append("\"toolType\":\"").append(escapeJson(message.toolType)).append("\",")
+                append("\"blendMode\":\"").append(escapeJson(message.blendMode)).append("\",")
+                append("\"layerId\":\"").append(escapeJson(message.layerId)).append("\",")
+                append("\"zIndex\":").append(message.zIndex).append("}")
+            }
+            is CollabMessage.TextElementSync -> buildString(360) {
+                append("{\"type\":\"").append(CollabMessage.TYPE_TEXT_ELEMENT_SYNC).append("\",")
+                append("\"elementId\":\"").append(escapeJson(message.elementId)).append("\",")
+                append("\"layerId\":\"").append(escapeJson(message.layerId)).append("\",")
+                append("\"text\":\"").append(escapeJson(message.text)).append("\",")
+                append("\"x\":").append(message.x).append(",")
+                append("\"y\":").append(message.y).append(",")
+                append("\"width\":").append(message.width).append(",")
+                append("\"height\":").append(message.height).append(",")
+                append("\"fontSizeSp\":").append(message.fontSizeSp).append(",")
+                append("\"color\":").append(message.color).append(",")
+                append("\"fontWeight\":").append(message.fontWeight).append(",")
+                append("\"backgroundStyle\":\"").append(escapeJson(message.backgroundStyle)).append("\",")
+                append("\"alignment\":\"").append(escapeJson(message.alignment)).append("\",")
+                append("\"rotationDegrees\":").append(message.rotationDegrees).append(",")
+                append("\"zIndex\":").append(message.zIndex).append(",")
+                append("\"peerId\":\"").append(escapeJson(message.peerId)).append("\",")
+                append("\"sessionToken\":\"").append(escapeJson(message.sessionToken)).append("\"}")
+            }
+            is CollabMessage.ImageElementSync -> buildString(512 + message.imageBase64.length) {
+                append("{\"type\":\"").append(CollabMessage.TYPE_IMAGE_ELEMENT_SYNC).append("\",")
+                append("\"elementId\":\"").append(escapeJson(message.elementId)).append("\",")
+                append("\"layerId\":\"").append(escapeJson(message.layerId)).append("\",")
+                append("\"assetId\":\"").append(escapeJson(message.assetId)).append("\",")
+                append("\"x\":").append(message.x).append(",")
+                append("\"y\":").append(message.y).append(",")
+                append("\"width\":").append(message.width).append(",")
+                append("\"height\":").append(message.height).append(",")
+                append("\"scale\":").append(message.scale).append(",")
+                append("\"rotationDegrees\":").append(message.rotationDegrees).append(",")
+                append("\"zIndex\":").append(message.zIndex).append(",")
+                append("\"imageBase64\":\"").append(escapeJson(message.imageBase64)).append("\",")
+                append("\"chromaKeyEnabled\":").append(message.chromaKeyEnabled).append(",")
+                append("\"keyColor\":").append(message.keyColor).append(",")
+                append("\"tolerance\":").append(message.tolerance).append(",")
+                append("\"edgeSoftening\":").append(message.edgeSoftening).append(",")
+                append("\"brightness\":").append(message.brightness).append(",")
+                append("\"contrast\":").append(message.contrast).append(",")
+                append("\"saturation\":").append(message.saturation).append(",")
+                append("\"temperature\":").append(message.temperature).append(",")
+                append("\"redBalance\":").append(message.redBalance).append(",")
+                append("\"greenBalance\":").append(message.greenBalance).append(",")
+                append("\"blueBalance\":").append(message.blueBalance).append(",")
+                append("\"peerId\":\"").append(escapeJson(message.peerId)).append("\",")
+                append("\"sessionToken\":\"").append(escapeJson(message.sessionToken)).append("\"}")
+            }
+            is CollabMessage.ElementsRemoveSync -> buildString(180) {
+                append("{\"type\":\"").append(CollabMessage.TYPE_ELEMENTS_REMOVE_SYNC).append("\",")
+                append("\"elementIds\":\"").append(escapeJson(message.elementIds.joinToString(","))).append("\",")
+                append("\"peerId\":\"").append(escapeJson(message.peerId)).append("\",")
+                append("\"sessionToken\":\"").append(escapeJson(message.sessionToken)).append("\"}")
+            }
+            is CollabMessage.AudioStreamFrame -> buildString(180 + message.pcmDataBase64.length) {
+                append("{\"type\":\"").append(CollabMessage.TYPE_AUDIO_STREAM_FRAME).append("\",")
+                append("\"peerId\":\"").append(escapeJson(message.peerId)).append("\",")
+                append("\"sequenceNumber\":").append(message.sequenceNumber).append(",")
+                append("\"sampleRateHz\":").append(message.sampleRateHz).append(",")
+                append("\"pcmDataBase64\":\"").append(escapeJson(message.pcmDataBase64)).append("\",")
+                append("\"bitrateKbps\":").append(message.bitrateKbps).append(",")
                 append("\"sessionToken\":\"").append(escapeJson(message.sessionToken)).append("\"}")
             }
             is CollabMessage.CursorBroadcast -> buildString(128) {
@@ -690,7 +836,7 @@ object CollabProtocolCodec {
     }
 
     fun decode(raw: String): CollabMessage? {
-        if (raw.length > 256_000) return null
+        if (raw.length > 2_500_000) return null
         val trimmed = raw.trim()
         if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null
 
@@ -788,7 +934,144 @@ object CollabProtocolCodec {
                 val strokeWidth = if (rawStrokeWidth.isNaN()) 4.0f else rawStrokeWidth.coerceIn(0.1f, 200f)
                 val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: ""
                 val sessionToken = extractStringField(trimmed, "sessionToken")?.take(100) ?: ""
-                CollabMessage.StrokeBroadcast(strokeId, points, colorHex, strokeWidth, peerId, sessionToken)
+                val toolType = extractStringField(trimmed, "toolType")?.take(32) ?: "PEN"
+                val blendMode = extractStringField(trimmed, "blendMode")?.take(32) ?: "NORMAL"
+                val layerId = extractStringField(trimmed, "layerId")?.take(100) ?: "layer_default"
+                val zIndex = extractLongField(trimmed, "zIndex")?.toInt() ?: 0
+                CollabMessage.StrokeBroadcast(
+                    strokeId = strokeId,
+                    points = points,
+                    colorHex = colorHex,
+                    strokeWidth = strokeWidth,
+                    peerId = peerId,
+                    sessionToken = sessionToken,
+                    toolType = toolType,
+                    blendMode = blendMode,
+                    layerId = layerId,
+                    zIndex = zIndex
+                )
+            }
+            CollabMessage.TYPE_TEXT_ELEMENT_SYNC -> {
+                val elementId = extractStringField(trimmed, "elementId")?.take(100) ?: return null
+                val layerId = extractStringField(trimmed, "layerId")?.take(100) ?: "layer_default"
+                val text = extractStringField(trimmed, "text")?.take(2_000) ?: ""
+                val x = (extractFloatField(trimmed, "x") ?: 0f).let { if (it.isNaN() || it.isInfinite()) 0f else it }
+                val y = (extractFloatField(trimmed, "y") ?: 0f).let { if (it.isNaN() || it.isInfinite()) 0f else it }
+                val width = (extractFloatField(trimmed, "width") ?: 260f).coerceIn(20f, 10_000f)
+                val height = (extractFloatField(trimmed, "height") ?: 80f).coerceIn(20f, 10_000f)
+                val fontSizeSp = (extractFloatField(trimmed, "fontSizeSp") ?: 18f).coerceIn(6f, 200f)
+                val color = extractLongField(trimmed, "color") ?: 0xFFF8FAFC
+                val fontWeight = (extractLongField(trimmed, "fontWeight")?.toInt() ?: 500).coerceIn(100, 900)
+                val backgroundStyle = extractStringField(trimmed, "backgroundStyle")?.take(32) ?: "TRANSPARENT"
+                val alignment = extractStringField(trimmed, "alignment")?.take(32) ?: "LEFT"
+                val rotationDegrees = (extractFloatField(trimmed, "rotationDegrees") ?: 0f).let { if (it.isNaN() || it.isInfinite()) 0f else it }
+                val zIndex = extractLongField(trimmed, "zIndex")?.toInt() ?: 0
+                val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: ""
+                val sessionToken = extractStringField(trimmed, "sessionToken")?.take(100) ?: ""
+                CollabMessage.TextElementSync(
+                    elementId = elementId,
+                    layerId = layerId,
+                    text = text,
+                    x = x,
+                    y = y,
+                    width = width,
+                    height = height,
+                    fontSizeSp = fontSizeSp,
+                    color = color,
+                    fontWeight = fontWeight,
+                    backgroundStyle = backgroundStyle,
+                    alignment = alignment,
+                    rotationDegrees = rotationDegrees,
+                    zIndex = zIndex,
+                    peerId = peerId,
+                    sessionToken = sessionToken
+                )
+            }
+            CollabMessage.TYPE_IMAGE_ELEMENT_SYNC -> {
+                val elementId = extractStringField(trimmed, "elementId")?.take(100) ?: return null
+                val layerId = extractStringField(trimmed, "layerId")?.take(100) ?: "layer_default"
+                val assetId = extractStringField(trimmed, "assetId")?.take(100) ?: return null
+                val x = (extractFloatField(trimmed, "x") ?: 0f).let { if (it.isNaN() || it.isInfinite()) 0f else it }
+                val y = (extractFloatField(trimmed, "y") ?: 0f).let { if (it.isNaN() || it.isInfinite()) 0f else it }
+                val width = (extractFloatField(trimmed, "width") ?: 200f).coerceIn(10f, 20_000f)
+                val height = (extractFloatField(trimmed, "height") ?: 200f).coerceIn(10f, 20_000f)
+                val scale = (extractFloatField(trimmed, "scale") ?: 1f).coerceIn(0.05f, 50f)
+                val rotationDegrees = (extractFloatField(trimmed, "rotationDegrees") ?: 0f).let { if (it.isNaN() || it.isInfinite()) 0f else it }
+                val zIndex = extractLongField(trimmed, "zIndex")?.toInt() ?: 0
+                val imageBase64 = extractStringField(trimmed, "imageBase64")?.take(2_000_000) ?: ""
+                val chromaKeyEnabled = extractBooleanField(trimmed, "chromaKeyEnabled") ?: false
+                val keyColor = extractLongField(trimmed, "keyColor") ?: 0xFF00FF00
+                val tolerance = (extractFloatField(trimmed, "tolerance") ?: 0.25f).coerceIn(0f, 1f)
+                val edgeSoftening = (extractFloatField(trimmed, "edgeSoftening") ?: 0.08f).coerceIn(0f, 1f)
+                val brightness = (extractFloatField(trimmed, "brightness") ?: 0f).coerceIn(-1f, 1f)
+                val contrast = (extractFloatField(trimmed, "contrast") ?: 1f).coerceIn(0f, 4f)
+                val saturation = (extractFloatField(trimmed, "saturation") ?: 1f).coerceIn(0f, 4f)
+                val temperature = (extractFloatField(trimmed, "temperature") ?: 0f).coerceIn(-1f, 1f)
+                val redBalance = (extractFloatField(trimmed, "redBalance") ?: 1f).coerceIn(0f, 4f)
+                val greenBalance = (extractFloatField(trimmed, "greenBalance") ?: 1f).coerceIn(0f, 4f)
+                val blueBalance = (extractFloatField(trimmed, "blueBalance") ?: 1f).coerceIn(0f, 4f)
+                val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: ""
+                val sessionToken = extractStringField(trimmed, "sessionToken")?.take(100) ?: ""
+                CollabMessage.ImageElementSync(
+                    elementId = elementId,
+                    layerId = layerId,
+                    assetId = assetId,
+                    x = x,
+                    y = y,
+                    width = width,
+                    height = height,
+                    scale = scale,
+                    rotationDegrees = rotationDegrees,
+                    zIndex = zIndex,
+                    imageBase64 = imageBase64,
+                    chromaKeyEnabled = chromaKeyEnabled,
+                    keyColor = keyColor,
+                    tolerance = tolerance,
+                    edgeSoftening = edgeSoftening,
+                    brightness = brightness,
+                    contrast = contrast,
+                    saturation = saturation,
+                    temperature = temperature,
+                    redBalance = redBalance,
+                    greenBalance = greenBalance,
+                    blueBalance = blueBalance,
+                    peerId = peerId,
+                    sessionToken = sessionToken
+                )
+            }
+            CollabMessage.TYPE_ELEMENTS_REMOVE_SYNC -> {
+                val rawIds = extractStringField(trimmed, "elementIds") ?: ""
+                val elementIds = rawIds.split(",")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .take(500)
+                if (elementIds.isEmpty()) return null
+                val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: ""
+                val sessionToken = extractStringField(trimmed, "sessionToken")?.take(100) ?: ""
+                CollabMessage.ElementsRemoveSync(
+                    elementIds = elementIds,
+                    peerId = peerId,
+                    sessionToken = sessionToken
+                )
+            }
+            CollabMessage.TYPE_AUDIO_STREAM_FRAME -> {
+                val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: return null
+                val sequenceNumber = extractLongField(trimmed, "sequenceNumber") ?: 0L
+                val sampleRateHz = (extractLongField(trimmed, "sampleRateHz")?.toInt() ?: 16000).coerceIn(8000, 48000)
+                val pcmDataBase64 = extractStringField(trimmed, "pcmDataBase64")?.take(64_000) ?: return null
+                if (pcmDataBase64.isEmpty()) return null
+                val bitrateKbps = CollabAudioBitrate.sanitize(
+                    extractLongField(trimmed, "bitrateKbps")?.toInt() ?: CollabAudioBitrate.BALANCED_32_KBPS
+                )
+                val sessionToken = extractStringField(trimmed, "sessionToken")?.take(100) ?: ""
+                CollabMessage.AudioStreamFrame(
+                    peerId = peerId,
+                    sequenceNumber = sequenceNumber,
+                    sampleRateHz = sampleRateHz,
+                    pcmDataBase64 = pcmDataBase64,
+                    bitrateKbps = bitrateKbps,
+                    sessionToken = sessionToken
+                )
             }
             CollabMessage.TYPE_CURSOR_BROADCAST -> {
                 val peerId = extractStringField(trimmed, "peerId")?.take(100) ?: return null

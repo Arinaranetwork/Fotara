@@ -116,6 +116,8 @@ class CanvasToolController(
     // In-progress drawing stroke points in world coordinates
     private val activeStrokePoints = mutableListOf<StrokePoint>()
     val currentPoints: List<StrokePoint> get() = activeStrokePoints
+    var activeStrokeId: String = UUID.randomUUID().toString()
+        private set
 
     // Transform gesture tracking
     var transformStartState: TransformHandlesMath.TransformStartState? = null
@@ -150,6 +152,7 @@ class CanvasToolController(
      */
     fun startStroke(worldX: Float, worldY: Float, rawPressure: Float) {
         isShapeSnapped = false
+        activeStrokeId = UUID.randomUUID().toString()
         activeStrokePoints.clear()
         val normalizedP = StrokeProcessor.normalizePressure(rawPressure)
         activeStrokePoints.add(StrokePoint(worldX, worldY, normalizedP))
@@ -263,7 +266,7 @@ class CanvasToolController(
         }
 
         val newStroke = StrokeElement(
-            id = UUID.randomUUID().toString(),
+            id = activeStrokeId,
             layerId = targetLayerId,
             points = finalPoints,
             color = strokeColor,

@@ -163,6 +163,10 @@ class FriendsViewModel(
         }
     }
 
+    fun syncMyProfile(displayName: String, pronouns: String = "", avatarUrl: String? = null) {
+        repository.syncMyProfile(displayName, pronouns, avatarUrl)
+    }
+
     fun addFriend(handle: String, displayName: String, onComplete: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             val result = repository.addFriend(handle, displayName)

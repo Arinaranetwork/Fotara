@@ -305,4 +305,296 @@ class CollabSessionEngineTest {
         assertEquals(CollabSessionState.IN_ROOM, engine.state.value)
         assertEquals(code, engine.roomCode.value)
     }
+
+    @Test
+    fun testTextAndImageElementSyncAndElementRemovalSync() {
+        engine.createRoom()
+
+        val textSync = CollabMessage.TextElementSync(
+            elementId = "txt_1",
+            layerId = "layer_default",
+            text = "Hello Collaborators",
+            x = 120f,
+            y = 240f,
+            width = 200f,
+            height = 60f,
+            fontSizeSp = 18f,
+            color = 0xFFF8FAFC,
+            fontWeight = 700,
+            backgroundStyle = "TRANSPARENT",
+            alignment = "LEFT",
+            rotationDegrees = 15f,
+            zIndex = 3
+        )
+        val encodedText = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.encode(textSync)
+        val decodedText = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.decode(encodedText) as? CollabMessage.TextElementSync
+        assertNotNull(decodedText)
+        assertEquals("Hello Collaborators", decodedText?.text)
+        assertEquals(15f, decodedText?.rotationDegrees)
+
+        val imgSync = CollabMessage.ImageElementSync(
+            elementId = "img_1",
+            layerId = "layer_default",
+            assetId = "asset_abc",
+            x = 50f,
+            y = 80f,
+            width = 320f,
+            height = 240f,
+            scale = 1.25f,
+            rotationDegrees = 0f,
+            zIndex = 4,
+            imageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+        val encodedImg = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.encode(imgSync)
+        val decodedImg = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.decode(encodedImg) as? CollabMessage.ImageElementSync
+        assertNotNull(decodedImg)
+        assertEquals("asset_abc", decodedImg?.assetId)
+        assertEquals(imgSync.imageBase64, decodedImg?.imageBase64)
+
+        val remSync = CollabMessage.ElementsRemoveSync(
+            elementIds = listOf("txt_1", "stroke_99")
+        )
+        val encodedRem = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.encode(remSync)
+        val decodedRem = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.decode(encodedRem) as? CollabMessage.ElementsRemoveSync
+        assertNotNull(decodedRem)
+        assertEquals(listOf("txt_1", "stroke_99"), decodedRem?.elementIds)
+
+        engine.receiveMessage(decodedText!!)
+        engine.receiveMessage(decodedImg!!)
+        engine.receiveMessage(decodedRem!!)
+
+        assertEquals(3, engine.bufferedStrokesCount.value)
+        val consumedTexts = engine.consumeBufferedTextElements()
+        val consumedImages = engine.consumeBufferedImageElements()
+        val consumedRemovals = engine.consumeBufferedRemovedElements()
+
+        assertEquals(1, consumedTexts.size)
+        assertEquals("txt_1", consumedTexts[0].elementId)
+        assertEquals(1, consumedImages.size)
+        assertEquals("img_1", consumedImages[0].elementId)
+        assertEquals(1, consumedRemovals.size)
+        assertEquals(listOf("txt_1", "stroke_99"), consumedRemovals[0].elementIds)
+    }
+
+    @Test
+    fun testAudioStreamFrameBroadcastAndReceiveRespectsMute() {
+        engine.createRoom()
+
+        var receivedFrame: CollabMessage.AudioStreamFrame? = null
+        engine.onAudioFrameReceived = { frame ->
+            receivedFrame = frame
+        }
+
+        // Initially local mic is unmuted
+        assertFalse(engine.isLocalMicMuted.value)
+        engine.broadcastAudioFrame("AAECAwQF", sequenceNumber = 1L, sampleRateHz = 16000)
+        val sentAudio = dispatchedMessages.filterIsInstance<CollabMessage.AudioStreamFrame>()
+        assertEquals(1, sentAudio.size)
+        assertEquals("local_p1", sentAudio[0].peerId)
+
+        // When muted locally, broadcastAudioFrame must not dispatch
+        engine.setLocalMicMuted(true)
+        assertTrue(engine.isLocalMicMuted.value)
+        engine.broadcastAudioFrame("BwgJCgsM", sequenceNumber = 2L, sampleRateHz = 16000)
+        assertEquals(1, dispatchedMessages.filterIsInstance<CollabMessage.AudioStreamFrame>().size)
+
+        // Receiving audio frame from remote peer invokes callback
+        val remoteFrame = CollabMessage.AudioStreamFrame(
+            peerId = "peer_remote_2",
+            sequenceNumber = 7L,
+            sampleRateHz = 16000,
+            pcmDataBase64 = "AAECAwQF"
+        )
+        val encoded = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.encode(remoteFrame)
+        val decoded = com.arinara.fotara.feature.collab.model.CollabProtocolCodec.decode(encoded)
+        assertNotNull(decoded)
+        engine.receiveMessage(decoded!!)
+        assertNotNull(receivedFrame)
+        assertEquals("peer_remote_2", receivedFrame?.peerId)
+        assertEquals(7L, receivedFrame?.sequenceNumber)
+    }
+
+    @Test
+    fun testDisableDrawingBlocksMemberFromDrawing() {
+        val hostEngine = CollabSessionEngine(
+            initialLocalPeerId = "host_p0",
+            initialLocalUserTag = "HostAlice"
+        )
+        hostEngine.createCustomRoom("FT-5500", userTag = "HostAlice")
+
+        assertTrue(engine.joinRoom("FT-5500", userTag = "MemberBob"))
+        assertTrue(engine.canLocalUserDraw.value)
+
+        // Host disables drawing for MemberBob
+        engine.receiveMessage(
+            CollabMessage.CanvasPermissionSync(
+                actorPeerId = "host_p0",
+                drawingDisabledPeerIds = setOf("local_p1")
+            )
+        )
+        assertFalse(engine.canLocalUserDraw.value)
+
+        // Attempting to broadcast text or image while drawing is disabled must be blocked
+        dispatchedMessages.clear()
+        assertFalse(
+            engine.broadcastTextElement(
+                CollabMessage.TextElementSync(
+                    elementId = "t_blocked",
+                    layerId = "l1",
+                    text = "Blocked",
+                    x = 0f,
+                    y = 0f,
+                    width = 100f,
+                    height = 40f,
+                    fontSizeSp = 16f,
+                    color = 0xFFFFFFFF,
+                    fontWeight = 400,
+                    backgroundStyle = "TRANSPARENT",
+                    alignment = "LEFT",
+                    rotationDegrees = 0f,
+                    zIndex = 1
+                )
+            )
+        )
+        assertTrue(dispatchedMessages.filterIsInstance<CollabMessage.TextElementSync>().isEmpty())
+    }
+
+    @Test
+    fun testHostLeaveAndHostConnectionLostTerminatesMemberAndAdminSession() {
+        val hostEngine = CollabSessionEngine(
+            initialLocalPeerId = "host_p0",
+            initialLocalUserTag = "HostAlice"
+        )
+        hostEngine.createCustomRoom("FT-7711", userTag = "HostAlice")
+
+        // Join as Member and promote to Admin
+        assertTrue(engine.joinRoom("FT-7711", userTag = "AdminBob"))
+        engine.receiveMessage(
+            CollabMessage.SetPeerRole(
+                hostPeerId = "host_p0",
+                targetPeerId = "local_p1",
+                newRole = com.arinara.fotara.feature.collab.model.CollabRole.ADMIN
+            )
+        )
+        assertEquals(com.arinara.fotara.feature.collab.model.CollabRole.ADMIN, engine.localRole.value)
+        assertEquals(CollabSessionState.IN_ROOM, engine.state.value)
+
+        // Case 1: Host sends RoomClosed
+        engine.receiveMessage(
+            CollabMessage.RoomClosed(
+                roomCode = "FT-7711",
+                hostPeerId = "host_p0",
+                reason = "The host has left and closed the room."
+            )
+        )
+        assertEquals(CollabSessionState.DISCONNECTED, engine.state.value)
+        assertNull(engine.roomCode.value)
+        assertTrue(engine.activePeers.value.isEmpty())
+        assertEquals("Session ended because the host left the room.", engine.lastErrorMessage.value)
+
+        // Case 2: Re-create & join, then TCP EOF (handleHostConnectionLost) fires before UDP RoomClosed arrives
+        hostEngine.leaveRoom()
+        assertTrue(hostEngine.createCustomRoom("FT-7722", userTag = "HostAlice"))
+        assertTrue(engine.joinRoom("FT-7722", userTag = "AdminBob"))
+        assertEquals(CollabSessionState.IN_ROOM, engine.state.value)
+
+        engine.handleHostConnectionLost()
+        assertEquals(CollabSessionState.DISCONNECTED, engine.state.value)
+        assertNull(engine.roomCode.value)
+        assertTrue(engine.activePeers.value.isEmpty())
+        assertEquals("Session ended because the host left the room.", engine.lastErrorMessage.value)
+    }
+
+    @Test
+    fun testRealUsernameResolvesInsteadOfFotaraUserAndRealTimeCursorAndLiveStrokeStreaming() {
+        val hostEngine = CollabSessionEngine(
+            initialLocalPeerId = "host_p0",
+            initialLocalUserTag = "Fotara User",
+            initialLocalUserHandle = "@sepli_host"
+        )
+        val roomCode = hostEngine.createRoom(
+            userTag = "Fotara User",
+            userHandle = "@sepli_host"
+        )
+        assertTrue(roomCode.isNotBlank())
+        assertEquals("sepli_host", hostEngine.activePeers.value["host_p0"]?.userTag)
+
+        val joinerEngine = CollabSessionEngine(
+            initialLocalPeerId = "joiner_p2",
+            initialLocalUserTag = "Fotara User",
+            initialLocalUserHandle = "@alex_member"
+        )
+        // Pre-populate stale buffers before joinRoom to verify A-008 buffer cleanup on join
+        joinerEngine.receiveMessage(
+            CollabMessage.TextElementSync(
+                elementId = "stale_txt",
+                layerId = "l1",
+                text = "Stale",
+                x = 0f,
+                y = 0f,
+                width = 50f,
+                height = 20f,
+                fontSizeSp = 14f,
+                color = 0xFFFFFFFF,
+                fontWeight = 400,
+                backgroundStyle = "TRANSPARENT",
+                alignment = "LEFT",
+                rotationDegrees = 0f,
+                zIndex = 1,
+                peerId = "other"
+            )
+        )
+        assertTrue(joinerEngine.joinRoom(roomCode, userTag = "Fotara User", userHandle = "@alex_member"))
+        assertTrue(joinerEngine.consumeBufferedTextElements().isEmpty())
+        assertEquals("alex_member", joinerEngine.activePeers.value["joiner_p2"]?.userTag)
+        assertEquals("alex_member", hostEngine.activePeers.value["joiner_p2"]?.userTag)
+
+        // Verify A-009: real-time cursor callback and live progressive stroke updates with same strokeId
+        var cursorCallbackCount = 0
+        var latestJoinerCursorX = 0f
+        var latestJoinerCursorY = 0f
+        hostEngine.onPeerCursorsUpdated = { peers ->
+            val joinerPeer = peers.firstOrNull { it.peerId == "joiner_p2" }
+            if (joinerPeer != null) {
+                cursorCallbackCount++
+                latestJoinerCursorX = joinerPeer.lastCursorX
+                latestJoinerCursorY = joinerPeer.lastCursorY
+            }
+        }
+        hostEngine.receiveMessage(
+            CollabMessage.CursorBroadcast(
+                peerId = "joiner_p2",
+                x = 140f,
+                y = 280f,
+                timestamp = 1000L
+            )
+        )
+        assertTrue(cursorCallbackCount >= 1)
+        assertEquals(140f, latestJoinerCursorX, 0.01f)
+        assertEquals(280f, latestJoinerCursorY, 0.01f)
+
+        // Live stroke streaming: same strokeId with growing points list must enqueue each progressive update
+        hostEngine.receiveMessage(
+            CollabMessage.StrokeBroadcast(
+                strokeId = "live_stroke_1",
+                points = listOf(10f, 10f, 20f, 20f),
+                colorHex = "#7A5AF8",
+                strokeWidth = 4f,
+                peerId = "joiner_p2"
+            )
+        )
+        hostEngine.receiveMessage(
+            CollabMessage.StrokeBroadcast(
+                strokeId = "live_stroke_1",
+                points = listOf(10f, 10f, 20f, 20f, 35f, 45f),
+                colorHex = "#7A5AF8",
+                strokeWidth = 4f,
+                peerId = "joiner_p2"
+            )
+        )
+        val buffered = hostEngine.consumeBufferedStrokes()
+        assertEquals(2, buffered.size)
+        assertEquals(4, buffered[0].points.size)
+        assertEquals(6, buffered[1].points.size)
+    }
 }

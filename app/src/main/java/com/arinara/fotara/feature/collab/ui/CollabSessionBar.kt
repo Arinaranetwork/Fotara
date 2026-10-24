@@ -33,6 +33,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
@@ -88,7 +90,10 @@ fun CollabSessionBar(
     modifier: Modifier = Modifier,
     localRole: CollabRole = CollabRole.MEMBER,
     canLocalUserDraw: Boolean = true,
+    isLocalMicMuted: Boolean = false,
+    isRoomMutedByMod: Boolean = false,
     unreadChatCount: Int = 0,
+    onToggleMicClick: (() -> Unit)? = null,
     onChatClick: (() -> Unit)? = null,
     onSettingsClick: (() -> Unit)? = null,
     onCopyCode: (() -> Unit)? = null
@@ -210,8 +215,11 @@ fun CollabSessionBar(
                 ) {
                     for (peer in displayedPeers) {
                         val peerHaloColor = PeerCursorRenderer.parseColor(peer.colorHex)
-                        val initials = remember(peer.userTag) {
-                            val parts = peer.userTag.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                        val initials = remember(peer.userTag, peer.userHandle) {
+                            val label = peer.userTag.trim()
+                                .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
+                                ?: peer.userHandle.trim().removePrefix("@")
+                            val parts = label.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
                             when {
                                 parts.size >= 2 -> "${parts[0].first().uppercaseChar()}${parts[1].first().uppercaseChar()}"
                                 parts.size == 1 -> parts[0].take(2).uppercase()
@@ -252,6 +260,37 @@ fun CollabSessionBar(
                                 color = ElectricSlateTokens.TextMuted
                             )
                         }
+                    }
+                }
+
+                // Microphone Mute / Unmute Button
+                if (onToggleMicClick != null) {
+                    val effectiveMuted = isLocalMicMuted || isRoomMutedByMod
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (!effectiveMuted) ElectricSlateTokens.PrimaryAccent
+                                else ElectricSlateTokens.SurfaceElevated
+                            )
+                            .border(
+                                1.dp,
+                                if (!effectiveMuted) ElectricSlateTokens.PrimaryAccent
+                                else ElectricSlateTokens.BorderSubtle,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .jigglePressClickable(onClick = onToggleMicClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (effectiveMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                            contentDescription = if (effectiveMuted) "Unmute Microphone" else "Mute Microphone",
+                            tint = if (!effectiveMuted) ElectricSlateTokens.TextPrimary
+                            else if (isRoomMutedByMod) ElectricSlateTokens.Destructive
+                            else ElectricSlateTokens.TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
 

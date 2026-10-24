@@ -169,6 +169,9 @@ class CollabSessionEngine(
     private val _locallyMutedPeerIds = MutableStateFlow<Set<String>>(emptySet())
     val locallyMutedPeerIds: StateFlow<Set<String>> = _locallyMutedPeerIds.asStateFlow()
 
+    private val _isLocalMicMuted = MutableStateFlow(false)
+    val isLocalMicMuted: StateFlow<Boolean> = _isLocalMicMuted.asStateFlow()
+
     private val _audioBitrateKbps = MutableStateFlow(CollabAudioBitrate.BALANCED_32_KBPS)
     val audioBitrateKbps: StateFlow<Int> = _audioBitrateKbps.asStateFlow()
 
@@ -207,16 +210,35 @@ class CollabSessionEngine(
     private val _outgoingMessages = MutableSharedFlow<CollabMessage>(extraBufferCapacity = 64)
     val outgoingMessages: SharedFlow<CollabMessage> = _outgoingMessages.asSharedFlow()
 
-    // Thread-safe vector stroke merger buffer
+    // Thread-safe vector stroke and canvas element merger buffers
     private val strokeBuffer = ConcurrentLinkedQueue<CollabStroke>()
+    private val textSyncBuffer = ConcurrentLinkedQueue<CollabMessage.TextElementSync>()
+    private val imageSyncBuffer = ConcurrentLinkedQueue<CollabMessage.ImageElementSync>()
+    private val removeSyncBuffer = ConcurrentLinkedQueue<CollabMessage.ElementsRemoveSync>()
     private val _bufferedStrokesCount = MutableStateFlow(0)
     val bufferedStrokesCount: StateFlow<Int> = _bufferedStrokesCount.asStateFlow()
 
-    // Deduplication ring for processed stroke IDs
+    // Deduplication ring for processed stroke and element sync payloads
     private val processedStrokeIds = LinkedHashSet<String>()
 
+    /**
+     * Optional callback invoked when a remote voice audio frame arrives for real-time playback.
+     */
+    @Volatile
+    var onAudioFrameReceived: ((CollabMessage.AudioStreamFrame) -> Unit)? = null
+
+    /**
+     * Optional callback invoked on the Host when a new participant joins so the Host can push
+     * a snapshot of existing canvas elements (strokes, texts, images).
+     */
+    @Volatile
+    var onPeerJoinedNeedSnapshot: ((String) -> Unit)? = null
+
     private val lanTransport: LanCollabTransport? = if (enableLanTransport) {
-        LanCollabTransport { incoming -> receiveMessage(incoming) }
+        LanCollabTransport(
+            onMessageReceived = { incoming -> receiveMessage(incoming) },
+            onHostConnectionLost = { handleHostConnectionLost() }
+        )
     } else {
         null
     }
@@ -228,17 +250,54 @@ class CollabSessionEngine(
         get() = _state.value == CollabSessionState.IN_ROOM && _roomCode.value != null
 
     /**
+     * Returns true if the local user is allowed to transmit live microphone audio.
+     */
+    val canLocalUserSpeak: Boolean
+        get() = isSessionActive && !_isLocalMicMuted.value && localPeerId !in _roomMutedPeerIds.value
+
+    /**
      * Optional transport bridge callback for external networks (WebSockets / WebRTC data channels).
      */
     @Volatile
     var transportBridge: ((CollabMessage) -> Unit)? = null
 
+    /**
+     * Direct low-latency callback invoked when remote or local peer cursors move or peers change,
+     * allowing native canvas rendering at 60fps without Compose full-screen recomposition.
+     */
+    @Volatile
+    var onPeerCursorsUpdated: ((Collection<CollabPeer>) -> Unit)? = null
+
     override fun close() {
         leaveRoom()
         lanTransport?.close()
         transportBridge = null
+        onAudioFrameReceived = null
+        onPeerJoinedNeedSnapshot = null
+        onPeerCursorsUpdated = null
         strokeBuffer.clear()
+        textSyncBuffer.clear()
+        imageSyncBuffer.clear()
+        removeSyncBuffer.clear()
         _bufferedStrokesCount.value = 0
+    }
+
+    private fun resolveEffectiveUserTag(rawTag: String, rawHandle: String): String {
+        val cleanTag = rawTag.trim()
+        val cleanHandle = rawHandle.trim().removePrefix("@")
+        val existingTag = localUserTag.trim()
+        return when {
+            cleanTag.isNotBlank() &&
+                !cleanTag.equals("Fotara User", ignoreCase = true) &&
+                !cleanTag.equals("My Profile", ignoreCase = true) -> cleanTag
+            cleanHandle.isNotBlank() -> cleanHandle
+            existingTag.isNotBlank() &&
+                !existingTag.equals("Fotara User", ignoreCase = true) &&
+                !existingTag.equals("My Profile", ignoreCase = true) -> existingTag
+            cleanTag.isNotBlank() -> cleanTag
+            existingTag.isNotBlank() -> existingTag
+            else -> "Fotara User"
+        }
     }
 
     fun clearErrorMessage() {
@@ -256,14 +315,14 @@ class CollabSessionEngine(
         deviceId: String = localDeviceId,
         userHandle: String = localUserHandle
     ) {
-        val resolved = realName.trim().ifEmpty { "Fotara User" }
+        if (userHandle.isNotBlank()) {
+            localUserHandle = CollabPrivacyPreset.normalizeHandle(userHandle)
+        }
+        val resolved = resolveEffectiveUserTag(realName, localUserHandle)
         localUserTag = resolved
         localPronouns = pronouns.trim()
         if (deviceId.isNotBlank()) {
             localDeviceId = deviceId.trim()
-        }
-        if (userHandle.isNotBlank()) {
-            localUserHandle = CollabPrivacyPreset.normalizeHandle(userHandle)
         }
 
         val currentPeer = _activePeers.value[localPeerId]
@@ -345,7 +404,7 @@ class CollabSessionEngine(
             generated
         }
 
-        localUserTag = userTag.trim().ifEmpty { localUserTag.ifEmpty { "Fotara User" } }
+        localUserTag = resolveEffectiveUserTag(userTag, localUserHandle)
         localPronouns = pronouns.trim()
         localColorHex = colorHex
         _lastErrorMessage.value = null
@@ -403,12 +462,16 @@ class CollabSessionEngine(
         )
 
         strokeBuffer.clear()
+        textSyncBuffer.clear()
+        imageSyncBuffer.clear()
+        removeSyncBuffer.clear()
         processedStrokeIds.clear()
         _bufferedStrokesCount.value = 0
         _chatMessages.value = emptyList()
         _unreadChatCount.value = 0
 
         _state.value = CollabSessionState.IN_ROOM
+        onPeerCursorsUpdated?.invoke(_activePeers.value.values)
 
         val announce = CollabMessage.HostAnnounce(
             roomCode = candidateCode,
@@ -498,7 +561,7 @@ class CollabSessionEngine(
             return false
         }
 
-        val resolvedUserTag = userTag.trim().ifEmpty { localUserTag.ifEmpty { "Fotara User" } }
+        val resolvedUserTag = resolveEffectiveUserTag(userTag, localUserHandle)
         var hostedRecord = CollabRoomRegistry.findRoom(normalizedCode)
         if (hostedRecord != null && hostedRecord.hostPeerId == localPeerId && _state.value != CollabSessionState.IN_ROOM) {
             CollabRoomRegistry.unregisterRoom(normalizedCode, localPeerId)
@@ -565,6 +628,9 @@ class CollabSessionEngine(
         _pinnedChatMessage.value = null
 
         strokeBuffer.clear()
+        textSyncBuffer.clear()
+        imageSyncBuffer.clear()
+        removeSyncBuffer.clear()
         processedStrokeIds.clear()
         _bufferedStrokesCount.value = 0
         _chatMessages.value = emptyList()
@@ -596,6 +662,7 @@ class CollabSessionEngine(
         _activePeers.value = initialPeers
 
         _state.value = CollabSessionState.IN_ROOM
+        onPeerCursorsUpdated?.invoke(_activePeers.value.values)
         lanTransport?.startJoinerDiscovery()
         if (hostedRecord != null && hostedRecord.lanIp.isNotBlank() && hostedRecord.lanPort > 0) {
             lanTransport?.connectToHost(hostedRecord.lanIp, hostedRecord.lanPort)
@@ -658,27 +725,53 @@ class CollabSessionEngine(
         val wasHost = _hostPeerId.value == localPeerId || _localRole.value == CollabRole.HOST
 
         if (_state.value != CollabSessionState.DISCONNECTED) {
+            val closingMessages = mutableListOf<CollabMessage>()
             if (wasHost && !currentCode.isNullOrBlank()) {
                 CollabRoomRegistry.unregisterRoom(currentCode, localPeerId)
-                val roomClosedMsg = CollabMessage.RoomClosed(
-                    roomCode = currentCode,
-                    sessionToken = currentToken,
-                    hostPeerId = localPeerId,
-                    reason = "HOST_LEFT"
+                closingMessages.add(
+                    CollabMessage.RoomClosed(
+                        roomCode = currentCode,
+                        sessionToken = currentToken,
+                        hostPeerId = localPeerId,
+                        reason = "HOST_LEFT"
+                    )
                 )
-                dispatchMessage(roomClosedMsg)
             }
-            val leaveMsg = CollabMessage.LeaveRoom(
-                peerId = localPeerId,
-                sessionToken = currentToken
+            closingMessages.add(
+                CollabMessage.LeaveRoom(
+                    peerId = localPeerId,
+                    sessionToken = currentToken
+                )
             )
-            dispatchMessage(leaveMsg)
+            for (msg in closingMessages) {
+                _outgoingMessages.tryEmit(msg)
+                transportBridge?.invoke(msg)
+            }
+            if (lanTransport != null) {
+                lanTransport.flushAndDisconnectSession(closingMessages)
+            }
         }
 
         resetRoomStateToDisconnected()
     }
 
+    /**
+     * Invoked when the joiner's TCP connection to the Central Host closes unexpectedly
+     * (e.g., Host exited the room or closed the app).
+     */
+    @Synchronized
+    fun handleHostConnectionLost() {
+        if (_state.value == CollabSessionState.IN_ROOM && _localRole.value != CollabRole.HOST) {
+            _roomCode.value?.let { code ->
+                CollabRoomRegistry.unregisterRoom(code, _hostPeerId.value)
+            }
+            _lastErrorMessage.value = "Session ended because the host left the room."
+            resetRoomStateToDisconnected()
+        }
+    }
+
     private fun resetRoomStateToDisconnected() {
+        lanTransport?.disconnectSessionSockets()
         _state.value = CollabSessionState.DISCONNECTED
         _roomCode.value = null
         _sessionToken.value = ""
@@ -693,6 +786,7 @@ class CollabSessionEngine(
         _roomMutedPeerIds.value = emptySet()
         _chatBlockedPeerIds.value = emptySet()
         _isLocalUserChatBlocked.value = false
+        _isLocalMicMuted.value = false
         _isGlobalDrawingDisabled.value = false
         _isGlobalSheetCreationDisabled.value = false
         _drawingDisabledPeerIds.value = emptySet()
@@ -701,8 +795,12 @@ class CollabSessionEngine(
         _canLocalUserCreateSheets.value = true
         isChatSheetOpen = false
         strokeBuffer.clear()
+        textSyncBuffer.clear()
+        imageSyncBuffer.clear()
+        removeSyncBuffer.clear()
         processedStrokeIds.clear()
         _bufferedStrokesCount.value = 0
+        onPeerCursorsUpdated?.invoke(emptyList())
     }
 
     // =========================================================================
@@ -1598,6 +1696,22 @@ class CollabSessionEngine(
     }
 
     /**
+     * Toggles the local user's microphone mute state and returns the new muted boolean.
+     */
+    fun toggleLocalMicMuted(): Boolean {
+        val next = !_isLocalMicMuted.value
+        _isLocalMicMuted.value = next
+        return next
+    }
+
+    /**
+     * Explicitly sets the local user's microphone mute state.
+     */
+    fun setLocalMicMuted(muted: Boolean) {
+        _isLocalMicMuted.value = muted
+    }
+
+    /**
      * Broadcasts a drawn vector stroke to all room participants.
      * Guarded: if [canLocalUserDraw] is false, blocks outgoing network dispatch and sets [lastErrorMessage].
      */
@@ -1605,7 +1719,11 @@ class CollabSessionEngine(
         points: List<Float>,
         colorHex: String = localColorHex,
         strokeWidth: Float = 4.0f,
-        strokeId: String = UUID.randomUUID().toString()
+        strokeId: String = UUID.randomUUID().toString(),
+        toolType: String = "PEN",
+        blendMode: String = "NORMAL",
+        layerId: String = "layer_default",
+        zIndex: Int = 0
     ): CollabMessage.StrokeBroadcast {
         val msg = CollabMessage.StrokeBroadcast(
             strokeId = strokeId,
@@ -1613,7 +1731,11 @@ class CollabSessionEngine(
             colorHex = colorHex,
             strokeWidth = strokeWidth,
             peerId = localPeerId,
-            sessionToken = _sessionToken.value
+            sessionToken = _sessionToken.value,
+            toolType = toolType,
+            blendMode = blendMode,
+            layerId = layerId,
+            zIndex = zIndex
         )
         if (!_canLocalUserDraw.value) {
             _lastErrorMessage.value = "Drawing is currently disabled by the host or admin."
@@ -1621,6 +1743,77 @@ class CollabSessionEngine(
         }
         dispatchMessage(msg)
         return msg
+    }
+
+    /**
+     * Broadcasts a text annotation element (`TextLayerElement`) creation, edit, or transform.
+     */
+    fun broadcastTextElement(msg: CollabMessage.TextElementSync): Boolean {
+        if (!_canLocalUserDraw.value) {
+            _lastErrorMessage.value = "Drawing is currently disabled by the host or admin."
+            return false
+        }
+        val stamped = msg.copy(
+            peerId = localPeerId,
+            sessionToken = _sessionToken.value
+        )
+        dispatchMessage(stamped)
+        return true
+    }
+
+    /**
+     * Broadcasts an image element (`ImageElement`) insertion, transform, or VFX adjustment.
+     */
+    fun broadcastImageElement(msg: CollabMessage.ImageElementSync): Boolean {
+        if (!_canLocalUserDraw.value) {
+            _lastErrorMessage.value = "Drawing is currently disabled by the host or admin."
+            return false
+        }
+        val stamped = msg.copy(
+            peerId = localPeerId,
+            sessionToken = _sessionToken.value
+        )
+        dispatchMessage(stamped)
+        return true
+    }
+
+    /**
+     * Broadcasts removal of canvas elements (erased strokes, deleted text/images/selections).
+     */
+    fun broadcastElementsRemoved(elementIds: List<String>): Boolean {
+        if (elementIds.isEmpty()) return false
+        if (!_canLocalUserDraw.value) {
+            _lastErrorMessage.value = "Drawing is currently disabled by the host or admin."
+            return false
+        }
+        val msg = CollabMessage.ElementsRemoveSync(
+            elementIds = elementIds,
+            peerId = localPeerId,
+            sessionToken = _sessionToken.value
+        )
+        dispatchMessage(msg)
+        return true
+    }
+
+    /**
+     * Broadcasts a live PCM voice audio frame when the local microphone is unmuted.
+     */
+    fun broadcastAudioFrame(
+        pcmDataBase64: String,
+        sequenceNumber: Long,
+        sampleRateHz: Int = 16000
+    ): CollabMessage.AudioStreamFrame? {
+        if (!canLocalUserSpeak || pcmDataBase64.isEmpty()) return null
+        val frame = CollabMessage.AudioStreamFrame(
+            peerId = localPeerId,
+            sequenceNumber = sequenceNumber,
+            sampleRateHz = sampleRateHz,
+            pcmDataBase64 = pcmDataBase64,
+            bitrateKbps = _audioBitrateKbps.value,
+            sessionToken = _sessionToken.value
+        )
+        dispatchMessage(frame)
+        return frame
     }
 
     /**
@@ -1648,6 +1841,7 @@ class CollabSessionEngine(
                 current
             }
         }
+        onPeerCursorsUpdated?.invoke(_activePeers.value.values)
 
         dispatchMessage(msg)
         return msg
@@ -1780,21 +1974,27 @@ class CollabSessionEngine(
                         }
                         _activePeers.update { current ->
                             val existing = current[joinerId]
+                            val effectiveJoinerHandle = message.userHandle.ifBlank { existing?.userHandle.orEmpty() }
+                            val effectiveJoinerTag = message.userTag.trim()
+                                .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
+                                ?: effectiveJoinerHandle.trim().removePrefix("@").ifBlank {
+                                    existing?.userTag?.ifBlank { "Fotara User" } ?: message.userTag.ifBlank { "Fotara User" }
+                                }
                             val updated = existing?.copy(
-                                userTag = message.userTag.ifBlank { existing.userTag },
+                                userTag = effectiveJoinerTag,
                                 colorHex = message.colorHex,
                                 deviceId = joinerDevId,
                                 pronouns = message.pronouns,
-                                userHandle = message.userHandle.ifBlank { existing.userHandle },
+                                userHandle = effectiveJoinerHandle,
                                 audioBitrateKbps = message.audioBitrateKbps,
                                 lastActiveMs = System.currentTimeMillis()
                             ) ?: CollabPeer(
                                 peerId = joinerId,
-                                userTag = message.userTag.ifBlank { "Fotara User" },
+                                userTag = effectiveJoinerTag,
                                 colorHex = message.colorHex,
                                 deviceId = joinerDevId,
                                 pronouns = message.pronouns,
-                                userHandle = message.userHandle,
+                                userHandle = effectiveJoinerHandle,
                                 role = CollabRole.MEMBER,
                                 audioBitrateKbps = message.audioBitrateKbps,
                                 lastActiveMs = System.currentTimeMillis()
@@ -1828,6 +2028,9 @@ class CollabSessionEngine(
                                     pinnedMessageId = _pinnedChatMessageId.value
                                 )
                             )
+                        }
+                        if (joinerId.isNotBlank() && joinerId != localPeerId) {
+                            onPeerJoinedNeedSnapshot?.invoke(joinerId)
                         }
                     }
                 }
@@ -1886,12 +2089,18 @@ class CollabSessionEngine(
                     }
                     _activePeers.update { current ->
                         val existing = current[message.peerId]
+                        val effectivePeerHandle = message.userHandle.ifBlank { existing?.userHandle.orEmpty() }
+                        val effectivePeerTag = message.userTag.trim()
+                            .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
+                            ?: effectivePeerHandle.trim().removePrefix("@").ifBlank {
+                                existing?.userTag?.ifBlank { "Fotara User" } ?: message.userTag.ifBlank { "Fotara User" }
+                            }
                         val updated = existing?.copy(
-                            userTag = message.userTag,
+                            userTag = effectivePeerTag,
                             colorHex = message.colorHex,
                             deviceId = message.deviceId.ifBlank { message.peerId },
                             pronouns = message.pronouns,
-                            userHandle = message.userHandle.ifBlank { existing.userHandle },
+                            userHandle = effectivePeerHandle,
                             role = if (message.peerId == _hostPeerId.value) CollabRole.HOST
                             else if (message.peerId in _adminPeerIds.value) CollabRole.ADMIN
                             else message.role,
@@ -1899,11 +2108,11 @@ class CollabSessionEngine(
                             lastActiveMs = System.currentTimeMillis()
                         ) ?: CollabPeer(
                             peerId = message.peerId,
-                            userTag = message.userTag,
+                            userTag = effectivePeerTag,
                             colorHex = message.colorHex,
                             deviceId = message.deviceId.ifBlank { message.peerId },
                             pronouns = message.pronouns,
-                            userHandle = message.userHandle,
+                            userHandle = effectivePeerHandle,
                             role = message.role,
                             audioBitrateKbps = message.audioBitrateKbps,
                             lastActiveMs = System.currentTimeMillis()
@@ -1924,7 +2133,8 @@ class CollabSessionEngine(
                         return
                     }
                 }
-                if (!processedStrokeIds.add(message.strokeId)) {
+                val dedupKey = "${message.strokeId}:${message.points.hashCode()}:${message.zIndex}:${message.layerId}"
+                if (!processedStrokeIds.add(dedupKey)) {
                     return
                 }
                 if (processedStrokeIds.size > MAX_STROKE_BUFFER_SIZE * 2) {
@@ -1938,13 +2148,87 @@ class CollabSessionEngine(
                     points = message.points,
                     colorHex = message.colorHex,
                     strokeWidth = message.strokeWidth,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = System.currentTimeMillis(),
+                    toolType = message.toolType,
+                    blendMode = message.blendMode,
+                    layerId = message.layerId,
+                    zIndex = message.zIndex
                 )
                 while (strokeBuffer.size >= MAX_STROKE_BUFFER_SIZE) {
                     strokeBuffer.poll()
                 }
                 strokeBuffer.add(stroke)
-                _bufferedStrokesCount.value = strokeBuffer.size
+                refreshBufferedEventsCount()
+            }
+            is CollabMessage.TextElementSync -> {
+                if (!isSessionTokenCompatible(message.sessionToken)) return
+                val senderId = message.peerId
+                if (senderId == localPeerId) return
+                if (senderId.isNotBlank()) {
+                    if (senderId in _bannedPeerIds.value || senderId in _drawingDisabledPeerIds.value) {
+                        return
+                    }
+                    if (_isGlobalDrawingDisabled.value && !canPeerDrawUnderGlobalLock(senderId)) {
+                        return
+                    }
+                }
+                while (textSyncBuffer.size >= MAX_STROKE_BUFFER_SIZE) {
+                    textSyncBuffer.poll()
+                }
+                textSyncBuffer.add(message)
+                refreshBufferedEventsCount()
+            }
+            is CollabMessage.ImageElementSync -> {
+                if (!isSessionTokenCompatible(message.sessionToken)) return
+                val senderId = message.peerId
+                if (senderId == localPeerId) return
+                if (senderId.isNotBlank()) {
+                    if (senderId in _bannedPeerIds.value || senderId in _drawingDisabledPeerIds.value) {
+                        return
+                    }
+                    if (_isGlobalDrawingDisabled.value && !canPeerDrawUnderGlobalLock(senderId)) {
+                        return
+                    }
+                }
+                while (imageSyncBuffer.size >= 128) {
+                    imageSyncBuffer.poll()
+                }
+                imageSyncBuffer.add(message)
+                refreshBufferedEventsCount()
+            }
+            is CollabMessage.ElementsRemoveSync -> {
+                if (!isSessionTokenCompatible(message.sessionToken)) return
+                val senderId = message.peerId
+                if (senderId == localPeerId) return
+                if (senderId.isNotBlank()) {
+                    if (senderId in _bannedPeerIds.value || senderId in _drawingDisabledPeerIds.value) {
+                        return
+                    }
+                    if (_isGlobalDrawingDisabled.value && !canPeerDrawUnderGlobalLock(senderId)) {
+                        return
+                    }
+                }
+                while (removeSyncBuffer.size >= MAX_STROKE_BUFFER_SIZE) {
+                    removeSyncBuffer.poll()
+                }
+                removeSyncBuffer.add(message)
+                refreshBufferedEventsCount()
+            }
+            is CollabMessage.AudioStreamFrame -> {
+                if (!isSessionTokenCompatible(message.sessionToken)) return
+                val senderId = message.peerId
+                if (senderId.isBlank() || senderId == localPeerId) return
+                if (senderId in _bannedPeerIds.value ||
+                    senderId in _roomMutedPeerIds.value ||
+                    senderId in _locallyMutedPeerIds.value
+                ) {
+                    return
+                }
+                _activePeers.update { current ->
+                    val existing = current[senderId] ?: return@update current
+                    current + (senderId to existing.copy(lastActiveMs = System.currentTimeMillis()))
+                }
+                onAudioFrameReceived?.invoke(message)
             }
             is CollabMessage.CursorBroadcast -> {
                 if (!isSessionTokenCompatible(message.sessionToken)) return
@@ -1966,6 +2250,7 @@ class CollabSessionEngine(
                         )
                         current + (message.peerId to updated)
                     }
+                    onPeerCursorsUpdated?.invoke(_activePeers.value.values)
                 }
             }
             is CollabMessage.ChatBroadcast -> {
@@ -2158,9 +2443,18 @@ class CollabSessionEngine(
                 _invitedUserHandles.value = message.invitedUserHandles
             }
             is CollabMessage.RoomClosed -> {
-                if (!isSessionTokenCompatible(message.sessionToken)) return
+                val activeCode = _roomCode.value
+                val matchesRoom = activeCode != null &&
+                    message.roomCode.isNotBlank() &&
+                    activeCode.equals(message.roomCode, ignoreCase = true)
+                if (!matchesRoom && !isSessionTokenCompatible(message.sessionToken)) return
                 val currentHost = _hostPeerId.value
-                if (currentHost != null && message.hostPeerId != currentHost) return
+                if (currentHost != null && message.hostPeerId.isNotBlank() && message.hostPeerId != currentHost) {
+                    return
+                }
+                if (message.roomCode.isNotBlank()) {
+                    CollabRoomRegistry.unregisterRoom(message.roomCode, message.hostPeerId.ifBlank { null })
+                }
                 _lastErrorMessage.value = "Session ended because the host left the room."
                 resetRoomStateToDisconnected()
             }
@@ -2169,6 +2463,9 @@ class CollabSessionEngine(
                 if (message.peerId != localPeerId) {
                     // Basic Host-Leave Rule: when the current Host leaves, everybody leaves
                     if (message.peerId == _hostPeerId.value) {
+                        _roomCode.value?.let { code ->
+                            CollabRoomRegistry.unregisterRoom(code, message.peerId)
+                        }
                         _lastErrorMessage.value = "Session ended because the host left the room."
                         resetRoomStateToDisconnected()
                     } else {
@@ -2181,6 +2478,11 @@ class CollabSessionEngine(
                 }
             }
         }
+    }
+
+    private fun refreshBufferedEventsCount() {
+        _bufferedStrokesCount.value =
+            strokeBuffer.size + textSyncBuffer.size + imageSyncBuffer.size + removeSyncBuffer.size
     }
 
     private fun isSessionTokenCompatible(incomingToken: String): Boolean {
@@ -2272,6 +2574,7 @@ class CollabSessionEngine(
         } else {
             _chatMessages.value.firstOrNull { it.messageId == pinId }
         }
+        onPeerCursorsUpdated?.invoke(_activePeers.value.values)
     }
 
     /**
@@ -2283,7 +2586,46 @@ class CollabSessionEngine(
             val stroke = strokeBuffer.poll() ?: break
             list.add(stroke)
         }
-        _bufferedStrokesCount.value = 0
+        refreshBufferedEventsCount()
+        return list
+    }
+
+    /**
+     * Drains and returns all incoming text annotation element sync messages.
+     */
+    fun consumeBufferedTextElements(): List<CollabMessage.TextElementSync> {
+        val list = mutableListOf<CollabMessage.TextElementSync>()
+        while (true) {
+            val item = textSyncBuffer.poll() ?: break
+            list.add(item)
+        }
+        refreshBufferedEventsCount()
+        return list
+    }
+
+    /**
+     * Drains and returns all incoming image element sync messages.
+     */
+    fun consumeBufferedImageElements(): List<CollabMessage.ImageElementSync> {
+        val list = mutableListOf<CollabMessage.ImageElementSync>()
+        while (true) {
+            val item = imageSyncBuffer.poll() ?: break
+            list.add(item)
+        }
+        refreshBufferedEventsCount()
+        return list
+    }
+
+    /**
+     * Drains and returns all incoming element removal sync messages.
+     */
+    fun consumeBufferedRemovedElements(): List<CollabMessage.ElementsRemoveSync> {
+        val list = mutableListOf<CollabMessage.ElementsRemoveSync>()
+        while (true) {
+            val item = removeSyncBuffer.poll() ?: break
+            list.add(item)
+        }
+        refreshBufferedEventsCount()
         return list
     }
 

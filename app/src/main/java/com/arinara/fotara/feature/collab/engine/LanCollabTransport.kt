@@ -157,7 +157,8 @@ object CollabRoomRegistry {
  * for reliable low-latency stroke, chat, and moderation frame delivery.
  */
 class LanCollabTransport(
-    private val onMessageReceived: (CollabMessage) -> Unit
+    private val onMessageReceived: (CollabMessage) -> Unit,
+    private val onHostConnectionLost: (() -> Unit)? = null
 ) : AutoCloseable {
 
     companion object {
@@ -179,6 +180,12 @@ class LanCollabTransport(
     @Volatile
     private var clientToHostWriter: PrintWriter? = null
 
+    @Volatile
+    private var connectedHostEndpoint: String = ""
+
+    @Volatile
+    private var isDisconnectingIntentionally: Boolean = false
+
     private val connectedJoinerWriters = CopyOnWriteArraySet<PrintWriter>()
     private val connectedJoinerSockets = CopyOnWriteArraySet<Socket>()
     private val pendingClientLines = ConcurrentLinkedQueue<String>()
@@ -194,6 +201,7 @@ class LanCollabTransport(
      * Starts the UDP discovery listener for Joiners looking for a Central Host (`HOST_ANNOUNCE`).
      */
     fun startJoinerDiscovery() {
+        isDisconnectingIntentionally = false
         startUdpListener()
     }
 
@@ -203,6 +211,7 @@ class LanCollabTransport(
      * `createRoom` broadcasts `HostAnnounce`.
      */
     fun startHostServer() {
+        isDisconnectingIntentionally = false
         var boundServer: ServerSocket? = tcpServerSocket
         if (boundServer == null || boundServer.isClosed) {
             boundServer = try {
@@ -287,14 +296,31 @@ class LanCollabTransport(
      */
     fun connectToHost(hostIp: String, hostPort: Int) {
         if (hostIp.isBlank() || hostPort <= 0) return
+        val endpoint = "$hostIp:$hostPort"
+        val existingSocket = clientToHostSocket
+        if (connectedHostEndpoint == endpoint &&
+            existingSocket != null &&
+            existingSocket.isConnected &&
+            !existingSocket.isClosed
+        ) {
+            return
+        }
+        isDisconnectingIntentionally = false
+        connectedHostEndpoint = endpoint
         scope.launch {
+            var socket: Socket? = null
             try {
-                val socket = Socket()
-                socket.tcpNoDelay = true
-                socket.connect(InetSocketAddress(hostIp, hostPort), SOCKET_TIMEOUT_MS)
-                clientToHostSocket = socket
+                try {
+                    clientToHostSocket?.close()
+                } catch (_: Exception) {
+                }
+                val newSocket = Socket()
+                newSocket.tcpNoDelay = true
+                newSocket.connect(InetSocketAddress(hostIp, hostPort), SOCKET_TIMEOUT_MS)
+                socket = newSocket
+                clientToHostSocket = newSocket
                 val writer = PrintWriter(
-                    OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8),
+                    OutputStreamWriter(newSocket.getOutputStream(), StandardCharsets.UTF_8),
                     true
                 )
                 clientToHostWriter = writer
@@ -305,10 +331,11 @@ class LanCollabTransport(
                         val queued = pendingClientLines.poll() ?: break
                         writer.println(queued)
                     }
+                    writer.flush()
                 }
 
-                BufferedReader(InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8)).use { reader ->
-                    while (isActive && !socket.isClosed) {
+                BufferedReader(InputStreamReader(newSocket.getInputStream(), StandardCharsets.UTF_8)).use { reader ->
+                    while (isActive && !newSocket.isClosed) {
                         val line = reader.readLine() ?: break
                         val decoded = CollabProtocolCodec.decode(line)
                         if (decoded != null) {
@@ -316,8 +343,23 @@ class LanCollabTransport(
                         }
                     }
                 }
+                if (!isDisconnectingIntentionally && clientToHostSocket === newSocket) {
+                    onHostConnectionLost?.invoke()
+                }
             } catch (_: Exception) {
-                // Handled by engine timeout / reconnect state
+                if (!isDisconnectingIntentionally && socket != null && clientToHostSocket === socket) {
+                    onHostConnectionLost?.invoke()
+                }
+            } finally {
+                if (socket != null && clientToHostSocket === socket) {
+                    clientToHostSocket = null
+                    clientToHostWriter = null
+                    connectedHostEndpoint = ""
+                }
+                try {
+                    socket?.close()
+                } catch (_: Exception) {
+                }
             }
         }
     }
@@ -327,54 +369,144 @@ class LanCollabTransport(
      */
     fun send(message: CollabMessage) {
         scope.launch {
-            val encoded = CollabProtocolCodec.encode(message)
-            when (message) {
-                is CollabMessage.RoomProbe,
-                is CollabMessage.WhoHasRoom,
-                is CollabMessage.HostAnnounce,
-                is CollabMessage.RoomClosed -> {
-                    startUdpListener()
-                    sendUdpBroadcast(encoded)
-                    if (message is CollabMessage.RoomClosed) {
-                        for (writer in connectedJoinerWriters) {
-                            try {
-                                synchronized(writer) {
-                                    writer.println(encoded)
-                                }
-                            } catch (_: Exception) {
-                                connectedJoinerWriters.remove(writer)
-                            }
+            sendEncodedNow(message)
+        }
+    }
+
+    private fun sendEncodedNow(message: CollabMessage) {
+        val encoded = CollabProtocolCodec.encode(message)
+        when (message) {
+            is CollabMessage.RoomProbe,
+            is CollabMessage.WhoHasRoom,
+            is CollabMessage.HostAnnounce -> {
+                startUdpListener()
+                sendUdpBroadcast(encoded)
+            }
+            is CollabMessage.RoomClosed -> {
+                startUdpListener()
+                // Write to clientToHostWriter (in case host ownership was transferred to a joiner)
+                val hostWriter = clientToHostWriter
+                if (hostWriter != null) {
+                    try {
+                        synchronized(hostWriter) {
+                            hostWriter.println(encoded)
+                            hostWriter.flush()
                         }
+                    } catch (_: Exception) {
                     }
                 }
-                else -> {
-                    val hostWriter = clientToHostWriter
-                    if (hostWriter != null) {
-                        try {
-                            synchronized(hostWriter) {
-                                hostWriter.println(encoded)
-                            }
-                        } catch (_: Exception) {
+                // Write to all connected joiners over TCP
+                for (writer in connectedJoinerWriters) {
+                    try {
+                        synchronized(writer) {
+                            writer.println(encoded)
+                            writer.flush()
                         }
-                    } else if (connectedJoinerWriters.isEmpty()) {
-                        while (pendingClientLines.size >= 64) {
-                            pendingClientLines.poll()
-                        }
-                        pendingClientLines.offer(encoded)
+                    } catch (_: Exception) {
+                        connectedJoinerWriters.remove(writer)
                     }
-                    // Broadcast to all connected Joiners if we are the Host
-                    for (writer in connectedJoinerWriters) {
+                }
+                // Multi-burst UDP broadcast so RoomClosed is never lost on Wi-Fi/Hotspot
+                repeat(3) { attempt ->
+                    sendUdpBroadcast(encoded)
+                    if (attempt < 2) {
                         try {
-                            synchronized(writer) {
-                                writer.println(encoded)
-                            }
-                        } catch (_: Exception) {
-                            connectedJoinerWriters.remove(writer)
+                            Thread.sleep(15L)
+                        } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
                         }
                     }
                 }
             }
+            else -> {
+                val hostWriter = clientToHostWriter
+                if (hostWriter != null) {
+                    try {
+                        synchronized(hostWriter) {
+                            hostWriter.println(encoded)
+                            hostWriter.flush()
+                        }
+                    } catch (_: Exception) {
+                    }
+                } else if (connectedJoinerWriters.isEmpty()) {
+                    while (pendingClientLines.size >= 64) {
+                        pendingClientLines.poll()
+                    }
+                    pendingClientLines.offer(encoded)
+                }
+                // Broadcast to all connected Joiners if we are the Host
+                for (writer in connectedJoinerWriters) {
+                    try {
+                        synchronized(writer) {
+                            writer.println(encoded)
+                            writer.flush()
+                        }
+                    } catch (_: Exception) {
+                        connectedJoinerWriters.remove(writer)
+                    }
+                }
+                if (message is CollabMessage.LeaveRoom) {
+                    sendUdpBroadcast(encoded)
+                }
+            }
         }
+    }
+
+    /**
+     * Flushes final closing messages (such as `RoomClosed` and `LeaveRoom`) before tearing down
+     * active session TCP sockets so every connected Member/Admin immediately exits the room.
+     */
+    fun flushAndDisconnectSession(closingMessages: List<CollabMessage>) {
+        isDisconnectingIntentionally = true
+        val flushThread = Thread {
+            try {
+                for (msg in closingMessages) {
+                    sendEncodedNow(msg)
+                }
+            } catch (_: Exception) {
+            } finally {
+                disconnectSessionSockets()
+            }
+        }
+        flushThread.isDaemon = true
+        flushThread.start()
+        try {
+            flushThread.join(250L)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+    }
+
+    /**
+     * Closes active session TCP sockets (Host server socket, joiner sockets, client-to-host socket)
+     * while keeping the UDP listener and coroutine scope alive for subsequent sessions.
+     */
+    fun disconnectSessionSockets() {
+        isDisconnectingIntentionally = true
+        pendingClientLines.clear()
+        connectedHostEndpoint = ""
+
+        try {
+            tcpServerSocket?.close()
+        } catch (_: Exception) {
+        }
+        tcpServerSocket = null
+
+        try {
+            clientToHostSocket?.close()
+        } catch (_: Exception) {
+        }
+        clientToHostSocket = null
+        clientToHostWriter = null
+
+        for (socket in connectedJoinerSockets) {
+            try {
+                socket.close()
+            } catch (_: Exception) {
+            }
+        }
+        connectedJoinerSockets.clear()
+        connectedJoinerWriters.clear()
     }
 
     private fun handleAcceptedJoinerSocket(socket: Socket) {
@@ -397,10 +529,16 @@ class LanCollabTransport(
                             onMessageReceived(decoded)
                             // Relay joiner frames across all other connected joiner sockets
                             if (decoded is CollabMessage.StrokeBroadcast ||
+                                decoded is CollabMessage.TextElementSync ||
+                                decoded is CollabMessage.ImageElementSync ||
+                                decoded is CollabMessage.ElementsRemoveSync ||
+                                decoded is CollabMessage.AudioStreamFrame ||
                                 decoded is CollabMessage.CursorBroadcast ||
                                 decoded is CollabMessage.ChatBroadcast ||
                                 decoded is CollabMessage.PeerJoined ||
                                 decoded is CollabMessage.LeaveRoom ||
+                                decoded is CollabMessage.RoomClosed ||
+                                decoded is CollabMessage.KickPeer ||
                                 decoded is CollabMessage.ModMutePeer ||
                                 decoded is CollabMessage.BlockPeerChat ||
                                 decoded is CollabMessage.DeleteChatMessage ||
@@ -415,6 +553,7 @@ class LanCollabTransport(
                                         try {
                                             synchronized(otherWriter) {
                                                 otherWriter.println(line)
+                                                otherWriter.flush()
                                             }
                                         } catch (_: Exception) {
                                         }
@@ -448,7 +587,7 @@ class LanCollabTransport(
                     bind(InetSocketAddress(DISCOVERY_UDP_PORT))
                 }
                 udpSocket = socket
-                val buffer = ByteArray(8192)
+                val buffer = ByteArray(16384)
                 while (isActive && !socket.isClosed) {
                     val packet = DatagramPacket(buffer, buffer.size)
                     socket.receive(packet)
@@ -514,33 +653,12 @@ class LanCollabTransport(
     }
 
     override fun close() {
+        disconnectSessionSockets()
         try {
             udpSocket?.close()
         } catch (_: Exception) {
         }
         udpSocket = null
-
-        try {
-            tcpServerSocket?.close()
-        } catch (_: Exception) {
-        }
-        tcpServerSocket = null
-
-        try {
-            clientToHostSocket?.close()
-        } catch (_: Exception) {
-        }
-        clientToHostSocket = null
-        clientToHostWriter = null
-
-        for (socket in connectedJoinerSockets) {
-            try {
-                socket.close()
-            } catch (_: Exception) {
-            }
-        }
-        connectedJoinerSockets.clear()
-        connectedJoinerWriters.clear()
         scope.cancel()
     }
 }

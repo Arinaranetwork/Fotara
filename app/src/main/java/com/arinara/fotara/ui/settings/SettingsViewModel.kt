@@ -350,6 +350,18 @@ class SettingsViewModel(
             val result = repo.claimUsername(requestedUsername, displayName)
             if (result.isSuccess) {
                 val claimed = result.getOrThrow()
+                val currentProfileName = settingsRepository.profileFlow.value.name.trim()
+                if (currentProfileName.isBlank() ||
+                    currentProfileName.equals("Fotara User", ignoreCase = true) ||
+                    currentProfileName.equals("My Profile", ignoreCase = true)
+                ) {
+                    val newProfileName = displayName.trim()
+                        .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
+                        ?: claimed.removePrefix("@")
+                    if (newProfileName.isNotBlank()) {
+                        settingsRepository.updateProfileName(newProfileName)
+                    }
+                }
                 refreshUsernameState()
                 _eventChannel.trySend("Username claimed: $claimed")
                 onResult(true, "Username claimed successfully: $claimed")

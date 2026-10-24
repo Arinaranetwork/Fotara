@@ -223,7 +223,21 @@ class DefaultAppContainer(override val context: Context) : AppContainer {
     }
 
     init {
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        val bgScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        bgScope.launch {
+            delay(1200L)
+            try {
+                settingsRepository.profileFlow.collect { profile ->
+                    friendsRepository.syncMyProfile(
+                        displayName = profile.resolvedName("Fotara User"),
+                        pronouns = profile.pronouns,
+                        avatarUrl = profile.avatarPath
+                    )
+                }
+            } catch (_: Exception) {
+            }
+        }
+        bgScope.launch {
             // Defer non-critical startup maintenance past the initial UI rendering window
             try { dbHelper.writableDatabase } catch (_: Exception) {}
             delay(7000L)

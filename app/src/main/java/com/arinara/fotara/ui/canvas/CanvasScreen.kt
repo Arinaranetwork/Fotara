@@ -66,6 +66,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -207,6 +209,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -242,14 +246,33 @@ fun CanvasScreen(
         }
     }
 
-    val realProfileName = remember(uiState.userProfile) {
-        uiState.userProfile.resolvedName(defaultFallback = "Fotara User")
+    val fallbackUsernameManager = remember(context) {
+        com.arinara.fotara.feature.friends.data.UsernameManager(context.applicationContext)
+    }
+    val resolvedUserHandle = remember(uiState.myUserHandle, uiState.userProfile) {
+        val handleFromState = uiState.myUserHandle.trim()
+        val handleFromPrefs = fallbackUsernameManager.getClaimedUsername().trim()
+        when {
+            handleFromState.isNotBlank() -> handleFromState
+            handleFromPrefs.isNotBlank() -> handleFromPrefs
+            else -> ""
+        }
+    }
+    val realProfileName = remember(uiState.userProfile, resolvedUserHandle) {
+        val explicitProfileName = uiState.userProfile.name.trim()
+            .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
+        val claimedDisplay = fallbackUsernameManager.getClaimedDisplayName().trim()
+            .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
+        val handleBody = resolvedUserHandle.removePrefix("@").trim()
+        when {
+            explicitProfileName != null -> explicitProfileName
+            handleBody.isNotBlank() -> handleBody
+            claimedDisplay != null -> claimedDisplay
+            else -> "Fotara User"
+        }
     }
     val realProfilePronouns = remember(uiState.userProfile) {
         uiState.userProfile.pronouns.trim()
-    }
-    val resolvedUserHandle = remember(uiState.myUserHandle, realProfileName) {
-        uiState.myUserHandle.ifBlank { realProfileName }
     }
     var persistentCollabDeviceId by remember { mutableStateOf("") }
     var collabPrefsLoaded by remember { mutableStateOf(false) }
@@ -261,7 +284,36 @@ fun CanvasScreen(
             enableLanTransport = true
         )
     }
+    val collabVoiceEngine = remember(collabEngine) {
+        com.arinara.fotara.feature.collab.audio.CollabVoiceEngine(
+            context = context.applicationContext,
+            sessionEngine = collabEngine
+        )
+    }
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            collabEngine.setLocalMicMuted(false)
+        } else {
+            collabEngine.setLocalMicMuted(true)
+        }
+    }
+    val ensureRecordAudioAndToggleMic: () -> Unit = {
+        val hasPerm = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!hasPerm) {
+            recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        } else {
+            collabEngine.toggleLocalMicMuted()
+        }
+    }
     LaunchedEffect(collabEngine) {
+        collabEngine.onPeerJoinedNeedSnapshot = {
+            viewModel.emitFullCanvasSnapshotForCollab()
+        }
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val prefs = context.getSharedPreferences("fotara_collab_prefs", android.content.Context.MODE_PRIVATE)
             val deviceId = prefs.getString("collab_device_id", null)
@@ -281,6 +333,39 @@ fun CanvasScreen(
             collabPrefsLoaded = true
         }
     }
+    LaunchedEffect(collabEngine, viewModel) {
+        viewModel.localCollabDiffs.collect { diff ->
+            if (collabEngine.roomCode.value == null) return@collect
+            if (!collabEngine.canLocalUserDraw.value) return@collect
+            if (diff.removedElementIds.isNotEmpty()) {
+                collabEngine.broadcastElementsRemoved(diff.removedElementIds)
+            }
+            for (stroke in diff.upsertedStrokes) {
+                collabEngine.broadcastStroke(
+                    points = stroke.points,
+                    colorHex = stroke.colorHex,
+                    strokeWidth = stroke.strokeWidth,
+                    strokeId = stroke.strokeId,
+                    toolType = stroke.toolType,
+                    blendMode = stroke.blendMode,
+                    layerId = stroke.layerId,
+                    zIndex = stroke.zIndex
+                )
+                if (stroke.points.size >= 2) {
+                    collabEngine.updateCursor(
+                        stroke.points[stroke.points.size - 2],
+                        stroke.points[stroke.points.size - 1]
+                    )
+                }
+            }
+            for (textEl in diff.upsertedTexts) {
+                collabEngine.broadcastTextElement(textEl)
+            }
+            for (imgEl in diff.upsertedImages) {
+                collabEngine.broadcastImageElement(imgEl)
+            }
+        }
+    }
     LaunchedEffect(realProfileName, realProfilePronouns, persistentCollabDeviceId, resolvedUserHandle) {
         collabEngine.syncUserProfile(
             realName = realProfileName,
@@ -295,14 +380,23 @@ fun CanvasScreen(
         }
         collabEngine.syncHostFriends(friendIdentities)
     }
-    DisposableEffect(collabEngine) {
+    DisposableEffect(collabEngine, collabVoiceEngine) {
         onDispose {
+            collabVoiceEngine.close()
             collabEngine.close()
         }
     }
     val collabRoomCode by collabEngine.roomCode.collectAsStateWithLifecycle()
-    val collabPeersMap by collabEngine.activePeers.collectAsStateWithLifecycle()
-    val collabPeers = remember(collabPeersMap) { collabPeersMap.values.toList() }
+    val collabUiPeersFlow = remember(collabEngine) {
+        collabEngine.activePeers
+            .map { peerMap ->
+                peerMap.values.map { peer ->
+                    peer.copy(lastCursorX = 0f, lastCursorY = 0f, lastActiveMs = 0L)
+                }
+            }
+            .distinctUntilChanged()
+    }
+    val collabPeers by collabUiPeersFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val collabChatMessages by collabEngine.chatMessages.collectAsStateWithLifecycle()
     val collabUnreadChatCount by collabEngine.unreadChatCount.collectAsStateWithLifecycle()
     val collabLocalRole by collabEngine.localRole.collectAsStateWithLifecycle()
@@ -310,6 +404,11 @@ fun CanvasScreen(
     val collabIsChatBlocked by collabEngine.isLocalUserChatBlocked.collectAsStateWithLifecycle()
     val collabCanDraw by collabEngine.canLocalUserDraw.collectAsStateWithLifecycle()
     val collabCanCreateSheets by collabEngine.canLocalUserCreateSheets.collectAsStateWithLifecycle()
+    val collabIsLocalMicMuted by collabEngine.isLocalMicMuted.collectAsStateWithLifecycle()
+    val collabIsRoomMutedByMod = remember(collabPeers, collabEngine.localPeerId) {
+        collabPeers.firstOrNull { it.peerId == collabEngine.localPeerId }?.isRoomMuted == true
+    }
+    val canEditCanvas = collabRoomCode == null || collabCanDraw
     val collabPeerVolumes by collabEngine.peerVolumes.collectAsStateWithLifecycle()
     val collabLocallyMutedPeers by collabEngine.locallyMutedPeerIds.collectAsStateWithLifecycle()
     val collabAudioBitrate by collabEngine.audioBitrateKbps.collectAsStateWithLifecycle()
@@ -325,6 +424,11 @@ fun CanvasScreen(
     val collabActivePresetId by collabEngine.activePresetId.collectAsStateWithLifecycle()
     val collabBufferedStrokesCount by collabEngine.bufferedStrokesCount.collectAsStateWithLifecycle()
     val collabErrorMessage by collabEngine.lastErrorMessage.collectAsStateWithLifecycle()
+    LaunchedEffect(canEditCanvas) {
+        if (!canEditCanvas && uiState.toolState.selection.isNotEmpty) {
+            viewModel.updateSelection(com.arinara.fotara.canvas.model.CanvasSelection.Empty)
+        }
+    }
     LaunchedEffect(collabSavedPresets, collabPrefsLoaded) {
         if (!collabPrefsLoaded) return@LaunchedEffect
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -333,28 +437,44 @@ fun CanvasScreen(
             prefs.edit().putString("collab_privacy_presets", encoded).apply()
         }
     }
-    LaunchedEffect(collabBufferedStrokesCount) {
-        if (collabBufferedStrokesCount > 0) {
-            val remoteStrokes = collabEngine.consumeBufferedStrokes()
-            if (remoteStrokes.isNotEmpty()) {
-                viewModel.applyRemoteCollabStrokes(remoteStrokes)
-            }
-        }
-    }
     var showCollabJoinDialog by remember { mutableStateOf(false) }
     var isJoiningCollabRoom by remember { mutableStateOf(false) }
     var showCollabChatSheet by remember { mutableStateOf(false) }
     var showCollabSettingsSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(collabBufferedStrokesCount, isJoiningCollabRoom) {
+        if (collabBufferedStrokesCount > 0 && !isJoiningCollabRoom) {
+            val remoteStrokes = collabEngine.consumeBufferedStrokes()
+            val remoteTexts = collabEngine.consumeBufferedTextElements()
+            val remoteImages = collabEngine.consumeBufferedImageElements()
+            val remoteRemovals = collabEngine.consumeBufferedRemovedElements()
+            viewModel.applyRemoteCollabSync(
+                remoteStrokes = remoteStrokes,
+                remoteTexts = remoteTexts,
+                remoteImages = remoteImages,
+                remoteRemovals = remoteRemovals
+            )
+        }
+    }
     LaunchedEffect(showCollabChatSheet) {
         collabEngine.setChatSheetOpen(showCollabChatSheet)
     }
+    var drawingViewRef by remember { mutableStateOf<CanvasDrawingView?>(null) }
     LaunchedEffect(collabRoomCode) {
         if (collabRoomCode == null) {
             showCollabChatSheet = false
             showCollabSettingsSheet = false
+            drawingViewRef?.updateRemotePeerCursors(emptyList(), collabEngine.localPeerId)
         }
     }
-    var drawingViewRef by remember { mutableStateOf<CanvasDrawingView?>(null) }
+    LaunchedEffect(collabEngine, drawingViewRef) {
+        val view = drawingViewRef
+        if (view != null) {
+            view.updateRemotePeerCursors(collabEngine.activePeers.value.values, collabEngine.localPeerId)
+        }
+        collabEngine.onPeerCursorsUpdated = { peers ->
+            drawingViewRef?.updateRemotePeerCursors(peers, collabEngine.localPeerId)
+        }
+    }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var showShareSheet by remember { mutableStateOf(false) }
     var renameInput by remember { mutableStateOf("") }
@@ -400,69 +520,53 @@ fun CanvasScreen(
                     historyManager = viewModel.historyManager,
                     spatialIndex = viewModel.spatialIndex,
                     onDocumentChanged = { updatedDoc, dirtyRect ->
-                        if (collabRoomCode == null || collabCanDraw) {
-                            val prevElements = uiState.document.elements
-                            viewModel.onDocumentModified(updatedDoc, dirtyRect)
-                            if (collabRoomCode != null && updatedDoc.elements.size > prevElements.size) {
-                                val prevIds = prevElements.mapTo(HashSet(prevElements.size)) { it.id }
-                                for (el in updatedDoc.elements) {
-                                    if (el is com.arinara.fotara.canvas.model.StrokeElement && el.id !in prevIds && el.points.isNotEmpty()) {
-                                        val hexColor = String.format("#%06X", (el.color and 0xFFFFFFL))
-                                        val flatPoints = ArrayList<Float>(el.points.size * 2)
-                                        for (pt in el.points) {
-                                            flatPoints.add(pt.x)
-                                            flatPoints.add(pt.y)
-                                        }
-                                        collabEngine.broadcastStroke(
-                                            points = flatPoints,
-                                            colorHex = hexColor,
-                                            strokeWidth = el.width,
-                                            strokeId = el.id
-                                        )
-                                        val lastPt = el.points.last()
-                                        collabEngine.updateCursor(lastPt.x, lastPt.y)
-                                    }
-                                }
-                            }
-                        }
+                        viewModel.onDocumentModified(updatedDoc, dirtyRect)
                     }
                 ).apply {
+                    canUserEditCanvas = canEditCanvas
                     onViewportChanged = { v ->
                         viewModel.setZoomPercentage(v.scale)
                     }
                     onSelectionChanged = { sel ->
                         viewModel.updateSelection(sel)
                     }
+                    onCursorMoved = { wx, wy ->
+                        if (collabEngine.isSessionActive) {
+                            collabEngine.updateCursor(wx, wy)
+                        }
+                    }
+                    onLiveStrokeProgress = { strokeId, pts, colorHex, width, toolType, blendMode, layerId ->
+                        if (collabEngine.isSessionActive && collabEngine.canLocalUserDraw.value) {
+                            collabEngine.broadcastStroke(
+                                points = pts,
+                                colorHex = colorHex,
+                                strokeWidth = width,
+                                strokeId = strokeId,
+                                toolType = toolType,
+                                blendMode = blendMode,
+                                layerId = layerId,
+                                zIndex = 0
+                            )
+                        }
+                    }
                     drawingViewRef = this
                 }
             },
             update = { view ->
+                view.canUserEditCanvas = canEditCanvas
                 if (view.documentSnapshot != uiState.document) {
                     view.documentSnapshot = uiState.document
                 }
                 if (view.activeLayerId != uiState.activeLayerId) {
                     view.activeLayerId = uiState.activeLayerId
                 }
+                view.updateRemotePeerCursors(
+                    peers = collabEngine.activePeers.value.values,
+                    localPeerId = collabEngine.localPeerId
+                )
                 drawingViewRef = view
             }
         )
-
-        if (collabRoomCode != null && collabPeers.size > 1) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawWithContent {
-                        drawContent()
-                        com.arinara.fotara.feature.collab.render.PeerCursorRenderer.renderPeerCursors(
-                            drawScope = this,
-                            peers = collabPeers,
-                            localPeerId = collabEngine.localPeerId,
-                            viewportWidth = size.width,
-                            viewportHeight = size.height
-                        )
-                    }
-            )
-        }
 
         // ==========================================
         // Z1 & Z2: Top Unified Responsive Header Row
@@ -472,6 +576,7 @@ fun CanvasScreen(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .statusBarsPadding()
+                .onSizeChanged { topCapsulesHeightPx = it.height }
                 .zIndex(10f)
         ) {
             if (collabRoomCode != null) {
@@ -485,7 +590,10 @@ fun CanvasScreen(
                     },
                     localRole = collabLocalRole,
                     canLocalUserDraw = collabCanDraw,
+                    isLocalMicMuted = collabIsLocalMicMuted,
+                    isRoomMutedByMod = collabIsRoomMutedByMod,
                     unreadChatCount = collabUnreadChatCount,
+                    onToggleMicClick = ensureRecordAudioAndToggleMic,
                     onChatClick = { showCollabChatSheet = true },
                     onSettingsClick = { showCollabSettingsSheet = true },
                     modifier = Modifier
@@ -497,8 +605,7 @@ fun CanvasScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
-                    .padding(horizontal = 16.dp)
-                    .onSizeChanged { topCapsulesHeightPx = it.height },
+                    .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -641,13 +748,13 @@ fun CanvasScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .jigglePressClickable(enabled = uiState.canUndo) { viewModel.undo() },
+                            .jigglePressClickable(enabled = uiState.canUndo && canEditCanvas) { viewModel.undo() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Undo,
                             contentDescription = "Undo",
-                            tint = if (uiState.canUndo) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
+                            tint = if (uiState.canUndo && canEditCanvas) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -656,13 +763,13 @@ fun CanvasScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .jigglePressClickable(enabled = uiState.canRedo) { viewModel.redo() },
+                            .jigglePressClickable(enabled = uiState.canRedo && canEditCanvas) { viewModel.redo() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Redo,
                             contentDescription = "Redo",
-                            tint = if (uiState.canRedo) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
+                            tint = if (uiState.canRedo && canEditCanvas) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -671,13 +778,13 @@ fun CanvasScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .jigglePressClickable { viewModel.setLayersPanelVisible(true) },
+                            .jigglePressClickable(enabled = canEditCanvas) { viewModel.setLayersPanelVisible(true) },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Layers,
                             contentDescription = "Layers",
-                            tint = if (uiState.showLayersPanel) ElectricSlateTokens.PrimaryAccent else ElectricSlateTokens.TextPrimary,
+                            tint = if (uiState.showLayersPanel) ElectricSlateTokens.PrimaryAccent else if (canEditCanvas) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -686,13 +793,13 @@ fun CanvasScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .jigglePressClickable { viewModel.setImageSourceDialogVisible(true) },
+                            .jigglePressClickable(enabled = canEditCanvas) { viewModel.setImageSourceDialogVisible(true) },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.AddPhotoAlternate,
                             contentDescription = "Add Image",
-                            tint = ElectricSlateTokens.TextPrimary,
+                            tint = if (canEditCanvas) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted.copy(alpha = 0.35f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -1511,12 +1618,14 @@ fun CanvasScreen(
                     AppFloatingBarCustomItem(
                         isSelected = isText,
                         onClick = {
+                            if (!canEditCanvas) return@AppFloatingBarCustomItem
                             if (isText) viewModel.toggleToolOptions() else {
                                 viewModel.setTool(CanvasToolType.TEXT)
                                 viewModel.showTextOptions()
                             }
                         },
                         onLongClick = {
+                            if (!canEditCanvas) return@AppFloatingBarCustomItem
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.showTextOptions()
                         }
@@ -1579,10 +1688,12 @@ fun CanvasScreen(
         // Z8: Contextual Object Bar (Selection Actions)
         // ==========================================
         val isSelectActive = uiState.toolState.activeTool == CanvasToolType.SELECT
-        val hasSelection = uiState.toolState.selection.isNotEmpty
+        val hasSelection = uiState.toolState.selection.isNotEmpty && canEditCanvas
         if (isSelectActive && hasSelection) {
+            val measuredHeaderDp = with(density) { topCapsulesHeightPx.toDp() }.value
+            val minExpectedHeaderDp = if (collabRoomCode != null) 124f else 56f
             val topOffsetDp = CanvasDockLayoutHelper.computeZ8TopOffset(
-                with(density) { topCapsulesHeightPx.toDp() }.value
+                maxOf(measuredHeaderDp, minExpectedHeaderDp)
             ).dp
             Box(
                 modifier = Modifier
@@ -2157,8 +2268,10 @@ fun CanvasScreen(
                         isJoiningCollabRoom = true
                         collabEngine.clearErrorMessage()
                         coroutineScope.launch {
-                            val joined = try {
-                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            var joined = false
+                            try {
+                                viewModel.flushSave()
+                                joined = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                                     collabEngine.joinRoom(
                                         code = code,
                                         userTag = realProfileName,
@@ -2168,11 +2281,22 @@ fun CanvasScreen(
                                         userHandle = resolvedUserHandle
                                     )
                                 }
+                                if (joined) {
+                                    viewModel.spawnNewCanvasForCollabJoin(code)
+                                    drawingViewRef?.resetZoom()
+                                }
                             } finally {
                                 isJoiningCollabRoom = false
                             }
                             if (joined) {
                                 showCollabJoinDialog = false
+                                if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                        context,
+                                        android.Manifest.permission.RECORD_AUDIO
+                                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                }
                             }
                         }
                     }
@@ -2186,6 +2310,13 @@ fun CanvasScreen(
                     )
                     if (created.isNotBlank()) {
                         showCollabJoinDialog = false
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.RECORD_AUDIO
+                            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) {
+                            recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                        }
                     }
                 },
                 onCreateCustomRoom = { customCode ->
@@ -2198,6 +2329,13 @@ fun CanvasScreen(
                         )
                     ) {
                         showCollabJoinDialog = false
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.RECORD_AUDIO
+                            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) {
+                            recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                        }
                     }
                 },
                 localUserName = realProfileName,
@@ -2265,6 +2403,9 @@ fun CanvasScreen(
                 accessMode = collabAccessMode,
                 isGlobalDrawingDisabled = collabIsGlobalDrawingDisabled,
                 isGlobalSheetCreationDisabled = collabIsGlobalSheetDisabled,
+                isLocalMicMuted = collabIsLocalMicMuted,
+                isRoomMutedByMod = collabIsRoomMutedByMod,
+                onToggleLocalMicMute = ensureRecordAudioAndToggleMic,
                 maxParticipants = collabMaxParticipants,
                 joinPolicy = collabJoinPolicy,
                 allowedUserHandles = collabAllowedHandles,

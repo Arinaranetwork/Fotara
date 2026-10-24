@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Lock
@@ -108,6 +110,9 @@ fun CollabRoomSettingsSheet(
     accessMode: CollabAccessMode,
     isGlobalDrawingDisabled: Boolean,
     isGlobalSheetCreationDisabled: Boolean,
+    isLocalMicMuted: Boolean = false,
+    isRoomMutedByMod: Boolean = false,
+    onToggleLocalMicMute: () -> Unit = {},
     maxParticipants: Int = CollabRoomCapacity.DEFAULT_MAX_PARTICIPANTS,
     joinPolicy: CollabJoinPolicy = CollabJoinPolicy.OPEN,
     allowedUserHandles: Set<String> = emptySet(),
@@ -1012,13 +1017,67 @@ fun CollabRoomSettingsSheet(
                             .padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "Voice & Audio Bitrate",
-                            fontFamily = ElmsSans,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = ElectricSlateTokens.TextPrimary
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Voice & Audio Bitrate",
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = ElectricSlateTokens.TextPrimary
+                                )
+                                Text(
+                                    text = when {
+                                        isRoomMutedByMod -> "Microphone muted by Host/Admin"
+                                        isLocalMicMuted -> "Your microphone is muted"
+                                        else -> "Your microphone is live in this room"
+                                    },
+                                    fontFamily = ElmsSans,
+                                    fontSize = 11.sp,
+                                    color = if (isRoomMutedByMod) ElectricSlateTokens.Destructive else ElectricSlateTokens.TextMuted
+                                )
+                            }
+
+                            val effectiveMuted = isLocalMicMuted || isRoomMutedByMod
+                            Row(
+                                modifier = Modifier
+                                    .height(34.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (!effectiveMuted) ElectricSlateTokens.PrimaryAccent
+                                        else ElectricSlateTokens.SurfaceElevated
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (!effectiveMuted) ElectricSlateTokens.PrimaryAccent
+                                        else ElectricSlateTokens.BorderSubtle,
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .jigglePressClickable(enabled = !isRoomMutedByMod, onClick = onToggleLocalMicMute)
+                                    .padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (effectiveMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                    contentDescription = if (effectiveMuted) "Unmute Mic" else "Mute Mic",
+                                    tint = if (!effectiveMuted) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = if (effectiveMuted) "Muted" else "Mic Live",
+                                    fontFamily = ElmsSans,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = if (!effectiveMuted) ElectricSlateTokens.TextPrimary else ElectricSlateTokens.TextMuted
+                                )
+                            }
+                        }
+
                         Text(
                             text = "My Outgoing Bitrate (Room cap: $roomMaxBitrateKbps kbps)",
                             fontFamily = ElmsSans,
@@ -1139,6 +1198,18 @@ fun CollabRoomSettingsSheet(
                     val currentVol = peerVolumes[peer.peerId] ?: 1.0f
                     val isLocallyMuted = peer.peerId in locallyMutedPeerIds || currentVol == 0.0f
                     val displayPercent = if (isLocallyMuted) 0 else (currentVol * 100f).roundToInt()
+                    val resolvedPeerLabel = remember(peer.userTag, peer.userHandle) {
+                        val cleanHandle = peer.userHandle.trim().removePrefix("@")
+                        val cleanTag = peer.userTag.trim()
+                        when {
+                            cleanTag.isNotBlank() &&
+                                !cleanTag.equals("Fotara User", ignoreCase = true) &&
+                                !cleanTag.equals("My Profile", ignoreCase = true) -> cleanTag
+                            cleanHandle.isNotBlank() -> cleanHandle
+                            cleanTag.isNotBlank() -> cleanTag
+                            else -> "Member"
+                        }
+                    }
 
                     Column(
                         modifier = Modifier
@@ -1167,8 +1238,8 @@ fun CollabRoomSettingsSheet(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                val initials = remember(peer.userTag) {
-                                    val parts = peer.userTag.trim().split(WHITESPACE_REGEX).filter { it.isNotEmpty() }
+                                val initials = remember(resolvedPeerLabel) {
+                                    val parts = resolvedPeerLabel.trim().split(WHITESPACE_REGEX).filter { it.isNotEmpty() }
                                     when {
                                         parts.size >= 2 -> "${parts[0].first().uppercaseChar()}${parts[1].first().uppercaseChar()}"
                                         parts.size == 1 -> parts[0].take(2).uppercase()
@@ -1198,7 +1269,7 @@ fun CollabRoomSettingsSheet(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Text(
-                                            text = if (isSelf) "${peer.userTag} (You)" else peer.userTag,
+                                            text = if (isSelf) "$resolvedPeerLabel (You)" else resolvedPeerLabel,
                                             fontFamily = ElmsSans,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 14.sp,
@@ -1338,7 +1409,7 @@ fun CollabRoomSettingsSheet(
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Text(
-                                    text = "Manage ${peer.userTag}",
+                                    text = "Manage $resolvedPeerLabel",
                                     fontFamily = ElmsSans,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
@@ -1354,7 +1425,7 @@ fun CollabRoomSettingsSheet(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "Disable Drawing for ${peer.userTag}",
+                                            text = "Disable Drawing for $resolvedPeerLabel",
                                             fontFamily = ElmsSans,
                                             fontSize = 12.sp,
                                             color = ElectricSlateTokens.TextPrimary

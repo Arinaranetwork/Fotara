@@ -8,6 +8,10 @@ package com.arinara.fotara.canvas.render
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.view.MotionEvent
 import android.view.View
 import android.widget.OverScroller
@@ -16,7 +20,6 @@ import com.arinara.fotara.canvas.engine.CanvasRect
 import com.arinara.fotara.canvas.engine.QuadTreeSpatialIndex
 import com.arinara.fotara.canvas.engine.ViewportState
 import com.arinara.fotara.canvas.engine.ViewportTransform
-import com.arinara.fotara.canvas.gesture.ActiveMode
 import com.arinara.fotara.canvas.gesture.PointerAction
 import com.arinara.fotara.canvas.gesture.PointerInputEvent
 import com.arinara.fotara.canvas.gesture.PointerPoint
@@ -27,6 +30,8 @@ import com.arinara.fotara.canvas.model.CanvasSelection
 import com.arinara.fotara.canvas.model.StrokeToolType
 import com.arinara.fotara.canvas.tool.CanvasToolController
 import com.arinara.fotara.canvas.tool.CanvasToolType
+import com.arinara.fotara.feature.collab.model.CollabPeer
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Architectural Choice (C9-A):
@@ -51,7 +56,18 @@ class CanvasDrawingView(
     private val spatialIndex: QuadTreeSpatialIndex,
     var onDocumentChanged: ((CanvasDocument, CanvasRect?) -> Unit)? = null,
     var onViewportChanged: ((ViewportState) -> Unit)? = null,
-    var onSelectionChanged: ((CanvasSelection) -> Unit)? = null
+    var onSelectionChanged: ((CanvasSelection) -> Unit)? = null,
+    var onEditBlocked: (() -> Unit)? = null,
+    var onCursorMoved: ((worldX: Float, worldY: Float) -> Unit)? = null,
+    var onLiveStrokeProgress: ((
+        strokeId: String,
+        points: List<Float>,
+        colorHex: String,
+        width: Float,
+        toolType: String,
+        blendMode: String,
+        layerId: String
+    ) -> Unit)? = null
 ) : View(context) {
 
     var viewport: ViewportState = ViewportState()
@@ -76,8 +92,186 @@ class CanvasDrawingView(
 
     var activeLayerId: String = "layer_default"
 
+    private var _canUserEditCanvas: Boolean = true
+    var canUserEditCanvas: Boolean
+        get() = _canUserEditCanvas
+        set(value) {
+            if (_canUserEditCanvas != value) {
+                _canUserEditCanvas = value
+                if (!value) {
+                    cancelShapeHold()
+                    toolController.cancelStroke()
+                    toolController.cancelEraser()
+                    toolController.cancelTransformGesture()
+                    activeLassoPolygon = null
+                    invalidate()
+                }
+            }
+        }
+
     private val scroller = OverScroller(context)
     private var activeLassoPolygon: List<Pair<Float, Float>>? = null
+
+    // Real-time 60fps cursor & live stroke streaming state
+    private var lastCursorPublishMs: Long = 0L
+    private var lastPublishedCursorWorldX: Float = Float.NaN
+    private var lastPublishedCursorWorldY: Float = Float.NaN
+    private var lastLiveStrokePublishMs: Long = 0L
+    private var lastCursorFrameTimeNs: Long = 0L
+
+    private class PeerCursorRenderState(
+        @Volatile var userTag: String,
+        @Volatile var colorInt: Int,
+        @Volatile var targetWorldX: Float,
+        @Volatile var targetWorldY: Float,
+        var currentWorldX: Float,
+        var currentWorldY: Float,
+        @Volatile var lastActiveMs: Long,
+        @Volatile var hasValidPosition: Boolean
+    )
+
+    private val peerCursorStates = ConcurrentHashMap<String, PeerCursorRenderState>()
+    private val cursorPointerPath = Path()
+    private val cursorPillRect = RectF()
+    private val cursorFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val cursorOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+    }
+    private val cursorPillFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0xEB161C26.toInt() // SurfacePanel with high opacity
+    }
+    private val cursorTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFF8FAFC.toInt() // TextPrimary
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+
+    fun updateRemotePeerCursors(peers: Collection<CollabPeer>, localPeerId: String) {
+        val activeRemoteIds = HashSet<String>(peers.size)
+        for (peer in peers) {
+            if (peer.peerId == localPeerId || peer.peerId.isBlank()) continue
+            activeRemoteIds.add(peer.peerId)
+            val resolvedTag = peer.userTag.trim()
+                .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
+                ?: peer.userHandle.trim().removePrefix("@").ifBlank {
+                    peer.userTag.trim().ifBlank { "Member" }
+                }
+            val parsedColor = parsePeerColorInt(peer.colorHex)
+            val hasPos = peer.lastCursorX != 0f || peer.lastCursorY != 0f
+            val existing = peerCursorStates[peer.peerId]
+            if (existing != null) {
+                existing.userTag = resolvedTag
+                existing.colorInt = parsedColor
+                existing.lastActiveMs = peer.lastActiveMs
+                if (hasPos) {
+                    if (!existing.hasValidPosition) {
+                        existing.currentWorldX = peer.lastCursorX
+                        existing.currentWorldY = peer.lastCursorY
+                        existing.hasValidPosition = true
+                    }
+                    existing.targetWorldX = peer.lastCursorX
+                    existing.targetWorldY = peer.lastCursorY
+                }
+            } else {
+                peerCursorStates[peer.peerId] = PeerCursorRenderState(
+                    userTag = resolvedTag,
+                    colorInt = parsedColor,
+                    targetWorldX = peer.lastCursorX,
+                    targetWorldY = peer.lastCursorY,
+                    currentWorldX = peer.lastCursorX,
+                    currentWorldY = peer.lastCursorY,
+                    lastActiveMs = peer.lastActiveMs,
+                    hasValidPosition = hasPos
+                )
+            }
+        }
+        val iter = peerCursorStates.keys.iterator()
+        while (iter.hasNext()) {
+            val id = iter.next()
+            if (id !in activeRemoteIds) {
+                iter.remove()
+            }
+        }
+        postInvalidateOnAnimation()
+    }
+
+    private fun parsePeerColorInt(hex: String): Int {
+        val cleaned = hex.trim().removePrefix("#")
+        return try {
+            when (cleaned.length) {
+                6 -> (cleaned.toLong(16) or 0xFF000000L).toInt()
+                8 -> cleaned.toLong(16).toInt()
+                else -> 0xFF7A5AF8.toInt()
+            }
+        } catch (_: Exception) {
+            0xFF7A5AF8.toInt()
+        }
+    }
+
+    private fun publishCursorPosition(screenX: Float, screenY: Float, force: Boolean = false) {
+        val callback = onCursorMoved ?: return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastCursorPublishMs < 16L) return
+        val wx = ViewportTransform.screenToWorldX(screenX, viewport)
+        val wy = ViewportTransform.screenToWorldY(screenY, viewport)
+        if (!force &&
+            !lastPublishedCursorWorldX.isNaN() &&
+            kotlin.math.abs(wx - lastPublishedCursorWorldX) < 0.25f &&
+            kotlin.math.abs(wy - lastPublishedCursorWorldY) < 0.25f
+        ) {
+            return
+        }
+        lastCursorPublishMs = now
+        lastPublishedCursorWorldX = wx
+        lastPublishedCursorWorldY = wy
+        callback.invoke(wx, wy)
+    }
+
+    private fun publishLiveStrokeIfDue(force: Boolean = false) {
+        val callback = onLiveStrokeProgress ?: return
+        if (!canUserEditCanvas || !toolController.isDrawing()) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastLiveStrokePublishMs < 32L) return
+        val pts = toolController.currentPoints
+        if (pts.isEmpty()) return
+        lastLiveStrokePublishMs = now
+
+        val flatPoints = ArrayList<Float>(maxOf(pts.size * 2, 4))
+        for (p in pts) {
+            flatPoints.add(p.x)
+            flatPoints.add(p.y)
+        }
+        if (flatPoints.size == 2) {
+            flatPoints.add(pts[0].x)
+            flatPoints.add(pts[0].y)
+        }
+        val isHighlighter = toolController.toolState.activeTool == CanvasToolType.HIGHLIGHTER
+        val rawColor = if (isHighlighter) toolController.toolState.highlighterColor else toolController.toolState.penColor
+        val alphaMultiplier = if (isHighlighter) 1.0f else toolController.toolState.penAlpha.coerceIn(0.05f, 1.0f)
+        val baseAlpha = ((rawColor ushr 24) and 0xFFL).let { if (it == 0L) 255L else it }
+        val finalAlpha = (baseAlpha * alphaMultiplier).toLong().coerceIn(1L, 255L)
+        val packedArgb = (finalAlpha shl 24) or (rawColor and 0x00FFFFFFL)
+        val colorHex = String.format("#%08X", packedArgb)
+        val strokeWidth = if (isHighlighter) toolController.toolState.highlighterSize else toolController.toolState.penSize
+        val toolTypeName = if (isHighlighter) StrokeToolType.HIGHLIGHTER.name else StrokeToolType.PEN.name
+        val blendModeName = if (isHighlighter) {
+            toolController.toolState.highlighterBlendMode.name
+        } else {
+            com.arinara.fotara.canvas.model.StrokeBlendMode.NORMAL.name
+        }
+        val resolvedLayerId = activeLayerId.ifEmpty { documentSnapshot.getPrimaryLayerId() }
+        callback.invoke(
+            toolController.activeStrokeId,
+            flatPoints,
+            colorHex,
+            strokeWidth,
+            toolTypeName,
+            blendModeName,
+            resolvedLayerId
+        )
+    }
 
     init {
         isFocusable = true
@@ -89,14 +283,14 @@ class CanvasDrawingView(
 
         // Route selection handle hit-testing to tool controller (strictly in SELECT tool)
         pointerStateMachine.onHitTestSelection = { sx, sy ->
-            if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) {
+            if (canUserEditCanvas && toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) {
                 toolController.hitTestHandles(sx, sy, viewport, resources.displayMetrics.density)
             } else null
         }
 
         // Route direct text layer hit-testing to tool controller (strictly in SELECT tool)
         pointerStateMachine.onHitTestTextLayer = { sx, sy ->
-            if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) {
+            if (canUserEditCanvas && toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) {
                 val (wx, wy) = ViewportTransform.screenToWorld(sx, sy, viewport)
                 val hitText = documentSnapshot.elements
                     .filterIsInstance<com.arinara.fotara.canvas.model.TextLayerElement>()
@@ -124,7 +318,7 @@ class CanvasDrawingView(
 
         // Route direct image element hit-testing to tool controller (strictly in SELECT tool)
         pointerStateMachine.onHitTestImageElement = { sx, sy ->
-            if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) {
+            if (canUserEditCanvas && toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) {
                 val (wx, wy) = ViewportTransform.screenToWorld(sx, sy, viewport)
                 val hitImg = documentSnapshot.elements
                     .filterIsInstance<com.arinara.fotara.canvas.model.ImageElement>()
@@ -155,7 +349,7 @@ class CanvasDrawingView(
     private var shapeHoldAnchorY = 0f
     private var isShapeSnapped = false
     private val shapeHoldRunnable = Runnable {
-        if (toolController.toolState.activeTool == CanvasToolType.PEN) {
+        if (canUserEditCanvas && toolController.toolState.activeTool == CanvasToolType.PEN) {
             val snapped = toolController.autoCorrectActiveStroke()
             if (snapped) {
                 isShapeSnapped = true
@@ -167,7 +361,7 @@ class CanvasDrawingView(
 
     private fun scheduleShapeHold(x: Float, y: Float) {
         shapeHoldHandler.removeCallbacks(shapeHoldRunnable)
-        if (toolController.toolState.activeTool == CanvasToolType.PEN && !isShapeSnapped) {
+        if (canUserEditCanvas && toolController.toolState.activeTool == CanvasToolType.PEN && !isShapeSnapped) {
             shapeHoldAnchorX = x
             shapeHoldAnchorY = y
             shapeHoldHandler.postDelayed(shapeHoldRunnable, com.arinara.fotara.canvas.engine.ShapeAutoCorrectEngine.HOLD_THRESHOLD_MS)
@@ -203,18 +397,24 @@ class CanvasDrawingView(
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 scroller.forceFinished(true)
                 isShapeSnapped = false
-                scheduleShapeHold(event.getX(pointerIndex), event.getY(pointerIndex))
+                val sx = event.getX(pointerIndex)
+                val sy = event.getY(pointerIndex)
+                publishCursorPosition(sx, sy, force = true)
+                scheduleShapeHold(sx, sy)
                 PointerInputEvent.Down(
                     pointerId = pointerId,
-                    x = event.getX(pointerIndex),
-                    y = event.getY(pointerIndex),
+                    x = sx,
+                    y = sy,
                     pressure = event.getPressure(pointerIndex),
                     toolType = toolType,
                     touchMajor = event.touchMajor
                 )
             }
             MotionEvent.ACTION_MOVE -> {
-                checkShapeHoldMovement(event.getX(pointerIndex), event.getY(pointerIndex))
+                val sx = event.getX(pointerIndex)
+                val sy = event.getY(pointerIndex)
+                publishCursorPosition(sx, sy, force = false)
+                checkShapeHoldMovement(sx, sy)
                 val historical = mutableListOf<PointerPoint>()
                 val historySize = event.historySize
                 for (h in 0 until historySize) {
@@ -229,8 +429,8 @@ class CanvasDrawingView(
 
                 PointerInputEvent.Move(
                     pointerId = pointerId,
-                    x = event.getX(pointerIndex),
-                    y = event.getY(pointerIndex),
+                    x = sx,
+                    y = sy,
                     pressure = event.getPressure(pointerIndex),
                     toolType = toolType,
                     touchMajor = event.touchMajor,
@@ -239,10 +439,13 @@ class CanvasDrawingView(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 cancelShapeHold()
+                val sx = event.getX(pointerIndex)
+                val sy = event.getY(pointerIndex)
+                publishCursorPosition(sx, sy, force = true)
                 PointerInputEvent.Up(
                     pointerId = pointerId,
-                    x = event.getX(pointerIndex),
-                    y = event.getY(pointerIndex)
+                    x = sx,
+                    y = sy
                 )
             }
             MotionEvent.ACTION_CANCEL -> {
@@ -256,6 +459,20 @@ class CanvasDrawingView(
         handlePointerActions(actions)
 
         return true
+    }
+
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER,
+            MotionEvent.ACTION_HOVER_MOVE -> {
+                publishCursorPosition(
+                    screenX = event.x,
+                    screenY = event.y,
+                    force = event.actionMasked == MotionEvent.ACTION_HOVER_ENTER
+                )
+            }
+        }
+        return super.onGenericMotionEvent(event)
     }
 
     private var lastViewportPublishTimeMs: Long = 0L
@@ -295,15 +512,30 @@ class CanvasDrawingView(
         for (action in actions) {
             when (action) {
                 is PointerAction.StartStroke -> {
+                    if (!canUserEditCanvas) {
+                        cancelShapeHold()
+                        toolController.cancelStroke()
+                        onEditBlocked?.invoke()
+                        continue
+                    }
                     val (wx, wy) = ViewportTransform.screenToWorld(action.screenX, action.screenY, viewport)
                     toolController.startStroke(wx, wy, action.pressure)
+                    publishLiveStrokeIfDue(force = true)
                     needsInvalidate = true
                 }
                 is PointerAction.AppendPoints -> {
+                    if (!canUserEditCanvas) continue
                     toolController.appendPoints(action.points, viewport)
+                    publishLiveStrokeIfDue(force = false)
                     needsInvalidate = true
                 }
                 is PointerAction.FinishStroke -> {
+                    if (!canUserEditCanvas) {
+                        isShapeSnapped = false
+                        toolController.cancelStroke()
+                        needsInvalidate = true
+                        continue
+                    }
                     toolController.activeLayerId = activeLayerId.ifEmpty { documentSnapshot.getPrimaryLayerId() }
                     toolController.isShapeSnapped = isShapeSnapped
                     val (updatedDoc, strokeBounds) = toolController.finishStroke(documentSnapshot, historyManager, viewport.scale)
@@ -355,9 +587,15 @@ class CanvasDrawingView(
                     postInvalidateOnAnimation()
                 }
                 is PointerAction.StartEraser -> {
+                    if (!canUserEditCanvas) {
+                        toolController.cancelEraser()
+                        onEditBlocked?.invoke()
+                        continue
+                    }
                     toolController.startEraser(action.screenX, action.screenY, viewport, documentSnapshot)
                 }
                 is PointerAction.EraseSweep -> {
+                    if (!canUserEditCanvas) continue
                     val (liveDoc, dirtyBounds) = toolController.sweepEraser(
                         points = action.points,
                         viewport = viewport,
@@ -369,6 +607,11 @@ class CanvasDrawingView(
                     }
                 }
                 is PointerAction.FinishEraser -> {
+                    if (!canUserEditCanvas) {
+                        toolController.cancelEraser()
+                        needsInvalidate = true
+                        continue
+                    }
                     val (committedDoc, dirtyBounds) = toolController.finishEraser(
                         document = documentSnapshot,
                         historyManager = historyManager
@@ -389,16 +632,26 @@ class CanvasDrawingView(
                     // Handled through StartEraser and EraseSweep
                 }
                 is PointerAction.TapSelect -> {
+                    if (!canUserEditCanvas) {
+                        onEditBlocked?.invoke()
+                        continue
+                    }
                     val newSelection = toolController.selectTap(action.screenX, action.screenY, viewport, documentSnapshot)
                     activeLassoPolygon = null
                     onSelectionChanged?.invoke(newSelection)
                     needsInvalidate = true
                 }
                 is PointerAction.LassoProgress -> {
+                    if (!canUserEditCanvas) continue
                     activeLassoPolygon = action.polygon
                     needsInvalidate = true
                 }
                 is PointerAction.LassoComplete -> {
+                    if (!canUserEditCanvas) {
+                        activeLassoPolygon = null
+                        onEditBlocked?.invoke()
+                        continue
+                    }
                     val newSelection = toolController.selectLasso(action.polygon, viewport, documentSnapshot)
                     activeLassoPolygon = null
                     onSelectionChanged?.invoke(newSelection)
@@ -406,9 +659,15 @@ class CanvasDrawingView(
                 }
                 is PointerAction.StartTransform -> {
                     cancelShapeHold()
+                    if (!canUserEditCanvas) {
+                        toolController.cancelTransformGesture()
+                        onEditBlocked?.invoke()
+                        continue
+                    }
                     toolController.startTransformGesture(action.screenX, action.screenY, viewport, documentSnapshot)
                 }
                 is PointerAction.TransformDelta -> {
+                    if (!canUserEditCanvas) continue
                     toolController.updateTransformPreview(
                         handleId = action.handleId,
                         currentScreenX = action.currentScreenX,
@@ -420,6 +679,11 @@ class CanvasDrawingView(
                     needsInvalidate = true
                 }
                 is PointerAction.FinishTransform -> {
+                    if (!canUserEditCanvas) {
+                        toolController.cancelTransformGesture()
+                        needsInvalidate = true
+                        continue
+                    }
                     val (updatedDoc, dirtyBounds) = toolController.commitTransform(
                         handleId = action.handleId,
                         totalDeltaX = action.totalDeltaX,
@@ -467,7 +731,9 @@ class CanvasDrawingView(
         super.onDraw(canvas)
 
         val isEraser = toolController.toolState.activeTool == CanvasToolType.ERASER
-        val inProgressPoints = if (isEraser) {
+        val inProgressPoints = if (!canUserEditCanvas) {
+            null
+        } else if (isEraser) {
             if (toolController.activeEraserStrokePoints.isNotEmpty()) toolController.activeEraserStrokePoints else null
         } else if (toolController.isDrawing()) {
             toolController.currentPoints
@@ -507,13 +773,103 @@ class CanvasDrawingView(
             inProgressWidth = inProgressWidth,
             inProgressBlendMode = inProgressBlendMode,
             inProgressLayerId = activeLayerId.ifEmpty { documentSnapshot.getPrimaryLayerId() },
-            selection = if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) toolController.selectionToDraw else com.arinara.fotara.canvas.model.CanvasSelection.Empty,
-            previewElements = if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) toolController.previewElements else null,
-            activeLassoPolygon = if (toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) activeLassoPolygon else emptyList(),
+            selection = if (canUserEditCanvas && toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) toolController.selectionToDraw else com.arinara.fotara.canvas.model.CanvasSelection.Empty,
+            previewElements = if (canUserEditCanvas && toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) toolController.previewElements else null,
+            activeLassoPolygon = if (canUserEditCanvas && toolController.toolState.activeTool == com.arinara.fotara.canvas.tool.CanvasToolType.SELECT) activeLassoPolygon else emptyList(),
             density = resources.displayMetrics.density,
             isGestureActive = isGestureActive,
             onTileInvalidated = { postInvalidate() }
         )
+
+        drawRemotePeerCursors(canvas)
+    }
+
+    private fun drawRemotePeerCursors(canvas: Canvas) {
+        if (peerCursorStates.isEmpty()) {
+            lastCursorFrameTimeNs = 0L
+            return
+        }
+        val nowNs = System.nanoTime()
+        val nowMs = System.currentTimeMillis()
+        val dtSec = if (lastCursorFrameTimeNs == 0L) {
+            0.016f
+        } else {
+            ((nowNs - lastCursorFrameTimeNs) / 1_000_000_000f).coerceIn(0.004f, 0.05f)
+        }
+        lastCursorFrameTimeNs = nowNs
+        val lerpFactor = (1f - kotlin.math.exp(-24f * dtSec)).coerceIn(0.22f, 1f)
+
+        val density = resources.displayMetrics.density
+        val pointerSize = 14f * density
+        val tipRadius = 2.8f * density
+        val pillOffsetX = 12f * density
+        val pillOffsetY = 12f * density
+        val pillHeight = 22f * density
+        val pillCorner = 11f * density
+        val pillPadH = 8f * density
+        cursorTextPaint.textSize = 11f * density
+
+        var stillAnimating = false
+
+        for (state in peerCursorStates.values) {
+            if (!state.hasValidPosition) continue
+            if (nowMs - state.lastActiveMs > 30_000L) continue
+
+            val dx = state.targetWorldX - state.currentWorldX
+            val dy = state.targetWorldY - state.currentWorldY
+            if (kotlin.math.hypot(dx, dy) > 0.15f) {
+                state.currentWorldX += dx * lerpFactor
+                state.currentWorldY += dy * lerpFactor
+                stillAnimating = true
+            } else {
+                state.currentWorldX = state.targetWorldX
+                state.currentWorldY = state.targetWorldY
+            }
+
+            val sx = ViewportTransform.worldToScreenX(state.currentWorldX, viewport)
+            val sy = ViewportTransform.worldToScreenY(state.currentWorldY, viewport)
+            if (sx < -200f || sx > width + 200f || sy < -200f || sy > height + 200f) continue
+
+            // 1. Directional pointer triangle
+            cursorPointerPath.reset()
+            cursorPointerPath.moveTo(sx, sy)
+            cursorPointerPath.lineTo(sx, sy + pointerSize)
+            cursorPointerPath.lineTo(sx + pointerSize * 0.42f, sy + pointerSize * 0.72f)
+            cursorPointerPath.lineTo(sx + pointerSize * 0.85f, sy + pointerSize * 0.72f)
+            cursorPointerPath.close()
+
+            cursorFillPaint.color = state.colorInt
+            canvas.drawPath(cursorPointerPath, cursorFillPaint)
+
+            cursorOutlinePaint.color = 0xFF262F3E.toInt() // BorderSubtle
+            cursorOutlinePaint.strokeWidth = 1f * density
+            canvas.drawPath(cursorPointerPath, cursorOutlinePaint)
+
+            // 2. Tip dot
+            canvas.drawCircle(sx, sy, tipRadius, cursorFillPaint)
+
+            // 3. Username pill badge
+            val label = state.userTag.take(20)
+            val textWidth = cursorTextPaint.measureText(label)
+            val pillWidth = (textWidth + pillPadH * 2f).coerceAtLeast(36f * density)
+            val left = sx + pillOffsetX
+            val top = sy + pillOffsetY
+            cursorPillRect.set(left, top, left + pillWidth, top + pillHeight)
+
+            canvas.drawRoundRect(cursorPillRect, pillCorner, pillCorner, cursorPillFillPaint)
+
+            cursorOutlinePaint.color = state.colorInt
+            cursorOutlinePaint.strokeWidth = 1.5f * density
+            canvas.drawRoundRect(cursorPillRect, pillCorner, pillCorner, cursorOutlinePaint)
+
+            val fontMetrics = cursorTextPaint.fontMetrics
+            val textBaseline = top + (pillHeight - (fontMetrics.bottom - fontMetrics.top)) / 2f - fontMetrics.top
+            canvas.drawText(label, left + pillPadH, textBaseline, cursorTextPaint)
+        }
+
+        if (stillAnimating) {
+            postInvalidateOnAnimation()
+        }
     }
 
     fun fitToContent() {

@@ -14,9 +14,10 @@ import android.media.ExifInterface
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
+import java.util.Base64
 import java.util.UUID
 
 data class CanvasAssetInfo(
@@ -184,7 +185,62 @@ class CanvasAssetManager(private val context: Context? = null) {
      * Resolves the on-disk file for a given asset ID.
      */
     fun getAssetFile(assetId: String): File {
-        return File(assetDir, "${assetId}.jpg")
+        val safeId = assetId.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        return File(assetDir, "${safeId}.jpg")
+    }
+
+    /**
+     * Encodes an existing canvas image asset into a compact Base64 JPEG payload for
+     * real-time collaborative canvas synchronization across peers.
+     */
+    fun encodeAssetToBase64(assetId: String): String {
+        return try {
+            val file = getAssetFile(assetId)
+            if (!file.exists() || file.length() == 0L) return ""
+            val bytes = if (file.length() <= 350_000L) {
+                file.readBytes()
+            } else {
+                val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.absolutePath, boundsOpts)
+                var sample = 1
+                while ((boundsOpts.outWidth / sample) > 960 || (boundsOpts.outHeight / sample) > 960) {
+                    sample *= 2
+                }
+                val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sample }
+                val bmp = BitmapFactory.decodeFile(file.absolutePath, decodeOpts)
+                if (bmp != null) {
+                    val out = ByteArrayOutputStream()
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 72, out)
+                    bmp.recycle()
+                    out.toByteArray()
+                } else {
+                    file.readBytes()
+                }
+            }
+            Base64.getEncoder().encodeToString(bytes)
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
+    /**
+     * Persists a Base64-encoded image asset received from a remote collaborator so that
+     * [com.arinara.fotara.canvas.render.CanvasRenderer] can render the [com.arinara.fotara.canvas.model.ImageElement].
+     */
+    fun saveRemoteAssetFromBase64(assetId: String, base64Data: String): Boolean {
+        if (assetId.isBlank() || base64Data.isBlank()) return false
+        return try {
+            val targetFile = getAssetFile(assetId)
+            if (targetFile.exists() && targetFile.length() > 0L) return true
+            val decoded = Base64.getDecoder().decode(base64Data)
+            if (decoded.isEmpty()) return false
+            FileOutputStream(targetFile).use { out ->
+                out.write(decoded)
+            }
+            true
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     /**
