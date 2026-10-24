@@ -23,6 +23,7 @@ interface FriendsRepository {
     suspend fun removeFriend(id: String)
     suspend fun updatePresence(status: StudyPresenceStatus, subject: String?)
     fun getMyHandle(): String
+    fun getMyHandleFlow(): Flow<String> = MutableStateFlow(getMyHandle())
     fun generateShareCode(): String
     suspend fun toggleFavorite(id: String)
     fun getMyPresenceStatusFlow(): Flow<StudyPresenceStatus>
@@ -40,6 +41,7 @@ interface FriendsRepository {
     suspend fun findUserByHandle(handle: String): FriendProfile?
 
     fun syncMyProfile(displayName: String, pronouns: String = "", avatarUrl: String? = null) {}
+    fun refreshNetworkPeers() {}
 }
 
 class LocalFriendsRepository(
@@ -97,6 +99,8 @@ class LocalFriendsRepository(
     @Volatile
     private var myAvatarUrl: String? = prefs.getString(KEY_MY_AVATAR_URL, null)?.takeIf { it.isNotBlank() }
 
+    private val _myHandleFlow = MutableStateFlow(resolveActiveLocalHandle())
+
     private val lanTransport: LanFriendTransport? = if (enableLanTransport) {
         LanFriendTransport(this)
     } else {
@@ -105,7 +109,9 @@ class LocalFriendsRepository(
     }
 
     override val localHandle: String
-        get() = resolveActiveLocalHandle()
+        get() = resolveActiveLocalHandle().ifBlank {
+            if (enableLanTransport) fallbackDeviceHandle() else ""
+        }
 
     init {
         if (enableLanTransport) {
@@ -123,6 +129,11 @@ class LocalFriendsRepository(
         }
     }
 
+    private fun fallbackDeviceHandle(): String {
+        val shortUuid = usernameManager.getInstallUuid().replace("-", "").take(6).lowercase()
+        return "@scholar_${shortUuid.ifBlank { "peer01" }}"
+    }
+
     private fun resolveActiveLocalHandle(): String {
         val claimed = usernameManager.getClaimedUsername()
         if (claimed.isNotBlank()) return claimed
@@ -138,8 +149,14 @@ class LocalFriendsRepository(
     }
 
     override fun getLocalProfileSnapshot(): FriendProfile? {
-        val handle = resolveActiveLocalHandle()
-        if (handle.removePrefix("@").isBlank()) return null
+        val rawHandle = resolveActiveLocalHandle()
+        val handle = if (rawHandle.removePrefix("@").isNotBlank()) {
+            rawHandle
+        } else if (enableLanTransport) {
+            fallbackDeviceHandle()
+        } else {
+            return null
+        }
         val resolvedName = myDisplayName.trim()
             .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
             ?: usernameManager.getClaimedDisplayName().trim()
@@ -195,7 +212,13 @@ class LocalFriendsRepository(
             editor.putString(KEY_MY_PRESENCE, StudyPresenceStatus.OPEN_TO_COLLAB.name)
         }
         editor.apply()
+        _myHandleFlow.value = resolveActiveLocalHandle()
         announceLocalPresence()
+    }
+
+    override fun refreshNetworkPeers() {
+        announceLocalPresence()
+        lanTransport?.refreshPeersNow()
     }
 
     private fun announceLocalPresence() {
@@ -215,8 +238,8 @@ class LocalFriendsRepository(
                 pronouns = profile.pronouns.ifBlank { existing.pronouns },
                 studyStatus = profile.studyStatus,
                 currentSubject = profile.currentSubject,
-                followersCount = maxOf(profile.followersCount, existing.followersCount),
-                followingCount = maxOf(profile.followingCount, existing.followingCount)
+                followersCount = profile.followersCount,
+                followingCount = profile.followingCount
             )
         }
 
@@ -437,8 +460,13 @@ class LocalFriendsRepository(
 
     override fun getMySubjectFlow(): Flow<String?> = _mySubjectFlow.asStateFlow()
 
+    override fun getMyHandleFlow(): Flow<String> = _myHandleFlow.asStateFlow()
+
     override suspend fun addFriend(handle: String, displayName: String): Result<FriendProfile> {
         val (extractedHandle, codeProfile) = FriendShareCodeCodec.decode(handle)
+        if (FriendShareCodeCodec.isShareCode(handle) && codeProfile == null) {
+            return Result.failure(IllegalArgumentException("Invalid or corrupted friend share code"))
+        }
         val rawHandle = extractedHandle.trim()
         val normalizedHandle = if (rawHandle.startsWith("@")) rawHandle else "@$rawHandle"
         if (normalizedHandle.length <= 1) {
@@ -452,78 +480,85 @@ class LocalFriendsRepository(
             return Result.failure(IllegalArgumentException("Handle may only contain letters, numbers, underscores, and dots"))
         }
 
+        val myNorm = resolveActiveLocalHandle()
+        if (myNorm.isNotBlank() && cleanHandle.equals(myNorm, ignoreCase = true)) {
+            return Result.failure(IllegalArgumentException("You cannot add your own username as a friend"))
+        }
+
         val currentList = _friendsFlow.value
         if (currentList.any { it.handle.equals(cleanHandle, ignoreCase = true) }) {
             return Result.failure(IllegalStateException("Friend with handle $cleanHandle already exists"))
         }
 
-        // 1. Discover live peer on LAN or in FriendPeerRegistry
+        // 1. Discover live peer on LAN or in FriendPeerRegistry, or via Share Code
         val lanDiscovered = FriendPeerRegistry.findByHandle(cleanHandle)
             ?: if (lanTransport != null) {
                 withContext(Dispatchers.IO) {
-                    lanTransport.queryPeerByHandle(cleanHandle, timeoutMs = 450L)
+                    lanTransport.queryPeerByHandle(cleanHandle, timeoutMs = 750L)
                 }
             } else {
                 null
             }
             ?: codeProfile
 
-        var trimmedDisplay = displayName.trim()
-        if (trimmedDisplay.isEmpty()) {
-            if (lanDiscovered != null && lanDiscovered.displayName.isNotBlank()) {
-                trimmedDisplay = lanDiscovered.displayName
-            } else {
-                val remoteRes = usernameManager.fetchProfileByUsername(handleBody)
-                val remoteName = remoteRes.getOrNull()?.displayName?.trim()
-                trimmedDisplay = if (!remoteName.isNullOrBlank()) {
-                    remoteName
-                } else {
-                    handleBody.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                }
+        // 2. Check existing local followers / following or remote Supabase registry
+        val knownLocalPeer = _followersFlow.value.find { it.handle.equals(cleanHandle, ignoreCase = true) }
+            ?: _followingFlow.value.find { it.handle.equals(cleanHandle, ignoreCase = true) }
+
+        val remotePeer = if (lanDiscovered == null && knownLocalPeer == null) {
+            usernameManager.fetchProfileByUsername(handleBody).getOrNull()?.let { remote ->
+                FriendProfile(
+                    id = remote.id,
+                    handle = "@${remote.username.lowercase()}",
+                    displayName = remote.displayName,
+                    studyStatus = StudyPresenceStatus.OFFLINE
+                )
             }
+        } else {
+            null
         }
 
-        val newFriend = if (lanDiscovered != null) {
-            lanDiscovered.copy(
-                id = lanDiscovered.id.ifBlank { UUID.randomUUID().toString() },
-                handle = cleanHandle,
-                displayName = trimmedDisplay.ifBlank { lanDiscovered.displayName },
-                joinedAt = System.currentTimeMillis(),
-                isFavorite = false
+        val verifiedTarget = lanDiscovered ?: knownLocalPeer ?: remotePeer
+            ?: return Result.failure(
+                IllegalArgumentException("User $cleanHandle does not exist or is not online")
             )
-        } else {
-            FriendProfile(
-                id = UUID.randomUUID().toString(),
-                handle = cleanHandle,
-                displayName = trimmedDisplay,
-                avatarUrl = null,
-                studyStatus = StudyPresenceStatus.OFFLINE,
-                currentSubject = null,
-                joinedAt = System.currentTimeMillis(),
-                isFavorite = false
-            )
-        }
+
+        val trimmedDisplay = displayName.trim()
+            .ifBlank { verifiedTarget.displayName.trim() }
+            .ifBlank {
+                handleBody.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            }
+
+        val newFriend = verifiedTarget.copy(
+            id = verifiedTarget.id.ifBlank { UUID.randomUUID().toString() },
+            handle = cleanHandle,
+            displayName = trimmedDisplay,
+            joinedAt = System.currentTimeMillis(),
+            isFavorite = false
+        )
 
         val updated = currentList + newFriend
         persistFriends(updated)
 
-        if (lanDiscovered != null || lanTransport != null) {
-            val currentFollowing = _followingFlow.value
-            if (currentFollowing.none { it.handle.equals(cleanHandle, ignoreCase = true) }) {
-                persistFollowing(currentFollowing + newFriend)
-            }
-            val snap = getLocalProfileSnapshot()
-            if (snap != null) {
-                FriendPeerRegistry.dispatchConnectEvent("ADD_FRIEND", snap, cleanHandle)
-            }
-            lanTransport?.sendConnectEvent("ADD_FRIEND", cleanHandle)
+        val currentFollowing = _followingFlow.value
+        if (currentFollowing.none { it.handle.equals(cleanHandle, ignoreCase = true) }) {
+            persistFollowing(currentFollowing + newFriend)
         }
+        val snap = getLocalProfileSnapshot()
+        if (snap != null) {
+            FriendPeerRegistry.dispatchConnectEvent("ADD_FRIEND", snap, cleanHandle)
+        }
+        lanTransport?.sendConnectEvent("ADD_FRIEND", cleanHandle)
+        announceLocalPresence()
 
         return Result.success(newFriend)
     }
 
     override suspend fun findUserByHandle(handle: String): FriendProfile? {
         val (extractedHandle, codeProfile) = FriendShareCodeCodec.decode(handle)
+        if (FriendShareCodeCodec.isShareCode(handle) && codeProfile == null) {
+            return null
+        }
         val clean = usernameManager.cleanUsername(extractedHandle)
         if (clean.isBlank()) return null
         val normalized = "@$clean"
@@ -532,7 +567,7 @@ class LocalFriendsRepository(
         val livePeer = FriendPeerRegistry.findByHandle(normalized)
             ?: if (lanTransport != null) {
                 withContext(Dispatchers.IO) {
-                    lanTransport.queryPeerByHandle(normalized, timeoutMs = 450L)
+                    lanTransport.queryPeerByHandle(normalized, timeoutMs = 750L)
                 }
             } else {
                 null
@@ -560,15 +595,6 @@ class LocalFriendsRepository(
             )
         }
 
-        // 4. Fallback discovered representation if valid username format
-        if (usernameManager.validateUsernameFormat(clean).first) {
-            return FriendProfile(
-                id = "discovered_${clean}",
-                handle = normalized,
-                displayName = clean.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
-                studyStatus = StudyPresenceStatus.OFFLINE
-            )
-        }
         return null
     }
 
@@ -601,6 +627,7 @@ class LocalFriendsRepository(
             FriendPeerRegistry.dispatchConnectEvent("FOLLOW", snap, normalizedFriendHandle)
         }
         lanTransport?.sendConnectEvent("FOLLOW", normalizedFriendHandle)
+        announceLocalPresence()
     }
 
     override suspend fun unfollowUser(id: String) {
@@ -614,6 +641,7 @@ class LocalFriendsRepository(
                 FriendPeerRegistry.dispatchConnectEvent("UNFOLLOW", snap, removed.handle)
             }
             lanTransport?.sendConnectEvent("UNFOLLOW", removed.handle)
+            announceLocalPresence()
         }
     }
 
@@ -628,6 +656,7 @@ class LocalFriendsRepository(
                 FriendPeerRegistry.dispatchConnectEvent("REMOVE_FOLLOWER", snap, removed.handle)
             }
             lanTransport?.sendConnectEvent("REMOVE_FOLLOWER", removed.handle)
+            announceLocalPresence()
         }
     }
 
@@ -658,6 +687,7 @@ class LocalFriendsRepository(
                 editor.putString(KEY_MY_DISPLAY_NAME, trimmedName)
             }
             editor.apply()
+            _myHandleFlow.value = resolveActiveLocalHandle()
             announceLocalPresence()
         }
         return result
@@ -670,14 +700,17 @@ class LocalFriendsRepository(
     override fun getMyHandle(): String = resolveActiveLocalHandle()
 
     override fun generateShareCode(): String {
-        val snap = getLocalProfileSnapshot()
-        if (snap != null) {
-            return FriendShareCodeCodec.encode(snap)
-        }
-        val myHandle = getMyHandle().removePrefix("@")
-        val timestamp = System.currentTimeMillis()
-        val suffix = Integer.toHexString((myHandle.hashCode() xor timestamp.toInt()) and 0xFFFF).uppercase()
-        return "FOTARA-FRIEND-$myHandle-$suffix"
+        val snap = getLocalProfileSnapshot() ?: FriendProfile(
+            id = usernameManager.getInstallUuid(),
+            handle = resolveActiveLocalHandle().ifBlank { fallbackDeviceHandle() },
+            displayName = myDisplayName.ifBlank { "Scholar" },
+            pronouns = myPronouns,
+            studyStatus = _myPresenceStatusFlow.value,
+            currentSubject = _mySubjectFlow.value,
+            followersCount = _followersFlow.value.size,
+            followingCount = _followingFlow.value.size
+        )
+        return FriendShareCodeCodec.encode(snap)
     }
 
     override suspend fun toggleFavorite(id: String) {

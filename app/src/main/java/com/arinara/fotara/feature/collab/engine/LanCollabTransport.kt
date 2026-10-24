@@ -226,6 +226,7 @@ class LanCollabTransport(
                     try {
                         val client = boundServer.accept()
                         client.tcpNoDelay = true
+                        com.arinara.fotara.feature.friends.data.FriendPeerRegistry.recordKnownPeerAddress(client.inetAddress)
                         connectedJoinerSockets.add(client)
                         handleAcceptedJoinerSocket(client)
                     } catch (_: Exception) {
@@ -591,6 +592,7 @@ class LanCollabTransport(
                 while (isActive && !socket.isClosed) {
                     val packet = DatagramPacket(buffer, buffer.size)
                     socket.receive(packet)
+                    com.arinara.fotara.feature.friends.data.FriendPeerRegistry.recordKnownPeerAddress(packet.address)
                     val json = String(packet.data, packet.offset, packet.length, StandardCharsets.UTF_8)
                     val decoded = CollabProtocolCodec.decode(json) ?: continue
                     if (decoded is CollabMessage.HostAnnounce) {
@@ -619,6 +621,7 @@ class LanCollabTransport(
         try {
             val bytes = payload.toByteArray(StandardCharsets.UTF_8)
             val targets = LinkedHashSet<InetAddress>()
+            targets.addAll(com.arinara.fotara.feature.friends.data.FriendPeerRegistry.getKnownPeerAddresses())
             try {
                 targets.add(InetAddress.getByName("255.255.255.255"))
             } catch (_: Exception) {

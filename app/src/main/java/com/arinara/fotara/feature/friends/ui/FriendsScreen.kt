@@ -128,7 +128,6 @@ fun FriendsScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
     userProfile: UserProfile = UserProfile(),
-    onInviteToStudy: ((FriendProfile) -> Unit)? = null,
     onShareNotes: ((FriendProfile) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -150,6 +149,7 @@ fun FriendsScreen(
 
     val ownProfile = remember(
         uiState.claimedUsername,
+        uiState.myHandle,
         uiState.myPresenceStatus,
         uiState.mySubject,
         uiState.followersCount,
@@ -162,10 +162,10 @@ fun FriendsScreen(
     ) {
         val resolvedOwnDisplayName = userProfile.name.trim()
             .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
-            ?: uiState.claimedUsername.removePrefix("@").ifBlank { "My Profile" }
+            ?: uiState.myHandle.removePrefix("@").ifBlank { "My Profile" }
         FriendProfile(
             id = "self_user",
-            handle = uiState.claimedUsername,
+            handle = uiState.myHandle,
             displayName = resolvedOwnDisplayName,
             avatarUrl = userProfile.avatarPath,
             pronouns = userProfile.pronouns,
@@ -174,6 +174,10 @@ fun FriendsScreen(
             followersCount = uiState.followersCount,
             followingCount = uiState.followingCount
         )
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshNetworkPeers()
     }
 
     LaunchedEffect(userProfile.name, userProfile.pronouns, userProfile.avatarPath, uiState.claimedUsername) {
@@ -185,6 +189,7 @@ fun FriendsScreen(
             pronouns = userProfile.pronouns,
             avatarUrl = userProfile.avatarPath
         )
+        viewModel.refreshNetworkPeers()
     }
 
     LaunchedEffect(uiState.message) {
@@ -483,13 +488,6 @@ fun FriendsScreen(
                                             profileForDialog = friend
                                             isOwnProfileDialog = false
                                         },
-                                        onInvite = {
-                                            if (onInviteToStudy != null) {
-                                                onInviteToStudy(friend)
-                                            } else {
-                                                Toast.makeText(context, "Study invitation sent to ${friend.displayName}", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
                                         onShare = {
                                             if (onShareNotes != null) {
                                                 onShareNotes(friend)
@@ -518,9 +516,6 @@ fun FriendsScreen(
                                         onClick = {
                                             profileForDialog = friend
                                             isOwnProfileDialog = false
-                                        },
-                                        onInvite = {
-                                            Toast.makeText(context, "Peer is offline. Study invitation queued for ${friend.displayName}", Toast.LENGTH_SHORT).show()
                                         },
                                         onShare = {
                                             if (onShareNotes != null) {
@@ -568,7 +563,9 @@ fun FriendsScreen(
                                 )
                             }
                             items(uiState.followers, key = { it.id }) { follower ->
-                                val isFollowing = uiState.following.any { it.id == follower.id }
+                                val isFollowing = uiState.following.any {
+                                    it.id == follower.id || it.handle.equals(follower.handle, ignoreCase = true)
+                                }
                                 FollowerItemCard(
                                     follower = follower,
                                     isFollowing = isFollowing,
@@ -648,10 +645,12 @@ fun FriendsScreen(
             myHandle = uiState.myHandle,
             shareCode = viewModel.getShareCode(),
             onDismiss = { showQrDialog = false },
-            onAddFriendFromCode = { handle, name ->
-                viewModel.addFriend(handle, name) { success, _ ->
+            onAddFriendFromCode = { handle, name, onError ->
+                viewModel.addFriend(handle, name) { success, msg ->
                     if (success) {
                         showQrDialog = false
+                    } else {
+                        onError(msg)
                     }
                 }
             }
@@ -662,10 +661,12 @@ fun FriendsScreen(
     if (showAddFriendDialog) {
         AddFriendDialog(
             onDismiss = { showAddFriendDialog = false },
-            onConfirm = { handle, name ->
-                viewModel.addFriend(handle, name) { success, _ ->
+            onConfirm = { handle, name, onError ->
+                viewModel.addFriend(handle, name) { success, msg ->
                     if (success) {
                         showAddFriendDialog = false
+                    } else {
+                        onError(msg)
                     }
                 }
             }
@@ -674,9 +675,19 @@ fun FriendsScreen(
 
     // Dialog: User Profile Detail Modal
     if (profileForDialog != null) {
-        val targetProfile = profileForDialog!!
+        val rawTarget = profileForDialog!!
         val isSelf = isOwnProfileDialog
-        val isCurrentlyFollowing = uiState.following.any { it.id == targetProfile.id }
+        val targetProfile = if (isSelf) {
+            ownProfile
+        } else {
+            uiState.friends.find { it.id == rawTarget.id || it.handle.equals(rawTarget.handle, ignoreCase = true) }
+                ?: uiState.followers.find { it.id == rawTarget.id || it.handle.equals(rawTarget.handle, ignoreCase = true) }
+                ?: uiState.following.find { it.id == rawTarget.id || it.handle.equals(rawTarget.handle, ignoreCase = true) }
+                ?: rawTarget
+        }
+        val isCurrentlyFollowing = uiState.following.any {
+            it.id == targetProfile.id || it.handle.equals(targetProfile.handle, ignoreCase = true)
+        }
 
         UserProfileDialog(
             profile = targetProfile,
@@ -694,14 +705,6 @@ fun FriendsScreen(
             onShareQrClick = {
                 profileForDialog = null
                 showQrDialog = true
-            },
-            onInviteToStudy = {
-                profileForDialog = null
-                if (onInviteToStudy != null) {
-                    onInviteToStudy(targetProfile)
-                } else {
-                    Toast.makeText(context, "Study invitation sent to ${targetProfile.displayName}", Toast.LENGTH_SHORT).show()
-                }
             },
             onShareNotes = {
                 profileForDialog = null
@@ -1116,7 +1119,6 @@ private fun SectionHeader(
 private fun FriendItemCard(
     friend: FriendProfile,
     onClick: () -> Unit,
-    onInvite: () -> Unit,
     onShare: () -> Unit,
     onToggleFavorite: () -> Unit,
     onDelete: () -> Unit
@@ -1246,24 +1248,6 @@ private fun FriendItemCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                OutlinedButton(
-                    onClick = onInvite,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, Color(0xFF28354D)),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(48.dp)
-                ) {
-                    Text(
-                        text = "Invite",
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 12.sp
-                    )
-                }
-
                 IconButton(
                     onClick = onShare,
                     modifier = Modifier.size(48.dp)
@@ -1906,7 +1890,6 @@ private fun UserProfileDialog(
     bannerCrop: String? = null,
     onDismiss: () -> Unit,
     onShareQrClick: () -> Unit,
-    onInviteToStudy: () -> Unit,
     onShareNotes: () -> Unit,
     onToggleFollow: () -> Unit,
     onRemoveFriend: () -> Unit,
@@ -2224,44 +2207,21 @@ private fun UserProfileDialog(
                         }
                     } else {
                         // Peer profile actions
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        OutlinedButton(
+                            onClick = onShareNotes,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFF28354D)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
                         ) {
-                            Button(
-                                onClick = onInviteToStudy,
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
-                                border = BorderStroke(1.dp, Color(0xFF334155)),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(44.dp)
-                            ) {
-                                Text(
-                                    text = "Invite to Study",
-                                    fontFamily = ElmsSans,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.sp,
-                                    color = Color.White
-                                )
-                            }
-
-                            OutlinedButton(
-                                onClick = onShareNotes,
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, Color(0xFF28354D)),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(44.dp)
-                            ) {
-                                Text(
-                                    text = "Share Notes",
-                                    fontFamily = ElmsSans,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.sp
-                                )
-                            }
+                            Text(
+                                text = "Share Notes",
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -2394,7 +2354,7 @@ private fun StatCounterCard(
 @Composable
 private fun AddFriendDialog(
     onDismiss: () -> Unit,
-    onConfirm: (handle: String, displayName: String) -> Unit
+    onConfirm: (handle: String, displayName: String, onError: (String) -> Unit) -> Unit
 ) {
     var handleInput by remember { mutableStateOf("") }
     var nameInput by remember { mutableStateOf("") }
@@ -2485,7 +2445,9 @@ private fun AddFriendDialog(
                         errorMessage = "Please enter an academic handle"
                         return@Button
                     }
-                    onConfirm(handle, name)
+                    onConfirm(handle, name) { err ->
+                        errorMessage = err
+                    }
                 },
 
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),

@@ -217,5 +217,28 @@ class FriendsViewModelTest {
         assertEquals("", clearedState.searchQuery)
         assertTrue(clearedState.discoveredPeer == null)
     }
+
+    @Test
+    fun testSearchAndAddNonExistentUsernameRejected() = runTest(testDispatcher) {
+        val collectJob = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        // Searching a non-existent username must not produce a fake discoveredPeer
+        viewModel.onSearchQueryChanged("@nonexistent_user_xyz")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.discoveredPeer == null)
+
+        // Attempting to add a non-existent username must fail and surface error message
+        var addSuccess = true
+        var addError = ""
+        viewModel.addFriend("@nonexistent_user_xyz", "") { success, msg ->
+            addSuccess = success
+            addError = msg
+        }
+        advanceUntilIdle()
+        assertFalse(addSuccess)
+        assertTrue(addError.contains("does not exist", ignoreCase = true))
+        assertTrue(viewModel.uiState.value.friends.isEmpty())
+    }
 }
 

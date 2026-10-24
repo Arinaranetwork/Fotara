@@ -83,16 +83,22 @@ class FriendsViewModel(
         ) { friends, followers, following ->
             Triple(friends, followers, following)
         },
-        repository.getMyPresenceStatusFlow(),
-        repository.getMySubjectFlow(),
+        combine(
+            repository.getMyPresenceStatusFlow(),
+            repository.getMySubjectFlow(),
+            repository.getMyHandleFlow()
+        ) { presence, subject, handle ->
+            Triple(presence, subject, handle)
+        },
         combine(_searchQuery, _discoveredPeer, _isSearchingPeer) { q, peer, searching ->
             Triple(q, peer, searching)
         },
         combine(_message, _claimVersion) { msg, ver -> msg to ver }
-    ) { (friends, followers, following), presence, subject, (query, peer, searching), (message, _) ->
+    ) { (friends, followers, following), (presence, subject, activeHandle), (query, peer, searching), (message, _) ->
         val (canChange, cooldownMsg) = repository.canChangeUsername()
         val cooldownDays = repository.getUsernameCooldownDays()
         val claimed = repository.getClaimedUsername()
+        val resolvedHandle = activeHandle.ifBlank { repository.getMyHandle() }.ifBlank { claimed }
         FriendsUiState(
             friends = friends,
             followers = followers,
@@ -106,7 +112,7 @@ class FriendsViewModel(
             searchQuery = query,
             discoveredPeer = peer,
             isSearchingPeer = searching,
-            myHandle = claimed,
+            myHandle = resolvedHandle,
             myPresenceStatus = presence,
             mySubject = subject,
             isLoading = false,
@@ -152,8 +158,16 @@ class FriendsViewModel(
             val peer = repository.findUserByHandle(handle)
             _discoveredPeer.value = peer
             _isSearchingPeer.value = false
+            if (peer == null) {
+                val formatted = handle.trim().let { if (it.startsWith("@")) it else "@$it" }
+                _message.value = "User $formatted does not exist or is not online"
+            }
             onResult(peer)
         }
+    }
+
+    fun refreshNetworkPeers() {
+        repository.refreshNetworkPeers()
     }
 
 

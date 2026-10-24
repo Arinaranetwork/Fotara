@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -78,7 +79,7 @@ fun FriendQrDialog(
     myHandle: String,
     shareCode: String,
     onDismiss: () -> Unit,
-    onAddFriendFromCode: (handle: String, displayName: String) -> Unit
+    onAddFriendFromCode: (handle: String, displayName: String, onError: (String) -> Unit) -> Unit
 ) {
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) } // 0: My Code, 1: Connect Peer
@@ -269,7 +270,9 @@ fun FriendQrDialog(
                                     fontFamily = ElmsSans,
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 13.sp,
-                                    color = TextPrimary
+                                    color = TextPrimary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                             IconButton(
@@ -378,7 +381,9 @@ fun FriendQrDialog(
                                 return@Button
                             }
 
-                            onAddFriendFromCode(rawCode, name)
+                            onAddFriendFromCode(rawCode, name) { err ->
+                                inputError = err
+                            }
                         },
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),

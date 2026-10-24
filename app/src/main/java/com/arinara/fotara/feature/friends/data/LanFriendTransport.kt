@@ -18,6 +18,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
@@ -25,10 +26,11 @@ import java.nio.charset.StandardCharsets
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * In-memory and cross-instance peer registry for live Friends discovery, presence status,
- * and follow/friend event delivery.
+ * known LAN peer addresses, and follow/friend event delivery.
  */
 object FriendPeerRegistry {
 
@@ -45,6 +47,7 @@ object FriendPeerRegistry {
 
     private val discoveredPeers = ConcurrentHashMap<String, FriendProfile>()
     private val peerTimestamps = ConcurrentHashMap<String, Long>()
+    private val knownPeerAddresses = CopyOnWriteArraySet<InetAddress>()
     private val listeners = CopyOnWriteArraySet<PeerListener>()
 
     fun normalizeHandle(raw: String): String {
@@ -60,6 +63,13 @@ object FriendPeerRegistry {
     fun unregisterListener(listener: PeerListener) {
         listeners.remove(listener)
     }
+
+    fun recordKnownPeerAddress(address: InetAddress?) {
+        if (address == null || address.isLoopbackAddress || address.isAnyLocalAddress) return
+        knownPeerAddresses.add(address)
+    }
+
+    fun getKnownPeerAddresses(): Set<InetAddress> = knownPeerAddresses
 
     fun recordPeer(profile: FriendProfile) {
         val norm = normalizeHandle(profile.handle)
@@ -81,9 +91,10 @@ object FriendPeerRegistry {
         for (listener in listeners) {
             val snap = listener.getLocalProfileSnapshot()
             if (snap != null && normalizeHandle(snap.handle) == norm) {
-                discoveredPeers[norm] = snap.copy(handle = norm)
+                val fresh = snap.copy(handle = norm)
+                discoveredPeers[norm] = fresh
                 peerTimestamps[norm] = System.currentTimeMillis()
-                return discoveredPeers[norm]
+                return fresh
             }
         }
         return discoveredPeers[norm]
@@ -107,6 +118,7 @@ object FriendPeerRegistry {
     fun clearAllForTesting() {
         discoveredPeers.clear()
         peerTimestamps.clear()
+        knownPeerAddresses.clear()
         listeners.clear()
     }
 }
@@ -118,6 +130,10 @@ object FriendPeerRegistry {
  */
 object FriendShareCodeCodec {
     private const val PREFIX = "FOTARA-FRIEND-"
+
+    fun isShareCode(raw: String): Boolean {
+        return raw.trim().startsWith(PREFIX, ignoreCase = true)
+    }
 
     fun encode(profile: FriendProfile): String {
         val cleanHandle = profile.handle.trim().removePrefix("@").ifBlank { "scholar" }
@@ -139,10 +155,13 @@ object FriendShareCodeCodec {
         val body = trimmed.substring(PREFIX.length)
         val firstDash = body.indexOf('-')
         if (firstDash <= 0) {
-            return "@$body" to null
+            return "" to null
         }
         val handlePart = body.substring(0, firstDash).trim()
         val payloadPart = body.substring(firstDash + 1).trim()
+        if (handlePart.isBlank() || payloadPart.isBlank()) {
+            return "" to null
+        }
         val decodedProfile = try {
             val bytes = Base64.getUrlDecoder().decode(payloadPart)
             val json = String(bytes, StandardCharsets.UTF_8)
@@ -155,8 +174,9 @@ object FriendShareCodeCodec {
 }
 
 /**
- * Lightweight LAN UDP broadcast & unicast transport for live multi-device Friends discovery,
- * presence status synchronization, and follow/friend notifications.
+ * Lightweight LAN UDP broadcast, gateway unicast, known-peer unicast, and `/24` subnet discovery
+ * transport for live multi-device Friends discovery, presence status synchronization, and
+ * follow/friend notifications.
  */
 class LanFriendTransport(
     private val listener: FriendPeerRegistry.PeerListener
@@ -165,6 +185,7 @@ class LanFriendTransport(
     companion object {
         const val FRIEND_UDP_PORT = 44830
         private const val HEARTBEAT_INTERVAL_MS = 4_000L
+        private const val SUBNET_SWEEP_MIN_INTERVAL_MS = 2_000L
         private const val MSG_ANNOUNCE = "FRIEND_ANNOUNCE"
         private const val MSG_WHO_IS = "FRIEND_WHO_IS"
         private const val MSG_CONNECT = "FRIEND_CONNECT"
@@ -176,10 +197,11 @@ class LanFriendTransport(
     private var udpSocket: DatagramSocket? = null
 
     private var heartbeatJob: Job? = null
+    private val lastSubnetSweepMs = AtomicLong(0L)
 
     init {
         FriendPeerRegistry.registerListener(listener)
-        startUdpListener()
+        ensureUdpSocket()
         startPeriodicHeartbeat()
     }
 
@@ -187,9 +209,33 @@ class LanFriendTransport(
         val profile = listener.getLocalProfileSnapshot() ?: return
         if (profile.handle.removePrefix("@").isBlank()) return
         FriendPeerRegistry.recordPeer(profile)
+        ensureUdpSocket()
         scope.launch {
             val packetStr = encodeAnnouncePacket(profile)
-            sendUdpBroadcast(packetStr)
+            sendUdpDiscovery(packetStr, includeSubnetSweep = false)
+        }
+    }
+
+    /**
+     * Broadcasts our presence and actively queries all peers on the LAN (`FRIEND_WHO_IS|*`)
+     * using broadcast, known-peer unicast, gateway unicast, and `/24` subnet unicast sweep.
+     */
+    fun refreshPeersNow() {
+        ensureUdpSocket()
+        val profile = listener.getLocalProfileSnapshot()
+        if (profile != null && profile.handle.removePrefix("@").isNotBlank()) {
+            FriendPeerRegistry.recordPeer(profile)
+        }
+        scope.launch {
+            if (profile != null && profile.handle.removePrefix("@").isNotBlank()) {
+                sendUdpDiscovery(encodeAnnouncePacket(profile), includeSubnetSweep = false)
+            }
+            val whoIs = if (profile != null && profile.handle.removePrefix("@").isNotBlank()) {
+                "$MSG_WHO_IS|*|${profile.toJson()}"
+            } else {
+                "$MSG_WHO_IS|*|"
+            }
+            sendUdpDiscovery(whoIs, includeSubnetSweep = true)
         }
     }
 
@@ -198,17 +244,20 @@ class LanFriendTransport(
         val normTarget = FriendPeerRegistry.normalizeHandle(targetHandle)
         if (normTarget.length <= 1) return
         FriendPeerRegistry.dispatchConnectEvent(eventType, profile, normTarget)
+        ensureUdpSocket()
         scope.launch {
             val packetStr = "$MSG_CONNECT|$eventType|$normTarget|${profile.toJson()}"
-            sendUdpBroadcast(packetStr)
-            sendUdpBroadcast(packetStr)
+            sendUdpDiscovery(packetStr, includeSubnetSweep = true)
+            delay(60L)
+            sendUdpDiscovery(packetStr, includeSubnetSweep = false)
         }
     }
 
     /**
-     * Queries the LAN for [handle] via UDP broadcast and waits up to [timeoutMs] for a live peer response.
+     * Queries the LAN for [handle] via UDP broadcast + `/24` unicast sweep and waits up to
+     * [timeoutMs] for a live peer response.
      */
-    fun queryPeerByHandle(handle: String, timeoutMs: Long = 450L): FriendProfile? {
+    fun queryPeerByHandle(handle: String, timeoutMs: Long = 750L): FriendProfile? {
         val norm = FriendPeerRegistry.normalizeHandle(handle)
         if (norm.length <= 1) return null
 
@@ -218,19 +267,27 @@ class LanFriendTransport(
             }
         }
 
-        startUdpListener()
+        ensureUdpSocket()
         val localSnap = listener.getLocalProfileSnapshot()
-        val whoIsPacket = if (localSnap != null && localSnap.handle.removePrefix("@").isNotBlank()) {
+        val whoIsSpecific = if (localSnap != null && localSnap.handle.removePrefix("@").isNotBlank()) {
             "$MSG_WHO_IS|$norm|${localSnap.toJson()}"
         } else {
             "$MSG_WHO_IS|$norm|"
         }
+        val whoIsAll = if (localSnap != null && localSnap.handle.removePrefix("@").isNotBlank()) {
+            "$MSG_WHO_IS|*|${localSnap.toJson()}"
+        } else {
+            "$MSG_WHO_IS|*|"
+        }
 
-        val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(100L, 1_500L)
+        val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(100L, 2_000L)
         var attempts = 0
         while (System.currentTimeMillis() < deadline) {
-            if (attempts == 0 || attempts == 3) {
-                sendUdpBroadcast(whoIsPacket)
+            if (attempts == 0) {
+                sendUdpDiscovery(whoIsSpecific, includeSubnetSweep = true)
+                sendUdpDiscovery(whoIsAll, includeSubnetSweep = false)
+            } else if (attempts == 4) {
+                sendUdpDiscovery(whoIsSpecific, includeSubnetSweep = false)
             }
             attempts++
             try {
@@ -250,41 +307,60 @@ class LanFriendTransport(
     private fun startPeriodicHeartbeat() {
         heartbeatJob?.cancel()
         heartbeatJob = scope.launch {
+            var tick = 0
             while (isActive) {
+                ensureUdpSocket()
                 val profile = listener.getLocalProfileSnapshot()
                 if (profile != null && profile.handle.removePrefix("@").isNotBlank()) {
                     FriendPeerRegistry.recordPeer(profile)
-                    sendUdpBroadcast(encodeAnnouncePacket(profile))
+                    sendUdpDiscovery(encodeAnnouncePacket(profile), includeSubnetSweep = false)
+                    if (tick % 3 == 0) {
+                        val whoIs = "$MSG_WHO_IS|*|${profile.toJson()}"
+                        sendUdpDiscovery(whoIs, includeSubnetSweep = (tick == 0))
+                    }
+                } else if (tick % 3 == 0) {
+                    sendUdpDiscovery("$MSG_WHO_IS|*|", includeSubnetSweep = (tick == 0))
                 }
+                tick++
                 delay(HEARTBEAT_INTERVAL_MS)
             }
         }
     }
 
-    private fun startUdpListener() {
-        scope.launch {
-            try {
-                if (udpSocket != null && udpSocket?.isClosed == false) return@launch
-                val socket = DatagramSocket(null).apply {
-                    reuseAddress = true
-                    broadcast = true
-                    bind(InetSocketAddress(FRIEND_UDP_PORT))
-                }
-                udpSocket = socket
-                val buffer = ByteArray(8192)
-                while (isActive && !socket.isClosed) {
-                    val packet = DatagramPacket(buffer, buffer.size)
-                    socket.receive(packet)
-                    val raw = String(packet.data, packet.offset, packet.length, StandardCharsets.UTF_8).trim()
-                    handleIncomingPacket(raw, packet.address)
-                }
-            } catch (_: Exception) {
-                // UDP port may be unavailable in pure JVM test environment
+    @Synchronized
+    private fun ensureUdpSocket(): DatagramSocket? {
+        val existing = udpSocket
+        if (existing != null && !existing.isClosed) {
+            return existing
+        }
+        return try {
+            val socket = DatagramSocket(null).apply {
+                reuseAddress = true
+                broadcast = true
+                bind(InetSocketAddress(FRIEND_UDP_PORT))
             }
+            udpSocket = socket
+            scope.launch {
+                val buffer = ByteArray(8192)
+                try {
+                    while (isActive && !socket.isClosed) {
+                        val packet = DatagramPacket(buffer, buffer.size)
+                        socket.receive(packet)
+                        val raw = String(packet.data, packet.offset, packet.length, StandardCharsets.UTF_8).trim()
+                        handleIncomingPacket(raw, packet.address)
+                    }
+                } catch (_: Exception) {
+                }
+            }
+            socket
+        } catch (_: Exception) {
+            // UDP port may be unavailable in pure JVM test environment
+            null
         }
     }
 
     private fun handleIncomingPacket(raw: String, senderAddress: InetAddress?) {
+        FriendPeerRegistry.recordKnownPeerAddress(senderAddress)
         when {
             raw.startsWith("$MSG_ANNOUNCE|") -> {
                 val json = raw.substringAfter("$MSG_ANNOUNCE|")
@@ -307,7 +383,7 @@ class LanFriendTransport(
                     if (senderAddress != null) {
                         sendUdpUnicast(response, senderAddress)
                     }
-                    sendUdpBroadcast(response)
+                    sendUdpDiscovery(response, includeSubnetSweep = false)
                 }
             }
             raw.startsWith("$MSG_CONNECT|") -> {
@@ -323,7 +399,7 @@ class LanFriendTransport(
                     if (senderAddress != null) {
                         sendUdpUnicast(response, senderAddress)
                     }
-                    sendUdpBroadcast(response)
+                    sendUdpDiscovery(response, includeSubnetSweep = false)
                 }
             }
         }
@@ -344,14 +420,22 @@ class LanFriendTransport(
         }
     }
 
-    private fun sendUdpBroadcast(payload: String) {
+    private fun sendUdpDiscovery(payload: String, includeSubnetSweep: Boolean) {
         try {
             val bytes = payload.toByteArray(StandardCharsets.UTF_8)
             val targets = LinkedHashSet<InetAddress>()
+            val sweepSubnets = ArrayList<ByteArray>()
+
+            // 1. Add known peer unicast addresses first
+            targets.addAll(FriendPeerRegistry.getKnownPeerAddresses())
+
+            // 2. Add global broadcast
             try {
                 targets.add(InetAddress.getByName("255.255.255.255"))
             } catch (_: Exception) {
             }
+
+            // 3. Inspect active network interfaces for broadcast, calculated subnet broadcast, and gateway .1
             try {
                 val interfaces = NetworkInterface.getNetworkInterfaces()
                 while (interfaces != null && interfaces.hasMoreElements()) {
@@ -361,6 +445,40 @@ class LanFriendTransport(
                         val bcast = ifAddr.broadcast
                         if (bcast != null) {
                             targets.add(bcast)
+                        }
+                        val inetAddr = ifAddr.address
+                        if (inetAddr is Inet4Address && !inetAddr.isLoopbackAddress) {
+                            val rawIp = inetAddr.address
+                            if (rawIp.size == 4) {
+                                // Calculate subnet broadcast and gateway from prefix
+                                val prefix = ifAddr.networkPrefixLength.toInt().coerceIn(8, 30)
+                                val mask = if (prefix == 0) 0 else (-1 shl (32 - prefix))
+                                val ipInt = ((rawIp[0].toInt() and 0xFF) shl 24) or
+                                    ((rawIp[1].toInt() and 0xFF) shl 16) or
+                                    ((rawIp[2].toInt() and 0xFF) shl 8) or
+                                    (rawIp[3].toInt() and 0xFF)
+                                val bcastInt = ipInt or mask.inv()
+                                val gatewayInt = (ipInt and mask) or 1
+                                try {
+                                    targets.add(intToInet4Address(bcastInt))
+                                    targets.add(intToInet4Address(gatewayInt))
+                                    // Also add /24 broadcast & gateway in case hotspot reports /16 or /32
+                                    targets.add(
+                                        InetAddress.getByAddress(
+                                            byteArrayOf(rawIp[0], rawIp[1], rawIp[2], 255.toByte())
+                                        )
+                                    )
+                                    targets.add(
+                                        InetAddress.getByAddress(
+                                            byteArrayOf(rawIp[0], rawIp[1], rawIp[2], 1.toByte())
+                                        )
+                                    )
+                                } catch (_: Exception) {
+                                }
+                                if (isPrivateIpv4(rawIp)) {
+                                    sweepSubnets.add(rawIp)
+                                }
+                            }
                         }
                     }
                 }
@@ -376,9 +494,50 @@ class LanFriendTransport(
                     } catch (_: Exception) {
                     }
                 }
+
+                // 4. Optional /24 unicast sweep when Wi-Fi AP / Android packet filter drops UDP broadcasts
+                if (includeSubnetSweep && sweepSubnets.isNotEmpty()) {
+                    val now = System.currentTimeMillis()
+                    val prev = lastSubnetSweepMs.get()
+                    if (now - prev >= SUBNET_SWEEP_MIN_INTERVAL_MS && lastSubnetSweepMs.compareAndSet(prev, now)) {
+                        for (rawIp in sweepSubnets.take(2)) {
+                            val selfHost = rawIp[3].toInt() and 0xFF
+                            for (host in 1..254) {
+                                if (host == selfHost) continue
+                                try {
+                                    val dest = InetAddress.getByAddress(
+                                        byteArrayOf(rawIp[0], rawIp[1], rawIp[2], host.toByte())
+                                    )
+                                    val packet = DatagramPacket(bytes, bytes.size, dest, FRIEND_UDP_PORT)
+                                    sender.send(packet)
+                                } catch (_: Exception) {
+                                }
+                            }
+                        }
+                    }
+                }
             }
         } catch (_: Exception) {
         }
+    }
+
+    private fun isPrivateIpv4(ip: ByteArray): Boolean {
+        val b0 = ip[0].toInt() and 0xFF
+        val b1 = ip[1].toInt() and 0xFF
+        return b0 == 10 ||
+            (b0 == 172 && b1 in 16..31) ||
+            (b0 == 192 && b1 == 168)
+    }
+
+    private fun intToInet4Address(value: Int): InetAddress {
+        return InetAddress.getByAddress(
+            byteArrayOf(
+                ((value ushr 24) and 0xFF).toByte(),
+                ((value ushr 16) and 0xFF).toByte(),
+                ((value ushr 8) and 0xFF).toByte(),
+                (value and 0xFF).toByte()
+            )
+        )
     }
 
     override fun close() {

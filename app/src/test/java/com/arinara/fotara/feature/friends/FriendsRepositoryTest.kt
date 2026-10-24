@@ -62,13 +62,34 @@ class FriendsRepositoryTest {
     private lateinit var prefs: TestSharedPreferences
     private lateinit var repository: LocalFriendsRepository
 
-    private fun createTestUsernameManager(): UsernameManager {
-        return object : UsernameManager(prefs) {
+    private val registeredDirectoryUsers = mapOf(
+        "alex_remote" to "Remote Alex",
+        "alex_m" to "Alex Miller",
+        "sarah_k" to "Sarah Kim",
+        "alex" to "Alex",
+        "sarah" to "Sarah",
+        "jordan" to "Jordan Baker",
+        "charlie" to "Charlie Brown",
+        "device_two" to "Device Two"
+    )
+
+    private fun createTestUsernameManager(targetPrefs: SharedPreferences = prefs): UsernameManager {
+        return object : UsernameManager(targetPrefs) {
             override suspend fun checkSupabaseAvailability(cleanUsername: String): Result<Boolean> = Result.success(true)
             override suspend fun upsertToSupabase(uuid: String, cleanUsername: String, displayName: String, timestamp: Long): Result<Unit> = Result.success(Unit)
             override suspend fun fetchProfileByUsername(username: String): Result<com.arinara.fotara.feature.friends.data.SupabaseUserProfile?> {
-                return if (username == "alex_remote") {
-                    Result.success(com.arinara.fotara.feature.friends.data.SupabaseUserProfile("remote-id", "uuid", "alex_remote", "Remote Alex", 1000L))
+                val clean = username.trim().removePrefix("@").lowercase()
+                val displayName = registeredDirectoryUsers[clean]
+                return if (displayName != null) {
+                    Result.success(
+                        com.arinara.fotara.feature.friends.data.SupabaseUserProfile(
+                            id = "remote-$clean",
+                            installUuid = "uuid-$clean",
+                            username = clean,
+                            displayName = displayName,
+                            updatedAt = 1000L
+                        )
+                    )
                 } else {
                     Result.success(null)
                 }
@@ -323,11 +344,105 @@ class FriendsRepositoryTest {
     }
 
     @Test
-    fun testFindUserByHandleFormatFallback() = runTest {
-        val found = repository.findUserByHandle("@some_peer")
-        assertNotNull(found)
-        assertEquals("@some_peer", found!!.handle)
-        assertEquals("Some_peer", found.displayName)
+    fun testFindUserByHandleNonExistentReturnsNull() = runTest {
+        val found = repository.findUserByHandle("@nonexistent_ghost_user")
+        org.junit.Assert.assertNull(found)
+    }
+
+    @Test
+    fun testAddFriendNonExistentUsernameFails() = runTest {
+        val result = repository.addFriend("@nonexistent_ghost_user", "Ghost User")
+        assertFalse(result.isSuccess)
+        val msg = result.exceptionOrNull()?.message.orEmpty()
+        assertTrue(msg.contains("does not exist", ignoreCase = true))
+        assertTrue(repository.getFriendsFlow().first().isEmpty())
+    }
+
+    @Test
+    fun testAddSelfUsernameFails() = runTest {
+        repository.claimUsername("my_own_handle", "Me")
+        val result = repository.addFriend("@my_own_handle", "Me")
+        assertFalse(result.isSuccess)
+        val msg = result.exceptionOrNull()?.message.orEmpty()
+        assertTrue(msg.contains("own username", ignoreCase = true))
+        assertTrue(repository.getFriendsFlow().first().isEmpty())
+    }
+
+    @Test
+    fun testAddFriendMalformedShareCodeFails() = runTest {
+        val result = repository.addFriend("FOTARA-FRIEND--BROKEN", "")
+        assertFalse(result.isSuccess)
+        assertTrue(repository.getFriendsFlow().first().isEmpty())
+    }
+
+    @Test
+    fun testRealUserTwoDeviceSimulationEndToEnd() = runTest {
+        val prefsA = TestSharedPreferences()
+        val prefsB = TestSharedPreferences()
+        val repoA = LocalFriendsRepository(prefsA, createTestUsernameManager(prefsA), enableLanTransport = false)
+        val repoB = LocalFriendsRepository(prefsB, createTestUsernameManager(prefsB), enableLanTransport = false)
+
+        // 1. Both users claim their usernames and set display names
+        assertTrue(repoA.claimUsername("alice_study", "Alice Chen").isSuccess)
+        assertTrue(repoB.claimUsername("bob_notes", "Bob Martinez").isSuccess)
+        assertEquals("@alice_study", repoA.getMyHandle())
+        assertEquals("@bob_notes", repoB.getMyHandle())
+
+        // 2. Bob goes online: STUDYING "Organic Chemistry II"
+        repoB.updatePresence(StudyPresenceStatus.STUDYING, "Organic Chemistry II")
+        repoA.updatePresence(StudyPresenceStatus.OPEN_TO_COLLAB, "Physics Lab")
+
+        // 3. Alice tries to add a username that does NOT exist -> must fail
+        val nonExistentAttempt = repoA.addFriend("@nobody_exists_404", "")
+        assertFalse(nonExistentAttempt.isSuccess)
+        assertTrue(repoA.getFriendsFlow().first().isEmpty())
+
+        // 4. Alice searches for Bob (@bob_notes) -> discovers Bob with live online status & subject
+        val discoveredBob = repoA.findUserByHandle("@bob_notes")
+        assertNotNull(discoveredBob)
+        assertEquals("@bob_notes", discoveredBob!!.handle)
+        assertEquals("Bob Martinez", discoveredBob.displayName)
+        assertEquals(StudyPresenceStatus.STUDYING, discoveredBob.studyStatus)
+        assertEquals("Organic Chemistry II", discoveredBob.currentSubject)
+
+        // 5. Alice adds Bob as a friend -> Bob is added with live online status, and Bob receives Alice's connect event
+        val addBobResult = repoA.addFriend("@bob_notes", "")
+        assertTrue(addBobResult.isSuccess)
+        val aliceFriends = repoA.getFriendsFlow().first()
+        assertEquals(1, aliceFriends.size)
+        assertEquals("@bob_notes", aliceFriends[0].handle)
+        assertEquals("Bob Martinez", aliceFriends[0].displayName)
+        assertEquals(StudyPresenceStatus.STUDYING, aliceFriends[0].studyStatus)
+        assertEquals("Organic Chemistry II", aliceFriends[0].currentSubject)
+        assertTrue(aliceFriends[0].isActive)
+
+        // Bob automatically sees Alice in his followers and friends list with her live status!
+        val bobFollowers = repoB.getFollowersFlow().first()
+        assertEquals(1, bobFollowers.size)
+        assertEquals("@alice_study", bobFollowers[0].handle)
+        assertEquals("Alice Chen", bobFollowers[0].displayName)
+        assertEquals(StudyPresenceStatus.OPEN_TO_COLLAB, bobFollowers[0].studyStatus)
+        assertEquals("Physics Lab", bobFollowers[0].currentSubject)
+
+        val bobFriends = repoB.getFriendsFlow().first()
+        assertEquals(1, bobFriends.size)
+        assertEquals("@alice_study", bobFriends[0].handle)
+        assertTrue(bobFriends[0].isActive)
+
+        // 6. Bob changes his presence to OPEN_TO_COLLAB ("Final Exam Prep") -> Alice sees update immediately
+        repoB.updatePresence(StudyPresenceStatus.OPEN_TO_COLLAB, "Final Exam Prep")
+        val aliceFriendsAfterUpdate = repoA.getFriendsFlow().first()
+        assertEquals(StudyPresenceStatus.OPEN_TO_COLLAB, aliceFriendsAfterUpdate[0].studyStatus)
+        assertEquals("Final Exam Prep", aliceFriendsAfterUpdate[0].currentSubject)
+
+        // 7. Bob goes OFFLINE -> Alice sees Bob transition to OFFLINE
+        repoB.updatePresence(StudyPresenceStatus.OFFLINE, null)
+        val aliceFriendsOffline = repoA.getFriendsFlow().first()
+        assertEquals(StudyPresenceStatus.OFFLINE, aliceFriendsOffline[0].studyStatus)
+        assertFalse(aliceFriendsOffline[0].isActive)
+
+        repoA.close()
+        repoB.close()
     }
 
     @Test
