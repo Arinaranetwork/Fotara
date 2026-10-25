@@ -17,11 +17,20 @@ app/build
 .cxx
 local.properties
 
+# Source Code & Build Scripts (Excluded from Public Repository)
+/app/
+/gradle/
+build.gradle.kts
+settings.gradle.kts
+gradle.properties
+gradlew
+gradlew.bat
+
 # Generated output & release binaries
 /Output/
 _Backups/
 
-# Security, Agent, and Internal Assets
+# Internal Files, Documentation, Changelogs & Plans
 .env
 .env.*
 node_modules/
@@ -37,10 +46,15 @@ Docs/
 Changelog/
 Rules.md
 Android.md
+GEMINI.md
 fotara-app-brief.md
+*plan*.md
 /UI/
 /QRIS/
 /Icon/
+/Assets/AppIcon/
+/Assets/Border/
+/Assets/Images/
 package.json
 package-lock.json
 UserDIagnostic/
