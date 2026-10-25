@@ -223,28 +223,7 @@ fun CanvasScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Ensure changes are flushed on system Back or app pause/stop
-    BackHandler {
-        coroutineScope.launch {
-            viewModel.flushSave()
-            onBack()
-        }
-    }
-
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
-                coroutineScope.launch {
-                    viewModel.flushSave()
-                }
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
+    var isLaunchingExternalSystemUi by remember { mutableStateOf(false) }
 
     val fallbackUsernameManager = remember(context) {
         com.arinara.fotara.feature.friends.data.UsernameManager(context.applicationContext)
@@ -290,9 +269,53 @@ fun CanvasScreen(
             sessionEngine = collabEngine
         )
     }
+
+    // Ensure changes are flushed and active collaborative session is exited on system Back or app stop
+    BackHandler {
+        coroutineScope.launch {
+            if (collabEngine.isSessionActive) {
+                collabEngine.leaveRoom()
+            }
+            viewModel.exitEphemeralCollabCanvas()
+            viewModel.flushSave()
+            onBack()
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, collabEngine) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    isLaunchingExternalSystemUi = false
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    coroutineScope.launch {
+                        viewModel.flushSave()
+                    }
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    if (!isLaunchingExternalSystemUi && collabEngine.isSessionActive) {
+                        collabEngine.leaveRoom()
+                        viewModel.exitEphemeralCollabCanvas()
+                    }
+                    coroutineScope.launch {
+                        viewModel.flushSave()
+                    }
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
+        isLaunchingExternalSystemUi = false
         if (granted) {
             collabEngine.setLocalMicMuted(false)
         } else {
@@ -305,6 +328,7 @@ fun CanvasScreen(
             android.Manifest.permission.RECORD_AUDIO
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         if (!hasPerm) {
+            isLaunchingExternalSystemUi = true
             recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
         } else {
             collabEngine.toggleLocalMicMuted()
@@ -382,6 +406,10 @@ fun CanvasScreen(
     }
     DisposableEffect(collabEngine, collabVoiceEngine) {
         onDispose {
+            if (collabEngine.isSessionActive) {
+                collabEngine.leaveRoom()
+            }
+            viewModel.exitEphemeralCollabCanvas()
             collabVoiceEngine.close()
             collabEngine.close()
         }
@@ -464,6 +492,10 @@ fun CanvasScreen(
             showCollabChatSheet = false
             showCollabSettingsSheet = false
             drawingViewRef?.updateRemotePeerCursors(emptyList(), collabEngine.localPeerId)
+            if (viewModel.isEphemeralCollabCanvas) {
+                viewModel.exitEphemeralCollabCanvas()
+                drawingViewRef?.resetZoom()
+            }
         }
     }
     LaunchedEffect(collabEngine, drawingViewRef) {
@@ -492,6 +524,7 @@ fun CanvasScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
+        isLaunchingExternalSystemUi = false
         if (uri != null) {
             val v = drawingViewRef
             if (v != null) {
@@ -587,6 +620,8 @@ fun CanvasScreen(
                         showCollabChatSheet = false
                         showCollabSettingsSheet = false
                         collabEngine.leaveRoom()
+                        viewModel.exitEphemeralCollabCanvas()
+                        drawingViewRef?.resetZoom()
                     },
                     localRole = collabLocalRole,
                     canLocalUserDraw = collabCanDraw,
@@ -619,6 +654,10 @@ fun CanvasScreen(
                         .size(48.dp)
                         .jiggleRotationClickable {
                             coroutineScope.launch {
+                                if (collabEngine.isSessionActive) {
+                                    collabEngine.leaveRoom()
+                                }
+                                viewModel.exitEphemeralCollabCanvas()
                                 viewModel.flushSave()
                                 onBack()
                             }
@@ -2116,6 +2155,7 @@ fun CanvasScreen(
             CanvasImageSourceDialog(
                 onPickFromGallery = {
                     viewModel.setImageSourceDialogVisible(false)
+                    isLaunchingExternalSystemUi = true
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
@@ -2295,6 +2335,7 @@ fun CanvasScreen(
                                         android.Manifest.permission.RECORD_AUDIO
                                     ) != android.content.pm.PackageManager.PERMISSION_GRANTED
                                 ) {
+                                    isLaunchingExternalSystemUi = true
                                     recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                                 }
                             }
@@ -2315,6 +2356,7 @@ fun CanvasScreen(
                                 android.Manifest.permission.RECORD_AUDIO
                             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
                         ) {
+                            isLaunchingExternalSystemUi = true
                             recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                         }
                     }
@@ -2334,6 +2376,7 @@ fun CanvasScreen(
                                 android.Manifest.permission.RECORD_AUDIO
                             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
                         ) {
+                            isLaunchingExternalSystemUi = true
                             recordAudioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                         }
                     }
@@ -2357,6 +2400,8 @@ fun CanvasScreen(
                     showCollabChatSheet = false
                     showCollabSettingsSheet = false
                     collabEngine.leaveRoom()
+                    viewModel.exitEphemeralCollabCanvas()
+                    drawingViewRef?.resetZoom()
                     showCollabJoinDialog = false
                 }
             )

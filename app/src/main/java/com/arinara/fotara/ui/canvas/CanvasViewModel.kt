@@ -204,6 +204,14 @@ class CanvasViewModel(
     val localCollabDiffs: SharedFlow<CollabCanvasDiff> = _localCollabDiffs.asSharedFlow()
 
     private val encodedAssetBase64Cache = ConcurrentHashMap<String, String>()
+    private val ephemeralCollabAssetIds = java.util.concurrent.CopyOnWriteArraySet<String>()
+
+    @Volatile
+    var isEphemeralCollabCanvas: Boolean = false
+        private set
+    private var preCollabCanvasId: Long? = null
+    private var preCollabTitle: String? = null
+    private var preCollabDocument: CanvasDocument? = null
 
     private var autosaveJob: Job? = null
     private val saveMutex = Mutex()
@@ -320,27 +328,25 @@ class CanvasViewModel(
     }
 
     /**
-     * Saves the active local canvas and spawns a brand-new empty canvas note dedicated to a joined
-     * collaborative room so the joiner starts cleanly with the Host's canvas data without mixing
-     * any pre-existing local canvas elements.
+     * Saves the active local canvas and enters a strictly ephemeral, in-memory collaborative canvas
+     * for a joined room. Joiner (Member/Admin) collaborative canvas data is NEVER persisted to SQLite
+     * or disk on the joiner's device, and is completely wiped when leaving the room via
+     * [exitEphemeralCollabCanvas].
      */
     suspend fun spawnNewCanvasForCollabJoin(roomCode: String): Long {
-        flushSave()
+        if (!isEphemeralCollabCanvas) {
+            flushSave()
+            preCollabCanvasId = _uiState.value.canvasId
+            preCollabTitle = _uiState.value.title
+            preCollabDocument = _uiState.value.document
+        }
+        autosaveJob?.cancel()
+        isEphemeralCollabCanvas = true
+
         val normalizedCode = roomCode.trim().uppercase().ifBlank { "ROOM" }
         val collabTitle = "Collab • $normalizedCode"
         val emptyDoc = CanvasDocument(title = collabTitle, elements = emptyList())
-        val currentFolderId = _uiState.value.folderId
-        val currentSubfolderId = _uiState.value.subfolderId
-
-        val newId = withContext(NonCancellable + Dispatchers.IO) {
-            val createdId = canvasNoteRepository.createCanvasNote(
-                folderId = currentFolderId,
-                subfolderId = currentSubfolderId,
-                title = collabTitle
-            )
-            canvasRepository.saveDocumentImmediate(createdId, emptyDoc)
-            createdId
-        }
+        val ephemeralId = -System.currentTimeMillis().coerceAtLeast(1L)
 
         sheetHistorySnapshots.clear()
         toolController.clearSelection()
@@ -355,7 +361,7 @@ class CanvasViewModel(
         toolController.activeLayerId = primaryLayerId
         _uiState.update {
             it.copy(
-                canvasId = newId,
+                canvasId = ephemeralId,
                 title = collabTitle,
                 document = emptyDoc,
                 activeLayerId = primaryLayerId,
@@ -368,7 +374,62 @@ class CanvasViewModel(
                 showExperimentalNotice = false
             )
         }
-        return newId
+        return ephemeralId
+    }
+
+    /**
+     * Exits the ephemeral collaborative canvas when a Member or Admin leaves the room,
+     * immediately wiping all temporary collaborative strokes, text, and downloaded image assets
+     * from the joiner's device and restoring their pre-collaboration local canvas.
+     */
+    fun exitEphemeralCollabCanvas() {
+        if (!isEphemeralCollabCanvas) return
+        isEphemeralCollabCanvas = false
+        autosaveJob?.cancel()
+        isDirty = false
+        retryAttempt = 0
+
+        val assetsToPurge = ephemeralCollabAssetIds.toSet()
+        ephemeralCollabAssetIds.clear()
+
+        val restoredId = preCollabCanvasId
+        val restoredTitle = preCollabTitle ?: "Canvas Note"
+        val restoredDoc = preCollabDocument ?: CanvasDocument(title = restoredTitle)
+        preCollabCanvasId = null
+        preCollabTitle = null
+        preCollabDocument = null
+
+        sheetHistorySnapshots.clear()
+        toolController.clearSelection()
+        historyManager.clear()
+        spatialIndex.rebuild(restoredDoc.elements)
+        tileCacheManager.invalidateAll()
+        canvasRenderer.clearImageCache()
+
+        val primaryLayerId = restoredDoc.getPrimaryLayerId()
+        toolController.activeLayerId = primaryLayerId
+        _uiState.update {
+            it.copy(
+                canvasId = restoredId,
+                title = restoredTitle,
+                document = restoredDoc,
+                activeLayerId = primaryLayerId,
+                toolState = toolController.toolState,
+                saveState = SaveState.SAVED,
+                canUndo = false,
+                canRedo = false
+            )
+        }
+
+        if (assetsToPurge.isNotEmpty()) {
+            viewModelScope.launch(Dispatchers.IO) {
+                for (assetId in assetsToPurge) {
+                    encodedAssetBase64Cache.remove(assetId)
+                    val file = canvasAssetManager.getAssetFile(assetId)
+                    canvasAssetManager.deleteAssetFile(file.absolutePath)
+                }
+            }
+        }
     }
 
     // ==========================================
@@ -559,6 +620,12 @@ class CanvasViewModel(
     }
 
     fun triggerDebouncedAutosave() {
+        if (isEphemeralCollabCanvas) {
+            isDirty = false
+            autosaveJob?.cancel()
+            _uiState.update { it.copy(saveState = SaveState.SAVED) }
+            return
+        }
         isDirty = true
         _uiState.update { it.copy(saveState = SaveState.SAVING) }
         autosaveJob?.cancel()
@@ -569,8 +636,23 @@ class CanvasViewModel(
     }
 
     private suspend fun performSave(): Boolean = withContext(NonCancellable + Dispatchers.IO) {
+        if (isEphemeralCollabCanvas) {
+            isDirty = false
+            _uiState.update { it.copy(saveState = SaveState.SAVED) }
+            return@withContext true
+        }
         val currentId = _uiState.value.canvasId ?: return@withContext false
+        if (currentId <= 0L) {
+            isDirty = false
+            _uiState.update { it.copy(saveState = SaveState.SAVED) }
+            return@withContext true
+        }
         saveMutex.withLock {
+            if (isEphemeralCollabCanvas) {
+                isDirty = false
+                _uiState.update { it.copy(saveState = SaveState.SAVED) }
+                return@withContext true
+            }
             if (!isDirty && _uiState.value.saveState == SaveState.SAVED) {
                 return@withContext true
             }
@@ -627,6 +709,11 @@ class CanvasViewModel(
      */
     suspend fun flushSave(): Boolean = withContext(NonCancellable + Dispatchers.IO) {
         autosaveJob?.cancel()
+        if (isEphemeralCollabCanvas) {
+            isDirty = false
+            _uiState.update { it.copy(saveState = SaveState.SAVED) }
+            return@withContext true
+        }
         if (!isDirty && _uiState.value.saveState == SaveState.SAVED) {
             return@withContext true
         }
@@ -638,6 +725,7 @@ class CanvasViewModel(
      */
     fun retrySave() {
         autosaveJob?.cancel()
+        if (isEphemeralCollabCanvas) return
         retryAttempt = 0
         viewModelScope.launch(Dispatchers.IO) {
             performSave()
@@ -743,6 +831,9 @@ class CanvasViewModel(
                         if (imgMsg.imageBase64.isNotBlank()) {
                             if (canvasAssetManager.saveRemoteAssetFromBase64(imgMsg.assetId, imgMsg.imageBase64)) {
                                 encodedAssetBase64Cache[imgMsg.assetId] = imgMsg.imageBase64
+                                if (isEphemeralCollabCanvas) {
+                                    ephemeralCollabAssetIds.add(imgMsg.assetId)
+                                }
                                 assetsDecoded = true
                             }
                         }
@@ -926,6 +1017,11 @@ class CanvasViewModel(
         val clean = newTitle.trim()
         if (clean.isBlank()) return
         val id = _uiState.value.canvasId ?: return
+        if (isEphemeralCollabCanvas || id <= 0L) {
+            val updated = _uiState.value.document.copy(title = clean)
+            _uiState.update { it.copy(title = clean, document = updated, showRenameDialog = false) }
+            return
+        }
         viewModelScope.launch {
             canvasNoteRepository.renameCanvasNote(id, clean)
             val updated = _uiState.value.document.copy(title = clean)
@@ -939,6 +1035,10 @@ class CanvasViewModel(
 
     fun moveCanvas(targetFolderId: Long, targetSubfolderId: Long?, onMoved: () -> Unit) {
         val id = _uiState.value.canvasId ?: return
+        if (isEphemeralCollabCanvas || id <= 0L) {
+            _uiState.update { it.copy(showMoveDialog = false) }
+            return
+        }
         viewModelScope.launch {
             canvasNoteRepository.moveCanvasNote(id, targetFolderId, targetSubfolderId)
             _uiState.update {
@@ -954,6 +1054,11 @@ class CanvasViewModel(
 
     fun deleteToTrash(onDeleted: () -> Unit) {
         val id = _uiState.value.canvasId ?: return
+        if (isEphemeralCollabCanvas || id <= 0L) {
+            _uiState.update { it.copy(showDeleteConfirmDialog = false) }
+            onDeleted()
+            return
+        }
         viewModelScope.launch {
             canvasNoteRepository.deleteCanvasNote(id)
             _uiState.update { it.copy(showDeleteConfirmDialog = false) }
@@ -2021,6 +2126,9 @@ class CanvasViewModel(
         screenWidth: Float,
         screenHeight: Float
     ) {
+        if (isEphemeralCollabCanvas) {
+            ephemeralCollabAssetIds.add(assetInfo.assetId)
+        }
         val currentDoc = _uiState.value.document
         val targetLayerId = _uiState.value.activeLayerId.ifEmpty {
             currentDoc.getPrimaryLayerId()

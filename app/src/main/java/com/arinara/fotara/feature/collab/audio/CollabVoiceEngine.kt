@@ -52,7 +52,7 @@ class CollabVoiceEngine(
     companion object {
         const val DEFAULT_SAMPLE_RATE_HZ = 16_000
         private const val FRAME_DURATION_MS = 40
-        private const val SILENCE_PEAK_THRESHOLD = 180
+        private const val SILENCE_PEAK_THRESHOLD = 40
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -125,6 +125,8 @@ class CollabVoiceEngine(
     private suspend fun runCaptureLoop() {
         var audioRecord: AudioRecord? = null
         var currentSampleRate = 0
+        var useMicSourceFallback = false
+        var consecutiveZeroFrames = 0
         try {
             while (scope.isActive && isRunning.get() && sessionEngine.isSessionActive) {
                 if (!sessionEngine.canLocalUserSpeak || !hasRecordAudioPermission()) {
@@ -148,8 +150,9 @@ class CollabVoiceEngine(
                         audioRecord?.release()
                     } catch (_: Throwable) {
                     }
-                    audioRecord = createAudioRecord(targetSampleRate)
+                    audioRecord = createAudioRecord(targetSampleRate, useMicSourceFallback)
                     currentSampleRate = targetSampleRate
+                    consecutiveZeroFrames = 0
                     if (audioRecord == null) {
                         delay(500L)
                         continue
@@ -186,6 +189,20 @@ class CollabVoiceEngine(
                     val amp = abs(shortBuffer[i].toInt())
                     if (amp > peak) peak = amp
                 }
+                if (peak <= 2 && !useMicSourceFallback) {
+                    consecutiveZeroFrames++
+                    if (consecutiveZeroFrames >= 15) {
+                        useMicSourceFallback = true
+                        try {
+                            audioRecord.stop()
+                            audioRecord.release()
+                        } catch (_: Throwable) {
+                        }
+                        audioRecord = null
+                    }
+                    continue
+                }
+                consecutiveZeroFrames = 0
                 if (peak < SILENCE_PEAK_THRESHOLD) {
                     continue
                 }
@@ -275,7 +292,7 @@ class CollabVoiceEngine(
     }
 
     @Suppress("MissingPermission")
-    private fun createAudioRecord(sampleRateHz: Int): AudioRecord? {
+    private fun createAudioRecord(sampleRateHz: Int, preferMicSource: Boolean = false): AudioRecord? {
         if (!hasRecordAudioPermission()) return null
         return try {
             val minBuf = AudioRecord.getMinBufferSize(
@@ -285,19 +302,28 @@ class CollabVoiceEngine(
             )
             if (minBuf <= 0) return null
             val bufferSize = maxOf(minBuf * 2, (sampleRateHz * FRAME_DURATION_MS / 1000) * 4)
-            val record = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                sampleRateHz,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                bufferSize
-            )
-            if (record.state == AudioRecord.STATE_INITIALIZED) {
-                record
+            val sources = if (preferMicSource) {
+                intArrayOf(MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             } else {
-                record.release()
-                null
+                intArrayOf(MediaRecorder.AudioSource.VOICE_COMMUNICATION, MediaRecorder.AudioSource.MIC)
             }
+            for (source in sources) {
+                try {
+                    val record = AudioRecord(
+                        source,
+                        sampleRateHz,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        bufferSize
+                    )
+                    if (record.state == AudioRecord.STATE_INITIALIZED) {
+                        return record
+                    }
+                    record.release()
+                } catch (_: Throwable) {
+                }
+            }
+            null
         } catch (_: Throwable) {
             null
         }
@@ -313,7 +339,7 @@ class CollabVoiceEngine(
             if (minBuf <= 0) return null
             val bufferSize = maxOf(minBuf * 2, (sampleRateHz * FRAME_DURATION_MS / 1000) * 4)
             val attributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build()
             val format = AudioFormat.Builder()

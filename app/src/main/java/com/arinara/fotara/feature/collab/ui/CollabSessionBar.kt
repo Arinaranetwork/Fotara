@@ -280,7 +280,7 @@ fun CollabSessionBar(
                                 else ElectricSlateTokens.BorderSubtle,
                                 RoundedCornerShape(12.dp)
                             )
-                            .jigglePressClickable(onClick = onToggleMicClick),
+                            .jigglePressClickable(enabled = !isRoomMutedByMod, onClick = onToggleMicClick),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

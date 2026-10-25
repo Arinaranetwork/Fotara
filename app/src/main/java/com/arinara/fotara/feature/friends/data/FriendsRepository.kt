@@ -40,7 +40,12 @@ interface FriendsRepository {
     suspend fun removeFollower(id: String)
     suspend fun findUserByHandle(handle: String): FriendProfile?
 
-    fun syncMyProfile(displayName: String, pronouns: String = "", avatarUrl: String? = null) {}
+    fun syncMyProfile(
+        displayName: String,
+        pronouns: String = "",
+        avatarUrl: String? = null,
+        bannerUrl: String? = null
+    ) {}
     fun refreshNetworkPeers() {}
 }
 
@@ -71,11 +76,74 @@ class LocalFriendsRepository(
         const val KEY_MY_DISPLAY_NAME = "key_my_display_name"
         const val KEY_MY_PRONOUNS = "key_my_pronouns"
         const val KEY_MY_AVATAR_URL = "key_my_avatar_url"
+        const val KEY_MY_BANNER_URL = "key_my_banner_url"
         const val KEY_MY_PRESENCE = "key_my_presence"
         const val KEY_MY_PRESENCE_EXPLICIT_OFFLINE = "key_my_presence_explicit_offline"
         const val KEY_MY_SUBJECT = "key_my_subject"
         const val DEFAULT_HANDLE = ""
         private const val DELIMITER = "\n---FRIEND_RECORD---\n"
+        private val mediaDataUriCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+        fun encodeImageFileOrKeepUri(
+            rawPath: String?,
+            maxWidth: Int,
+            maxHeight: Int,
+            quality: Int = 55
+        ): String? {
+            val trimmed = rawPath?.trim()?.takeIf { it.isNotBlank() } ?: return null
+            if (trimmed.startsWith("data:image/", ignoreCase = true) ||
+                trimmed.startsWith("http://", ignoreCase = true) ||
+                trimmed.startsWith("https://", ignoreCase = true)
+            ) {
+                return trimmed
+            }
+            return try {
+                val file = java.io.File(trimmed)
+                if (!file.exists() || !file.isFile || file.length() <= 0L) {
+                    return trimmed
+                }
+                val cacheKey = "${file.absolutePath}:${file.lastModified()}:${maxWidth}x${maxHeight}"
+                mediaDataUriCache[cacheKey]?.let { return it }
+
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(file.absolutePath, bounds)
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                    return trimmed
+                }
+                var sample = 1
+                while ((bounds.outWidth / sample) > maxWidth * 2 || (bounds.outHeight / sample) > maxHeight * 2) {
+                    sample *= 2
+                }
+                val decodeOpts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+                val decoded = android.graphics.BitmapFactory.decodeFile(file.absolutePath, decodeOpts)
+                    ?: return trimmed
+                val scale = minOf(
+                    maxWidth.toFloat() / decoded.width.coerceAtLeast(1),
+                    maxHeight.toFloat() / decoded.height.coerceAtLeast(1),
+                    1.0f
+                )
+                val targetW = (decoded.width * scale).toInt().coerceAtLeast(1)
+                val targetH = (decoded.height * scale).toInt().coerceAtLeast(1)
+                val scaled = if (targetW != decoded.width || targetH != decoded.height) {
+                    android.graphics.Bitmap.createScaledBitmap(decoded, targetW, targetH, true).also {
+                        if (it !== decoded) decoded.recycle()
+                    }
+                } else {
+                    decoded
+                }
+                val out = java.io.ByteArrayOutputStream()
+                @Suppress("DEPRECATION")
+                scaled.compress(android.graphics.Bitmap.CompressFormat.WEBP, quality, out)
+                scaled.recycle()
+                val bytes = out.toByteArray()
+                if (bytes.isEmpty()) return trimmed
+                val dataUri = "data:image/webp;base64," + java.util.Base64.getEncoder().encodeToString(bytes)
+                mediaDataUriCache[cacheKey] = dataUri
+                dataUri
+            } catch (_: Throwable) {
+                trimmed
+            }
+        }
     }
 
     private val _friendsFlow = MutableStateFlow<List<FriendProfile>>(loadFriends())
@@ -98,6 +166,9 @@ class LocalFriendsRepository(
 
     @Volatile
     private var myAvatarUrl: String? = prefs.getString(KEY_MY_AVATAR_URL, null)?.takeIf { it.isNotBlank() }
+
+    @Volatile
+    private var myBannerUrl: String? = prefs.getString(KEY_MY_BANNER_URL, null)?.takeIf { it.isNotBlank() }
 
     private val _myHandleFlow = MutableStateFlow(resolveActiveLocalHandle())
 
@@ -174,6 +245,7 @@ class LocalFriendsRepository(
             handle = handle,
             displayName = resolvedName,
             avatarUrl = myAvatarUrl,
+            bannerUrl = myBannerUrl,
             pronouns = myPronouns,
             studyStatus = effectiveStatus,
             currentSubject = _mySubjectFlow.value,
@@ -182,7 +254,12 @@ class LocalFriendsRepository(
         )
     }
 
-    override fun syncMyProfile(displayName: String, pronouns: String, avatarUrl: String?) {
+    override fun syncMyProfile(
+        displayName: String,
+        pronouns: String,
+        avatarUrl: String?,
+        bannerUrl: String?
+    ) {
         val trimmedName = displayName.trim()
         val trimmedPronouns = pronouns.trim()
         val editor = prefs.edit()
@@ -203,8 +280,12 @@ class LocalFriendsRepository(
         }
         myPronouns = trimmedPronouns
         editor.putString(KEY_MY_PRONOUNS, trimmedPronouns)
-        myAvatarUrl = avatarUrl?.takeIf { it.isNotBlank() }
+        myAvatarUrl = encodeImageFileOrKeepUri(avatarUrl, maxWidth = 56, maxHeight = 56, quality = 55)
         editor.putString(KEY_MY_AVATAR_URL, myAvatarUrl)
+        if (bannerUrl != null) {
+            myBannerUrl = encodeImageFileOrKeepUri(bannerUrl, maxWidth = 140, maxHeight = 78, quality = 55)
+            editor.putString(KEY_MY_BANNER_URL, myBannerUrl)
+        }
 
         val explicitOffline = prefs.getBoolean(KEY_MY_PRESENCE_EXPLICIT_OFFLINE, false)
         if (!explicitOffline && _myPresenceStatusFlow.value == StudyPresenceStatus.OFFLINE) {
@@ -236,6 +317,8 @@ class LocalFriendsRepository(
             return existing.copy(
                 displayName = profile.displayName.ifBlank { existing.displayName },
                 pronouns = profile.pronouns.ifBlank { existing.pronouns },
+                avatarUrl = profile.avatarUrl?.takeIf { it.isNotBlank() } ?: existing.avatarUrl,
+                bannerUrl = profile.bannerUrl?.takeIf { it.isNotBlank() } ?: existing.bannerUrl,
                 studyStatus = profile.studyStatus,
                 currentSubject = profile.currentSubject,
                 followersCount = profile.followersCount,
@@ -315,10 +398,10 @@ class LocalFriendsRepository(
                 }
                 persistFollowers(updatedFollowers)
 
-                val isMutualOrFriend = eventType == "ADD_FRIEND" ||
-                    _followingFlow.value.any { it.handle.equals(normSender, ignoreCase = true) } ||
-                    _friendsFlow.value.any { it.handle.equals(normSender, ignoreCase = true) }
-                if (isMutualOrFriend) {
+                val isMutual = _followingFlow.value.any {
+                    it.id == normalizedSender.id || it.handle.equals(normSender, ignoreCase = true)
+                }
+                if (isMutual) {
                     val currentFriends = _friendsFlow.value
                     val existsInFriends = currentFriends.any {
                         it.id == normalizedSender.id || it.handle.equals(normSender, ignoreCase = true)
@@ -339,16 +422,28 @@ class LocalFriendsRepository(
                 announceLocalPresence()
             }
             "UNFOLLOW" -> {
-                val updated = _followersFlow.value.filterNot {
+                val updatedFollowers = _followersFlow.value.filterNot {
                     it.id == normalizedSender.id || it.handle.equals(normSender, ignoreCase = true)
                 }
-                persistFollowers(updated)
+                persistFollowers(updatedFollowers)
+                val updatedFriends = _friendsFlow.value.filterNot {
+                    it.id == normalizedSender.id || it.handle.equals(normSender, ignoreCase = true)
+                }
+                if (updatedFriends != _friendsFlow.value) {
+                    persistFriends(updatedFriends)
+                }
             }
             "REMOVE_FOLLOWER" -> {
-                val updated = _followingFlow.value.filterNot {
+                val updatedFollowing = _followingFlow.value.filterNot {
                     it.id == normalizedSender.id || it.handle.equals(normSender, ignoreCase = true)
                 }
-                persistFollowing(updated)
+                persistFollowing(updatedFollowing)
+                val updatedFriends = _friendsFlow.value.filterNot {
+                    it.id == normalizedSender.id || it.handle.equals(normSender, ignoreCase = true)
+                }
+                if (updatedFriends != _friendsFlow.value) {
+                    persistFriends(updatedFriends)
+                }
             }
         }
     }
@@ -482,12 +577,12 @@ class LocalFriendsRepository(
 
         val myNorm = resolveActiveLocalHandle()
         if (myNorm.isNotBlank() && cleanHandle.equals(myNorm, ignoreCase = true)) {
-            return Result.failure(IllegalArgumentException("You cannot add your own username as a friend"))
+            return Result.failure(IllegalArgumentException("You cannot follow your own username"))
         }
 
-        val currentList = _friendsFlow.value
-        if (currentList.any { it.handle.equals(cleanHandle, ignoreCase = true) }) {
-            return Result.failure(IllegalStateException("Friend with handle $cleanHandle already exists"))
+        val currentFollowing = _followingFlow.value
+        if (currentFollowing.any { it.handle.equals(cleanHandle, ignoreCase = true) }) {
+            return Result.failure(IllegalStateException("Already following $cleanHandle"))
         }
 
         // 1. Discover live peer on LAN or in FriendPeerRegistry, or via Share Code
@@ -529,7 +624,7 @@ class LocalFriendsRepository(
                 handleBody.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
             }
 
-        val newFriend = verifiedTarget.copy(
+        val newFollowed = verifiedTarget.copy(
             id = verifiedTarget.id.ifBlank { UUID.randomUUID().toString() },
             handle = cleanHandle,
             displayName = trimmedDisplay,
@@ -537,21 +632,27 @@ class LocalFriendsRepository(
             isFavorite = false
         )
 
-        val updated = currentList + newFriend
-        persistFriends(updated)
+        persistFollowing(currentFollowing + newFollowed)
 
-        val currentFollowing = _followingFlow.value
-        if (currentFollowing.none { it.handle.equals(cleanHandle, ignoreCase = true) }) {
-            persistFollowing(currentFollowing + newFriend)
+        // Mutual follow check: only add to Friends if they already follow us
+        val isFollower = _followersFlow.value.any {
+            it.id == newFollowed.id || it.handle.equals(cleanHandle, ignoreCase = true)
         }
+        if (isFollower) {
+            val currentFriends = _friendsFlow.value
+            if (currentFriends.none { it.id == newFollowed.id || it.handle.equals(cleanHandle, ignoreCase = true) }) {
+                persistFriends(currentFriends + newFollowed)
+            }
+        }
+
         val snap = getLocalProfileSnapshot()
         if (snap != null) {
-            FriendPeerRegistry.dispatchConnectEvent("ADD_FRIEND", snap, cleanHandle)
+            FriendPeerRegistry.dispatchConnectEvent("FOLLOW", snap, cleanHandle)
         }
-        lanTransport?.sendConnectEvent("ADD_FRIEND", cleanHandle)
+        lanTransport?.sendConnectEvent("FOLLOW", cleanHandle)
         announceLocalPresence()
 
-        return Result.success(newFriend)
+        return Result.success(newFollowed)
     }
 
     override suspend fun findUserByHandle(handle: String): FriendProfile? {
@@ -614,11 +715,13 @@ class LocalFriendsRepository(
             val updated = current + resolvedFriend
             persistFollowing(updated)
         }
-        // If they already follow us (or in live discovery), also add/sync in Friends list
-        val isFollower = _followersFlow.value.any { it.handle.equals(normalizedFriendHandle, ignoreCase = true) }
-        if (isFollower || FriendPeerRegistry.findByHandle(normalizedFriendHandle) != null) {
+        // Only add to Friends list when the follow is mutual (they already follow us)
+        val isFollower = _followersFlow.value.any {
+            it.id == resolvedFriend.id || it.handle.equals(normalizedFriendHandle, ignoreCase = true)
+        }
+        if (isFollower) {
             val currentFriends = _friendsFlow.value
-            if (currentFriends.none { it.handle.equals(normalizedFriendHandle, ignoreCase = true) }) {
+            if (currentFriends.none { it.id == resolvedFriend.id || it.handle.equals(normalizedFriendHandle, ignoreCase = true) }) {
                 persistFriends(currentFriends + resolvedFriend)
             }
         }
@@ -633,8 +736,21 @@ class LocalFriendsRepository(
     override suspend fun unfollowUser(id: String) {
         val current = _followingFlow.value
         val removed = current.firstOrNull { it.id == id || it.handle.equals(id, ignoreCase = true) }
-        val updated = current.filterNot { it.id == id || it.handle.equals(id, ignoreCase = true) }
+            ?: _friendsFlow.value.firstOrNull { it.id == id || it.handle.equals(id, ignoreCase = true) }
+        val updated = current.filterNot {
+            it.id == id ||
+                it.handle.equals(id, ignoreCase = true) ||
+                (removed != null && it.handle.equals(removed.handle, ignoreCase = true))
+        }
         persistFollowing(updated)
+        val updatedFriends = _friendsFlow.value.filterNot {
+            it.id == id ||
+                it.handle.equals(id, ignoreCase = true) ||
+                (removed != null && it.handle.equals(removed.handle, ignoreCase = true))
+        }
+        if (updatedFriends != _friendsFlow.value) {
+            persistFriends(updatedFriends)
+        }
         if (removed != null) {
             val snap = getLocalProfileSnapshot()
             if (snap != null) {
@@ -648,8 +764,20 @@ class LocalFriendsRepository(
     override suspend fun removeFollower(id: String) {
         val current = _followersFlow.value
         val removed = current.firstOrNull { it.id == id || it.handle.equals(id, ignoreCase = true) }
-        val updated = current.filterNot { it.id == id || it.handle.equals(id, ignoreCase = true) }
+        val updated = current.filterNot {
+            it.id == id ||
+                it.handle.equals(id, ignoreCase = true) ||
+                (removed != null && it.handle.equals(removed.handle, ignoreCase = true))
+        }
         persistFollowers(updated)
+        val updatedFriends = _friendsFlow.value.filterNot {
+            it.id == id ||
+                it.handle.equals(id, ignoreCase = true) ||
+                (removed != null && it.handle.equals(removed.handle, ignoreCase = true))
+        }
+        if (updatedFriends != _friendsFlow.value) {
+            persistFriends(updatedFriends)
+        }
         if (removed != null) {
             val snap = getLocalProfileSnapshot()
             if (snap != null) {

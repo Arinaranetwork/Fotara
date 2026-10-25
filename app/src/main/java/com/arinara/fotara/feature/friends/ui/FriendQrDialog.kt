@@ -216,7 +216,7 @@ fun FriendQrDialog(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Scan to add as academic friend",
+                        text = "Scan to follow academic profile",
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Normal,
                         fontSize = 13.sp,
@@ -296,7 +296,7 @@ fun FriendQrDialog(
                 } else {
                     // --- CONNECT PEER VIEW ---
                     Text(
-                        text = "Add Peer by Tag or Code",
+                        text = "Follow User by Tag or Code",
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
@@ -393,7 +393,7 @@ fun FriendQrDialog(
                             .height(48.dp)
                     ) {
                         Text(
-                            text = "Connect Friend",
+                            text = "Follow User",
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Medium,
                             fontSize = 14.sp,

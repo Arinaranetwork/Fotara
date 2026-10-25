@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -177,18 +178,32 @@ class FriendsViewModel(
         }
     }
 
-    fun syncMyProfile(displayName: String, pronouns: String = "", avatarUrl: String? = null) {
-        repository.syncMyProfile(displayName, pronouns, avatarUrl)
+    fun syncMyProfile(
+        displayName: String,
+        pronouns: String = "",
+        avatarUrl: String? = null,
+        bannerUrl: String? = null
+    ) {
+        repository.syncMyProfile(displayName, pronouns, avatarUrl, bannerUrl)
     }
 
     fun addFriend(handle: String, displayName: String, onComplete: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             val result = repository.addFriend(handle, displayName)
             if (result.isSuccess) {
-                _message.value = "Added ${result.getOrNull()?.displayName} to friends"
-                onComplete?.invoke(true, "Successfully added friend")
+                val target = result.getOrNull()
+                val isMutualFriend = target != null && repository.getFriendsFlow().first().any {
+                    it.id == target.id || it.handle.equals(target.handle, ignoreCase = true)
+                }
+                val statusMsg = if (isMutualFriend) {
+                    "Following ${target?.displayName} • You are now Friends!"
+                } else {
+                    "Following ${target?.displayName}"
+                }
+                _message.value = statusMsg
+                onComplete?.invoke(true, statusMsg)
             } else {
-                val errorMsg = result.exceptionOrNull()?.message ?: "Failed to add friend"
+                val errorMsg = result.exceptionOrNull()?.message ?: "Failed to follow user"
                 _message.value = errorMsg
                 onComplete?.invoke(false, errorMsg)
             }

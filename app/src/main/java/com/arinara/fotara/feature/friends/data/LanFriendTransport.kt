@@ -341,7 +341,7 @@ class LanFriendTransport(
             }
             udpSocket = socket
             scope.launch {
-                val buffer = ByteArray(8192)
+                val buffer = ByteArray(32768)
                 try {
                     while (isActive && !socket.isClosed) {
                         val packet = DatagramPacket(buffer, buffer.size)

@@ -79,6 +79,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.ExpandMore
@@ -168,6 +169,7 @@ fun FriendsScreen(
             handle = uiState.myHandle,
             displayName = resolvedOwnDisplayName,
             avatarUrl = userProfile.avatarPath,
+            bannerUrl = userProfile.bannerPath,
             pronouns = userProfile.pronouns,
             studyStatus = uiState.myPresenceStatus,
             currentSubject = uiState.mySubject,
@@ -180,14 +182,15 @@ fun FriendsScreen(
         viewModel.refreshNetworkPeers()
     }
 
-    LaunchedEffect(userProfile.name, userProfile.pronouns, userProfile.avatarPath, uiState.claimedUsername) {
+    LaunchedEffect(userProfile.name, userProfile.pronouns, userProfile.avatarPath, userProfile.bannerPath, uiState.claimedUsername) {
         val effectiveName = userProfile.name.trim()
             .takeIf { it.isNotBlank() && !it.equals("Fotara User", ignoreCase = true) && !it.equals("My Profile", ignoreCase = true) }
             ?: uiState.claimedUsername.removePrefix("@")
         viewModel.syncMyProfile(
             displayName = effectiveName,
             pronouns = userProfile.pronouns,
-            avatarUrl = userProfile.avatarPath
+            avatarUrl = userProfile.avatarPath,
+            bannerUrl = userProfile.bannerPath
         )
         viewModel.refreshNetworkPeers()
     }
@@ -618,7 +621,7 @@ fun FriendsScreen(
                                         profileForDialog = peer
                                         isOwnProfileDialog = false
                                     },
-                                    onUnfollow = { viewModel.unfollowUser(peer.id) }
+                                    onUnfollow = { friendToDelete = peer }
                                 )
                             }
                             item {
@@ -657,9 +660,16 @@ fun FriendsScreen(
         )
     }
 
-    // Dialog: Add Friend
+    // Dialog: Follow User by @username
     if (showAddFriendDialog) {
         AddFriendDialog(
+            discoveredPeer = uiState.discoveredPeer,
+            onHandleQueryChange = { viewModel.onSearchQueryChanged(it) },
+            onViewProfile = { peer ->
+                showAddFriendDialog = false
+                profileForDialog = peer
+                isOwnProfileDialog = false
+            },
             onDismiss = { showAddFriendDialog = false },
             onConfirm = { handle, name, onError ->
                 viewModel.addFriend(handle, name) { success, msg ->
@@ -677,15 +687,30 @@ fun FriendsScreen(
     if (profileForDialog != null) {
         val rawTarget = profileForDialog!!
         val isSelf = isOwnProfileDialog
-        val targetProfile = if (isSelf) {
+        val networkPeerMatch = uiState.discoveredPeer?.takeIf {
+            it.id == rawTarget.id || it.handle.equals(rawTarget.handle, ignoreCase = true)
+        }
+        val baseProfile = if (isSelf) {
             ownProfile
         } else {
             uiState.friends.find { it.id == rawTarget.id || it.handle.equals(rawTarget.handle, ignoreCase = true) }
                 ?: uiState.followers.find { it.id == rawTarget.id || it.handle.equals(rawTarget.handle, ignoreCase = true) }
                 ?: uiState.following.find { it.id == rawTarget.id || it.handle.equals(rawTarget.handle, ignoreCase = true) }
+                ?: networkPeerMatch
                 ?: rawTarget
         }
+        val targetProfile = if (!isSelf) {
+            baseProfile.copy(
+                avatarUrl = baseProfile.avatarUrl ?: networkPeerMatch?.avatarUrl ?: rawTarget.avatarUrl,
+                bannerUrl = baseProfile.bannerUrl ?: networkPeerMatch?.bannerUrl ?: rawTarget.bannerUrl
+            )
+        } else {
+            baseProfile
+        }
         val isCurrentlyFollowing = uiState.following.any {
+            it.id == targetProfile.id || it.handle.equals(targetProfile.handle, ignoreCase = true)
+        }
+        val isCurrentlyFriend = uiState.friends.any {
             it.id == targetProfile.id || it.handle.equals(targetProfile.handle, ignoreCase = true)
         }
 
@@ -696,6 +721,7 @@ fun FriendsScreen(
             followingCount = if (isSelf) uiState.followingCount else targetProfile.followingCount,
             friendsCount = if (isSelf) uiState.totalFriendsCount else 0,
             isFollowing = isCurrentlyFollowing,
+            isFriend = isCurrentlyFriend,
             avatarPath = if (isSelf) userProfile.avatarPath else targetProfile.avatarUrl,
             bannerPath = if (isSelf) userProfile.bannerPath else targetProfile.bannerUrl,
             bannerUpdatedAt = if (isSelf) userProfile.bannerUpdatedAt else 0L,
@@ -716,13 +742,12 @@ fun FriendsScreen(
             },
             onToggleFollow = {
                 if (isCurrentlyFollowing) {
-                    viewModel.unfollowUser(targetProfile.id)
+                    friendToDelete = targetProfile
                 } else {
                     viewModel.followUser(targetProfile)
                 }
             },
             onRemoveFriend = {
-                profileForDialog = null
                 friendToDelete = targetProfile
             }
         )
@@ -745,13 +770,17 @@ fun FriendsScreen(
         )
     }
 
-    // Dialog: Confirm Friend Deletion
+    // Dialog: Confirm Unfollow Warning
     if (friendToDelete != null) {
+        val targetPeer = friendToDelete!!
+        val isTargetMutualFriend = uiState.friends.any {
+            it.id == targetPeer.id || it.handle.equals(targetPeer.handle, ignoreCase = true)
+        }
         AlertDialog(
             onDismissRequest = { friendToDelete = null },
             title = {
                 Text(
-                    text = "Remove Friend",
+                    text = "Unfollow ${targetPeer.displayName}?",
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
@@ -760,7 +789,11 @@ fun FriendsScreen(
             },
             text = {
                 Text(
-                    text = "Are you sure you want to remove ${friendToDelete?.displayName} (${friendToDelete?.formattedHandle}) from your friends list?",
+                    text = if (isTargetMutualFriend) {
+                        "Warning: You and ${targetPeer.displayName} (${targetPeer.formattedHandle}) are Friends. Unfollowing them will also remove them from your Friends list. Are you sure you want to unfollow?"
+                    } else {
+                        "Warning: Are you sure you want to unfollow ${targetPeer.displayName} (${targetPeer.formattedHandle})? You will no longer see their study updates in your Following list."
+                    },
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Normal,
                     fontSize = 14.sp,
@@ -772,8 +805,7 @@ fun FriendsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val id = friendToDelete?.id
-                        if (id != null) viewModel.removeFriend(id)
+                        viewModel.unfollowUser(targetPeer.id)
                         friendToDelete = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
@@ -781,7 +813,7 @@ fun FriendsScreen(
                     modifier = Modifier.height(48.dp)
                 ) {
                     Text(
-                        text = "Remove",
+                        text = "Unfollow",
                         fontFamily = ElmsSans,
                         fontWeight = FontWeight.Medium,
                         color = Color.White
@@ -1113,6 +1145,84 @@ private fun SectionHeader(
 }
 
 /**
+ * Renders a peer or user avatar from either a Base64 Data URI ("data:image/..."),
+ * an HTTP/HTTPS URL, or a local file path, falling back to initials if unavailable.
+ */
+@Composable
+private fun PeerAvatarContent(
+    avatarPath: String?,
+    displayName: String,
+    defaultInitials: String = "FR",
+    fontSize: androidx.compose.ui.unit.TextUnit = 15.sp
+) {
+    val context = LocalContext.current
+    val isDataUri = remember(avatarPath) {
+        avatarPath?.startsWith("data:image/", ignoreCase = true) == true
+    }
+    val dataUriBitmap = remember(avatarPath) {
+        if (isDataUri && avatarPath != null) {
+            try {
+                val base64Part = avatarPath.substringAfter("base64,", "")
+                if (base64Part.isNotEmpty()) {
+                    val bytes = android.util.Base64.decode(base64Part, android.util.Base64.DEFAULT)
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                } else null
+            } catch (_: Throwable) {
+                null
+            }
+        } else null
+    }
+    val hasValidLocalOrRemote = remember(avatarPath) {
+        if (avatarPath.isNullOrBlank() || isDataUri) {
+            false
+        } else if (avatarPath.startsWith("http://", ignoreCase = true) || avatarPath.startsWith("https://", ignoreCase = true)) {
+            true
+        } else {
+            java.io.File(avatarPath).exists()
+        }
+    }
+
+    if (dataUriBitmap != null) {
+        androidx.compose.foundation.Image(
+            bitmap = dataUriBitmap,
+            contentDescription = displayName,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+    } else if (hasValidLocalOrRemote && !avatarPath.isNullOrBlank()) {
+        val modelData: Any = if (avatarPath.startsWith("http", ignoreCase = true)) {
+            avatarPath
+        } else {
+            java.io.File(avatarPath)
+        }
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(modelData)
+                .crossfade(true)
+                .build(),
+            contentDescription = displayName,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+    } else {
+        val initials = displayName
+            .split(" ")
+            .mapNotNull { it.firstOrNull()?.toString() }
+            .take(2)
+            .joinToString("")
+            .uppercase()
+
+        Text(
+            text = if (initials.isNotEmpty()) initials else defaultInitials,
+            fontFamily = ElmsSans,
+            fontWeight = FontWeight.Bold,
+            fontSize = fontSize,
+            color = Color.White
+        )
+    }
+}
+
+/**
  * Single Friend row card.
  */
 @Composable
@@ -1148,19 +1258,11 @@ private fun FriendItemCard(
                         .background(Color(0xFF1E2638)),
                     contentAlignment = Alignment.Center
                 ) {
-                    val initials = friend.displayName
-                        .split(" ")
-                        .mapNotNull { it.firstOrNull()?.toString() }
-                        .take(2)
-                        .joinToString("")
-                        .uppercase()
-
-                    Text(
-                        text = if (initials.isNotEmpty()) initials else "FR",
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Color.White
+                    PeerAvatarContent(
+                        avatarPath = friend.avatarUrl,
+                        displayName = friend.displayName,
+                        defaultInitials = "FR",
+                        fontSize = 15.sp
                     )
                 }
 
@@ -1320,19 +1422,11 @@ private fun FollowerItemCard(
                     .background(Color(0xFF1E2638)),
                 contentAlignment = Alignment.Center
             ) {
-                val initials = follower.displayName
-                    .split(" ")
-                    .mapNotNull { it.firstOrNull()?.toString() }
-                    .take(2)
-                    .joinToString("")
-                    .uppercase()
-
-                Text(
-                    text = if (initials.isNotEmpty()) initials else "FL",
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = Color.White
+                PeerAvatarContent(
+                    avatarPath = follower.avatarUrl,
+                    displayName = follower.displayName,
+                    defaultInitials = "FL",
+                    fontSize = 15.sp
                 )
             }
 
@@ -1426,19 +1520,11 @@ private fun FollowingItemCard(
                     .background(Color(0xFF1E2638)),
                 contentAlignment = Alignment.Center
             ) {
-                val initials = peer.displayName
-                    .split(" ")
-                    .mapNotNull { it.firstOrNull()?.toString() }
-                    .take(2)
-                    .joinToString("")
-                    .uppercase()
-
-                Text(
-                    text = if (initials.isNotEmpty()) initials else "PG",
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = Color.White
+                PeerAvatarContent(
+                    avatarPath = peer.avatarUrl,
+                    displayName = peer.displayName,
+                    defaultInitials = "PG",
+                    fontSize = 15.sp
                 )
             }
 
@@ -1537,7 +1623,7 @@ private fun FriendsEmptyState(
                 modifier = Modifier.height(48.dp)
             ) {
                 Text(
-                    text = "Add Friend",
+                    text = "Follow User",
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Medium,
                     fontSize = 14.sp,
@@ -1720,18 +1806,11 @@ private fun DiscoveredPeerCard(
                         .background(Color(0xFF1E2638)),
                     contentAlignment = Alignment.Center
                 ) {
-                    val initials = peer.displayName
-                        .split(" ")
-                        .mapNotNull { it.firstOrNull()?.toString() }
-                        .take(2)
-                        .joinToString("")
-                        .uppercase()
-                    Text(
-                        text = if (initials.isNotEmpty()) initials else "PR",
-                        fontFamily = ElmsSans,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Color.White
+                    PeerAvatarContent(
+                        avatarPath = peer.avatarUrl,
+                        displayName = peer.displayName,
+                        defaultInitials = "PR",
+                        fontSize = 15.sp
                     )
                 }
 
@@ -1772,7 +1851,7 @@ private fun DiscoveredPeerCard(
                         modifier = Modifier.height(36.dp)
                     ) {
                         Text(
-                            text = "Add Friend",
+                            text = "Follow",
                             fontFamily = ElmsSans,
                             fontWeight = FontWeight.Medium,
                             fontSize = 12.sp,
@@ -1884,6 +1963,7 @@ private fun UserProfileDialog(
     followingCount: Int,
     friendsCount: Int,
     isFollowing: Boolean,
+    isFriend: Boolean = false,
     avatarPath: String? = null,
     bannerPath: String? = null,
     bannerUpdatedAt: Long = 0L,
@@ -1896,7 +1976,7 @@ private fun UserProfileDialog(
     onSelectTab: (FriendsTab) -> Unit = {}
 ) {
     val context = LocalContext.current
-    var isExpanded by remember { mutableStateOf(isSelf) }
+    var isExpanded by remember { mutableStateOf(true) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1987,32 +2067,12 @@ private fun UserProfileDialog(
                                 .border(BorderStroke(2.dp, HomeCardSurface), RoundedCornerShape(18.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (!avatarPath.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(avatarPath)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = profile.displayName,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                val initials = profile.displayName
-                                    .split(" ")
-                                    .mapNotNull { it.firstOrNull()?.toString() }
-                                    .take(2)
-                                    .joinToString("")
-                                    .uppercase()
-
-                                Text(
-                                    text = if (initials.isNotEmpty()) initials else if (isSelf) "ME" else "FR",
-                                    fontFamily = ElmsSans,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp,
-                                    color = Color.White
-                                )
-                            }
+                            PeerAvatarContent(
+                                avatarPath = avatarPath,
+                                displayName = profile.displayName,
+                                defaultInitials = if (isSelf) "ME" else "FR",
+                                fontSize = 20.sp
+                            )
                         }
 
                         val dotColor = when (profile.studyStatus) {
@@ -2034,16 +2094,39 @@ private fun UserProfileDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Display Name
-                Text(
-                    text = profile.displayName,
-                    fontFamily = ElmsSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // Display Name + Mutual Friend Badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = profile.displayName,
+                        fontFamily = ElmsSans,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (!isSelf && isFriend) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Color(0xFF1E3A5F))
+                                .border(BorderStroke(1.dp, Color(0xFF60A5FA)), RoundedCornerShape(999.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "Friend",
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = Color(0xFF93C5FD)
+                            )
+                        }
+                    }
+                }
 
                 // Pronouns
                 if (profile.pronouns.isNotBlank()) {
@@ -2206,64 +2289,63 @@ private fun UserProfileDialog(
                             )
                         }
                     } else {
-                        // Peer profile actions
-                        OutlinedButton(
-                            onClick = onShareNotes,
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, Color(0xFF28354D)),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(44.dp)
-                        ) {
-                            Text(
-                                text = "Share Notes",
-                                fontFamily = ElmsSans,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
+                        // Peer profile actions: Follow / Unfollow + Share Notes
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            if (isFollowing) {
+                                OutlinedButton(
+                                    onClick = onToggleFollow,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, Color(0xFF7F1D1D)),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color(0xFFF87171)
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                ) {
+                                    Text(
+                                        text = "Unfollow",
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            } else {
+                                Button(
+                                    onClick = onToggleFollow,
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                ) {
+                                    Text(
+                                        text = "Follow",
+                                        fontFamily = ElmsSans,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 12.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
                             OutlinedButton(
-                                onClick = onToggleFollow,
+                                onClick = onShareNotes,
                                 shape = RoundedCornerShape(8.dp),
                                 border = BorderStroke(1.dp, Color(0xFF28354D)),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = if (isFollowing) TextSecondary else Color(0xFF60A5FA)
-                                ),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(44.dp)
                             ) {
                                 Text(
-                                    text = if (isFollowing) "Unfollow" else "Follow",
+                                    text = "Share Notes",
                                     fontFamily = ElmsSans,
                                     fontWeight = FontWeight.Medium,
                                     fontSize = 12.sp
-                                )
-                            }
-
-                            Button(
-                                onClick = onRemoveFriend,
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B1818)),
-                                border = BorderStroke(1.dp, Color(0xFF7F1D1D)),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(44.dp)
-                            ) {
-                                Text(
-                                    text = "Remove Friend",
-                                    fontFamily = ElmsSans,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 12.sp,
-                                    color = Color(0xFFF87171)
                                 )
                             }
                         }
@@ -2349,22 +2431,35 @@ private fun StatCounterCard(
 }
 
 /**
- * Add Friend Dialog modal.
+ * Follow User by @username Dialog modal with live profile banner and avatar preview.
  */
 @Composable
 private fun AddFriendDialog(
+    discoveredPeer: FriendProfile? = null,
+    onHandleQueryChange: (String) -> Unit = {},
+    onViewProfile: (FriendProfile) -> Unit = {},
     onDismiss: () -> Unit,
     onConfirm: (handle: String, displayName: String, onError: (String) -> Unit) -> Unit
 ) {
     var handleInput by remember { mutableStateOf("") }
-    var nameInput by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val matchingPeer = remember(discoveredPeer, handleInput) {
+        val clean = handleInput.trim().removePrefix("@").lowercase()
+        if (clean.length >= 3 && discoveredPeer != null &&
+            discoveredPeer.handle.removePrefix("@").equals(clean, ignoreCase = true)
+        ) {
+            discoveredPeer
+        } else {
+            null
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Add Friend",
+                text = "Follow User",
                 fontFamily = ElmsSans,
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
@@ -2377,7 +2472,7 @@ private fun AddFriendDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Enter your classmate's academic username and full display name to connect.",
+                    text = "Enter a user's @username to follow them. When both of you follow each other, you automatically become Friends.",
                     fontFamily = ElmsSans,
                     fontSize = 13.sp,
                     color = TextSecondary
@@ -2388,6 +2483,7 @@ private fun AddFriendDialog(
                     onValueChange = {
                         handleInput = it
                         errorMessage = null
+                        onHandleQueryChange(it)
                     },
                     label = { Text("Academic Handle (@username)") },
                     singleLine = true,
@@ -2403,26 +2499,70 @@ private fun AddFriendDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                OutlinedTextField(
-                    value = nameInput,
-                    onValueChange = {
-                        nameInput = it
-                        errorMessage = null
-                    },
-                    label = { Text("Display Name (Optional)") },
-                    placeholder = { Text("Auto-resolved if left empty") },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF3B82F6),
-                        unfocusedBorderColor = HomeCardBorder,
-                        focusedContainerColor = HomeNearBlack,
-                        unfocusedContainerColor = HomeNearBlack,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (matchingPeer != null) {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = HomeNearBlack),
+                        border = BorderStroke(1.dp, Color(0xFF283548)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onViewProfile(matchingPeer) }
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(84.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(56.dp)
+                                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                                ) {
+                                    ProfileBanner(
+                                        bannerPath = matchingPeer.bannerUrl,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0xFF1E2638))
+                                        .border(BorderStroke(2.dp, HomeNearBlack), RoundedCornerShape(14.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    PeerAvatarContent(
+                                        avatarPath = matchingPeer.avatarUrl,
+                                        displayName = matchingPeer.displayName,
+                                        defaultInitials = "PR",
+                                        fontSize = 15.sp
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = matchingPeer.displayName,
+                                fontFamily = ElmsSans,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Color.White
+                            )
+                            Text(
+                                text = matchingPeer.formattedHandle,
+                                fontFamily = ElmsSans,
+                                fontSize = 12.sp,
+                                color = FolderTabCream
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                }
 
                 if (errorMessage != null) {
                     Text(
@@ -2440,23 +2580,21 @@ private fun AddFriendDialog(
             Button(
                 onClick = {
                     val handle = handleInput.trim()
-                    val name = nameInput.trim()
                     if (handle.isEmpty()) {
                         errorMessage = "Please enter an academic handle"
                         return@Button
                     }
-                    onConfirm(handle, name) { err ->
+                    onConfirm(handle, matchingPeer?.displayName ?: "") { err ->
                         errorMessage = err
                     }
                 },
-
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2638)),
                 border = BorderStroke(1.dp, Color(0xFF334155)),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.height(48.dp)
             ) {
                 Text(
-                    text = "Add Contact",
+                    text = "Follow",
                     fontFamily = ElmsSans,
                     fontWeight = FontWeight.Medium,
                     color = Color.White

@@ -198,11 +198,30 @@ fun ProfileBanner(
     isOnScreen: Boolean = true
 ) {
     val context = LocalContext.current
+    val isDataUri = remember(bannerPath) { bannerPath?.startsWith("data:image/", ignoreCase = true) == true }
+    val dataUriBitmap = remember(bannerPath) {
+        if (isDataUri && bannerPath != null) {
+            try {
+                val base64Part = bannerPath.substringAfter("base64,", "")
+                if (base64Part.isNotEmpty()) {
+                    val bytes = android.util.Base64.decode(base64Part, android.util.Base64.DEFAULT)
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                } else null
+            } catch (_: Throwable) { null }
+        } else null
+    }
     val bannerFile = remember(bannerPath, bannerUpdatedAt) {
-        bannerPath?.let { File(it) }
+        if (!isDataUri) bannerPath?.let { File(it) } else null
     }
 
-    if (bannerFile != null && bannerFile.exists()) {
+    if (dataUriBitmap != null) {
+        androidx.compose.foundation.Image(
+            bitmap = dataUriBitmap,
+            contentDescription = "Profile Banner",
+            contentScale = ContentScale.Crop,
+            modifier = modifier.fillMaxSize()
+        )
+    } else if (bannerFile != null && bannerFile.exists()) {
         val isGif = remember(bannerFile.absolutePath) {
             bannerFile.name.endsWith(".gif", ignoreCase = true)
         }

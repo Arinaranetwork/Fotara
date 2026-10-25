@@ -597,4 +597,80 @@ class CollabSessionEngineTest {
         assertEquals(4, buffered[0].points.size)
         assertEquals(6, buffered[1].points.size)
     }
+
+    @Test
+    fun testHostAndAdminMuteMemberForcesLocalMicMuteAndBlocksUnmute() {
+        val hostEngine = CollabSessionEngine(
+            initialLocalPeerId = "host_p0",
+            initialLocalUserTag = "HostAlice"
+        )
+        assertTrue(hostEngine.createCustomRoom("FT-8899", userTag = "HostAlice"))
+
+        val adminEngine = CollabSessionEngine(
+            initialLocalPeerId = "admin_p2",
+            initialLocalUserTag = "AdminCarol"
+        )
+        assertTrue(adminEngine.joinRoom("FT-8899", userTag = "AdminCarol"))
+        assertTrue(engine.joinRoom("FT-8899", userTag = "MemberBob"))
+
+        // Host promotes Carol to Admin
+        val promoteMsg = CollabMessage.SetPeerRole(
+            hostPeerId = "host_p0",
+            targetPeerId = "admin_p2",
+            newRole = com.arinara.fotara.feature.collab.model.CollabRole.ADMIN
+        )
+        hostEngine.receiveMessage(promoteMsg)
+        adminEngine.receiveMessage(promoteMsg)
+        engine.receiveMessage(promoteMsg)
+        assertEquals(com.arinara.fotara.feature.collab.model.CollabRole.ADMIN, adminEngine.localRole.value)
+
+        // Initially MemberBob is unmuted and can broadcast audio
+        assertFalse(engine.isLocalMicMuted.value)
+        assertFalse(engine.activePeers.value["local_p1"]?.isRoomMuted == true)
+
+        // Admin mutes MemberBob via setPeerRoomMuted
+        var adminDispatchedMute: CollabMessage.ModMutePeer? = null
+        adminEngine.transportBridge = { msg ->
+            if (msg is CollabMessage.ModMutePeer) {
+                adminDispatchedMute = msg
+            }
+        }
+        assertTrue(adminEngine.setPeerRoomMuted(targetPeerId = "local_p1", isMuted = true))
+        assertNotNull(adminDispatchedMute)
+        assertEquals("admin_p2", adminDispatchedMute?.actorPeerId)
+        assertEquals("local_p1", adminDispatchedMute?.targetPeerId)
+        assertTrue(adminDispatchedMute?.isMuted == true)
+
+        // Deliver ModMutePeer to MemberBob
+        engine.receiveMessage(adminDispatchedMute!!)
+        assertTrue(engine.activePeers.value["local_p1"]?.isRoomMuted == true)
+        assertTrue(engine.isLocalMicMuted.value)
+
+        // MemberBob attempts to unmute via toggleLocalMicMuted() and setLocalMicMuted(false) -> MUST be blocked
+        assertTrue(engine.toggleLocalMicMuted())
+        assertTrue(engine.isLocalMicMuted.value)
+        assertEquals("You are muted in this room by the host or admin.", engine.lastErrorMessage.value)
+
+        engine.setLocalMicMuted(false)
+        assertTrue(engine.isLocalMicMuted.value)
+
+        // MemberBob audio frames must not broadcast while room-muted
+        dispatchedMessages.clear()
+        engine.broadcastAudioFrame("AAECAwQF", sequenceNumber = 50L, sampleRateHz = 16000)
+        assertTrue(dispatchedMessages.filterIsInstance<CollabMessage.AudioStreamFrame>().isEmpty())
+
+        // Host unmutes MemberBob -> MemberBob can now unmute their mic and transmit audio
+        engine.receiveMessage(
+            CollabMessage.ModMutePeer(
+                actorPeerId = "host_p0",
+                targetPeerId = "local_p1",
+                isMuted = false
+            )
+        )
+        assertFalse(engine.activePeers.value["local_p1"]?.isRoomMuted == true)
+        assertFalse(engine.toggleLocalMicMuted())
+        assertFalse(engine.isLocalMicMuted.value)
+        engine.broadcastAudioFrame("AAECAwQF", sequenceNumber = 51L, sampleRateHz = 16000)
+        assertEquals(1, dispatchedMessages.filterIsInstance<CollabMessage.AudioStreamFrame>().size)
+    }
 }

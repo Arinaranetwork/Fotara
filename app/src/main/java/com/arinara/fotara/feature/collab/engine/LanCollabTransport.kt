@@ -158,7 +158,8 @@ object CollabRoomRegistry {
  */
 class LanCollabTransport(
     private val onMessageReceived: (CollabMessage) -> Unit,
-    private val onHostConnectionLost: (() -> Unit)? = null
+    private val onHostConnectionLost: (() -> Unit)? = null,
+    private val onConnectedToHost: (() -> Unit)? = null
 ) : AutoCloseable {
 
     companion object {
@@ -182,6 +183,9 @@ class LanCollabTransport(
 
     @Volatile
     private var connectedHostEndpoint: String = ""
+
+    @Volatile
+    private var connectingHostEndpoint: String = ""
 
     @Volatile
     private var isDisconnectingIntentionally: Boolean = false
@@ -299,15 +303,16 @@ class LanCollabTransport(
         if (hostIp.isBlank() || hostPort <= 0) return
         val endpoint = "$hostIp:$hostPort"
         val existingSocket = clientToHostSocket
-        if (connectedHostEndpoint == endpoint &&
-            existingSocket != null &&
-            existingSocket.isConnected &&
-            !existingSocket.isClosed
+        if (connectingHostEndpoint == endpoint ||
+            (connectedHostEndpoint == endpoint &&
+                existingSocket != null &&
+                existingSocket.isConnected &&
+                !existingSocket.isClosed)
         ) {
             return
         }
         isDisconnectingIntentionally = false
-        connectedHostEndpoint = endpoint
+        connectingHostEndpoint = endpoint
         scope.launch {
             var socket: Socket? = null
             try {
@@ -320,6 +325,8 @@ class LanCollabTransport(
                 newSocket.connect(InetSocketAddress(hostIp, hostPort), SOCKET_TIMEOUT_MS)
                 socket = newSocket
                 clientToHostSocket = newSocket
+                connectedHostEndpoint = endpoint
+                connectingHostEndpoint = ""
                 val writer = PrintWriter(
                     OutputStreamWriter(newSocket.getOutputStream(), StandardCharsets.UTF_8),
                     true
@@ -334,6 +341,7 @@ class LanCollabTransport(
                     }
                     writer.flush()
                 }
+                onConnectedToHost?.invoke()
 
                 BufferedReader(InputStreamReader(newSocket.getInputStream(), StandardCharsets.UTF_8)).use { reader ->
                     while (isActive && !newSocket.isClosed) {
@@ -348,10 +356,16 @@ class LanCollabTransport(
                     onHostConnectionLost?.invoke()
                 }
             } catch (_: Exception) {
+                if (connectingHostEndpoint == endpoint) {
+                    connectingHostEndpoint = ""
+                }
                 if (!isDisconnectingIntentionally && socket != null && clientToHostSocket === socket) {
                     onHostConnectionLost?.invoke()
                 }
             } finally {
+                if (connectingHostEndpoint == endpoint) {
+                    connectingHostEndpoint = ""
+                }
                 if (socket != null && clientToHostSocket === socket) {
                     clientToHostSocket = null
                     clientToHostWriter = null
@@ -430,10 +444,14 @@ class LanCollabTransport(
                     } catch (_: Exception) {
                     }
                 } else if (connectedJoinerWriters.isEmpty()) {
-                    while (pendingClientLines.size >= 64) {
-                        pendingClientLines.poll()
+                    if (message is CollabMessage.AudioStreamFrame || message is CollabMessage.CursorBroadcast) {
+                        sendUdpBroadcast(encoded)
+                    } else {
+                        while (pendingClientLines.size >= 64) {
+                            pendingClientLines.poll()
+                        }
+                        pendingClientLines.offer(encoded)
                     }
-                    pendingClientLines.offer(encoded)
                 }
                 // Broadcast to all connected Joiners if we are the Host
                 for (writer in connectedJoinerWriters) {
@@ -446,7 +464,16 @@ class LanCollabTransport(
                         connectedJoinerWriters.remove(writer)
                     }
                 }
-                if (message is CollabMessage.LeaveRoom) {
+                if (message is CollabMessage.LeaveRoom ||
+                    message is CollabMessage.JoinRoom ||
+                    message is CollabMessage.PeerJoined ||
+                    message is CollabMessage.ModMutePeer ||
+                    message is CollabMessage.BlockPeerChat ||
+                    message is CollabMessage.SetPeerRole ||
+                    message is CollabMessage.KickPeer ||
+                    message is CollabMessage.CanvasPermissionSync ||
+                    message is CollabMessage.RoomSettingsSync
+                ) {
                     sendUdpBroadcast(encoded)
                 }
             }
@@ -486,6 +513,7 @@ class LanCollabTransport(
         isDisconnectingIntentionally = true
         pendingClientLines.clear()
         connectedHostEndpoint = ""
+        connectingHostEndpoint = ""
 
         try {
             tcpServerSocket?.close()
@@ -521,12 +549,42 @@ class LanCollabTransport(
                 null
             }
 
+            var socketPeerId = ""
+            var socketSessionToken = ""
+
             try {
                 BufferedReader(InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8)).use { reader ->
                     while (isActive && !socket.isClosed) {
                         val line = reader.readLine() ?: break
                         val decoded = CollabProtocolCodec.decode(line)
                         if (decoded != null) {
+                            when (decoded) {
+                                is CollabMessage.JoinRoom -> {
+                                    if (decoded.peerId.isNotBlank()) socketPeerId = decoded.peerId
+                                    if (decoded.sessionToken.isNotBlank()) socketSessionToken = decoded.sessionToken
+                                }
+                                is CollabMessage.PeerJoined -> {
+                                    if (socketPeerId.isBlank() && decoded.peerId.isNotBlank()) socketPeerId = decoded.peerId
+                                    if (decoded.sessionToken.isNotBlank()) socketSessionToken = decoded.sessionToken
+                                }
+                                is CollabMessage.CursorBroadcast -> {
+                                    if (socketPeerId.isBlank() && decoded.peerId.isNotBlank()) socketPeerId = decoded.peerId
+                                    if (decoded.sessionToken.isNotBlank()) socketSessionToken = decoded.sessionToken
+                                }
+                                is CollabMessage.StrokeBroadcast -> {
+                                    if (socketPeerId.isBlank() && decoded.peerId.isNotBlank()) socketPeerId = decoded.peerId
+                                    if (decoded.sessionToken.isNotBlank()) socketSessionToken = decoded.sessionToken
+                                }
+                                is CollabMessage.AudioStreamFrame -> {
+                                    if (socketPeerId.isBlank() && decoded.peerId.isNotBlank()) socketPeerId = decoded.peerId
+                                    if (decoded.sessionToken.isNotBlank()) socketSessionToken = decoded.sessionToken
+                                }
+                                is CollabMessage.ChatBroadcast -> {
+                                    if (socketPeerId.isBlank() && decoded.peerId.isNotBlank()) socketPeerId = decoded.peerId
+                                    if (decoded.sessionToken.isNotBlank()) socketSessionToken = decoded.sessionToken
+                                }
+                                else -> {}
+                            }
                             onMessageReceived(decoded)
                             // Relay joiner frames across all other connected joiner sockets
                             if (decoded is CollabMessage.StrokeBroadcast ||
@@ -574,6 +632,24 @@ class LanCollabTransport(
                     socket.close()
                 } catch (_: Exception) {
                 }
+                if (!isDisconnectingIntentionally && socketPeerId.isNotBlank()) {
+                    val leaveMsg = CollabMessage.LeaveRoom(
+                        peerId = socketPeerId,
+                        sessionToken = socketSessionToken
+                    )
+                    val encodedLeave = CollabProtocolCodec.encode(leaveMsg)
+                    onMessageReceived(leaveMsg)
+                    for (otherWriter in connectedJoinerWriters) {
+                        try {
+                            synchronized(otherWriter) {
+                                otherWriter.println(encodedLeave)
+                                otherWriter.flush()
+                            }
+                        } catch (_: Exception) {
+                        }
+                    }
+                    sendUdpBroadcast(encodedLeave)
+                }
             }
         }
     }
@@ -609,6 +685,25 @@ class LanCollabTransport(
                         onMessageReceived(decoded)
                     } else {
                         onMessageReceived(decoded)
+                        if (connectedJoinerWriters.isNotEmpty() && (
+                                decoded is CollabMessage.AudioStreamFrame ||
+                                    decoded is CollabMessage.ModMutePeer ||
+                                    decoded is CollabMessage.BlockPeerChat ||
+                                    decoded is CollabMessage.SetPeerRole ||
+                                    decoded is CollabMessage.LeaveRoom ||
+                                    decoded is CollabMessage.PeerJoined
+                                )
+                        ) {
+                            for (writer in connectedJoinerWriters) {
+                                try {
+                                    synchronized(writer) {
+                                        writer.println(json)
+                                        writer.flush()
+                                    }
+                                } catch (_: Exception) {
+                                }
+                            }
+                        }
                     }
                 }
             } catch (_: Exception) {

@@ -237,10 +237,43 @@ class CollabSessionEngine(
     private val lanTransport: LanCollabTransport? = if (enableLanTransport) {
         LanCollabTransport(
             onMessageReceived = { incoming -> receiveMessage(incoming) },
-            onHostConnectionLost = { handleHostConnectionLost() }
+            onHostConnectionLost = { handleHostConnectionLost() },
+            onConnectedToHost = { handleConnectedToHost() }
         )
     } else {
         null
+    }
+
+    @Synchronized
+    private fun handleConnectedToHost() {
+        val currentCode = _roomCode.value ?: return
+        if (!isSessionActive || _localRole.value == CollabRole.HOST) return
+        dispatchMessage(
+            CollabMessage.JoinRoom(
+                roomCode = currentCode,
+                userTag = localUserTag,
+                colorHex = localColorHex,
+                peerId = localPeerId,
+                deviceId = localDeviceId,
+                pronouns = localPronouns,
+                userHandle = localUserHandle,
+                audioBitrateKbps = _audioBitrateKbps.value,
+                sessionToken = _sessionToken.value
+            )
+        )
+        dispatchMessage(
+            CollabMessage.PeerJoined(
+                peerId = localPeerId,
+                userTag = localUserTag,
+                colorHex = localColorHex,
+                deviceId = localDeviceId,
+                pronouns = localPronouns,
+                userHandle = localUserHandle,
+                role = _localRole.value,
+                audioBitrateKbps = _audioBitrateKbps.value,
+                sessionToken = _sessionToken.value
+            )
+        )
     }
 
     /**
@@ -927,10 +960,20 @@ class CollabSessionEngine(
         if (actorPeerId == targetPeerId) return false
         val currentHost = _hostPeerId.value
         if (targetPeerId == currentHost) return false
+        val actorRole = _activePeers.value[actorPeerId]?.role
+        val targetRole = _activePeers.value[targetPeerId]?.role
 
         return when {
-            actorPeerId == currentHost -> true
-            actorPeerId in _adminPeerIds.value -> targetPeerId !in _adminPeerIds.value
+            actorPeerId == currentHost ||
+                actorRole == CollabRole.HOST ||
+                (actorPeerId == localPeerId && _localRole.value == CollabRole.HOST) -> true
+            actorPeerId in _adminPeerIds.value ||
+                actorRole == CollabRole.ADMIN ||
+                (actorPeerId == localPeerId && _localRole.value == CollabRole.ADMIN) ->
+                targetPeerId !in _adminPeerIds.value &&
+                    targetRole != CollabRole.ADMIN &&
+                    targetRole != CollabRole.HOST
+            currentHost == null && actorPeerId != localPeerId -> true
             else -> false
         }
     }
@@ -946,12 +989,22 @@ class CollabSessionEngine(
         if (actorPeerId == targetPeerId) return false
         val currentHost = _hostPeerId.value
         if (targetPeerId == currentHost) return false
+        val actorRole = _activePeers.value[actorPeerId]?.role
+        val targetRole = _activePeers.value[targetPeerId]?.role
 
         return when {
-            actorPeerId == currentHost -> true
-            actorPeerId in _adminPeerIds.value -> {
-                _accessMode.value == CollabAccessMode.HOST_AND_ADMIN && targetPeerId !in _adminPeerIds.value
+            actorPeerId == currentHost ||
+                actorRole == CollabRole.HOST ||
+                (actorPeerId == localPeerId && _localRole.value == CollabRole.HOST) -> true
+            actorPeerId in _adminPeerIds.value ||
+                actorRole == CollabRole.ADMIN ||
+                (actorPeerId == localPeerId && _localRole.value == CollabRole.ADMIN) -> {
+                _accessMode.value == CollabAccessMode.HOST_AND_ADMIN &&
+                    targetPeerId !in _adminPeerIds.value &&
+                    targetRole != CollabRole.ADMIN &&
+                    targetRole != CollabRole.HOST
             }
+            currentHost == null && actorPeerId != localPeerId -> true
             else -> false
         }
     }
@@ -1699,6 +1752,11 @@ class CollabSessionEngine(
      * Toggles the local user's microphone mute state and returns the new muted boolean.
      */
     fun toggleLocalMicMuted(): Boolean {
+        if (localPeerId in _roomMutedPeerIds.value) {
+            _isLocalMicMuted.value = true
+            _lastErrorMessage.value = "You are muted in this room by the host or admin."
+            return true
+        }
         val next = !_isLocalMicMuted.value
         _isLocalMicMuted.value = next
         return next
@@ -1708,6 +1766,11 @@ class CollabSessionEngine(
      * Explicitly sets the local user's microphone mute state.
      */
     fun setLocalMicMuted(muted: Boolean) {
+        if (!muted && localPeerId in _roomMutedPeerIds.value) {
+            _isLocalMicMuted.value = true
+            _lastErrorMessage.value = "You are muted in this room by the host or admin."
+            return
+        }
         _isLocalMicMuted.value = muted
     }
 
@@ -1911,10 +1974,14 @@ class CollabSessionEngine(
                 }
                 val activeCode = _roomCode.value
                 if (activeCode != null && activeCode.equals(message.roomCode, ignoreCase = true)) {
-                    if (_sessionToken.value.isBlank()) {
+                    if (_localRole.value != CollabRole.HOST && message.sessionToken.isNotBlank()) {
+                        _sessionToken.value = message.sessionToken
+                    } else if (_sessionToken.value.isBlank()) {
                         _sessionToken.value = message.sessionToken
                     }
-                    if (_hostPeerId.value == null) {
+                    if (_localRole.value != CollabRole.HOST && message.hostPeerId.isNotBlank()) {
+                        _hostPeerId.value = message.hostPeerId
+                    } else if (_hostPeerId.value == null) {
                         _hostPeerId.value = message.hostPeerId
                     }
                     _roomMaxBitrateKbps.value = CollabAudioBitrate.sanitize(message.maxBitrateKbps)
@@ -2020,6 +2087,36 @@ class CollabSessionEngine(
                     if (_localRole.value == CollabRole.HOST) {
                         broadcastCanvasPermissionSync()
                         broadcastRoomSettingsSync()
+                        for (adminId in _adminPeerIds.value) {
+                            dispatchMessage(
+                                CollabMessage.SetPeerRole(
+                                    sessionToken = _sessionToken.value,
+                                    hostPeerId = localPeerId,
+                                    targetPeerId = adminId,
+                                    newRole = CollabRole.ADMIN
+                                )
+                            )
+                        }
+                        for (mutedId in _roomMutedPeerIds.value) {
+                            dispatchMessage(
+                                CollabMessage.ModMutePeer(
+                                    sessionToken = _sessionToken.value,
+                                    actorPeerId = localPeerId,
+                                    targetPeerId = mutedId,
+                                    isMuted = true
+                                )
+                            )
+                        }
+                        for (blockedId in _chatBlockedPeerIds.value) {
+                            dispatchMessage(
+                                CollabMessage.BlockPeerChat(
+                                    sessionToken = _sessionToken.value,
+                                    actorPeerId = localPeerId,
+                                    targetPeerId = blockedId,
+                                    isBlocked = true
+                                )
+                            )
+                        }
                         if (_pinnedChatMessageId.value != null) {
                             dispatchMessage(
                                 CollabMessage.PinChatMessage(
@@ -2045,6 +2142,14 @@ class CollabSessionEngine(
                 }
             }
             is CollabMessage.PeerJoined -> {
+                if (message.role == CollabRole.HOST && _localRole.value != CollabRole.HOST) {
+                    if (_hostPeerId.value == null || _hostPeerId.value == message.peerId) {
+                        _hostPeerId.value = message.peerId
+                        if (message.sessionToken.isNotBlank()) {
+                            _sessionToken.value = message.sessionToken
+                        }
+                    }
+                }
                 if (!isSessionTokenCompatible(message.sessionToken)) return
                 if (message.peerId in _bannedPeerIds.value || message.deviceId in _bannedDeviceIds.value) {
                     return
@@ -2397,6 +2502,9 @@ class CollabSessionEngine(
 
                 if (message.isMuted) {
                     _roomMutedPeerIds.update { it + message.targetPeerId }
+                    if (message.targetPeerId == localPeerId) {
+                        _isLocalMicMuted.value = true
+                    }
                 } else {
                     _roomMutedPeerIds.update { it - message.targetPeerId }
                 }
@@ -2415,11 +2523,18 @@ class CollabSessionEngine(
             }
             is CollabMessage.CanvasPermissionSync -> {
                 if (!isSessionTokenCompatible(message.sessionToken)) return
+                val actorRole = _activePeers.value[message.actorPeerId]?.role
                 val isAuthorized = message.actorPeerId == _hostPeerId.value ||
-                    message.actorPeerId in _adminPeerIds.value
+                    message.actorPeerId in _adminPeerIds.value ||
+                    actorRole == CollabRole.HOST ||
+                    actorRole == CollabRole.ADMIN ||
+                    (_hostPeerId.value == null && message.actorPeerId != localPeerId)
                 if (!isAuthorized) return
 
-                if (message.actorPeerId == _hostPeerId.value) {
+                if (message.actorPeerId == _hostPeerId.value || actorRole == CollabRole.HOST || _hostPeerId.value == null) {
+                    if (_hostPeerId.value == null && message.actorPeerId != localPeerId) {
+                        _hostPeerId.value = message.actorPeerId
+                    }
                     _accessMode.value = message.accessMode
                 }
                 _isGlobalDrawingDisabled.value = message.isGlobalDrawingDisabled
@@ -2432,6 +2547,9 @@ class CollabSessionEngine(
                 if (!isSessionTokenCompatible(message.sessionToken)) return
                 val currentHost = _hostPeerId.value
                 if (currentHost != null && message.hostPeerId != currentHost) return
+                if (currentHost == null && message.hostPeerId.isNotBlank()) {
+                    _hostPeerId.value = message.hostPeerId
+                }
                 val sanitized = CollabAudioBitrate.sanitize(message.maxBitrateKbps)
                 _roomMaxBitrateKbps.value = sanitized
                 if (_audioBitrateKbps.value > sanitized) {
@@ -2554,6 +2672,9 @@ class CollabSessionEngine(
         }
 
         _isLocalUserChatBlocked.value = (resolvedLocalRole != CollabRole.HOST) && (localPeerId in chatBlocked)
+        if (localPeerId in muted) {
+            _isLocalMicMuted.value = true
+        }
 
         _canLocalUserDraw.value = when (resolvedLocalRole) {
             CollabRole.HOST -> true

@@ -113,6 +113,7 @@ class FriendsRepositoryTest {
 
     @Test
     fun testAddFriendSuccess() = runTest {
+        // One-way follow adds to following list first; mutual follow promotes to friends list
         val result = repository.addFriend("@alex_m", "Alex Miller")
         assertTrue(result.isSuccess)
 
@@ -122,9 +123,24 @@ class FriendsRepositoryTest {
         assertEquals("Alex Miller", added.displayName)
         assertEquals(StudyPresenceStatus.OFFLINE, added.studyStatus)
 
-        val currentList = repository.getFriendsFlow().first()
-        assertEquals(1, currentList.size)
-        assertEquals(added.id, currentList[0].id)
+        val followingList = repository.getFollowingFlow().first()
+        assertEquals(1, followingList.size)
+        assertEquals("@alex_m", followingList[0].handle)
+        assertTrue(repository.getFriendsFlow().first().isEmpty())
+
+        // When Alex follows back (remote connect event), both become mutual friends
+        repository.onRemoteConnectEvent(
+            eventType = "FOLLOW",
+            senderProfile = com.arinara.fotara.feature.friends.model.FriendProfile(
+                id = added.id,
+                handle = "@alex_m",
+                displayName = "Alex Miller"
+            ),
+            targetHandle = repository.getMyHandle()
+        )
+        val currentFriends = repository.getFriendsFlow().first()
+        assertEquals(1, currentFriends.size)
+        assertEquals("@alex_m", currentFriends[0].handle)
     }
 
     @Test
@@ -142,7 +158,7 @@ class FriendsRepositoryTest {
         assertFalse(duplicateResult.isSuccess)
         assertTrue(duplicateResult.exceptionOrNull() is IllegalStateException)
 
-        val list = repository.getFriendsFlow().first()
+        val list = repository.getFollowingFlow().first()
         assertEquals(1, list.size)
     }
 
@@ -171,14 +187,17 @@ class FriendsRepositoryTest {
     fun testRemoveFriend() = runTest {
         val f1 = repository.addFriend("@alex", "Alex").getOrThrow()
         val f2 = repository.addFriend("@sarah", "Sarah").getOrThrow()
+        repository.onRemoteConnectEvent("FOLLOW", f1, "")
+        repository.onRemoteConnectEvent("FOLLOW", f2, "")
 
         assertEquals(2, repository.getFriendsFlow().first().size)
 
-        repository.removeFriend(f1.id)
+        repository.unfollowUser(f1.id)
 
         val afterRemove = repository.getFriendsFlow().first()
         assertEquals(1, afterRemove.size)
         assertEquals(f2.id, afterRemove[0].id)
+        assertFalse(repository.getFollowingFlow().first().any { it.id == f1.id })
     }
 
     @Test
@@ -212,6 +231,7 @@ class FriendsRepositoryTest {
     @Test
     fun testToggleFavorite() = runTest {
         val friend = repository.addFriend("@alex", "Alex").getOrThrow()
+        repository.onRemoteConnectEvent("FOLLOW", friend, "")
         assertFalse(friend.isFavorite)
 
         repository.toggleFavorite(friend.id)
@@ -225,8 +245,10 @@ class FriendsRepositoryTest {
 
     @Test
     fun testPersistenceAcrossRepositoryInstances() = runTest {
-        repository.addFriend("@alex", "Alex Miller")
-        repository.addFriend("@jordan", "Jordan Baker")
+        val f1 = repository.addFriend("@alex", "Alex Miller").getOrThrow()
+        val f2 = repository.addFriend("@jordan", "Jordan Baker").getOrThrow()
+        repository.onRemoteConnectEvent("FOLLOW", f1, "")
+        repository.onRemoteConnectEvent("FOLLOW", f2, "")
         repository.updatePresence(StudyPresenceStatus.OPEN_TO_COLLAB, "Calculus III")
 
         // Instantiate second repository with same preferences backing
@@ -405,24 +427,38 @@ class FriendsRepositoryTest {
         assertEquals(StudyPresenceStatus.STUDYING, discoveredBob.studyStatus)
         assertEquals("Organic Chemistry II", discoveredBob.currentSubject)
 
-        // 5. Alice adds Bob as a friend -> Bob is added with live online status, and Bob receives Alice's connect event
+        // 5. Alice follows Bob (@bob_notes) -> Bob is in Alice's following list, and Alice is in Bob's followers list (not Friends yet until Bob follows back)
+        repoA.syncMyProfile("Alice Chen", "she/her", "data:image/webp;base64,QUxJQ0VfQVZBVEFS", "data:image/webp;base64,QUxJQ0VfQkFOTkVS")
+        repoB.syncMyProfile("Bob Martinez", "he/him", "data:image/webp;base64,Qk9CX0FWQVRBUg==", "data:image/webp;base64,Qk9CX0JBTk5FUg==")
+
         val addBobResult = repoA.addFriend("@bob_notes", "")
         assertTrue(addBobResult.isSuccess)
-        val aliceFriends = repoA.getFriendsFlow().first()
-        assertEquals(1, aliceFriends.size)
-        assertEquals("@bob_notes", aliceFriends[0].handle)
-        assertEquals("Bob Martinez", aliceFriends[0].displayName)
-        assertEquals(StudyPresenceStatus.STUDYING, aliceFriends[0].studyStatus)
-        assertEquals("Organic Chemistry II", aliceFriends[0].currentSubject)
-        assertTrue(aliceFriends[0].isActive)
+        assertEquals(1, repoA.getFollowingFlow().first().size)
+        assertTrue(repoA.getFriendsFlow().first().isEmpty())
 
-        // Bob automatically sees Alice in his followers and friends list with her live status!
+        // Bob automatically sees Alice in his followers list with her live status, avatar, and banner!
         val bobFollowers = repoB.getFollowersFlow().first()
         assertEquals(1, bobFollowers.size)
         assertEquals("@alice_study", bobFollowers[0].handle)
         assertEquals("Alice Chen", bobFollowers[0].displayName)
+        assertEquals("data:image/webp;base64,QUxJQ0VfQVZBVEFS", bobFollowers[0].avatarUrl)
+        assertEquals("data:image/webp;base64,QUxJQ0VfQkFOTkVS", bobFollowers[0].bannerUrl)
         assertEquals(StudyPresenceStatus.OPEN_TO_COLLAB, bobFollowers[0].studyStatus)
         assertEquals("Physics Lab", bobFollowers[0].currentSubject)
+        assertTrue(repoB.getFriendsFlow().first().isEmpty())
+
+        // Now Bob follows Alice back -> mutual follow promotes both Alice and Bob to Friends!
+        assertTrue(repoB.addFriend("@alice_study", "").isSuccess)
+
+        val aliceFriends = repoA.getFriendsFlow().first()
+        assertEquals(1, aliceFriends.size)
+        assertEquals("@bob_notes", aliceFriends[0].handle)
+        assertEquals("Bob Martinez", aliceFriends[0].displayName)
+        assertEquals("data:image/webp;base64,Qk9CX0FWQVRBUg==", aliceFriends[0].avatarUrl)
+        assertEquals("data:image/webp;base64,Qk9CX0JBTk5FUg==", aliceFriends[0].bannerUrl)
+        assertEquals(StudyPresenceStatus.STUDYING, aliceFriends[0].studyStatus)
+        assertEquals("Organic Chemistry II", aliceFriends[0].currentSubject)
+        assertTrue(aliceFriends[0].isActive)
 
         val bobFriends = repoB.getFriendsFlow().first()
         assertEquals(1, bobFriends.size)
@@ -441,6 +477,11 @@ class FriendsRepositoryTest {
         assertEquals(StudyPresenceStatus.OFFLINE, aliceFriendsOffline[0].studyStatus)
         assertFalse(aliceFriendsOffline[0].isActive)
 
+        // 8. Alice unfollows Bob -> Bob is removed from both Alice's following and friends list
+        repoA.unfollowUser(aliceFriendsOffline[0].id)
+        assertTrue(repoA.getFollowingFlow().first().isEmpty())
+        assertTrue(repoA.getFriendsFlow().first().isEmpty())
+
         repoA.close()
         repoB.close()
     }
@@ -457,6 +498,7 @@ class FriendsRepositoryTest {
     @Test
     fun testMultiDeviceLanPresenceUpdatesFriendOnlineStatusAndSubject() = runTest {
         val added = repository.addFriend("@device_two", "").getOrThrow()
+        repository.onRemoteConnectEvent("FOLLOW", added, "")
         assertEquals(StudyPresenceStatus.OFFLINE, added.studyStatus)
 
         // Simulate receiving a live LAN presence packet from Device 2
