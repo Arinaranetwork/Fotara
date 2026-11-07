@@ -6,141 +6,114 @@
 
 <div align="center">
 
-<img src="Assets/Logos/FotaraLogo.png" alt="Fotara Logo" width="112" />
+<img src="Assets/Logos/FotaraLogo.png" alt="Fotara App Icon" width="112" />
 
-# Fotara - Intelligent Offline Academic Workspace & Note Engine
+# Fotara — Built for Your Everyday Study & Work
 
-**A sovereign, privacy-preserving academic workbench for structured coursework, native LaTeX mathematics, vector sketching, and automated schedule tracking.**
+**An intelligent, offline-first Android workspace uniting structured subject folders, a rich STEM Note Studio, an infinite vector drawing canvas, local Wi-Fi collaboration, smart document scanning, and adaptive class schedules.**
 
-[![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024%2B)-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
+[![UI](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Architecture](https://img.shields.io/badge/Architecture-Offline--First%20%26%20Encrypted-7A5AF8?style=flat-square)](#privacy--security-by-design)
 [![License](https://img.shields.io/badge/License-Proprietary%20%26%20Educational-2A9D8F?style=flat-square)](#license)
-[![Release](https://img.shields.io/github/v/release/Arinaranetwork/Fotara?style=flat-square&color=00B4D8&label=Release)](https://github.com/Arinaranetwork/Fotara/releases/latest)
+[![Releases](https://img.shields.io/github/v/release/Arinaranetwork/Fotara?style=flat-square&color=00B4D8&label=Releases)](https://github.com/Arinaranetwork/Fotara/releases/latest)
 
 <br />
 
-<img src="Assets/Banners/FotaraBanner_2.1_2026-10-23.jpg" alt="Fotara Workspace Showcase" width="100%" />
+<img src="Assets/Banners/Fotara%20Github%20Main%20Promotional%20Banner.jpg" alt="Fotara Promotional Banner" width="100%" />
 
 <p align="center">
-  <i>Fotara runtime environment on Android: Rich Markdown and KaTeX math editor, infinite vector Drawing Canvas, and adaptive multi-day schedule widget.</i>
+  <i>Fotara on Android — Infinite vector sketching, structured subject spaces, rich STEM note studio, and live class timetable tracking.</i>
 </p>
 
-[Downloads & Releases](https://github.com/Arinaranetwork/Fotara/releases) • [Product Overview](#product-overview) • [Core Features](#feature-highlights) • [Release Channels](#release-channels-matrix) • [Architecture](#tech-stack--architecture) • [Build Quickstart](#build--development-quickstart)
+[Download Releases](https://github.com/Arinaranetwork/Fotara/releases) • [Overview](#overview) • [Core Capabilities](#core-capabilities) • [Privacy & Security](#privacy--security-by-design) • [Release Channels](#release-channels) • [Getting Started](#getting-started)
 
 </div>
 
 ---
 
-## Product Overview
+## Overview
 
-Fotara is an autonomous, academic-grade productivity operating environment engineered for engineering students, researchers, and technical professionals. Designed from first principles to eliminate third-party cloud vulnerabilities and network reliance, Fotara operates strictly on an **offline-first architecture** with **local encryption**, hardware-backed biometric authentication, and **zero cloud dependency**.
+**Fotara** is an all-in-one workspace crafted for students, educators, researchers, and everyday creators who want complete ownership over their notes and coursework. Built around an **offline-first architecture** with **hardware-backed local encryption**, Fotara keeps your lectures, sketches, documents, and schedules fast, organized, and private—with zero mandatory cloud dependency.
 
-Users organize dense intellectual workloads into isolated **modular spaces**, binding structured markdown notes, native mathematical proofs, unbounded multi-layer vector canvas diagrams, and deadline-aware timetable widgets into a single unified workspace.
-
----
-
-## Feature Highlights
-
-### Modular Spaces & Workspaces
-- **Isolated Domain Vaults**: Segregate distinct semesters, academic disciplines, research initiatives, and laboratory projects with dedicated cryptographic access boundaries.
-- **Hierarchical Organization**: Multi-tier folder and subfolder categorization with configurable grid densities, custom space palettes, and visual pinning for up to four high-priority references per folder.
-- **Syllabus Performance Evaluator**: Integrated course weight analyzer calculating live grade standings and projected final examination targets.
-
-### Native LaTeX Engine
-- **Pure Compose Layout Tree**: High-performance mathematical typesetting without WebView overhead or JavaScript bridges.
-- **Comprehensive Syntax**: Direct parsing and rendering of `$ ... $` inline formulas and `$$ ... $$` display block equations, matrices, integrals, summation operators, and Greek alphabets.
-- **Constrained Markdown Table Editor**: Native GitHub-Flavored Markdown table editor with automated column balancing, zebra shading, and context-aware toolbar disabling block items inside cells.
-
-### Infinite Drawing Canvas
-- **Multi-Layer Vector Sketching**: Two-axis unbounded viewport with continuous pinch-to-zoom (0.2x to 5.0x), custom paper grids (blank, dot grid, graph grid, ruled), and independent layer opacity/visibility controls.
-- **Geometric Shape & Curve Snapping**: Continuous draw-and-hold recognition snapping rough strokes into exact geometric primitives (rectangles, circles, ellipses, triangles, and arrows) with tactile haptic response.
-- **Text Layers & Vector Duplication**: Movable, resizable, and rotatable vector typography annotations alongside multi-element duplicate and delete tools.
-- **Multi-Sheet Project Files**: Project documents supporting up to 10 distinct sheets with isolated undo/redo command histories and combined multi-page export.
-
-### Adaptive Class Schedule Widget
-- **Jetpack Glance AppWidgets**: Live Home Screen widgets providing real-time daily course tracking, upcoming assignment alerts, and timetable glance overviews.
-- **Dynamic 1-Day to 7-Day Matrix**: Contextual schedule tables adapting between compact single-session agenda views and comprehensive weekly academic overviews.
-- **Reboot-Resilient Alarms**: Dual notification pipelines supporting unobtrusive reminder banners or high-priority ringing alarms resilient against Android Doze and device reboot events.
-
-### Hierarchical `.fotara` Container Backup
-- **Full-Fidelity Archival**: Complete offline backup container storing database states, workspace hierarchies, vector sketches, OCR indices, and media assets in an atomic ZIP archive.
-- **Integrity Validation**: SHA-256 manifest verification and schema validation protecting archives against bit rot or partial corruption during transfer.
-- **Granular Restoration**: Capability to restore entire application environments or selectively extract designated spaces and course folders.
+Instead of scattering lecture photos across your camera roll, equations across separate editors, and schedules across different apps, Fotara brings everything together into clean **Spaces** and **Subject Folders** designed in the signature **Electric Slate** dark theme.
 
 ---
 
-## Release Channels Matrix
+## Core Capabilities
 
-Fotara follows three distinct deployment channels to guarantee stability for everyday coursework while continuously advancing experimental capabilities.
+### 🗂️ Spaces, Folders & Effortless Organization
+- **Dedicated Workspaces**: Separate semesters, projects, personal study, and research into clean, independent spaces.
+- **Subject Folders & Subfolders**: Organize materials by course or topic with color-coded folder cards, custom note labels, and pinned favorites.
+- **Dynamic `!` Title Expressions**: Automate note and folder naming using live inline tokens—such as dates, times, sequence counters, and folder context—complete with an interactive autocomplete popup and literal `no!` escape syntax.
+- **Home Screen Shortcuts**: Pin frequently used folders and individual notes directly to your Android home screen for instant, one-tap access.
 
-| Channel | Identifier | Stability & Intent | Update Cadence | Distribution |
-|:---|:---|:---|:---|:---|
-| **Stable** | `v<major>.<moderate>.<minor>` (e.g. `v2.1.2`) | Battle-tested production builds intended for primary devices and critical academic schedules. | Monthly / Milestone releases | [GitHub Releases](https://github.com/Arinaranetwork/Fotara/releases) |
-| **Beta** | `v<major>.<moderate>.<minor>-beta` (e.g. `v1.9.0-beta`) | Feature-complete milestone builds undergoing broad compatibility validation and field testing. | Bi-weekly releases | [GitHub Releases (Pre-Release)](https://github.com/Arinaranetwork/Fotara/releases) |
-| **Alpha** | `v<major>.<moderate>.<minor>-alpha` (e.g. `v1.9.4-alpha`) | Active development branch containing early experimental tools, canvas extensions, and architectural updates. | Continuous preview builds | [GitHub Releases (Tags)](https://github.com/Arinaranetwork/Fotara/releases) |
+### 📝 Hybrid Note Studio (Markdown, Math, Code, Tables, Charts & Voice)
+- **Segmented Rich Markdown Editor**: Write effortlessly with inline top-bar title editing, live formatting controls, checklists, and instant preview.
+- **Native LaTeX Mathematics**: Render inline (`$...$`) and display (`$$...$$`) equations, matrices, integrals, and Greek notation with authentic mathematical serif typography—powered natively in Jetpack Compose with zero WebView overhead.
+- **Syntax-Highlighted Code Blocks**: Embed clean, dark-slate code cards with multi-language syntax highlighting, one-tap copy, and line-wrap toggles.
+- **Interactive Typed Tables**: Build structured tables inside notes with typed column headers (`Text`, `Number`, `Checkbox`, `Date`), instant sorting, filtering, search, and rapid row/column expansion.
+- **Built-In Charts & CSV Importer**: Visualize data directly inside notes with **Bar/Column**, **Line/Area** (including linear regression trendlines), **Pie/Donut**, **Radar/Spider**, and **Scatter** plots—or import raw CSV datasets with automatic delimiter and header detection.
+- **Voice Dictation & Inline Audio Clips**: Capture lectures hands-free with continuous speech-to-text dictation right into your cursor, or record live-waveform audio clips embedded directly inside your notes with variable-speed playback.
 
-### Installation Instructions
-1. Download the preferred channel release APK from the [Releases](https://github.com/Arinaranetwork/Fotara/releases) page.
-2. Transfer or download the APK directly to an Android device running Android 7.0 (API 24) or higher.
-3. Open the APK file using the system package installer. If required, allow installation from unknown sources.
-4. Complete the offline initial onboarding to set up your primary workspace.
+### 🎨 Infinite Vector Canvas & Expressive Sketching
+- **Multi-Layer Infinite Viewport**: Sketch, diagram, and brainstorm on an unbounded canvas with customizable paper grids (dot, graph, ruled, or blank), multi-sheet project support, and granular layer opacity and stacking controls.
+- **Expressive Brush Engine**: Draw with realistic textured brushes—including **Ballpoint**, **Fountain / Calligraphy**, **Marker / Chisel**, **Pencil / Sketch**, and **Dashed Diagram Pens**—alongside a gap-tolerant **Flood-Fill Bucket**, **Eyedropper Color Loupe**, and precision **Stroke-Carving Eraser**.
+- **Hold-to-Snap Smart Shapes**: Pause briefly at the end of any freehand stroke to automatically snap lines, arrows, rectangles, circles, ellipses, and triangles into crisp geometric vectors.
+
+### 🤝 Local Wi-Fi Collaborative Study Rooms
+- **Peer-to-Peer Canvas Sync**: Host or join live study sessions over the same Wi-Fi network using a custom room code—requiring no external servers or internet connection.
+- **Live Cursors, Strokes & Voice Chat**: Sketch together in real time with synchronized strokes, images, text annotations, live peer cursors, and built-in low-latency voice chat.
+- **Host Moderation & Access Controls**: Manage room privacy policies, promote admins, mute participants, or toggle drawing and sheet-creation permissions on a global or per-member basis.
+
+### 📸 Rapid Document Scanner, PDF Studio & On-Device OCR
+- **Rapid Multi-Shot Camera & Perspective Dewarp**: Capture whiteboards, handouts, and textbook pages rapidly with a live filmstrip tray, 4-corner perspective correction loupe, and readability filters.
+- **In-Situ PDF & Document Studio**: Read and annotate PDFs directly, reorder or manage pages, attach page-specific audio recordings, and export flattened vector PDFs.
+- **Instant Offline Full-Text Search**: Every handwritten scan, printed page, and note is indexed automatically on-device via Optical Character Recognition (OCR) and full-text search so you can find any keyword in milliseconds.
+
+### 📅 Adaptive Timetable Widget & Smart Class Alarms
+- **Live Home Screen Timetable**: Keep track of your daily classes, room numbers, and day-specific notes with a resizable Android home screen widget.
+- **Flexible Schedule Overrides**: Toggle one-time or recurring weekly day notes and temporarily pause schedules for holidays or breaks.
+- **Floating Subject Countdown & Alarms**: Receive reboot-resilient class reminders and a smooth, top-down floating countdown pill before your next subject begins—with easy one-tap, swipe, or volume-key dismissal.
 
 ---
 
-## Tech Stack & Architecture
+## Privacy & Security by Design
 
-- **Language & Runtime**: Kotlin 2.0.21, Java 17 bytecode target.
-- **UI Toolkit**: Jetpack Compose, Material Design 3, Compose Foundation Layout.
-- **Local Storage & Indexing**: Room SQLite, raw SQLite FTS4 virtual tables, Android Keystore encryption.
-- **Widgets**: Jetpack Glance Material3 AppWidget runtime.
-- **Concurrency & Reactivity**: Kotlin Coroutines, StateFlow, SharedFlow.
-- **On-Device Vision**: Google ML Kit Digital Optical Character Recognition (OCR).
-- **Mathematical Layout**: Pure Compose KaTeX formula parser and layout tree.
-- **Architecture Pattern**: Unidirectional Data Flow (UDF), Model-View-ViewModel (MVVM), offline-first repository pattern with manual dependency injection.
+- **100% Offline-First Operation**: All notes, vector canvases, OCR indexes, voice recordings, and schedules live locally on your device.
+- **Hardware-Backed Private Space & Folder Locks**: Protect sensitive spaces and locked folders with `AndroidKeyStore` AES-GCM encryption at rest and salted PBKDF2 passcodes.
+- **Flexible Authentication & Recovery**: Choose between biometric unlock or strict PIN-only mode, configure optional security question recovery, and rely on automatic lockout protection.
+- **Full-Fidelity `.fotara` Backups**: Export and restore your entire workspace—or selected spaces and folders—using self-contained, integrity-verified `.fotara` archive bundles.
 
 ---
 
-## Build & Development Quickstart
+## Release Channels
 
-### Prerequisites
-- Android Studio Ladybug (2024.2.1) or higher
-- Android SDK Platform 36 (Android 16 Developer Preview / Android 15 Vanilla Ice Cream)
-- JDK 17 (bundled with Android Studio or OpenJDK 17)
+Fotara publishes builds across three release tracks so you can choose between rock-solid daily reliability and early access to new tools:
 
-### Building from Source
+| Channel | Purpose | Availability |
+|:---|:---|:---|
+| **Stable** | Production-ready releases verified for everyday academic and professional workflows. | [GitHub Releases](https://github.com/Arinaranetwork/Fotara/releases) |
+| **Beta** | Feature-complete milestone builds open for broader testing and feedback before promotion to Stable. | [GitHub Releases (Pre-Release)](https://github.com/Arinaranetwork/Fotara/releases) |
+| **Alpha** | Early preview builds showcasing experimental studio tools, canvas enhancements, and upcoming features. | [GitHub Releases](https://github.com/Arinaranetwork/Fotara/releases) |
 
-Clone the repository:
-```bash
-git clone https://github.com/Arinaranetwork/Fotara.git
-cd Fotara
-```
+---
 
-Verify dynamic project versioning:
-```bash
-./gradlew printVersion
-```
+## Getting Started
 
-Compile and assemble the debug APK:
-```bash
-./gradlew assembleDebug
-```
-
-Execute unit test test suites:
-```bash
-./gradlew testDebugUnitTest
-```
-
-Output binaries are generated in `app/build/outputs/apk/debug/` and verified production releases are packaged in `/Output/Release/`.
+1. Visit the [**Releases**](https://github.com/Arinaranetwork/Fotara/releases) page and download the APK from your preferred release channel.
+2. Open the downloaded APK on your Android device and allow installation if prompted by your system.
+3. Launch **Fotara** and complete the quick offline setup to create your first Space and Subject Folders.
+4. Updates can be downloaded and resumed directly inside the app via **Settings → Check for Updates**.
 
 ---
 
 ## License
 
-Fotara is proprietary software developed by and exclusive property of **Arinara Network**.
-All rights reserved. Free for personal, educational, and individual academic study use.
-Commercial exploitation, redistribution, reverse engineering, or unauthorized mirror hosting is strictly prohibited without prior written consent from Arinara Network.
+Fotara is proprietary software developed by and exclusive property of **Arinara Network**.  
+All rights reserved. Free for personal, educational, and individual study use.  
+Commercial redistribution, reverse engineering, or unauthorized mirror hosting is strictly prohibited without prior written consent from Arinara Network.
 
 <div align="center">
-  <sub>Arinara Network Engineering • Production Workspace Ecosystem</sub>
+  <sub>Crafted by <b>Arinara Network</b> • Electric Slate Productivity Ecosystem</sub>
 </div>
