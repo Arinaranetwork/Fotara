@@ -20,6 +20,7 @@ local.properties
 # Source Code & Build Scripts (Excluded from Public Repository)
 /app/
 /gradle/
+supabase/
 build.gradle.kts
 settings.gradle.kts
 gradle.properties
