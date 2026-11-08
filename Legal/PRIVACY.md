@@ -39,7 +39,7 @@ Fotara performs network communication only for specific, transparent features:
 ### 3. Optional Anonymous Device Count
 - **Host**: `nrvnhbizyvubcdqvzabv.supabase.co`.
 - **Purpose**: Helping the developer estimate the approximate number of active devices running Fotara.
-- **Trigger**: Occurs only after you accept these terms (if enabled), at most once every 24 hours, or immediately when the app version changes.
+- **Trigger**: Occurs only after you accept these terms (if enabled), on a repeating weekly cadence (at most once every 7 days), or immediately when the app version changes.
 - **Transmitted Data**:
   - `device_id`: A randomly generated UUID v4 verified unused on first allocation and permanently locked locally to your device installation. It is not tied to your Google account, Android ID, advertising ID, IMEI, MAC address, hardware serial number, IP address, or device model.
   - `app_version`: The numerical app version string (for example, `1.8.0`).
