@@ -41,10 +41,10 @@ Fotara performs network communication only for specific, transparent features:
 - **Purpose**: Helping the developer estimate the approximate number of active devices running Fotara.
 - **Trigger**: Occurs only after you accept these terms (if enabled), at most once every 24 hours, or immediately when the app version changes.
 - **Transmitted Data**:
-  - `device_id`: A randomly generated UUID v4 created locally on first use. It is not tied to your Google account, Android ID, advertising ID, IMEI, MAC address, hardware serial number, IP address, or device model.
+  - `device_id`: A randomly generated UUID v4 verified unused on first allocation and permanently locked locally to your device installation. It is not tied to your Google account, Android ID, advertising ID, IMEI, MAC address, hardware serial number, IP address, or device model.
   - `app_version`: The numerical app version string (for example, `1.8.0`).
   - `channel`: The release channel (`stable` or `beta`).
-- **Control and Deletion**: You can disable the anonymous device count at first launch or at any time in Settings > About & Legal > Privacy. Turning this setting off immediately deletes your local device ID and queues a request to remove the ID from the server database.
+- **Control and Opt-Out**: You can disable the anonymous device count at first launch or at any time in Settings > About & Legal > Privacy. Turning this setting off stops active device count pings and queues a request to remove your active count entry from the server database, while your local anonymous `device_id` stays locked on your device without collecting any personal data.
 
 ### 4. Server Logs and IP Addresses
 When connecting to GitHub or Supabase, standard internet protocol routing requires transmission of your IP address. These third-party hosting infrastructure providers may process and record IP addresses in standard server access logs according to their own system operations.
