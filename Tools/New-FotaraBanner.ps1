@@ -5,10 +5,10 @@
 # written consent from Arinara Network as sole legal owner of this codebase.
 
 param(
-    [string]$Version = "2.6.2",
+    [string]$Version = "2.6.3",
     [string]$Codename = "Hyperion",
-    [string]$Description = "Telegram-Style App Icon Carousel, 6x Animated GIF Folder Covers, Custom Folder Icon Badges, and Edge-to-Edge Schedule Settings",
-    [string]$ReleaseDate = "2026-11-15",
+    [string]$Description = "Pattern Backgrounds, Top Header FX, Per-Note Glow, Expandable Deadline Studio & UI Polish",
+    [string]$ReleaseDate = "2026-11-17",
     [string]$OutputPath = ""
 )
 
@@ -140,7 +140,7 @@ $fCardLabel  = [System.Drawing.Font]::new($elmsFamily, [float]($W * 0.0052), [Sy
 $fCardBody   = [System.Drawing.Font]::new($elmsFamily, [float]($W * 0.0064), [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
 
 # ==============================================================================
-# 2A. Render Slot 1 (Back/Mid Layer): Appearance — Telegram-Style App Icon Carousel & 3x/Day Schedule
+# 2A. Render Slot 1 (Back/Mid Layer): Background & Patterns + Top Header FX (4x/Day)
 # ==============================================================================
 $pathSlot1 = New-TopRoundedRectPath $slot1X $slot1Y $slot1W $slot1H 22.0
 $state1 = $g.Save()
@@ -149,53 +149,53 @@ $g.FillPath($bBgCanvas, $pathSlot1)
 
 # Top violet accent bar
 $g.FillRectangle($bTrackInactive, $slot1X, $slot1Y, $slot1W, 6.0)
-$g.FillRectangle($bPrimaryAccent, $slot1X, $slot1Y, [float]($slot1W * 0.78), 6.0)
+$g.FillRectangle($bPrimaryAccent, $slot1X, $slot1Y, [float]($slot1W * 0.82), 6.0)
 
 $pad1 = [float]($slot1W * 0.065)
 $curY1 = $slot1Y + 18.0
 
-$g.DrawString("SETTINGS $bullet APPEARANCE", $fCardLabel, $bPrimaryAccent, $slot1X + $pad1, $curY1)
+$g.DrawString("APPEARANCE $bullet VISUAL STUDIO", $fCardLabel, $bPrimaryAccent, $slot1X + $pad1, $curY1)
 $curY1 += [float]($W * 0.0072)
-$g.DrawString("App Icon Showcase", $fCardHeader, $bTextPrimary, $slot1X + $pad1, $curY1)
+$g.DrawString("Background & Patterns", $fCardHeader, $bTextPrimary, $slot1X + $pad1, $curY1)
 $curY1 += [float]($W * 0.0135)
 
-$g.DrawString("LAUNCHER ICON PRESETS (4)", $fCardLabel, $bTextMuted, $slot1X + $pad1, $curY1)
+$g.DrawString("WCAG TEMPLATES (8 LOCKED)", $fCardLabel, $bTextMuted, $slot1X + $pad1, $curY1)
 $curY1 += [float]($W * 0.0085)
 
-# 4 Squircle App Icons Row (Default, Dawn, Focus, Vault)
+# 4 Swatch Tiles Row (Obsidian, Violet, Teal, Cobalt)
 $iconRowH = [float]($H * 0.145)
 $iconRowPath = New-RoundedRectPath ($slot1X + $pad1) $curY1 ($slot1W - 2 * $pad1) $iconRowH 14.0
 $g.FillPath($bSurfacePanel, $iconRowPath)
 $g.DrawPath($pBorderSubtle, $iconRowPath)
 
-$presets = @("Default", "Dawn", "Focus", "Vault")
+$presets = @("Slate", "Violet", "Teal", "Cobalt")
 $sqSize = [float]($iconRowH * 0.48)
 $sqGap  = [float]((($slot1W - 2 * $pad1) - (4 * $sqSize)) / 5.0)
 for ($pi = 0; $pi -lt 4; $pi++) {
     $sx = $slot1X + $pad1 + $sqGap + $pi * ($sqSize + $sqGap)
     $sy = $curY1 + 14.0
     $sqPath = New-RoundedRectPath $sx $sy $sqSize $sqSize 14.0
-    $g.FillPath($(if ($pi -eq 0) { $bPrimaryAccent } else { $bSurfaceElev }), $sqPath)
-    if ($pi -eq 0) {
+    $g.FillPath($(if ($pi -eq 1) { $bPrimaryAccent } else { $bSurfaceElev }), $sqPath)
+    if ($pi -eq 1) {
         $ringPath = New-RoundedRectPath ($sx - 4.0) ($sy - 4.0) ($sqSize + 8.0) ($sqSize + 8.0) 16.0
         $g.DrawPath($pAccentBorder, $ringPath)
         $ringPath.Dispose()
     } else {
         $g.DrawPath($pBorderSubtle, $sqPath)
     }
-    $g.DrawString($presets[$pi], $fCardSub, $(if ($pi -eq 0) { $bPrimaryAccent } else { $bTextMuted }), $sx + 4.0, $sy + $sqSize + 8.0)
+    $g.DrawString($presets[$pi], $fCardSub, $(if ($pi -eq 1) { $bPrimaryAccent } else { $bTextMuted }), $sx + 4.0, $sy + $sqSize + 8.0)
     $sqPath.Dispose()
 }
 $iconRowPath.Dispose()
 $curY1 += $iconRowH + 12.0
 
-$g.DrawString("3X/DAY SCHEDULED ROTATION (3H COOLDOWN)", $fCardLabel, $bTextMuted, $slot1X + $pad1, $curY1)
+$g.DrawString("105 SVGS $bullet R->L DRIFT", $fCardLabel, $bTextMuted, $slot1X + $pad1, $curY1)
 $curY1 += [float]($W * 0.0085)
 
 $scheduleSlots = @(
-    @{ Name = "Morning Slot"; Time = "06:00 AM"; Meta = "Dawn Icon $bullet Active Alias" },
-    @{ Name = "Afternoon Slot"; Time = "12:00 PM"; Meta = "Focus Icon $bullet Study Mode" },
-    @{ Name = "Night Slot"; Time = "08:00 PM"; Meta = "Vault Icon $bullet Dark Slate" }
+    @{ Name = "Morning Slot"; Time = "06:00"; Meta = "Right Focus $bullet 24dp Blur" },
+    @{ Name = "Noon Slot"; Time = "12:00"; Meta = "Header FX $bullet 4x/Day" },
+    @{ Name = "Evening Slot"; Time = "18:00"; Meta = "Auto-Shift +1h Guard" }
 )
 foreach ($c in $scheduleSlots) {
     $rowH = [float]($H * 0.076)
@@ -203,7 +203,7 @@ foreach ($c in $scheduleSlots) {
     $g.FillPath($bSurfaceElev, $rowPath)
     $g.DrawPath($pBorderSubtle, $rowPath)
     $g.DrawString($c.Name, $fCardBody, $bTextPrimary, $slot1X + $pad1 + 10.0, $curY1 + 7.0)
-    $g.DrawString($c.Time, $fCardLabel, $bPrimaryAccent, $slot1X + $slot1W - $pad1 - ($slot1W * 0.28), $curY1 + 8.0)
+    $g.DrawString($c.Time, $fCardLabel, $bPrimaryAccent, $slot1X + $pad1 + ($slot1W * 0.42), $curY1 + 8.0)
     $g.DrawString($c.Meta, $fCardSub, $bTextMuted, $slot1X + $pad1 + 10.0, $curY1 + ($rowH * 0.52))
     $rowPath.Dispose()
     $curY1 += $rowH + 8.0
@@ -214,7 +214,7 @@ $g.DrawPath($pBorderSubtle, $pathSlot1)
 $pathSlot1.Dispose()
 
 # ==============================================================================
-# 2B. Render Slot 3 (Far-Right Tallest Layer): Folder Settings — Animated GIF Cover & Badge Backing Studio
+# 2B. Render Slot 3 (Far-Right Tallest Layer): Expandable > Deadline Studio & Schedule Counters
 # ==============================================================================
 $pathSlot3 = New-TopRoundedRectPath $slot3X $slot3Y $slot3W $slot3H 22.0
 $state3 = $g.Save()
@@ -224,37 +224,37 @@ $g.FillPath($bBgCanvas, $pathSlot3)
 $pad3 = [float]($slot3W * 0.065)
 $curY3 = $slot3Y + 18.0
 
-$g.DrawString("Folder Settings", $fCardHeader, $bTextPrimary, $slot3X + $pad3, $curY3)
+$g.DrawString("Deadline Studio", $fCardHeader, $bTextPrimary, $slot3X + $pad3, $curY3)
 $curY3 += [float]($W * 0.013)
 
-$g.DrawString("LIVE PREVIEW $bullet 6X ANIMATED GIF COVER", $fCardLabel, $bTextMuted, $slot3X + $pad3, $curY3)
+$g.DrawString("SUBJECT-PAIRED ALARMS $bullet PRE-CLASS", $fCardLabel, $bTextMuted, $slot3X + $pad3, $curY3)
 $curY3 += [float]($W * 0.0085)
 
-# Simulated Folder Card with Animated GIF Cover & 44dp Custom PNG Badge
+# Simulated Deadline Card
 $simH = [float]($H * 0.175)
 $simPath = New-RoundedRectPath ($slot3X + $pad3) $curY3 ($slot3W - 2 * $pad3) $simH 16.0
 $g.FillPath($bSurfacePanel, $simPath)
 $g.DrawPath($pAccentBorder, $simPath)
 
-# 44dp Custom Badge Box in Top-Left + GIF Pill in Top-Right
-$bdgPath = New-RoundedRectPath ($slot3X + $pad3 + 12.0) ($curY3 + 12.0) 36.0 36.0 10.0
-$g.FillPath($bSurfaceElev, $bdgPath)
+# Top-Left Due Pill + Top-Right Ringing Mode Pill
+$bdgPath = New-RoundedRectPath ($slot3X + $pad3 + 12.0) ($curY3 + 12.0) 86.0 24.0 12.0
+$g.FillPath($bAccentSoft, $bdgPath)
 $g.DrawPath($pAccentBorder, $bdgPath)
-$g.DrawString("PNG", $fCardLabel, $bPrimaryAccent, $slot3X + $pad3 + 16.0, $curY3 + 23.0)
+$g.DrawString("DUE 23:59", $fCardLabel, $bPrimaryAccent, $slot3X + $pad3 + 20.0, $curY3 + 17.0)
 $bdgPath.Dispose()
 
-$gifPill = New-RoundedRectPath ($slot3X + $slot3W - $pad3 - 54.0) ($curY3 + 12.0) 42.0 22.0 11.0
+$gifPill = New-RoundedRectPath ($slot3X + $slot3W - $pad3 - 78.0) ($curY3 + 12.0) 66.0 24.0 12.0
 $g.FillPath($bPrimaryAccent, $gifPill)
-$g.DrawString("GIF", $fCardLabel, $bTextPrimary, $slot3X + $slot3W - $pad3 - 45.0, $curY3 + 16.0)
+$g.DrawString("ALARM", $fCardLabel, $bTextPrimary, $slot3X + $slot3W - $pad3 - 68.0, $curY3 + 17.0)
 $gifPill.Dispose()
 
-$g.DrawString("Physics II Vault", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($simH * 0.50))
-$g.DrawString("24 Notes $bullet 360x202 @ 15fps (0.9 MB)", $fCardSub, $bTextMuted, $slot3X + $pad3 + 12.0, $curY3 + ($simH * 0.72))
+$g.DrawString("Physics Problem Set (2)", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($simH * 0.50))
+$g.DrawString("Auto-Disarm at 100% $bullet 3d / 1d / 1h", $fCardSub, $bTextMuted, $slot3X + $pad3 + 12.0, $curY3 + ($simH * 0.72))
 $simPath.Dispose()
 $curY3 += $simH + 12.0
 
-# Badge Backing & Border Studio
-$g.DrawString("BADGE BACKING & BORDER STUDIO", $fCardLabel, $bTextMuted, $slot3X + $pad3, $curY3)
+# Niche Academic Controls Box
+$g.DrawString("ACADEMIC ESCALATION & SYNC", $fCardLabel, $bTextMuted, $slot3X + $pad3, $curY3)
 $curY3 += [float]($W * 0.0085)
 
 $hsvH = [float]($H * 0.165)
@@ -262,26 +262,26 @@ $hsvRect = [System.Drawing.RectangleF]::new($slot3X + $pad3, $curY3, $slot3W - 2
 $hsvPath = New-RoundedRectPath $hsvRect.X $hsvRect.Y $hsvRect.Width $hsvRect.Height 14.0
 $g.FillPath($bSurfacePanel, $hsvPath)
 $g.DrawPath($pBorderSubtle, $hsvPath)
-$g.DrawString("Show Backing Box", $fCardBody, $bTextPrimary, $hsvRect.X + 12.0, $hsvRect.Y + 10.0)
+$g.DrawString("Remind Before Paired Class", $fCardBody, $bTextPrimary, $hsvRect.X + 12.0, $hsvRect.Y + 10.0)
 $g.FillEllipse($bPrimaryAccent, $hsvRect.X + $hsvRect.Width - 28.0, $hsvRect.Y + 10.0, 16.0, 16.0)
-$g.DrawString("Border:  [ None ]  [ Accent ]  [ Frosted ]", $fCardSub, $bPrimaryAccent, $hsvRect.X + 12.0, $hsvRect.Y + ($hsvH * 0.44))
-$g.DrawString("Icon Fit:  [ Contained (8dp) ]  [ Full-Bleed ]", $fCardSub, $bEmerald, $hsvRect.X + 12.0, $hsvRect.Y + ($hsvH * 0.72))
+$g.DrawString("Checkpoints: [ 3d ] [ 1d ] [ 3h ] [ Due ]", $fCardSub, $bPrimaryAccent, $hsvRect.X + 12.0, $hsvRect.Y + ($hsvH * 0.44))
+$g.DrawString("Mode: Escalate on Final Warning", $fCardSub, $bEmerald, $hsvRect.X + 12.0, $hsvRect.Y + ($hsvH * 0.72))
 $hsvPath.Dispose()
 $curY3 += $hsvH + 10.0
 
-# Edge-to-Edge Schedule Binding & Note Badge Rows
+# Widget & Briefing Counter Rows
 $hexRowH = [float]($H * 0.068)
 $hexPath = New-RoundedRectPath ($slot3X + $pad3) $curY3 ($slot3W - 2 * $pad3) $hexRowH 12.0
 $g.FillPath($bSurfaceElev, $hexPath)
 $g.DrawPath($pBorderSubtle, $hexPath)
-$g.DrawString("Bind Folder: Physics II", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
+$g.DrawString("Widget: Physics II (2)", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
 $hexPath.Dispose()
 $curY3 += $hexRowH + 8.0
 
 $syncPath = New-RoundedRectPath ($slot3X + $pad3) $curY3 ($slot3W - 2 * $pad3) $hexRowH 12.0
 $g.FillPath($bSurfaceElev, $syncPath)
 $g.DrawPath($pBorderSubtle, $syncPath)
-$g.DrawString("Select 1 Note: Gauss Law Summary", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
+$g.DrawString("1:1 Shortcut Badge Sync", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
 $g.FillEllipse($bPrimaryAccent, $slot3X + $slot3W - $pad3 - 26.0, $curY3 + ($hexRowH * 0.25), 16.0, 16.0)
 $syncPath.Dispose()
 $curY3 += $hexRowH + 8.0
@@ -289,7 +289,7 @@ $curY3 += $hexRowH + 8.0
 $lockPath = New-RoundedRectPath ($slot3X + $pad3) $curY3 ($slot3W - 2 * $pad3) $hexRowH 12.0
 $g.FillPath($bSurfaceElev, $lockPath)
 $g.DrawPath($pBorderSubtle, $lockPath)
-$g.DrawString("Pin to Top of Workspace", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
+$g.DrawString("Note Version History (<= 30)", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
 $lockPath.Dispose()
 
 $g.Restore($state3)
@@ -297,7 +297,7 @@ $g.DrawPath($pBorderSubtle, $pathSlot3)
 $pathSlot3.Dispose()
 
 # ==============================================================================
-# 2C. Render Slot 2 (Center-Right Foreground Layer): New Subject Folder Sheet & Left [NOTE] Badge Color Sync
+# 2C. Render Slot 2 (Center-Right Foreground Layer): High-Contrast Badges, Note Glow & Corner Radius
 # ==============================================================================
 $pathSlot2 = New-TopRoundedRectPath $slot2X $slot2Y $slot2W $slot2H 20.0
 $state2 = $g.Save()
@@ -307,12 +307,12 @@ $g.FillPath($bSurfacePanel, $pathSlot2)
 $pad2 = [float]($slot2W * 0.075)
 $curY2 = $slot2Y + 16.0
 
-$g.DrawString("New Subject Folder", $fCardBody, $bTextPrimary, $slot2X + $pad2, $curY2)
+$g.DrawString("Per-Note Top Glow", $fCardBody, $bTextPrimary, $slot2X + $pad2, $curY2)
 $curY2 += [float]($W * 0.0085)
-$g.DrawString("44dp Live Badge $bullet 7 Swatches + [+]", $fCardSub, $bTextMuted, $slot2X + $pad2, $curY2)
+$g.DrawString("Follow Color $bullet 0-22dp Radius", $fCardSub, $bTextMuted, $slot2X + $pad2, $curY2)
 $curY2 += [float]($W * 0.0105)
 
-# Note Card with Tinted Top-Left [ NOTE ] Badge & Study Guide Label Pill (No Top-Right Dot)
+# Note Card with High-Contrast PDF 11 Pill, Top-Right Pin, Bottom-Right Label +N
 $cropSize = [float]($slot2W - 2 * $pad2)
 $cropH = [float]($cropSize * 0.72)
 $cropPath = New-RoundedRectPath ($slot2X + $pad2) $curY2 $cropSize $cropH 14.0
@@ -321,49 +321,49 @@ $g.DrawPath($pAccentBorder, $cropPath)
 
 $noteBadge = New-RoundedRectPath ($slot2X + $pad2 + 10.0) ($curY2 + 10.0) 68.0 24.0 12.0
 $g.FillPath($bAccentSoft, $noteBadge)
-$g.DrawString("NOTE", $fCardLabel, $bPrimaryAccent, $slot2X + $pad2 + 22.0, $curY2 + 15.0)
+$g.DrawString("PDF 11", $fCardLabel, $bPrimaryAccent, $slot2X + $pad2 + 20.0, $curY2 + 15.0)
 $noteBadge.Dispose()
 
-$lblBadge = New-RoundedRectPath ($slot2X + $pad2 + 86.0) ($curY2 + 10.0) 96.0 24.0 12.0
+$lblBadge = New-RoundedRectPath ($slot2X + $pad2 + $cropSize - 76.0) ($curY2 + $cropH - 32.0) 66.0 22.0 11.0
 $g.FillPath($bAccentSoft, $lblBadge)
-$g.DrawString("Study Guide", $fCardLabel, $bPrimaryAccent, $slot2X + $pad2 + 96.0, $curY2 + 15.0)
+$g.DrawString("Exam +2", $fCardLabel, $bPrimaryAccent, $slot2X + $pad2 + $cropSize - 68.0, $curY2 + $cropH - 27.0)
 $lblBadge.Dispose()
 
-$g.DrawString("Thermodynamics Notes", $fCardBody, $bTextPrimary, $slot2X + $pad2 + 12.0, $curY2 + ($cropH * 0.44))
-$g.DrawString("Chapter 6 Laws & Entropy Problems", $fCardSub, $bTextMuted, $slot2X + $pad2 + 12.0, $curY2 + ($cropH * 0.68))
+$g.DrawString("Calculus III", $fCardBody, $bTextPrimary, $slot2X + $pad2 + 12.0, $curY2 + ($cropH * 0.42))
+$g.DrawString("Stokes Theorem", $fCardSub, $bTextMuted, $slot2X + $pad2 + 12.0, $curY2 + ($cropH * 0.62))
 $cropPath.Dispose()
 $curY2 += $cropH + 10.0
 
-# Curated Swatch Strip Indicator
-$g.DrawString("Accent Swatches (7 + Custom HSV)", $fCardLabel, $bPrimaryAccent, $slot2X + $pad2, $curY2)
+# Parametric Corner Radius Slider (12dp Squircle)
+$g.DrawString("Badge Radius: 12dp (0-22dp)", $fCardLabel, $bPrimaryAccent, $slot2X + $pad2, $curY2)
 $curY2 += [float]($W * 0.008)
 $g.FillRectangle($bTrackInactive, $slot2X + $pad2, $curY2, $cropSize, 5.0)
-$g.FillRectangle($bPrimaryAccent, $slot2X + $pad2, $curY2, [float]($cropSize * 0.65), 5.0)
+$g.FillRectangle($bPrimaryAccent, $slot2X + $pad2, $curY2, [float]($cropSize * 0.55), 5.0)
 $curY2 += 12.0
 
 $chipW = [float](($cropSize - 8.0) / 3.0)
 $chipH = [float]($H * 0.048)
-$chips = @("Violet", "Teal", "Emerald")
+$chips = @("0dp", "12dp", "22dp")
 for ($i = 0; $i -lt 3; $i++) {
     $cx = $slot2X + $pad2 + $i * ($chipW + 4.0)
     $cp = New-RoundedRectPath $cx $curY2 $chipW $chipH ($chipH / 2.0)
-    $g.FillPath($bSurfaceElev, $cp)
-    $g.DrawPath($pBorderSubtle, $cp)
-    $g.DrawString($chips[$i], $fCardLabel, $bTextPrimary, $cx + 9.0, $curY2 + ($chipH * 0.24))
+    $g.FillPath($(if ($i -eq 1) { $bAccentSoft } else { $bSurfaceElev }), $cp)
+    $g.DrawPath($(if ($i -eq 1) { $pAccentBorder } else { $pBorderSubtle }), $cp)
+    $g.DrawString($chips[$i], $fCardLabel, $bTextPrimary, $cx + 12.0, $curY2 + ($chipH * 0.24))
     $cp.Dispose()
 }
 $curY2 += $chipH + 10.0
 
-# Button-in-Button Widget Sync + Preview pill
+# .fotara Study Bundle / VFX Export pill
 $wsH = [float]($H * 0.062)
 $wsPath = New-RoundedRectPath ($slot2X + $pad2) $curY2 $cropSize $wsH 12.0
 $g.FillPath($bSurfaceElev, $wsPath)
 $g.DrawPath($pBorderSubtle, $wsPath)
-$g.DrawString("Widget Sync", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + 8.0, $curY2 + ($wsH * 0.28))
+$g.DrawString(".fotara Bundle", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + 8.0, $curY2 + ($wsH * 0.28))
 $prevH = [float]($wsH * 0.64)
 $prevPill = New-RoundedRectPath ($slot2X + $pad2 + $cropSize * 0.58) ($curY2 + $wsH * 0.18) ($cropSize * 0.38) $prevH ($prevH / 2.0)
 $g.FillPath($bPrimaryAccent, $prevPill)
-$g.DrawString("Preview", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + $cropSize * 0.63, $curY2 + ($wsH * 0.28))
+$g.DrawString("Export", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + $cropSize * 0.65, $curY2 + ($wsH * 0.28))
 $prevPill.Dispose()
 $wsPath.Dispose()
 
