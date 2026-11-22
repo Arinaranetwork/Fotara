@@ -5,10 +5,10 @@
 # written consent from Arinara Network as sole legal owner of this codebase.
 
 param(
-    [string]$Version = "2.6.5",
+    [string]$Version = "2.6.6",
     [string]$Codename = "Hyperion",
-    [string]$Description = "Legacy Schedule DB Converter, Per-Space Canvas Isolation, DisableUpdate Kill-Switch & Vault Fix",
-    [string]$ReleaseDate = "2026-11-21",
+    [string]$Description = "Class Schedule import fix, widget Space picker, Support Goal page, right-aligned folder pin, and sanitized FTR-265-S1 build.",
+    [string]$ReleaseDate = "2026-11-22",
     [string]$OutputPath = ""
 )
 
@@ -140,71 +140,68 @@ $fCardLabel  = [System.Drawing.Font]::new($elmsFamily, [float]($W * 0.0052), [Sy
 $fCardBody   = [System.Drawing.Font]::new($elmsFamily, [float]($W * 0.0064), [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
 
 # ==============================================================================
-# 2A. Render Slot 1 (Back/Mid Layer): DisableUpdate Kill-Switch & Sanitized Gate
+# 2A. Render Slot 1 (Back/Mid Layer): Support Fotara (Active Goal & QRIS, No History)
 # ==============================================================================
 $pathSlot1 = New-TopRoundedRectPath $slot1X $slot1Y $slot1W $slot1H 22.0
 $state1 = $g.Save()
 $g.SetClip($pathSlot1)
 $g.FillPath($bBgCanvas, $pathSlot1)
 
-# Top violet accent bar
 $g.FillRectangle($bTrackInactive, $slot1X, $slot1Y, $slot1W, 6.0)
-$g.FillRectangle($bPrimaryAccent, $slot1X, $slot1Y, [float]($slot1W * 0.85), 6.0)
+$g.FillRectangle($bPrimaryAccent, $slot1X, $slot1Y, [float]($slot1W * 0.64), 6.0)
 
 $pad1 = [float]($slot1W * 0.065)
 $curY1 = $slot1Y + 18.0
 
-$g.DrawString("RELEASE SAFETY $bullet SUPABASE SYNC", $fCardLabel, $bPrimaryAccent, $slot1X + $pad1, $curY1)
+$g.DrawString("SUPPORT FOTARA $bullet NOTE REUSE", $fCardLabel, $bPrimaryAccent, $slot1X + $pad1, $curY1)
 $curY1 += [float]($W * 0.0072)
-$g.DrawString("DisableUpdate Gate", $fCardHeader, $bTextPrimary, $slot1X + $pad1, $curY1)
+$g.DrawString("Active Support Goal", $fCardHeader, $bTextPrimary, $slot1X + $pad1, $curY1)
 $curY1 += [float]($W * 0.0135)
 
-$g.DrawString("CHANNEL SCOPE", $fCardLabel, $bTextMuted, $slot1X + $pad1, $curY1)
+# Active Goal Card Preview
+$goalCardH = [float]($H * 0.24)
+$goalCardPath = New-RoundedRectPath ($slot1X + $pad1) $curY1 ($slot1W - 2 * $pad1) $goalCardH 16.0
+$g.FillPath($bSurfacePanel, $goalCardPath)
+$g.DrawPath($pAccentBorder, $goalCardPath)
+
+$gBadge = New-RoundedRectPath ($slot1X + $pad1 + 12.0) ($curY1 + 12.0) 118.0 24.0 12.0
+$g.FillPath($bSurfaceElev, $gBadge)
+$g.DrawPath($pBorderSubtle, $gBadge)
+$g.DrawString("ACTIVE GOAL", $fCardLabel, $bTextPrimary, $slot1X + $pad1 + 22.0, $curY1 + 17.0)
+$gBadge.Dispose()
+
+$pctBadge = New-RoundedRectPath ($slot1X + $pad1 + 138.0) ($curY1 + 12.0) 56.0 24.0 12.0
+$g.FillPath($bPrimaryAccent, $pctBadge)
+$g.DrawString("64%", $fCardLabel, $bTextPrimary, $slot1X + $pad1 + 150.0, $curY1 + 17.0)
+$pctBadge.Dispose()
+
+$g.DrawString("Server & Cloud Upgrade", $fCardBody, $bTextPrimary, $slot1X + $pad1 + 12.0, $curY1 + 48.0)
+$g.DrawString("Fast, offline-ready & ad-free", $fCardSub, $bTextMuted, $slot1X + $pad1 + 12.0, $curY1 + 74.0)
+
+$barW = [float]($slot1W - 2 * $pad1 - 24.0)
+$g.FillRectangle($bTrackInactive, $slot1X + $pad1 + 12.0, $curY1 + 106.0, $barW, 7.0)
+$g.FillRectangle($bPrimaryAccent, $slot1X + $pad1 + 12.0, $curY1 + 106.0, [float]($barW * 0.64), 7.0)
+
+$g.DrawString("Rp 320.000", $fCardBody, $bTextPrimary, $slot1X + $pad1 + 12.0, $curY1 + 124.0)
+$g.DrawString("Target Rp 500.000", $fCardSub, $bTextMuted, $slot1X + $pad1 + 12.0, $curY1 + 148.0)
+$goalCardPath.Dispose()
+$curY1 += $goalCardH + 12.0
+
+$g.DrawString("QRIS $bullet OWNER GOAL NOTE", $fCardLabel, $bTextMuted, $slot1X + $pad1, $curY1)
 $curY1 += [float]($W * 0.0085)
 
-# 4 Channel Scope Tiles (All, Stable, Beta, Alpha)
-$iconRowH = [float]($H * 0.145)
-$iconRowPath = New-RoundedRectPath ($slot1X + $pad1) $curY1 ($slot1W - 2 * $pad1) $iconRowH 14.0
-$g.FillPath($bSurfacePanel, $iconRowPath)
-$g.DrawPath($pBorderSubtle, $iconRowPath)
-
-$presets = @("All", "Stable", "Beta", "Alpha")
-$sqSize = [float]($iconRowH * 0.48)
-$sqGap  = [float]((($slot1W - 2 * $pad1) - (4 * $sqSize)) / 5.0)
-for ($pi = 0; $pi -lt 4; $pi++) {
-    $sx = $slot1X + $pad1 + $sqGap + $pi * ($sqSize + $sqGap)
-    $sy = $curY1 + 14.0
-    $sqPath = New-RoundedRectPath $sx $sy $sqSize $sqSize 14.0
-    $g.FillPath($(if ($pi -eq 2) { $bPrimaryAccent } else { $bSurfaceElev }), $sqPath)
-    if ($pi -eq 2) {
-        $ringPath = New-RoundedRectPath ($sx - 4.0) ($sy - 4.0) ($sqSize + 8.0) ($sqSize + 8.0) 16.0
-        $g.DrawPath($pAccentBorder, $ringPath)
-        $ringPath.Dispose()
-    } else {
-        $g.DrawPath($pBorderSubtle, $sqPath)
-    }
-    $g.DrawString($presets[$pi].Substring(0,1), $fCardBody, $bTextPrimary, $sx + ($sqSize * 0.34), $sy + ($sqSize * 0.30))
-    $g.DrawString($presets[$pi], $fCardSub, $(if ($pi -eq 2) { $bPrimaryAccent } else { $bTextMuted }), $sx + 2.0, $sy + $sqSize + 8.0)
-    $sqPath.Dispose()
-}
-$iconRowPath.Dispose()
-$curY1 += $iconRowH + 12.0
-
-$g.DrawString("HMAC POLICY $bullet VANISH", $fCardLabel, $bTextMuted, $slot1X + $pad1, $curY1)
-$curY1 += [float]($W * 0.0085)
-
-$scheduleSlots = @(
-    @{ Name = "Installed Recall"; Time = "Notice"; Meta = "Priority 90 $bullet Block APK" },
-    @{ Name = "GitHub Feed"; Time = "Hidden"; Meta = "Auto-Vanished Live" },
-    @{ Name = "Sanitized Unlock"; Time = "FTR-ID"; Meta = "[FTR-SANITIZED] Match" }
+$qrisSlots = @(
+    @{ Name = "QRIS Code Card"; Time = "Expand"; Meta = "Download QRIS $bullet Clean View" },
+    @{ Name = "Goal Rich Note"; Time = "View"; Meta = "Note Editor / Viewer Reuse" },
+    @{ Name = "Owner Dev Edit"; Time = "Sync"; Meta = "Signed Supabase WebP Upload" }
 )
-foreach ($c in $scheduleSlots) {
-    $rowH = [float]($H * 0.076)
+foreach ($c in $qrisSlots) {
+    $rowH = [float]($H * 0.072)
     $rowPath = New-RoundedRectPath ($slot1X + $pad1) $curY1 ($slot1W - 2 * $pad1) $rowH 12.0
     $g.FillPath($bSurfaceElev, $rowPath)
     $g.DrawPath($pBorderSubtle, $rowPath)
     $g.DrawString($c.Name, $fCardBody, $bTextPrimary, $slot1X + $pad1 + 10.0, $curY1 + 7.0)
-    $g.DrawString($c.Time, $fCardLabel, $bPrimaryAccent, $slot1X + $pad1 + ($slot1W * 0.44), $curY1 + 8.0)
+    $g.DrawString($c.Time, $fCardLabel, $bPrimaryAccent, $slot1X + $pad1 + ($slot1W * 0.46), $curY1 + 8.0)
     $g.DrawString($c.Meta, $fCardSub, $bTextMuted, $slot1X + $pad1 + 10.0, $curY1 + ($rowH * 0.52))
     $rowPath.Dispose()
     $curY1 += $rowH + 8.0
@@ -215,7 +212,7 @@ $g.DrawPath($pBorderSubtle, $pathSlot1)
 $pathSlot1.Dispose()
 
 # ==============================================================================
-# 2B. Render Slot 3 (Far-Right Tallest Layer): Schedule DB v34 & Dialog Layering
+# 2B. Render Slot 3 (Far-Right Tallest Layer): Schedule 2-Col Import & FTR-265-S1
 # ==============================================================================
 $pathSlot3 = New-TopRoundedRectPath $slot3X $slot3Y $slot3W $slot3H 22.0
 $state3 = $g.Save()
@@ -228,34 +225,31 @@ $curY3 = $slot3Y + 18.0
 $g.DrawString("Class Schedule", $fCardHeader, $bTextPrimary, $slot3X + $pad3, $curY3)
 $curY3 += [float]($W * 0.013)
 
-$g.DrawString("SQLITE V34 CONVERTER $bullet SPACE ISOLATED", $fCardLabel, $bTextMuted, $slot3X + $pad3, $curY3)
+$g.DrawString("2-COLUMN TIME $bullet SAX PARSER $bullet DB V34", $fCardLabel, $bTextMuted, $slot3X + $pad3, $curY3)
 $curY3 += [float]($W * 0.0085)
 
-# Simulated Legacy DB Recovery Card
 $simH = [float]($H * 0.175)
 $simPath = New-RoundedRectPath ($slot3X + $pad3) $curY3 ($slot3W - 2 * $pad3) $simH 16.0
 $g.FillPath($bSurfacePanel, $simPath)
 $g.DrawPath($pAccentBorder, $simPath)
 
-# Top-Left Status Pill + Top-Right Action Pill
-$bdgPath = New-RoundedRectPath ($slot3X + $pad3 + 12.0) ($curY3 + 12.0) 96.0 24.0 12.0
+$bdgPath = New-RoundedRectPath ($slot3X + $pad3 + 12.0) ($curY3 + 12.0) 104.0 24.0 12.0
 $g.FillPath($bAccentSoft, $bdgPath)
 $g.DrawPath($pAccentBorder, $bdgPath)
-$g.DrawString("SQLITE V34", $fCardLabel, $bPrimaryAccent, $slot3X + $pad3 + 22.0, $curY3 + 17.0)
+$g.DrawString("FTR-265-S1", $fCardLabel, $bPrimaryAccent, $slot3X + $pad3 + 22.0, $curY3 + 17.0)
 $bdgPath.Dispose()
 
-$gifPill = New-RoundedRectPath ($slot3X + $slot3W - $pad3 - 96.0) ($curY3 + 12.0) 84.0 24.0 12.0
+$gifPill = New-RoundedRectPath ($slot3X + $slot3W - $pad3 - 102.0) ($curY3 + 12.0) 90.0 24.0 12.0
 $g.FillPath($bPrimaryAccent, $gifPill)
-$g.DrawString("RECOVER", $fCardLabel, $bTextPrimary, $slot3X + $slot3W - $pad3 - 82.0, $curY3 + 17.0)
+$g.DrawString("SANITIZED", $fCardLabel, $bTextPrimary, $slot3X + $slot3W - $pad3 - 92.0, $curY3 + 17.0)
 $gifPill.Dispose()
 
-$g.DrawString("Legacy DB Migrator", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($simH * 0.50))
-$g.DrawString("Auto-heals pre-2.6.4 schedules", $fCardSub, $bTextMuted, $slot3X + $pad3 + 12.0, $curY3 + ($simH * 0.72))
+$g.DrawString("XLSX / DOCX Import", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($simH * 0.50))
+$g.DrawString("Start + End columns & auto-day focus", $fCardSub, $bTextMuted, $slot3X + $pad3 + 12.0, $curY3 + ($simH * 0.72))
 $simPath.Dispose()
 $curY3 += $simH + 12.0
 
-# Dialog Z-Order & Vault Keystore Fix Box
-$g.DrawString("TIMETABLE & VAULT RELIABILITY", $fCardLabel, $bTextMuted, $slot3X + $pad3, $curY3)
+$g.DrawString("IMPORTED SUBJECTS & STORAGE", $fCardLabel, $bTextMuted, $slot3X + $pad3, $curY3)
 $curY3 += [float]($W * 0.0085)
 
 $hsvH = [float]($H * 0.165)
@@ -263,10 +257,10 @@ $hsvRect = [System.Drawing.RectangleF]::new($slot3X + $pad3, $curY3, $slot3W - 2
 $hsvPath = New-RoundedRectPath $hsvRect.X $hsvRect.Y $hsvRect.Width $hsvRect.Height 14.0
 $g.FillPath($bSurfacePanel, $hsvPath)
 $g.DrawPath($pBorderSubtle, $hsvPath)
-$g.DrawString("Physics & Calculus III", $fCardBody, $bTextPrimary, $hsvRect.X + 12.0, $hsvRect.Y + 10.0)
+$g.DrawString("Physics II & Calculus III", $fCardBody, $bTextPrimary, $hsvRect.X + 12.0, $hsvRect.Y + 10.0)
 $g.FillEllipse($bEmerald, $hsvRect.X + $hsvRect.Width - 28.0, $hsvRect.Y + 10.0, 16.0, 16.0)
-$g.DrawString("08:00 Biology $bullet 10:30 Chemistry", $fCardSub, $bPrimaryAccent, $hsvRect.X + 12.0, $hsvRect.Y + ($hsvH * 0.44))
-$g.DrawString("Popup Z-Order Overlay Fixed", $fCardSub, $bEmerald, $hsvRect.X + 12.0, $hsvRect.Y + ($hsvH * 0.72))
+$g.DrawString("08:00 Start $bullet 09:40 End Time", $fCardSub, $bPrimaryAccent, $hsvRect.X + 12.0, $hsvRect.Y + ($hsvH * 0.44))
+$g.DrawString("Active Space Adoption Verified", $fCardSub, $bEmerald, $hsvRect.X + 12.0, $hsvRect.Y + ($hsvH * 0.72))
 $hsvPath.Dispose()
 $curY3 += $hsvH + 10.0
 
@@ -274,14 +268,14 @@ $hexRowH = [float]($H * 0.068)
 $hexPath = New-RoundedRectPath ($slot3X + $pad3) $curY3 ($slot3W - 2 * $pad3) $hexRowH 12.0
 $g.FillPath($bSurfaceElev, $hexPath)
 $g.DrawPath($pBorderSubtle, $hexPath)
-$g.DrawString("AndroidKeyStore Vault IV Fix", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
+$g.DrawString("Biology Lab $bullet Excel Serial Fractions", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
 $hexPath.Dispose()
 $curY3 += $hexRowH + 8.0
 
 $syncPath = New-RoundedRectPath ($slot3X + $pad3) $curY3 ($slot3W - 2 * $pad3) $hexRowH 12.0
 $g.FillPath($bSurfaceElev, $syncPath)
 $g.DrawPath($pBorderSubtle, $syncPath)
-$g.DrawString("Dialog-Backed Import Mapping", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
+$g.DrawString("Organic Chemistry $bullet Docx Table", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
 $g.FillEllipse($bPrimaryAccent, $slot3X + $slot3W - $pad3 - 26.0, $curY3 + ($hexRowH * 0.25), 16.0, 16.0)
 $syncPath.Dispose()
 $curY3 += $hexRowH + 8.0
@@ -289,7 +283,7 @@ $curY3 += $hexRowH + 8.0
 $lockPath = New-RoundedRectPath ($slot3X + $pad3) $curY3 ($slot3W - 2 * $pad3) $hexRowH 12.0
 $g.FillPath($bSurfaceElev, $lockPath)
 $g.DrawPath($pBorderSubtle, $lockPath)
-$g.DrawString("Archive Restore Remapper v34", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
+$g.DrawString("SQLite insertOrThrow Self-Heal", $fCardBody, $bTextPrimary, $slot3X + $pad3 + 12.0, $curY3 + ($hexRowH * 0.26))
 $lockPath.Dispose()
 
 $g.Restore($state3)
@@ -297,7 +291,7 @@ $g.DrawPath($pBorderSubtle, $pathSlot3)
 $pathSlot3.Dispose()
 
 # ==============================================================================
-# 2C. Render Slot 2 (Center-Right Foreground Layer): Per-Space Canvas & Multi-Select Dock
+# 2C. Render Slot 2 (Center-Right Foreground Layer): Widget Space Picker & Folder Pin Right
 # ==============================================================================
 $pathSlot2 = New-TopRoundedRectPath $slot2X $slot2Y $slot2W $slot2H 20.0
 $state2 = $g.Save()
@@ -307,9 +301,9 @@ $g.FillPath($bSurfacePanel, $pathSlot2)
 $pad2 = [float]($slot2W * 0.075)
 $curY2 = $slot2Y + 16.0
 
-$g.DrawString("Per-Space Theme", $fCardBody, $bTextPrimary, $slot2X + $pad2, $curY2)
+$g.DrawString("Widget Space", $fCardBody, $bTextPrimary, $slot2X + $pad2, $curY2)
 $curY2 += [float]($W * 0.0085)
-$g.DrawString("Isolated Backdrop $bullet #0D1117", $fCardSub, $bTextMuted, $slot2X + $pad2, $curY2)
+$g.DrawString("Per-Instance Config $bullet Vault Safe", $fCardSub, $bTextMuted, $slot2X + $pad2, $curY2)
 $curY2 += [float]($W * 0.0105)
 
 $cropSize = [float]($slot2W - 2 * $pad2)
@@ -321,34 +315,34 @@ $g.DrawPath($pAccentBorder, $cropPath)
 $noteBadge = New-RoundedRectPath ($slot2X + $pad2 + 10.0) ($curY2 + 10.0) 86.0 24.0 12.0
 $g.FillPath($bSurfaceElev, $noteBadge)
 $g.DrawPath($pBorderSubtle, $noteBadge)
-$g.DrawString("2 Spaces", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + 20.0, $curY2 + 15.0)
+$g.DrawString("Math", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + 22.0, $curY2 + 15.0)
 $noteBadge.Dispose()
 
-$lblBadge = New-RoundedRectPath ($slot2X + $pad2 + $cropSize - 82.0) ($curY2 + $cropH - 32.0) 72.0 22.0 11.0
+$lblBadge = New-RoundedRectPath ($slot2X + $pad2 + $cropSize - 98.0) ($curY2 + 10.0) 88.0 24.0 12.0
 $g.FillPath($bPrimaryAccent, $lblBadge)
-$g.DrawString("Scoped", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + $cropSize - 68.0, $curY2 + $cropH - 27.0)
+$g.DrawString("Pin Right", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + $cropSize - 82.0, $curY2 + 15.0)
 $lblBadge.Dispose()
 
-$g.DrawString("Obsidian Slate", $fCardBody, $bTextPrimary, $slot2X + $pad2 + 12.0, $curY2 + ($cropH * 0.42))
-$g.DrawString("Clean Dark Default on Switch", $fCardSub, $bTextMuted, $slot2X + $pad2 + 12.0, $curY2 + ($cropH * 0.62))
+$g.DrawString("Physics Space", $fCardBody, $bTextPrimary, $slot2X + $pad2 + 12.0, $curY2 + ($cropH * 0.46))
+$g.DrawString("6 classes $bullet Right Pin Layout", $fCardSub, $bTextMuted, $slot2X + $pad2 + 12.0, $curY2 + ($cropH * 0.66))
 $cropPath.Dispose()
 $curY2 += $cropH + 10.0
 
-$g.DrawString("MULTI-SELECT DOCK (zIndex 10)", $fCardLabel, $bPrimaryAccent, $slot2X + $pad2, $curY2)
+$g.DrawString("APPWIDGET SPACE PICKER", $fCardLabel, $bPrimaryAccent, $slot2X + $pad2, $curY2)
 $curY2 += [float]($W * 0.008)
 $g.FillRectangle($bTrackInactive, $slot2X + $pad2, $curY2, $cropSize, 5.0)
-$g.FillRectangle($bPrimaryAccent, $slot2X + $pad2, $curY2, [float]($cropSize * 0.90), 5.0)
+$g.FillRectangle($bPrimaryAccent, $slot2X + $pad2, $curY2, [float]($cropSize * 0.78), 5.0)
 $curY2 += 12.0
 
 $chipW = [float](($cropSize - 8.0) / 3.0)
 $chipH = [float]($H * 0.048)
-$chips = @("Link", "Rename", "Move")
+$chips = @("Active", "Space 1", "Space 2")
 for ($i = 0; $i -lt 3; $i++) {
     $cx = $slot2X + $pad2 + $i * ($chipW + 4.0)
     $cp = New-RoundedRectPath $cx $curY2 $chipW $chipH ($chipH / 2.0)
     $g.FillPath($(if ($i -eq 1) { $bAccentSoft } else { $bSurfaceElev }), $cp)
     $g.DrawPath($(if ($i -eq 1) { $pAccentBorder } else { $pBorderSubtle }), $cp)
-    $g.DrawString($chips[$i], $fCardLabel, $bTextPrimary, $cx + 10.0, $curY2 + ($chipH * 0.24))
+    $g.DrawString($chips[$i], $fCardLabel, $bTextPrimary, $cx + 8.0, $curY2 + ($chipH * 0.24))
     $cp.Dispose()
 }
 $curY2 += $chipH + 10.0
@@ -357,11 +351,11 @@ $wsH = [float]($H * 0.062)
 $wsPath = New-RoundedRectPath ($slot2X + $pad2) $curY2 $cropSize $wsH 12.0
 $g.FillPath($bSurfaceElev, $wsPath)
 $g.DrawPath($pBorderSubtle, $wsPath)
-$g.DrawString("Home Menu", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + 8.0, $curY2 + ($wsH * 0.28))
+$g.DrawString("Widget Ready", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + 8.0, $curY2 + ($wsH * 0.28))
 $prevH = [float]($wsH * 0.64)
-$prevPill = New-RoundedRectPath ($slot2X + $pad2 + $cropSize * 0.50) ($curY2 + $wsH * 0.18) ($cropSize * 0.46) $prevH ($prevH / 2.0)
+$prevPill = New-RoundedRectPath ($slot2X + $pad2 + $cropSize * 0.54) ($curY2 + $wsH * 0.18) ($cropSize * 0.42) $prevH ($prevH / 2.0)
 $g.FillPath($bPrimaryAccent, $prevPill)
-$g.DrawString("Ready", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + $cropSize * 0.64, $curY2 + ($wsH * 0.28))
+$g.DrawString("Apply", $fCardLabel, $bTextPrimary, $slot2X + $pad2 + $cropSize * 0.66, $curY2 + ($wsH * 0.28))
 $prevPill.Dispose()
 $wsPath.Dispose()
 
